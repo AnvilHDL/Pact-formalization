@@ -1,0 +1,10 @@
+name = "anvilpp"
+version = "0.1.0"
+defaultTargets = ["anvilpp"]
+
+[[lean_lib]]
+name = "Anvilpp"
+
+[[lean_exe]]
+name = "anvilpp"
+root = "Main"
