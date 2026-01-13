@@ -7,8 +7,9 @@ inductive MessageExch : Type where
 
 /-- Process type. -/
 inductive ProcTy : Type where
-  | message : MessageExch → ProcTy → ProcTy
+  | message : MessageExch → ProcTy
   | cycle : ProcTy
+  | skip : ProcTy
   | dollar : ProcId → ProcTy
   | choice : ProcTy → ProcTy → ProcTy
   | choice_fair : BranchId → ProcTy → ProcTy → ProcTy

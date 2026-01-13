@@ -304,49 +304,6 @@ namespace Semantics
       NonInstantMessage p_body m →
       NonInstantMessage (Proc.recur f p_body) m
 
-
-  -- TODO: we probably don't need these now
-  def instantReducible (p : Proc) : Bool :=
-    match p with
-    | .skip => true
-    | .cycle => false
-    | .par p₁ p₂ => instantReducible p₁ && instantReducible p₂
-    | .seq p₁ p₂ => instantReducible p₁ && instantReducible p₂
-    | .send _ _ => true
-    | .recv _ _ p' => instantReducible p'
-    | .ifunfair _ p₁ p₂
-    | .iffair _ _ p₁ p₂ => instantReducible p₁ || instantReducible p₂
-    | .xoffer p_else branches
-    | .offer p_else branches => instantReducible p_else
-      || branches.any (fun br => instantReducible (ChoiceBranch.getProc br))
-    | .var _ => true
-    | .endp _ => true
-    | .recur _ p_body => instantReducible p_body
-  termination_by 0
-  decreasing_by
-    all_goals sorry -- FIXME: prove that this is terminating
-
-  def awaitSet (p : Proc) : Finset MessageId :=
-    match p with
-    | .cycle | .skip | .endp _ => ∅
-    | .recv msg _ p' => {msg} ∪ awaitSet p'
-    | .send msg _ => {msg}
-    | .par p₁ p₂ => awaitSet p₁ ∪ awaitSet p₂
-    | .seq p₁ p₂ =>
-      if instantReducible p₁ then awaitSet p₁ ∪ awaitSet p₂ else awaitSet p₁
-    | .xoffer p_else branches
-    | .offer p_else branches =>
-      awaitSet p_else ∪
-      branches.foldl (fun acc br => acc ∪ {ChoiceBranch.getMessageId br} ∪ awaitSet (ChoiceBranch.getProc br)) ∅
-    | .var _ => ∅ -- FIXME: not correct
-    | .ifunfair _ p₁ p₂
-    | .iffair _ _ p₁ p₂ => awaitSet p₁ ∪ awaitSet p₂
-    | .recur _ p_body => awaitSet p_body
-  termination_by 0
-  decreasing_by
-    all_goals sorry -- FIXME: prove that this is terminating
-
-
   abbrev ProcComp := Multiset Proc
   inductive CompReduces : ProcComp → TransLabel → ProcComp → Prop where
     | nonsync_step (ex_msg : Finset MessageId) (p : Proc) (p' : Proc) (α : TransLabel) (rest : ProcComp) :
