@@ -224,6 +224,88 @@ namespace Semantics
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
 
+  inductive NonInstantReducible : Proc → Prop where
+    | cycle : NonInstantReducible Proc.cycle
+    | par_left (p₁ p₂ : Proc) :
+      NonInstantReducible p₁ →
+      NonInstantReducible (Proc.par p₁ p₂)
+    | par_right (p₁ p₂ : Proc) :
+      NonInstantReducible p₂ →
+      NonInstantReducible (Proc.par p₁ p₂)
+    | seq_left (p₁ p₂ : Proc) :
+      NonInstantReducible p₁ →
+      NonInstantReducible (Proc.seq p₁ p₂)
+    | seq_right (p₁ p₂ : Proc) :
+      NonInstantReducible p₂ →
+      NonInstantReducible (Proc.seq p₁ p₂)
+    | xoffer (p_else : Proc) (branches : List ChoiceBranch) :
+      NonInstantReducible p_else →
+      ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
+      NonInstantReducible (Proc.xoffer p_else branches)
+    | offer (p_else : Proc) (branches : List ChoiceBranch) :
+      NonInstantReducible p_else →
+      ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
+      NonInstantReducible (Proc.offer p_else branches)
+    | ifunfair (e : Expr) (p₁ p₂ : Proc) :
+      NonInstantReducible p₁ →
+      NonInstantReducible p₂ →
+      NonInstantReducible (Proc.ifunfair e p₁ p₂)
+    | iffair (bid : BranchId) (e : Expr) (p₁ p₂ : Proc) :
+      NonInstantReducible p₁ →
+      NonInstantReducible p₂ →
+      NonInstantReducible (Proc.iffair bid e p₁ p₂)
+    | recur (f : String) (p_body : Proc) :
+      NonInstantReducible p_body →
+      NonInstantReducible (Proc.recur f p_body)
+
+  inductive NonInstantMessage : Proc → MessageId → Prop where
+    | recv (msg m : MessageId) (var : String) (p : Proc) :
+      msg ≠ m →
+      NonInstantMessage p m →
+      NonInstantMessage (Proc.recv msg var p) m
+    | send (msg m : MessageId) (e : Expr) :
+      msg ≠ m →
+      NonInstantMessage (Proc.send msg e) m
+    | cycle (m : MessageId) :
+      NonInstantMessage Proc.cycle m
+    | skip (m : MessageId) :
+      NonInstantMessage Proc.skip m
+    | par (p₁ p₂ : Proc) (m : MessageId) :
+      NonInstantMessage p₁ m →
+      NonInstantMessage p₂ m →
+      NonInstantMessage (Proc.par p₁ p₂) m
+    | seq (p₁ p₂ : Proc) (m : MessageId) :
+      NonInstantMessage p₁ m →
+      NonInstantMessage p₂ m →
+      NonInstantMessage (Proc.seq p₁ p₂) m
+    | seq_noninst (p₁ p₂ : Proc) (m : MessageId) :
+      NonInstantMessage p₁ m →
+      NonInstantReducible p₁ →
+      NonInstantMessage (Proc.seq p₁ p₂) m
+    | xoffer (p_else : Proc) (branches : List ChoiceBranch) (m : MessageId) :
+      NonInstantMessage p_else m →
+      (∀ br ∈ branches, NonInstantMessage br.getProc m) →
+      (∀ br ∈ branches, br.getMessageId ≠ m) →
+      NonInstantMessage (Proc.xoffer p_else branches) m
+    | offer (p_else : Proc) (branches : List ChoiceBranch) (m : MessageId) :
+      NonInstantMessage p_else m →
+      (∀ br ∈ branches, NonInstantMessage br.getProc m) →
+      (∀ br ∈ branches, br.getMessageId ≠ m) →
+      NonInstantMessage (Proc.offer p_else branches) m
+    | ifunfair (e : Expr) (p₁ p₂ : Proc) (m : MessageId) :
+      NonInstantMessage p₁ m →
+      NonInstantMessage p₂ m →
+      NonInstantMessage (Proc.ifunfair e p₁ p₂) m
+    | iffair (bid : BranchId) (e : Expr) (p₁ p₂ : Proc) (m : MessageId) :
+      NonInstantMessage p₁ m →
+      NonInstantMessage p₂ m →
+      NonInstantMessage (Proc.iffair bid e p₁ p₂) m
+    | recur (f : String) (p_body : Proc) (m : MessageId) :
+      NonInstantMessage p_body m →
+      NonInstantMessage (Proc.recur f p_body) m
+
+
+  -- TODO: we probably don't need these now
   def instantReducible (p : Proc) : Bool :=
     match p with
     | .skip => true
@@ -268,7 +350,7 @@ namespace Semantics
   abbrev ProcComp := Multiset Proc
   inductive CompReduces : ProcComp → TransLabel → ProcComp → Prop where
     | nonsync_step (ex_msg : Finset MessageId) (p : Proc) (p' : Proc) (α : TransLabel) (rest : ProcComp) :
-      (∀ po ∈ rest, ex_msg ∩ awaitSet po = ∅) →
+      (∀ po ∈ rest, ∀ m ∈ ex_msg, NonInstantMessage po m) →
       Reduces ex_msg p α p' → ¬α.isAsync →
       CompReduces (Multiset.cons p rest) α (Multiset.cons p' rest)
     | msg_step (ex_msg₁ ex_msg₂ : Finset MessageId) (p₁ p₁' p₂ p₂' : Proc) (msg : MessageId) (b : Bool) (rest : ProcComp) :
