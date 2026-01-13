@@ -1,8 +1,5 @@
 import Mathlib.Data.Finset.Basic
-
-abbrev MessageId := String
-abbrev BranchId := Nat
-abbrev ProcId := Nat
+import Anvilpp.Base
 
 /-- Binary operators. -/
 inductive BOp : Type where
@@ -48,6 +45,12 @@ namespace ChoiceBranch
   def getMessageId : ChoiceBranch → MessageId
     | send msg _ _ => msg
     | recv msg _ _ => msg
+
+  def getProc : ChoiceBranch → Proc
+    | send _ _ p => p
+    | recv _ _ p => p
+
+  def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
 end ChoiceBranch
 
 inductive TransLabel : Type where
@@ -57,6 +60,14 @@ inductive TransLabel : Type where
   | branchTrue : BranchId → TransLabel
   | branchFalse : BranchId → TransLabel
   | dollar : ProcId → TransLabel
+
+namespace TransLabel
+  def isAsync (α : TransLabel) : Bool :=
+    match α with
+    | ε | branchTrue _
+    | branchFalse _ | dollar _ => false
+    | tock | message _ _ => true
+end TransLabel
 
 namespace Semantics
   inductive ExprEval : Expr → Bool → Prop where
@@ -139,7 +150,6 @@ namespace Semantics
         if g = f then Proc.recur g p' else Proc.recur g (procReplace p' f p_body)
   end
 
-
   inductive Reduces : Finset MessageId → Proc → TransLabel → Proc → Prop where
     | send ex_msg (msg : MessageId) (e : Expr) (p : Proc) (b : Bool) :
       e ↓ b →
@@ -179,6 +189,10 @@ namespace Semantics
       Reduces ex_msg p₁ TransLabel.tock p₁' →
       Reduces ex_msg p₂ TransLabel.tock p₂' →
       Reduces ex_msg (Proc.par p₁ p₂) TransLabel.tock (Proc.par p₁' p₂')
+    | par_skip_right ex_msg (p₁ : Proc) :
+      Reduces ex_msg (Proc.par p₁ Proc.skip) TransLabel.ε p₁
+    | par_skip_left ex_msg (p₂ : Proc) :
+      Reduces ex_msg (Proc.par Proc.skip p₂) TransLabel.ε p₂
     | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
                          (msg : MessageId) (p' : Proc) (b : Bool) :
       ChoiceBranch.recv msg var p' ∈ branches →
@@ -191,29 +205,18 @@ namespace Semantics
     | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
       ex_msg ∩ (branches.map ChoiceBranch.getMessageId).toFinset = ∅ →
       Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
-    | offer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
-                         (msg : MessageId) (b : Bool) :
-      -- let p' := List.foldl (fun acc br =>
-      --     let p_branch :=
-      --       match br with
-      --       | ChoiceBranch.recv m v p'' =>
-      --         if m = msg then procExprReplace p'' v b else Proc.xoffer Proc.skip [br]
-      --       | _ => Proc.xoffer Proc.skip [br]
-      --     Proc.par acc p_branch
-      --   ) Proc.skip branches
-      ChoiceBranch.recv msg var p' ∈ branches →
+    | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
+                         (msg : MessageId) (b : Bool) (lbranches rbranches : List ChoiceBranch) :
+      branches = lbranches ++ (ChoiceBranch.recv msg var p_branch) :: rbranches →
+      branches' = lbranches.map ChoiceBranch.toXOffer ++ (procExprReplace p_branch var b) :: rbranches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
       Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg b) p'
-    | offer_branch_send ex_msg (msg : MessageId) (p_else p' : Proc)
-                         (branches : List ChoiceBranch) (e : Expr) (b : Bool) :
-      -- let p' := List.foldl (fun acc br =>
-      --     let p_branch :=
-      --       match br with
-      --       | ChoiceBranch.send m e' p'' =>
-      --         if m = msg then p'' else Proc.xoffer Proc.skip [br]
-      --       | _ => Proc.xoffer Proc.skip [br]
-      --     Proc.par acc p_branch
-      --   ) Proc.skip branches
-      ChoiceBranch.send msg e p' ∈ branches →
+    | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
+                         (lbranches rbranches : List ChoiceBranch) (e : Expr) (b : Bool) :
+      e ↓ b →
+      branches = lbranches ++ (ChoiceBranch.send msg e p') :: rbranches →
+      branches' = lbranches.map ChoiceBranch.toXOffer ++ p_branch :: rbranches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
       Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg b) p'
     | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
       ex_msg ∩ (branches.map ChoiceBranch.getMessageId).toFinset = ∅ →
@@ -221,4 +224,59 @@ namespace Semantics
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
 
+  def instantReducible (p : Proc) : Bool :=
+    match p with
+    | .skip => true
+    | .cycle => false
+    | .par p₁ p₂ => instantReducible p₁ && instantReducible p₂
+    | .seq p₁ p₂ => instantReducible p₁ && instantReducible p₂
+    | .send _ _ => true
+    | .recv _ _ p' => instantReducible p'
+    | .ifunfair _ p₁ p₂
+    | .iffair _ _ p₁ p₂ => instantReducible p₁ || instantReducible p₂
+    | .xoffer p_else branches
+    | .offer p_else branches => instantReducible p_else
+      || branches.any (fun br => instantReducible (ChoiceBranch.getProc br))
+    | .var _ => true
+    | .endp _ => true
+    | .recur _ p_body => instantReducible p_body
+  termination_by 0
+  decreasing_by
+    all_goals sorry -- FIXME: prove that this is terminating
+
+  def awaitSet (p : Proc) : Finset MessageId :=
+    match p with
+    | .cycle | .skip | .endp _ => ∅
+    | .recv msg _ p' => {msg} ∪ awaitSet p'
+    | .send msg _ => {msg}
+    | .par p₁ p₂ => awaitSet p₁ ∪ awaitSet p₂
+    | .seq p₁ p₂ =>
+      if instantReducible p₁ then awaitSet p₁ ∪ awaitSet p₂ else awaitSet p₁
+    | .xoffer p_else branches
+    | .offer p_else branches =>
+      awaitSet p_else ∪
+      branches.foldl (fun acc br => acc ∪ {ChoiceBranch.getMessageId br} ∪ awaitSet (ChoiceBranch.getProc br)) ∅
+    | .var _ => ∅ -- FIXME: not correct
+    | .ifunfair _ p₁ p₂
+    | .iffair _ _ p₁ p₂ => awaitSet p₁ ∪ awaitSet p₂
+    | .recur _ p_body => awaitSet p_body
+  termination_by 0
+  decreasing_by
+    all_goals sorry -- FIXME: prove that this is terminating
+
+
+  abbrev ProcComp := Multiset Proc
+  inductive CompReduces : ProcComp → TransLabel → ProcComp → Prop where
+    | nonsync_step (ex_msg : Finset MessageId) (p : Proc) (p' : Proc) (α : TransLabel) (rest : ProcComp) :
+      (∀ po ∈ rest, ex_msg ∩ awaitSet po = ∅) →
+      Reduces ex_msg p α p' → ¬α.isAsync →
+      CompReduces (Multiset.cons p rest) α (Multiset.cons p' rest)
+    | msg_step (ex_msg₁ ex_msg₂ : Finset MessageId) (p₁ p₁' p₂ p₂' : Proc) (msg : MessageId) (b : Bool) (rest : ProcComp) :
+      Reduces ex_msg₁ p₁ (TransLabel.message msg b) p₁' →
+      Reduces ex_msg₂ p₂ (TransLabel.message msg b) p₂' →
+      CompReduces (Multiset.cons p₁ (Multiset.cons p₂ rest)) (TransLabel.message msg b)
+        (Multiset.cons p₁' (Multiset.cons p₂' rest))
+    | tock_step (c c' : ProcComp) :
+      Multiset.Rel (fun p₁ p₂ => Reduces ∅ p₁ TransLabel.tock p₂) c c' →
+      CompReduces c TransLabel.tock c'
 end Semantics
