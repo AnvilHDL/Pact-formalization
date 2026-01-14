@@ -25,3 +25,36 @@ inductive ProcTy : Type where
   | offer : ProcTy → List (MessageExch × ProcTy) → ProcTy
   | var : String → ProcTy
   | recur : String → ProcTy → ProcTy
+
+namespace ProcTy
+  mutual
+    def replaceBranchVar (branch_tys : MessageExch × ProcTy) (x : String) (τ' : ProcTy) :
+        MessageExch × ProcTy :=
+      (branch_tys.1, branch_tys.2.replaceVar x τ')
+
+    /-- Replace occurrences of a process type variable with another process type. -/
+    def replaceVar (τ : ProcTy) (x : String) (τ' : ProcTy) : ProcTy :=
+      match τ with
+      | message me => ProcTy.message me
+      | cycle => ProcTy.cycle
+      | skip => ProcTy.skip
+      | dollar pid => ProcTy.dollar pid
+      | choice τ₁ τ₂ => ProcTy.choice (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+      | choice_fair bid τ₁ τ₂ =>
+          ProcTy.choice_fair bid (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+      | par τ₁ τ₂ => ProcTy.par (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+      | seq τ₁ τ₂ => ProcTy.seq (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+      | xoffer τ_else branch_tys =>
+          ProcTy.xoffer (replaceVar τ_else x τ')
+            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
+      | offer τ_else branch_tys =>
+          ProcTy.offer (replaceVar τ_else x τ')
+            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
+      | var y => if x = y then τ' else ProcTy.var y
+      | recur y body =>
+          if x = y then ProcTy.recur y body
+          else ProcTy.recur y (replaceVar body x τ')
+    decreasing_by  -- FIXME: prove termination
+      all_goals sorry
+  end
+end ProcTy
