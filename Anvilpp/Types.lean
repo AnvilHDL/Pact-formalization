@@ -58,3 +58,5 @@ namespace ProcTy
       all_goals sorry
   end
 end ProcTy
+
+abbrev ProcTyComposition := Multiset ProcTy

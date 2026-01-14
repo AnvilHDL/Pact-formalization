@@ -203,7 +203,7 @@ namespace Semantics
       e ↓ b →
       Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg b) p'
     | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-      ex_msg ∩ (branches.map ChoiceBranch.getMessageId).toFinset = ∅ →
+      ∀ m ∈ branches.map ChoiceBranch.getMessageId, m ∈ ex_msg →
       Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
     | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
                          (msg : MessageId) (b : Bool) (lbranches rbranches : List ChoiceBranch) :
@@ -219,7 +219,7 @@ namespace Semantics
       p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
       Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg b) p'
     | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-      ex_msg ∩ (branches.map ChoiceBranch.getMessageId).toFinset = ∅ →
+      ∀ m ∈ branches.map ChoiceBranch.getMessageId, m ∈ ex_msg →
       Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
