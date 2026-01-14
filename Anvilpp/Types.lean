@@ -5,6 +5,12 @@ inductive MessageExch : Type where
   | send : MessageId → MessageExch
   | recv : MessageId → MessageExch
 
+namespace MessageExch
+  def messageId : MessageExch → MessageId
+    | send msg => msg
+    | recv msg => msg
+end MessageExch
+
 /-- Process type. -/
 inductive ProcTy : Type where
   | message : MessageExch → ProcTy
