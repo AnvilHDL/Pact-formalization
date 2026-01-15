@@ -177,3 +177,19 @@ inductive ProcTyCompTransition : ProcTyComposition → AbstractTransLabel → Pr
   | tock (τs τs' : ProcTyComposition) :
     Multiset.Rel (fun τ τ' => ProcTyTransition ∅ τ AbstractTransLabel.tock τ') τs τs' →
     ProcTyCompTransition τs AbstractTransLabel.tock τs'
+
+inductive ProcTyReachable : ProcTy → ProcTy → Prop where
+  | base (τ : ProcTy) :
+    ProcTyReachable τ τ
+  | step (τ₁ τ₂ τ₃ : ProcTy) (ex_msg : Finset MessageId) (lbl : AbstractTransLabel) :
+    ProcTyTransition ex_msg τ₁ lbl τ₂ →
+    ProcTyReachable τ₂ τ₃ →
+    ProcTyReachable τ₁ τ₃
+
+inductive ProcTyCompReachable : ProcTyComposition → ProcTyComposition → Prop where
+  | base (τs : ProcTyComposition) :
+    ProcTyCompReachable τs τs
+  | step (τs₁ τs₂ τs₃ : ProcTyComposition) (lbl : AbstractTransLabel) :
+    ProcTyCompTransition τs₁ lbl τs₂ →
+    ProcTyCompReachable τs₂ τs₃ →
+    ProcTyCompReachable τs₁ τs₃

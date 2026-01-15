@@ -4,6 +4,7 @@ import Anvilpp.Base
 inductive MessageExch : Type where
   | send : MessageId → MessageExch
   | recv : MessageId → MessageExch
+deriving DecidableEq
 
 namespace MessageExch
   def messageId : MessageExch → MessageId
@@ -25,6 +26,9 @@ inductive ProcTy : Type where
   | offer : ProcTy → List (MessageExch × ProcTy) → ProcTy
   | var : String → ProcTy
   | recur : String → ProcTy → ProcTy
+
+-- FIXME: Lean cannot automatically derive DecidableEq for this yet
+instance : DecidableEq ProcTy := by sorry
 
 namespace ProcTy
   mutual
