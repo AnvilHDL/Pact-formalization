@@ -1,4 +1,5 @@
 import Anvilpp.Base
+import Anvilpp.Proc
 import Anvilpp.Types
 
 /-- Abstract versions of transition labels for automata. -/
@@ -18,6 +19,14 @@ namespace AbstractTransLabel
     | branchTrue _ => true
     | branchFalse _ => true
     | dollar _ => true
+
+  def fromConcrete : TransLabel → AbstractTransLabel
+    | TransLabel.ε => AbstractTransLabel.ε
+    | TransLabel.tock => AbstractTransLabel.tock
+    | TransLabel.message msg _ => AbstractTransLabel.message msg
+    | TransLabel.branchTrue bid => AbstractTransLabel.branchTrue bid
+    | TransLabel.branchFalse bid => AbstractTransLabel.branchFalse bid
+    | TransLabel.dollar pid => AbstractTransLabel.dollar pid
 end AbstractTransLabel
 
 inductive ProcTyNonInstant : ProcTy → Prop where
@@ -155,16 +164,16 @@ inductive ProcTyTransition : Finset MessageId → ProcTy → AbstractTransLabel 
     ProcTyTransition ex_msg (ProcTy.offer τ_else branch_tys)
       (AbstractTransLabel.message me.messageId) ty
 
-inductive ProcTyAutomatonTransition : ProcTyComposition → AbstractTransLabel → ProcTyComposition → Prop where
+inductive ProcTyCompTransition : ProcTyComposition → AbstractTransLabel → ProcTyComposition → Prop where
   | nonsync (ex_msg : Finset MessageId) (τ τ' : ProcTy) (τs : ProcTyComposition) (lbl : AbstractTransLabel) :
     lbl.isNonsync →
     ProcTyTransition ex_msg τ lbl τ' →
     (∀ msg ∈ ex_msg, ProcTyNonInstantMsg τ msg) →
-    ProcTyAutomatonTransition (τs + {τ}) lbl (τs + {τ'})
+    ProcTyCompTransition (τs + {τ}) lbl (τs + {τ'})
   | message (τ₁ τ₂ τ'₁ τ'₂ : ProcTy) (τs : ProcTyComposition) (msg : MessageId) :
     ProcTyTransition ∅ τ₁ (AbstractTransLabel.message msg) τ'₁ →
     ProcTyTransition ∅ τ₂ (AbstractTransLabel.message msg) τ'₂ →
-    ProcTyAutomatonTransition (τs + {τ₁, τ₂}) (AbstractTransLabel.message msg) (τs + {τ'₁, τ'₂})
+    ProcTyCompTransition (τs + {τ₁, τ₂}) (AbstractTransLabel.message msg) (τs + {τ'₁, τ'₂})
   | tock (τs τs' : ProcTyComposition) :
     Multiset.Rel (fun τ τ' => ProcTyTransition ∅ τ AbstractTransLabel.tock τ') τs τs' →
-    ProcTyAutomatonTransition τs AbstractTransLabel.tock τs'
+    ProcTyCompTransition τs AbstractTransLabel.tock τs'
