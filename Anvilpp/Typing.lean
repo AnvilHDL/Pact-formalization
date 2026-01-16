@@ -73,20 +73,20 @@ mutual
       ProcTyJudgement ctx p₁ τ₁ →
       ProcTyJudgement ctx p₂ τ₂ →
       ProcTyJudgement ctx (Proc.iffair b e p₁ p₂) (ProcTy.choice_fair b τ₁ τ₂)
-    -- | xoffer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
-    --     (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    --   (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
-    --   branches.length = branch_tys.length →
-    --   ∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty →
-    --   ProcTyJudgement ctx p_else τ_else →
-    --   ProcTyJudgement ctx (Proc.xoffer p_else branches) (ProcTy.xoffer τ_else branch_tys)
-    -- | offer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
-    --     (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    --   (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
-    --   branches.length = branch_tys.length →
-    --   ∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty →
-    --   ProcTyJudgement ctx p_else τ_else →
-    --   ProcTyJudgement ctx (Proc.offer p_else branches) (ProcTy.offer τ_else branch_tys)
+    | xoffer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
+        (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+      (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
+      branches.length = branch_tys.length →
+      ∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty →
+      ProcTyJudgement ctx p_else τ_else →
+      ProcTyJudgement ctx (Proc.xoffer p_else branches) (ProcTy.xoffer τ_else branch_tys)
+    | offer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
+        (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+      (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
+      branches.length = branch_tys.length →
+      ∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty →
+      ProcTyJudgement ctx p_else τ_else →
+      ProcTyJudgement ctx (Proc.offer p_else branches) (ProcTy.offer τ_else branch_tys)
     | var (ctx : ProcTyContext) (x : String) (τ : ProcTy) :
       ctx.procVars x = some τ →
       ProcTyJudgement ctx (Proc.var x) τ

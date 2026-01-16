@@ -37,14 +37,14 @@ inductive AbsentIn : String → ProcTy → Prop where
     AbsentIn x τ₁ →
     AbsentIn x τ₂ →
     AbsentIn x (ProcTy.seq τ₁ τ₂)
-  -- | xoffer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   AbsentIn x τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → AbsentIn x ty) →
-  --   AbsentIn x (ProcTy.xoffer τ_else branch_tys)
-  -- | offer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   AbsentIn x τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → AbsentIn x ty) →
-  --   AbsentIn x (ProcTy.offer τ_else branch_tys)
+  | xoffer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    AbsentIn x τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → AbsentIn x ty) →
+    AbsentIn x (ProcTy.xoffer τ_else branch_tys)
+  | offer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    AbsentIn x τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → AbsentIn x ty) →
+    AbsentIn x (ProcTy.offer τ_else branch_tys)
   | recur (x x' : String) (body : ProcTy) :
     x ≠ x' →
     AbsentIn x body →
@@ -68,14 +68,14 @@ inductive AtTail : String → ProcTy → Prop where
     AtTail x τ₁ →
     AtTail x τ₂ →
     AtTail x (ProcTy.choice_fair bid τ₁ τ₂)
-  -- | xoffer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   AtTail x τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → AtTail x ty) →
-  --   AtTail x (ProcTy.xoffer τ_else branch_tys)
-  -- | offer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   AtTail x τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → AtTail x ty) →
-  --   AtTail x (ProcTy.offer τ_else branch_tys)
+  | xoffer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    AtTail x τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → AtTail x ty) →
+    AtTail x (ProcTy.xoffer τ_else branch_tys)
+  | offer (x : String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    AtTail x τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → AtTail x ty) →
+    AtTail x (ProcTy.offer τ_else branch_tys)
   | recur (x x' : String) (body : ProcTy) :
     x ≠ x' →
     AtTail x body →
@@ -108,16 +108,16 @@ inductive WellformedTy : ProcTy → Prop where
     WellformedTy τ₁ →
     WellformedTy τ₂ →
     WellformedTy (ProcTy.seq τ₁ τ₂)
-  -- | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   WellformedTy τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
-  --   WellformedTy (ProcTy.xoffer τ_else branch_tys)
-  -- | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   WellformedTy τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
-  --   WellformedTy (ProcTy.offer τ_else branch_tys)
-  -- | var (x : String) :
-  --   WellformedTy (ProcTy.var x)
+  | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    WellformedTy τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
+    WellformedTy (ProcTy.xoffer τ_else branch_tys)
+  | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    WellformedTy τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
+    WellformedTy (ProcTy.offer τ_else branch_tys)
+  | var (x : String) :
+    WellformedTy (ProcTy.var x)
   | recur (x : String) (body : ProcTy) :
     WellformedTy body →
     AtTail x body →
@@ -167,16 +167,16 @@ def reachableTySet (Γ : String → Option ProcTy) (τ : ProcTy) : Finset ProcTy
       let set₂ := reachableTySet Γ τ₂
       (set₁ ×ˢ set₂).image (fun (τ'₁, τ'₂) => ProcTy.par τ'₁ τ'₂) ∪ {ProcTy.skip}
   -- FIXME: check if this is correct
-  -- | .xoffer τ_else branch_tys =>
-  --     let set_else := reachableTySet Γ τ_else
-  --     let set_branches :=
-  --       branch_tys.foldl (fun acc (_, ty) => acc ∪ reachableTySet Γ ty) ∅
-  --     set_else ∪ set_branches ∪ {ProcTy.skip}
-  -- | .offer τ_else branch_tys =>
-  --     let set_else := reachableTySet Γ τ_else
-  --     let set_branches :=
-  --       branch_tys.foldl (fun acc (_, ty) => acc ∪ reachableTySet Γ ty) ∅
-  --     set_else ∪ set_branches ∪ {ProcTy.skip}
+  | .xoffer τ_else branch_tys =>
+      let set_else := reachableTySet Γ τ_else
+      let set_branches :=
+        branch_tys.foldl (fun acc (_, ty) => acc ∪ reachableTySet Γ ty) ∅
+      set_else ∪ set_branches ∪ {ProcTy.skip}
+  | .offer τ_else branch_tys =>
+      let set_else := reachableTySet Γ τ_else
+      let set_branches :=
+        branch_tys.foldl (fun acc (_, ty) => acc ∪ reachableTySet Γ ty) ∅
+      set_else ∪ set_branches ∪ {ProcTy.skip}
   | .var x => (
     match Γ x with
     | some τ' => {τ'}

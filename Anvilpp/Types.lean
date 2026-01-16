@@ -22,8 +22,8 @@ inductive ProcTy : Type where
   | choice_fair : BranchId → ProcTy → ProcTy → ProcTy
   | par : ProcTy → ProcTy → ProcTy
   | seq : ProcTy → ProcTy → ProcTy
-  -- | xoffer : ProcTy → List (MessageExch × ProcTy) → ProcTy
-  -- | offer : ProcTy → List (MessageExch × ProcTy) → ProcTy
+  | xoffer : ProcTy → List (MessageExch × ProcTy) → ProcTy
+  | offer : ProcTy → List (MessageExch × ProcTy) → ProcTy
   | var : String → ProcTy
   | recur : String → ProcTy → ProcTy
 
@@ -48,12 +48,12 @@ namespace ProcTy
           ProcTy.choice_fair bid (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
       | par τ₁ τ₂ => ProcTy.par (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
       | seq τ₁ τ₂ => ProcTy.seq (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
-      -- | xoffer τ_else branch_tys =>
-      --     ProcTy.xoffer (replaceVar τ_else x τ')
-      --       (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
-      -- | offer τ_else branch_tys =>
-      --     ProcTy.offer (replaceVar τ_else x τ')
-      --       (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
+      | xoffer τ_else branch_tys =>
+          ProcTy.xoffer (replaceVar τ_else x τ')
+            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
+      | offer τ_else branch_tys =>
+          ProcTy.offer (replaceVar τ_else x τ')
+            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
       | var y => if x = y then τ' else ProcTy.var y
       | recur y body =>
           if x = y then ProcTy.recur y body

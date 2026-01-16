@@ -17,6 +17,20 @@ def valEval (v₁ v₂ : Bool) (bop : BOp) :=
   | .and => v₁ && v₂
   | .or => v₁ || v₂
 
+
+inductive MessageDir : Type where
+  | send : MessageDir
+  | recv : MessageDir
+  | complete : MessageDir
+  deriving DecidableEq
+
+namespace MessageDir
+  def dual : MessageDir → MessageDir → Bool
+    | send, recv => true
+    | recv, send => true
+    | _, _ => false
+end MessageDir
+
 mutual
   /-- A branch in `offer` or `xoffer`. -/
   inductive ChoiceBranch : Type where
@@ -35,8 +49,8 @@ mutual
     -- | letin : String → Expr → Proc → Proc
     | ifunfair : Expr → Proc → Proc → Proc
     | iffair : BranchId → Expr → Proc → Proc → Proc
-    -- | xoffer : Proc → List ChoiceBranch → Proc
-    -- | offer : Proc → List ChoiceBranch → Proc
+    | xoffer : Proc → List ChoiceBranch → Proc
+    | offer : Proc → List ChoiceBranch → Proc
     /-- Recursion -/
     | recur : String → Proc → Proc
 end
@@ -50,21 +64,15 @@ namespace ChoiceBranch
     | send _ _ p => p
     | recv _ _ p => p
 
-  -- def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
+  def getDir : ChoiceBranch → MessageDir
+    | send _ _ _ => MessageDir.send
+    | recv _ _ _ => MessageDir.recv
+
+  def getMessage (br : ChoiceBranch) : MessageId × MessageDir :=
+    (br.getMessageId, br.getDir)
+
+  def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
 end ChoiceBranch
-
-inductive MessageDir : Type where
-  | send : MessageDir
-  | recv : MessageDir
-  | complete : MessageDir
-  deriving DecidableEq
-
-namespace MessageDir
-  def dual : MessageDir → MessageDir → Bool
-    | send, recv => true
-    | recv, send => true
-    | _, _ => false
-end MessageDir
 
 inductive TransLabel : Type where
   | ε : TransLabel
@@ -148,12 +156,12 @@ namespace Semantics
         Proc.ifunfair (exprReplace e x v) (procExprReplace p₁ x v) (procExprReplace p₂ x v)
       | Proc.iffair bid e p₁ p₂ =>
         Proc.iffair bid (exprReplace e x v) (procExprReplace p₁ x v) (procExprReplace p₂ x v)
-      -- | Proc.xoffer p' branches =>
-      --   Proc.xoffer (procExprReplace p' x v)
-      --     (branches.map fun br => choiceBranchExprReplace br x v)
-      -- | Proc.offer p' branches =>
-      --   Proc.offer (procExprReplace p' x v)
-      --     (branches.map fun br => choiceBranchExprReplace br x v)
+      | Proc.xoffer p' branches =>
+        Proc.xoffer (procExprReplace p' x v)
+          (branches.map fun br => choiceBranchExprReplace br x v)
+      | Proc.offer p' branches =>
+        Proc.offer (procExprReplace p' x v)
+          (branches.map fun br => choiceBranchExprReplace br x v)
       | Proc.recur f p' => Proc.recur f (procExprReplace p' x v)
   end
 
@@ -179,10 +187,10 @@ namespace Semantics
         Proc.ifunfair e (procReplace p₁ f p_body) (procReplace p₂ f p_body)
       | Proc.iffair bid e p₁ p₂ =>
         Proc.iffair bid e (procReplace p₁ f p_body) (procReplace p₂ f p_body)
-      -- | Proc.xoffer p' branches =>
-      --   Proc.xoffer (procReplace p' f p_body) (branches.map fun br => choiceBranchProcReplace br f p_body)
-      -- | Proc.offer p' branches =>
-      --   Proc.offer (procReplace p' f p_body) (branches.map fun br => choiceBranchProcReplace br f p_body)
+      | Proc.xoffer p' branches =>
+        Proc.xoffer (procReplace p' f p_body) (branches.map fun br => choiceBranchProcReplace br f p_body)
+      | Proc.offer p' branches =>
+        Proc.offer (procReplace p' f p_body) (branches.map fun br => choiceBranchProcReplace br f p_body)
       | Proc.recur g p' =>
         if g = f then Proc.recur g p' else Proc.recur g (procReplace p' f p_body)
   end
@@ -201,14 +209,14 @@ namespace Semantics
     | seq_right (p₁ p₂ : Proc) :
       NonInstantReducible p₂ →
       NonInstantReducible (Proc.seq p₁ p₂)
-    -- | xoffer (p_else : Proc) (branches : List ChoiceBranch) :
-    --   NonInstantReducible p_else →
-    --   ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
-    --   NonInstantReducible (Proc.xoffer p_else branches)
-    -- | offer (p_else : Proc) (branches : List ChoiceBranch) :
-    --   NonInstantReducible p_else →
-    --   ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
-    --   NonInstantReducible (Proc.offer p_else branches)
+    | xoffer (p_else : Proc) (branches : List ChoiceBranch) :
+      NonInstantReducible p_else →
+      ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
+      NonInstantReducible (Proc.xoffer p_else branches)
+    | offer (p_else : Proc) (branches : List ChoiceBranch) :
+      NonInstantReducible p_else →
+      ∀ br ∈ branches, NonInstantReducible (ChoiceBranch.getProc br) →
+      NonInstantReducible (Proc.offer p_else branches)
     | ifunfair (e : Expr) (p₁ p₂ : Proc) :
       NonInstantReducible p₁ →
       NonInstantReducible p₂ →
@@ -250,16 +258,16 @@ namespace Semantics
       NonInstantMessage p₁ mx →
       NonInstantReducible p₁ →
       NonInstantMessage (Proc.seq p₁ p₂) mx
-    -- | xoffer (p_else : Proc) (branches : List ChoiceBranch) (m : MessageId) :
-    --   NonInstantMessage p_else m →
-    --   (∀ br ∈ branches, NonInstantMessage br.getProc m) →
-    --   (∀ br ∈ branches, br.getMessageId ≠ m) →
-    --   NonInstantMessage (Proc.xoffer p_else branches) m
-    -- | offer (p_else : Proc) (branches : List ChoiceBranch) (m : MessageId) :
-    --   NonInstantMessage p_else m →
-    --   (∀ br ∈ branches, NonInstantMessage br.getProc m) →
-    --   (∀ br ∈ branches, br.getMessageId ≠ m) →
-    --   NonInstantMessage (Proc.offer p_else branches) m
+    | xoffer (p_else : Proc) (branches : List ChoiceBranch) (mx : MessageId × MessageDir) :
+      NonInstantMessage p_else mx →
+      (∀ br ∈ branches, NonInstantMessage br.getProc mx) →
+      (∀ br ∈ branches, br.getMessage ≠ mx) →
+      NonInstantMessage (Proc.xoffer p_else branches) mx
+    | offer (p_else : Proc) (branches : List ChoiceBranch) (mx : MessageId × MessageDir) :
+      NonInstantMessage p_else mx →
+      (∀ br ∈ branches, NonInstantMessage br.getProc mx) →
+      (∀ br ∈ branches, br.getMessage ≠ mx) →
+      NonInstantMessage (Proc.offer p_else branches) mx
     | ifunfair (e : Expr) (p₁ p₂ : Proc) (mx : MessageId × MessageDir) :
       NonInstantMessage p₁ mx →
       NonInstantMessage p₂ mx →
@@ -331,34 +339,34 @@ namespace Semantics
       Reduces ex_msg₁ p₁ (TransLabel.message msg dir b) p₁' →
       Reduces ex_msg₂ p₂ (TransLabel.message msg dir' b) p₂' →
       Reduces ex_msg (Proc.par p₁ p₂) (TransLabel.message msg dir b) (Proc.par p₁' p₂')
-    -- | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
-    --                      (msg : MessageId) (p' : Proc) (b : Bool) :
-    --   ChoiceBranch.recv msg var p' ∈ branches →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg b) (procExprReplace p' var b)
-    -- | xoffer_branch_send ex_msg (msg : MessageId) (e : Expr) (p_else p' : Proc)
-    --                      (branches : List ChoiceBranch) (b : Bool) :
-    --   ChoiceBranch.send msg e p' ∈ branches →
-    --   e ↓ b →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg b) p'
-    -- | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-    --   ∀ m ∈ branches.map ChoiceBranch.getMessageId, m ∈ ex_msg →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
-    -- | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
-    --                      (msg : MessageId) (b : Bool) (lbranches rbranches : List ChoiceBranch) :
-    --   branches = lbranches ++ (ChoiceBranch.recv msg var p_branch) :: rbranches →
-    --   branches' = lbranches.map ChoiceBranch.toXOffer ++ (procExprReplace p_branch var b) :: rbranches.map ChoiceBranch.toXOffer →
-    --   p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
-    --   Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg b) p'
-    -- | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
-    --                      (lbranches rbranches : List ChoiceBranch) (e : Expr) (b : Bool) :
-    --   e ↓ b →
-    --   branches = lbranches ++ (ChoiceBranch.send msg e p') :: rbranches →
-    --   branches' = lbranches.map ChoiceBranch.toXOffer ++ p_branch :: rbranches.map ChoiceBranch.toXOffer →
-    --   p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
-    --   Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg b) p'
-    -- | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-    --   ∀ m ∈ branches.map ChoiceBranch.getMessageId, m ∈ ex_msg →
-    --   Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
+    | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
+                         (msg : MessageId) (p' : Proc) (b : Bool) :
+      ChoiceBranch.recv msg var p' ∈ branches →
+      Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.recv b) (procExprReplace p' var b)
+    | xoffer_branch_send ex_msg (msg : MessageId) (e : Expr) (p_else p' : Proc)
+                         (branches : List ChoiceBranch) (b : Bool) :
+      ChoiceBranch.send msg e p' ∈ branches →
+      e ↓ b →
+      Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.send b) p'
+    | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
+      ∀ mx ∈ branches.map ChoiceBranch.getMessage, mx ∈ ex_msg →
+      Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
+    | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
+                         (msg : MessageId) (b : Bool) (lbranches rbranches : List ChoiceBranch) :
+      branches = lbranches ++ (ChoiceBranch.recv msg var p_branch) :: rbranches →
+      branches' = lbranches.map ChoiceBranch.toXOffer ++ (procExprReplace p_branch var b) :: rbranches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
+      Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
+    | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
+                         (lbranches rbranches : List ChoiceBranch) (e : Expr) (b : Bool) :
+      e ↓ b →
+      branches = lbranches ++ (ChoiceBranch.send msg e p') :: rbranches →
+      branches' = lbranches.map ChoiceBranch.toXOffer ++ p_branch :: rbranches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
+      Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.send b) p'
+    | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
+      ∀ mx ∈ branches.map ChoiceBranch.getMessage, mx ∈ ex_msg →
+      Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
 
