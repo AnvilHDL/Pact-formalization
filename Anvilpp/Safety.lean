@@ -124,6 +124,12 @@ inductive WellformedTy : ProcTy → Prop where
     WellformedTy (ProcTy.recur x body)
 
 -- TODO: the most important proof
+/-
+  Issues:
+  - Need to ensure that if process is a deadend, then type is also a deadend (i.e., no deadend is removed by typing)
+    - Equivalently, if type is not a deadend, then process is also not a deadend
+  - Maybe need to ignore ε transitions
+-/
 lemma type_emulates_proc : ∀ (comp comp' : Semantics.ProcComp)
                              (comp_ty : ProcTyComposition) (c_lbl : TransLabel),
     CompositionTyJudgement comp comp_ty →
@@ -131,6 +137,13 @@ lemma type_emulates_proc : ∀ (comp comp' : Semantics.ProcComp)
     ∃ comp_ty',
       CompositionTyJudgement comp' comp_ty' ∧
       ProcTyCompTransition comp_ty (AbstractTransLabel.fromConcrete c_lbl) comp_ty' := sorry
+
+lemma deadend_preserved_by_typing :
+  ∀ (comp : Semantics.ProcComp) (comp_ty comp'_ty : ProcTyComposition) (a_lbl : AbstractTransLabel),
+    CompositionTyJudgement comp comp_ty →
+    ProcTyCompTransition comp_ty a_lbl comp'_ty →
+    ∃ (comp' : Semantics.ProcComp) (c_lbl : TransLabel),
+      Semantics.CompReduces comp c_lbl comp' := sorry
 
 def reachableTySet (Γ : String → Option ProcTy) (τ : ProcTy) : Finset ProcTy :=
   match τ with
@@ -150,6 +163,7 @@ def reachableTySet (Γ : String → Option ProcTy) (τ : ProcTy) : Finset ProcTy
       let set₁ := reachableTySet Γ τ₁
       let set₂ := reachableTySet Γ τ₂
       (set₁ ×ˢ set₂).image (fun (τ'₁, τ'₂) => ProcTy.par τ'₁ τ'₂) ∪ {ProcTy.skip}
+  -- FIXME: check if this is correct
   | .xoffer τ_else branch_tys =>
       let set_else := reachableTySet Γ τ_else
       let set_branches :=
