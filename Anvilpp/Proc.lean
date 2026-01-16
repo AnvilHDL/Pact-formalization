@@ -53,21 +53,58 @@ namespace ChoiceBranch
   -- def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
 end ChoiceBranch
 
+inductive MessageDir : Type where
+  | send : MessageDir
+  | recv : MessageDir
+  | complete : MessageDir
+  deriving DecidableEq
+
+namespace MessageDir
+  def dual : MessageDir → MessageDir → Bool
+    | send, recv => true
+    | recv, send => true
+    | _, _ => false
+end MessageDir
+
 inductive TransLabel : Type where
   | ε : TransLabel
   | tock : TransLabel
-  | message : MessageId → Bool → TransLabel
+  | message : MessageId → MessageDir → Bool → TransLabel
   | branchTrue : BranchId → TransLabel
   | branchFalse : BranchId → TransLabel
   | dollar : ProcId → TransLabel
 
 namespace TransLabel
-  def isAsync (α : TransLabel) : Bool :=
+  def isComplete (α : TransLabel) : Bool :=
     match α with
-    | ε | branchTrue _
-    | branchFalse _ | dollar _ => false
-    | tock | message _ _ => true
+    | TransLabel.message _ dir _ => dir = MessageDir.complete
+    | _ => true
 end TransLabel
+
+/-- Abstract versions of transition labels for automata. -/
+inductive AbstractTransLabel : Type where
+  | ε : AbstractTransLabel
+  | tock : AbstractTransLabel
+  | message : MessageId → MessageDir → AbstractTransLabel
+  | branchTrue : BranchId → AbstractTransLabel
+  | branchFalse : BranchId → AbstractTransLabel
+  | dollar : ProcId → AbstractTransLabel
+
+namespace AbstractTransLabel
+  def fromConcrete : TransLabel → AbstractTransLabel
+    | TransLabel.ε => AbstractTransLabel.ε
+    | TransLabel.tock => AbstractTransLabel.tock
+    | TransLabel.message msg dir _ => AbstractTransLabel.message msg dir
+    | TransLabel.branchTrue bid => AbstractTransLabel.branchTrue bid
+    | TransLabel.branchFalse bid => AbstractTransLabel.branchFalse bid
+    | TransLabel.dollar pid => AbstractTransLabel.dollar pid
+
+  def isComplete (α : AbstractTransLabel) : Bool :=
+    match α with
+    | AbstractTransLabel.message _ dir => dir = MessageDir.complete
+    | _ => true
+end AbstractTransLabel
+
 
 namespace Semantics
   inductive ExprEval : Expr → Bool → Prop where
@@ -153,9 +190,9 @@ namespace Semantics
   inductive Reduces : Finset MessageId → Proc → TransLabel → Proc → Prop where
     | send ex_msg (msg : MessageId) (e : Expr) (p : Proc) (b : Bool) :
       e ↓ b →
-      Reduces ex_msg (Proc.send msg e) (TransLabel.message msg b) p
+      Reduces ex_msg (Proc.send msg e) (TransLabel.message msg MessageDir.send b) p
     | recv ex_msg (msg : MessageId) (var : String) (p : Proc) (b : Bool) :
-      Reduces ex_msg (Proc.recv msg var p) (TransLabel.message msg b) (procExprReplace p var b)
+      Reduces ex_msg (Proc.recv msg var p) (TransLabel.message msg MessageDir.recv b) (procExprReplace p var b)
     | seq_step ex_msg (p₁ p₁' p₂ : Proc) (α : TransLabel) :
       Reduces ex_msg p₁ α p₁' →
       Reduces ex_msg (Proc.seq p₁ p₂) α (Proc.seq p₁' p₂)
@@ -193,6 +230,12 @@ namespace Semantics
       Reduces ex_msg (Proc.par p₁ Proc.skip) TransLabel.ε p₁
     | par_skip_left ex_msg (p₂ : Proc) :
       Reduces ex_msg (Proc.par Proc.skip p₂) TransLabel.ε p₂
+    | par_message ex_msg (msg : MessageId) (dir dir' : MessageDir) (b : Bool)
+                      (p₁ p₁' p₂ p₂' : Proc) :
+      MessageDir.dual dir dir' →
+      Reduces ex_msg p₁ (TransLabel.message msg dir b) p₁' →
+      Reduces ex_msg p₂ (TransLabel.message msg dir' b) p₂' →
+      Reduces ex_msg (Proc.par p₁ p₂) (TransLabel.message msg dir b) (Proc.par p₁' p₂')
     -- | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
     --                      (msg : MessageId) (p' : Proc) (b : Bool) :
     --   ChoiceBranch.recv msg var p' ∈ branches →
@@ -304,18 +347,8 @@ namespace Semantics
       NonInstantMessage p_body m →
       NonInstantMessage (Proc.recur f p_body) m
 
-  abbrev ProcComp := Multiset Proc
-  inductive CompReduces : ProcComp → TransLabel → ProcComp → Prop where
-    | nonsync_step (ex_msg : Finset MessageId) (p : Proc) (p' : Proc) (α : TransLabel) (rest : ProcComp) :
-      (∀ po ∈ rest, ∀ m ∈ ex_msg, NonInstantMessage po m) →
-      Reduces ex_msg p α p' → ¬α.isAsync →
-      CompReduces (Multiset.cons p rest) α (Multiset.cons p' rest)
-    | msg_step (ex_msg₁ ex_msg₂ : Finset MessageId) (p₁ p₁' p₂ p₂' : Proc) (msg : MessageId) (b : Bool) (rest : ProcComp) :
-      Reduces ex_msg₁ p₁ (TransLabel.message msg b) p₁' →
-      Reduces ex_msg₂ p₂ (TransLabel.message msg b) p₂' →
-      CompReduces (Multiset.cons p₁ (Multiset.cons p₂ rest)) (TransLabel.message msg b)
-        (Multiset.cons p₁' (Multiset.cons p₂' rest))
-    | tock_step (c c' : ProcComp) :
-      Multiset.Rel (fun p₁ p₂ => Reduces ∅ p₁ TransLabel.tock p₂) c c' →
-      CompReduces c TransLabel.tock c'
+  abbrev ProcComp := Proc
+  def CompReduces (c₁ : ProcComp) (α : TransLabel) (c₂ : ProcComp) : Prop :=
+    ∃ ex_msg : Finset MessageId, Reduces ex_msg c₁ α c₂ ∧ α.isComplete
+
 end Semantics

@@ -96,5 +96,4 @@ mutual
 
 end
 
-def CompositionTyJudgement (comp : Semantics.ProcComp) (comp_ty : ProcTyComposition) : Prop :=
-  Multiset.Rel (ProcTyJudgement ProcTyContext.empty) comp comp_ty
+def CompositionTyJudgement := ProcTyJudgement ProcTyContext.empty

@@ -2,33 +2,6 @@ import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
 
-/-- Abstract versions of transition labels for automata. -/
-inductive AbstractTransLabel : Type where
-  | ε : AbstractTransLabel
-  | tock : AbstractTransLabel
-  | message : MessageId → AbstractTransLabel
-  | branchTrue : BranchId → AbstractTransLabel
-  | branchFalse : BranchId → AbstractTransLabel
-  | dollar : ProcId → AbstractTransLabel
-
-namespace AbstractTransLabel
-  def isNonsync : AbstractTransLabel → Bool
-    | ε => true
-    | tock => false
-    | message _ => false
-    | branchTrue _ => true
-    | branchFalse _ => true
-    | dollar _ => true
-
-  def fromConcrete : TransLabel → AbstractTransLabel
-    | TransLabel.ε => AbstractTransLabel.ε
-    | TransLabel.tock => AbstractTransLabel.tock
-    | TransLabel.message msg _ => AbstractTransLabel.message msg
-    | TransLabel.branchTrue bid => AbstractTransLabel.branchTrue bid
-    | TransLabel.branchFalse bid => AbstractTransLabel.branchFalse bid
-    | TransLabel.dollar pid => AbstractTransLabel.dollar pid
-end AbstractTransLabel
-
 inductive ProcTyNonInstant : ProcTy → Prop where
   | cycle :
     ProcTyNonInstant ProcTy.cycle
@@ -111,9 +84,9 @@ inductive ProcTyNonInstantMsg : ProcTy → MessageId → Prop where
 
 inductive ProcTyTransition : Finset MessageId → ProcTy → AbstractTransLabel → ProcTy → Prop where
   | message_send ex_msg (msg : MessageId) (τ : ProcTy) :
-    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.send msg) (AbstractTransLabel.message msg) τ
+    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.send msg) (AbstractTransLabel.message msg MessageDir.send) τ
   | message_recv ex_msg (msg : MessageId) (τ : ProcTy) :
-    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.recv msg) (AbstractTransLabel.message msg) τ
+    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.recv msg) (AbstractTransLabel.message msg MessageDir.recv) τ
   | par_left ex_msg (τ₁ τ₁' τ₂ : ProcTy) (lbl : AbstractTransLabel) :
     lbl ≠ AbstractTransLabel.tock →
     ProcTyTransition ex_msg τ₁ lbl τ₁' →
@@ -130,6 +103,11 @@ inductive ProcTyTransition : Finset MessageId → ProcTy → AbstractTransLabel 
     ProcTyTransition ex_msg (ProcTy.par ProcTy.skip τ₂) AbstractTransLabel.ε τ₂
   | par_skip_right ex_msg (τ₁ : ProcTy) :
     ProcTyTransition ex_msg (ProcTy.par τ₁ ProcTy.skip) AbstractTransLabel.ε τ₁
+  | par_message ex_msg (τ₁ τ₂ τ'₁ τ'₂ : ProcTy) (msg : MessageId) (d₁ d₂ : MessageDir) :
+    MessageDir.dual d₁ d₂ →
+    ProcTyTransition ∅ τ₁ (AbstractTransLabel.message msg d₁) τ'₁ →
+    ProcTyTransition ∅ τ₂ (AbstractTransLabel.message msg d₂) τ'₂ →
+    ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) (AbstractTransLabel.message msg MessageDir.complete) (ProcTy.par τ'₁ τ'₂)
   | seq_step ex_msg (τ₁ τ₁' τ₂ : ProcTy) (lbl : AbstractTransLabel) :
     ProcTyTransition ex_msg τ₁ lbl τ₁' →
     ProcTyTransition ex_msg (ProcTy.seq τ₁ τ₂) lbl (ProcTy.seq τ₁' τ₂)
@@ -164,19 +142,10 @@ inductive ProcTyTransition : Finset MessageId → ProcTy → AbstractTransLabel 
   --   ProcTyTransition ex_msg (ProcTy.offer τ_else branch_tys)
   --     (AbstractTransLabel.message me.messageId) ty
 
-inductive ProcTyCompTransition : ProcTyComposition → AbstractTransLabel → ProcTyComposition → Prop where
-  | nonsync (ex_msg : Finset MessageId) (τ τ' : ProcTy) (τs : ProcTyComposition) (lbl : AbstractTransLabel) :
-    lbl.isNonsync →
-    ProcTyTransition ex_msg τ lbl τ' →
-    (∀ msg ∈ ex_msg, ProcTyNonInstantMsg τ msg) →
-    ProcTyCompTransition (τs + {τ}) lbl (τs + {τ'})
-  | message (τ₁ τ₂ τ'₁ τ'₂ : ProcTy) (τs : ProcTyComposition) (msg : MessageId) :
-    ProcTyTransition ∅ τ₁ (AbstractTransLabel.message msg) τ'₁ →
-    ProcTyTransition ∅ τ₂ (AbstractTransLabel.message msg) τ'₂ →
-    ProcTyCompTransition (τs + {τ₁, τ₂}) (AbstractTransLabel.message msg) (τs + {τ'₁, τ'₂})
-  | tock (τs τs' : ProcTyComposition) :
-    Multiset.Rel (fun τ τ' => ProcTyTransition ∅ τ AbstractTransLabel.tock τ') τs τs' →
-    ProcTyCompTransition τs AbstractTransLabel.tock τs'
+def ProcTyCompTransition (τ₁ : ProcTyComposition) (lbl : AbstractTransLabel) (τ₂ : ProcTyComposition) : Prop :=
+  lbl.isComplete ∧
+  ∃ ex_msg : Finset MessageId,
+    ProcTyTransition ex_msg τ₁ lbl τ₂
 
 inductive ProcTyReachable : ProcTy → ProcTy → Prop where
   | base (τ : ProcTy) :

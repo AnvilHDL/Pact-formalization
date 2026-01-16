@@ -63,4 +63,4 @@ namespace ProcTy
   end
 end ProcTy
 
-abbrev ProcTyComposition := Multiset ProcTy
+abbrev ProcTyComposition := ProcTy

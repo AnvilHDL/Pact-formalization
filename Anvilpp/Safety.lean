@@ -195,12 +195,3 @@ decreasing_by
 
 lemma reachable_types_in_set :
   ∀ (τ τ' : ProcTy), ProcTyReachable τ τ' → τ' ∈ reachableTySet (fun _ => none) τ := sorry
-
-/-
-  Similarly for compositions.
--/
-
-lemma reachable_comp_types_in_set :
-  ∀ (comp comp' : ProcTyComposition),
-    ProcTyCompReachable comp comp' →
-    Multiset.Rel (fun τ τ' => τ' ∈ reachableTySet (fun _ => none) τ) comp comp' := sorry
