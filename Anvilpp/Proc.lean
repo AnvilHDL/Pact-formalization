@@ -251,6 +251,9 @@ namespace Semantics
     | recur (f : String) (p_body : Proc) :
       NonInstantReducible p_body →
       NonInstantReducible (Proc.recur f p_body)
+    | recv (msg : MessageId) (var : String) (p : Proc) :
+      NonInstantReducible p →
+      NonInstantReducible (Proc.recv msg var p)
 
   inductive NonInstantMessage : Proc → (MessageId × MessageDir) → Prop where
     | recv (msg m : MessageId) (var : String) (p : Proc) :
