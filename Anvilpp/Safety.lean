@@ -130,28 +130,286 @@ inductive WellformedTy : ProcTy → Prop where
     - Equivalently, if type is not a deadend, then process is also not a deadend
   - Maybe need to ignore ε transitions
 -/
-lemma type_emulates_proc : ∀ (comp comp' : Semantics.ProcComp)
-                             (comp_ty : ProcTyComposition) (c_lbl : TransLabel),
-    CompositionTyJudgement comp comp_ty →
-    Semantics.CompReduces comp c_lbl comp' →
-    ∃ comp_ty',
-      CompositionTyJudgement comp' comp_ty' ∧
-      ProcTyCompTransition comp_ty (AbstractTransLabel.fromConcrete c_lbl) comp_ty' := by sorry
-    -- intro comp comp' comp_ty c_lbl H_judg H_red
-    -- induction H_red generalizing comp_ty
+lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
+                             (τ : ProcTyComposition) (c_lbl : TransLabel),
+    CompositionTyJudgement p τ →
+    Semantics.CompReduces p c_lbl p' →
+    ∃ τ',
+      CompositionTyJudgement p' τ' ∧
+      ProcTyCompTransition τ (AbstractTransLabel.fromConcrete c_lbl) τ' := by
+    intro p p' τ c_lbl H_typing H_reduces
+    revert H_typing τ
+    unfold Semantics.CompReduces at H_reduces
+    have ⟨ex_msg, ⟨H_reduces, H_complete⟩⟩ := H_reduces
+    induction H_reduces
+    case tock ex_msg' =>
+      intro τ H_typing
+      cases H_typing
+      exists ProcTy.skip
+      constructor
+      . unfold CompositionTyJudgement
+        apply ProcTyJudgement.skip
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . exists ∅
+          apply ProcTyTransition.tock
+    case seq_skip =>
+      intro τ H_typing
+      sorry
+    case seq_step =>
+      intro τ H_typing
+      rename_i H_ind
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      rename TransLabel => α
+      rename Finset _ => ex_msg'
+      rename_i H_red
+      have H_ind' := H_ind ⟨ex_msg', ⟨H_red, H_complete⟩⟩ H_complete τ₁ H_typing₁
+      have ⟨τ₁', H_ind'⟩ := H_ind'
+      exists ProcTy.seq τ₁' τ₂
+      constructor
+      . apply ProcTyJudgement.seq
+        . exact H_ind'.1
+        . exact H_typing₂
+      . unfold ProcTyCompTransition
+        constructor
+        . rewrite [AbstractTransLabel.fromConcrete_isComplete]
+          assumption
+        . unfold ProcTyCompTransition at H_ind'
+          have ⟨ex_msg'', H_transition⟩ := H_ind'.2.2
+          exists ex_msg''
+          apply ProcTyTransition.seq_step
+          exact H_transition
+    case send =>
+      intro τ H_typing
+      exists ProcTy.skip
+    case recv =>
+      intro τ H_typing
+      exists ProcTy.skip
+    case par_skip_left =>
+      intro τ H_typing
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      exists τ₂
+      constructor
+      . exact H_typing₂
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          cases H_typing₁
+          apply ProcTyTransition.par_skip_left
+    case par_skip_right =>
+      intro τ H_typing
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      exists τ₁
+      constructor
+      . exact H_typing₁
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          cases H_typing₂
+          apply ProcTyTransition.par_skip_right
+    case par_left =>
+      intro τ H_typing
+      rename_i H_red₁ H_ind
+      rename Finset _ => ex_msg'
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      have ⟨τ₁', H_ind'⟩ := H_ind ⟨ex_msg', ⟨H_red₁, H_complete⟩⟩ H_complete τ₁ H_typing₁
+      exists ProcTy.par τ₁' τ₂
+      constructor
+      . apply ProcTyJudgement.par
+        . exact H_ind'.1
+        . exact H_typing₂
+      . unfold ProcTyCompTransition
+        constructor
+        . rewrite [AbstractTransLabel.fromConcrete_isComplete]
+          assumption
+        . unfold ProcTyCompTransition at H_ind'
+          have ⟨ex_msg'', H_transition⟩ := H_ind'.2.2
+          exists ex_msg''
+          apply ProcTyTransition.par_left (ex_msg' := ex_msg' ∩ ex_msg'')
+          . rename_i H_not_tock _ _
+            rename TransLabel => α
+            apply (AbstractTransLabel.fromConcrete_nontock α).mp
+            exact H_not_tock
+          . simp
+          . sorry -- FIXME: prove this in a separate lemma
+          . exact H_transition
+    case par_right => -- symmetrical
+      intro τ H_typing
+      rename_i H_red₂ H_ind
+      rename Finset _ => ex_msg'
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      have ⟨τ₂', H_ind'⟩ := H_ind ⟨ex_msg', ⟨H_red₂, H_complete⟩⟩ H_complete τ₂ H_typing₂
+      exists ProcTy.par τ₁ τ₂'
+      constructor
+      . apply ProcTyJudgement.par
+        . exact H_typing₁
+        . exact H_ind'.1
+      . unfold ProcTyCompTransition
+        constructor
+        . rewrite [AbstractTransLabel.fromConcrete_isComplete]
+          assumption
+        . unfold ProcTyCompTransition at H_ind'
+          have ⟨ex_msg'', H_transition⟩ := H_ind'.2.2
+          exists ex_msg''
+          apply ProcTyTransition.par_right (ex_msg' := ex_msg' ∩ ex_msg'')
+          . rename_i H_not_tock _ _
+            rename TransLabel => α
+            apply (AbstractTransLabel.fromConcrete_nontock α).mp
+            exact H_not_tock
+          . simp
+          . sorry -- FIXME: prove this in a separate lemma
+          . exact H_transition
+    case par_tock => sorry
+    case recur_unfold =>
+      intro τ H_typing
+      cases H_typing
+      rename String => X
+      rename ProcTy => τ
+      exists τ.replaceVar X (ProcTy.recur X τ)
+      unfold CompositionTyJudgement
+      constructor
+      . sorry -- FIXME: prove this separately in a lemma
+      . unfold ProcTyCompTransition
+        constructor
+        . rewrite [AbstractTransLabel.fromConcrete_isComplete]
+          aesop
+        . exists ∅
+          apply ProcTyTransition.recur_unfold
+    case ifunfair_true =>
+      intro τ H_typing
+      cases H_typing
+      rename_i τ₁ τ₂ ctx H_typing₁ H_typing₂
+      exists τ₁
+      constructor
+      . exact H_typing₁
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          apply ProcTyTransition.choice_left
+    case ifunfair_false =>
+      -- symmetrical
+      intro τ H_typing
+      cases H_typing
+      rename_i τ₁ τ₂ ctx H_typing₁ H_typing₂
+      exists τ₂
+      constructor
+      . exact H_typing₂
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          apply ProcTyTransition.choice_right
+    case iffair_true =>
+      intro τ H_typing
+      cases H_typing
+      rename_i bid τ₁ τ₂ ctx H_typing₁ H_typing₂
+      exists τ₁
+      constructor
+      . exact H_typing₁
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          apply ProcTyTransition.choice_fair_left
+    case iffair_false =>
+      -- symmetrical
+      intro τ H_typing
+      cases H_typing
+      rename_i bid τ₁ τ₂ ctx H_typing₁ H_typing₂
+      exists τ₂
+      constructor
+      . exact H_typing₂
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        unfold ProcTyCompTransition
+        constructor
+        . aesop
+        . have ⟨ex_msg'', H_red⟩ := H_reduces
+          exists ex_msg''
+          apply ProcTyTransition.choice_fair_right
+    case par_message =>
+      intro τ H_typing
+      rename_i H_sub₁ H_sub₂ H_nim₁ H_nim₂ H_red₁ H_red₂ H_ih₁ H_ih₂
+      rename MessageId => msg
+      rename_i ex_msg₁ ex_msg₂ dir dir' b p₁ p₁' p₂ p₂' H_dual
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      unfold TransLabel.isComplete at H_complete
+      simp at H_complete
+      rewrite [H_complete] at H_dual
+      unfold MessageDir.dual at H_dual
+      simp at H_dual
+      -- have ⟨τ₁', H_ih₁'⟩ := H_ih₁ ⟨ex_msg₁, ⟨H_red₁, H_complete⟩⟩ H_complete τ₁ H_typing₁
 
 
 lemma deadend_preserved_by_typing :
-  ∀ (comp : Semantics.ProcComp) (comp_ty comp'_ty : ProcTyComposition) (a_lbl : AbstractTransLabel),
-    CompositionTyJudgement comp comp_ty →
-    ProcTyCompTransition comp_ty a_lbl comp'_ty →
-    ∃ (comp' : Semantics.ProcComp) (c_lbl : TransLabel),
-      Semantics.CompReduces comp c_lbl comp' := sorry
+  ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (l : AbstractTransLabel),
+    CompositionTyJudgement p τ →
+    ProcTyCompTransition τ l τ' →
+    ∃ (p' : Semantics.ProcComp) (α : TransLabel),
+      Semantics.CompReduces p α p' := by
+
+    intro p τ τ' l H_typing
+    induction τ using ProcTy.ind
+    case H_skip =>
+      cases H_typing
+      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+      cases H_trans
+    case H_cycle =>
+      cases H_typing
+      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+      exists Proc.skip, TransLabel.tock
+      unfold Semantics.CompReduces
+      exists ∅
+      constructor
+      . apply Semantics.Reduces.tock
+      . aesop
+    case H_dollar pid =>
+      cases H_typing
+      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+      exists Proc.skip, TransLabel.dollar pid
+    case H_message msg =>
+      cases H_typing
+      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+      rename MessageId => msg
+      rename Proc => p
+      rename Expr => e
+      cases H_trans
+      unfold AbstractTransLabel.isComplete at H_complete
+      simp at H_complete
+    all_goals sorry
+
 
 def reachableTySet (Γ : String → Option ProcTy) (τ : ProcTy) : Finset ProcTy :=
   match τ with
   | .message x => {ProcTy.message x, ProcTy.skip}
-  | .cycle => {ProcTy.cycle} ∪ {ProcTy.skip}
+  | .cycle => {ProcTy.cycle, ProcTy.skip}
   | .skip => {ProcTy.skip}
   | .dollar pid => {ProcTy.dollar pid, ProcTy.skip}
   | .seq τ₁ τ₂ =>

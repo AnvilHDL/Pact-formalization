@@ -61,6 +61,28 @@ namespace ProcTy
     decreasing_by  -- FIXME: prove termination
       all_goals sorry
   end
+
+  -- TODO: see if this is actually useful
+  theorem ind {C : ProcTy → Prop}
+      (H_message : ∀ me, C (ProcTy.message me))
+      (H_cycle : C ProcTy.cycle)
+      (H_skip : C ProcTy.skip)
+      (H_dollar : ∀ pid, C (ProcTy.dollar pid))
+      (H_choice : ∀ τ₁ τ₂, C τ₁ → C τ₂ → C (ProcTy.choice τ₁ τ₂))
+      (H_choice_fair : ∀ bid τ₁ τ₂, C τ₁ → C τ₂ → C (ProcTy.choice_fair bid τ₁ τ₂))
+      (H_par : ∀ τ₁ τ₂, C τ₁ → C τ₂ → C (ProcTy.par τ₁ τ₂))
+      (H_seq : ∀ τ₁ τ₂, C τ₁ → C τ₂ → C (ProcTy.seq τ₁ τ₂))
+      (H_xoffer : ∀ τ_else branch_tys,
+          C τ_else →
+          (∀ me ty, (me, ty) ∈ branch_tys → C ty) →
+          C (ProcTy.xoffer τ_else branch_tys))
+      (H_offer : ∀ τ_else branch_tys,
+          C τ_else →
+          (∀ me ty, (me, ty) ∈ branch_tys → C ty) →
+          C (ProcTy.offer τ_else branch_tys))
+      (H_var : ∀ x, C (ProcTy.var x))
+      (H_recur : ∀ x body, C body → C (ProcTy.recur x body)) :
+      ∀ τ, C τ := sorry
 end ProcTy
 
 abbrev ProcTyComposition := ProcTy

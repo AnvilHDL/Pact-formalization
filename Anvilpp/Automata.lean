@@ -87,6 +87,8 @@ inductive ProcTyNonInstantMsg : ProcTy → (MessageId × MessageDir) → Prop wh
     ProcTyNonInstantMsg (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.send)
 
 inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → AbstractTransLabel → ProcTy → Prop where
+  | tock ex_msg :
+    ProcTyTransition ex_msg ProcTy.cycle AbstractTransLabel.tock ProcTy.skip
   | message_send ex_msg (msg : MessageId) (τ : ProcTy) :
     ProcTyTransition ex_msg (ProcTy.message $ MessageExch.send msg) (AbstractTransLabel.message msg MessageDir.send) τ
   | message_recv ex_msg (msg : MessageId) (τ : ProcTy) :
