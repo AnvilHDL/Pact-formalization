@@ -97,18 +97,18 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
     lbl ≠ AbstractTransLabel.tock →
     ex_msg' ⊆ ex_msg →
     (∀ mx ∈ ex_msg', ProcTyNonInstantMsg τ₂ mx) →
-    ProcTyTransition ex_msg τ₁ lbl τ₁' →
+    ProcTyTransition ex_msg' τ₁ lbl τ₁' →
     ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂)
   | par_right ex_msg ex_msg' (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
     lbl ≠ AbstractTransLabel.tock →
     ex_msg' ⊆ ex_msg →
     (∀ mx ∈ ex_msg', ProcTyNonInstantMsg τ₁ mx) →
-    ProcTyTransition ex_msg τ₂ lbl τ₂' →
+    ProcTyTransition ex_msg' τ₂ lbl τ₂' →
     ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁ τ₂')
-  | par_tock ex_msg (τ₁ τ₂ : ProcTy) :
-    ProcTyTransition ex_msg τ₁ AbstractTransLabel.tock τ₁ →
-    ProcTyTransition ex_msg τ₂ AbstractTransLabel.tock τ₂ →
-    ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) AbstractTransLabel.tock (ProcTy.par τ₁ τ₂)
+  | par_tock ex_msg (τ₁ τ₂ τ₁' τ₂' : ProcTy) :
+    ProcTyTransition ex_msg τ₁ AbstractTransLabel.tock τ₁' →
+    ProcTyTransition ex_msg τ₂ AbstractTransLabel.tock τ₂' →
+    ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) AbstractTransLabel.tock (ProcTy.par τ₁' τ₂')
   | par_skip_left ex_msg (τ₂ : ProcTy) :
     ProcTyTransition ex_msg (ProcTy.par ProcTy.skip τ₂) AbstractTransLabel.ε τ₂
   | par_skip_right ex_msg (τ₁ : ProcTy) :
@@ -176,3 +176,28 @@ inductive ProcTyCompReachable : ProcTyComposition → ProcTyComposition → Prop
     ProcTyCompTransition τs₁ lbl τs₂ →
     ProcTyCompReachable τs₂ τs₃ →
     ProcTyCompReachable τs₁ τs₃
+
+lemma procty_trans_preserved_under_extended_exmsg :
+      ∀ (ex_msg ex_msg' : Finset (MessageId × MessageDir)) (τ₁ τ₂ : ProcTy) (lbl : AbstractTransLabel),
+        ex_msg ⊆ ex_msg' →
+        ProcTyTransition ex_msg τ₁ lbl τ₂ →
+        ProcTyTransition ex_msg' τ₁ lbl τ₂ := by
+  intro ex_msg ex_msg' τ₁ τ₂ lbl H_subset H_transition
+  revert H_subset
+  induction H_transition
+  case tock =>
+    intro H_subset
+    apply ProcTyTransition.tock
+  case message_send ex_msg msg τ =>
+    intro H_subset
+    apply ProcTyTransition.message_send
+  case message_recv ex_msg msg τ =>
+    intro H_subset
+    apply ProcTyTransition.message_recv
+  case par_left ex_msg ex_msg' τ₁ τ₁' τ₂ lbl H_neq H_subset H_non_instant H_transition IH =>
+    intro H_subset_total
+    apply ProcTyTransition.par_left
+    . exact H_neq
+    . sorry
+    all_goals sorry
+  all_goals sorry

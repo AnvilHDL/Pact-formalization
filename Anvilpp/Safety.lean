@@ -400,6 +400,16 @@ lemma non_instant_msg_preservation :
     all_goals sorry
   all_goals sorry -- FIXME: complete
 
+
+lemma recursion_unfolding_preserved :
+      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String),
+        ProcTyJudgement (ctx.extendProcVar x) p τ →
+        ProcTyJudgement ctx (Semantics.procReplace p x (Proc.recur x p)) (τ.replaceVar x $ ProcTy.recur x τ) := by
+
+  sorry
+
+
+
 -- TODO: the most important proof
 /-
   Issues:
@@ -529,8 +539,8 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           assumption
         . unfold ProcTyCompTransition at H_ind'
           have ⟨ex_msg'', H_transition⟩ := H_ind'.2.2
-          exists ex_msg''
-          apply ProcTyTransition.par_left (ex_msg' := ex_msg' ∩ ex_msg'')
+          exists ex_msg' ∪ ex_msg''
+          apply ProcTyTransition.par_left (ex_msg' := ex_msg'')
           . rename_i H_not_tock _ _
             rename TransLabel => α
             apply (AbstractTransLabel.fromConcrete_nontock α).mp
@@ -543,7 +553,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
             intro mx H_mx
             apply (H_msg mx).mp
             apply H_non_instant
-            aesop
+            sorry -- FIXME: need to prove something a bit stronger
           . exact H_transition
     case par_right => -- symmetrical
       intro τ H_typing
@@ -578,8 +588,34 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
             apply (H_msg mx).mp
             apply H_non_instant
             aesop
-          . exact H_transition
-    case par_tock => sorry
+          . sorry -- FIXME: need to prove something a bit stronger
+    case par_tock =>
+      intro τ H_typing
+      rename_i ex_msg' p₁ p₂ p₁' p₂' H_red₁ H_red₂ H_ind₁ H_ind₂
+      cases H_typing
+      rename_i τ₁ τ₂ H_typing₁ H_typing₂
+      have ⟨τ₁', H_ind₁'⟩ := H_ind₁ ⟨ex_msg', ⟨H_red₁, H_complete⟩⟩ H_complete τ₁ H_typing₁
+      have ⟨τ₂', H_ind₂'⟩ := H_ind₂ ⟨ex_msg', ⟨H_red₂, H_complete⟩⟩ H_complete τ₂ H_typing₂
+      exists ProcTy.par τ₁' τ₂'
+      constructor
+      . apply ProcTyJudgement.par
+        . exact H_ind₁'.1
+        . exact H_ind₂'.1
+      . unfold ProcTyCompTransition
+        constructor
+        . rewrite [AbstractTransLabel.fromConcrete_isComplete]
+          assumption
+        . unfold ProcTyCompTransition at H_ind₁' H_ind₂'
+          have ⟨ex_msg'', H_transition₁⟩ := H_ind₁'.2.2
+          have ⟨ex_msg''', H_transition₂⟩ := H_ind₂'.2.2
+          exists ex_msg'' ∪ ex_msg'''
+          apply ProcTyTransition.par_tock
+          . apply procty_trans_preserved_under_extended_exmsg ex_msg'' (ex_msg'' ∪ ex_msg''')
+            . exact Finset.subset_union_left
+            . exact H_transition₁
+          . apply procty_trans_preserved_under_extended_exmsg ex_msg''' (ex_msg'' ∪ ex_msg''')
+            . exact Finset.subset_union_right
+            . exact H_transition₂
     case recur_unfold =>
       intro τ H_typing
       cases H_typing
@@ -588,7 +624,9 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       exists τ.replaceVar X (ProcTy.recur X τ)
       unfold CompositionTyJudgement
       constructor
-      . sorry -- FIXME: prove this separately in a lemma
+      . rename Proc => p_body
+        apply recursion_unfolding_preserved p_body τ
+        assumption
       . unfold ProcTyCompTransition
         constructor
         . rewrite [AbstractTransLabel.fromConcrete_isComplete]
