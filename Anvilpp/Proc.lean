@@ -315,7 +315,8 @@ namespace Semantics
       e ↓ b →
       Reduces ex_msg (Proc.send msg e) (TransLabel.message msg MessageDir.send b) Proc.skip
     | recv ex_msg (msg : MessageId) (var : String) (p : Proc) (b : Bool) :
-      Reduces ex_msg (Proc.recv msg var p) (TransLabel.message msg MessageDir.recv b) (procExprReplace p var b)
+      Reduces ex_msg (Proc.recv msg var p) (TransLabel.message msg MessageDir.recv b)
+        $ Proc.seq Proc.skip (procExprReplace p var b)
     | seq_step ex_msg (p₁ p₁' p₂ : Proc) (α : TransLabel) :
       Reduces ex_msg p₁ α p₁' →
       Reduces ex_msg (Proc.seq p₁ p₂) α (Proc.seq p₁' p₂)
@@ -366,7 +367,7 @@ namespace Semantics
       (∀ mx ∈ ex_msg₁, NonInstantMessage p₂ mx) →
       Reduces ex_msg₁ p₁ (TransLabel.message msg dir b) p₁' →
       Reduces ex_msg₂ p₂ (TransLabel.message msg dir' b) p₂' →
-      Reduces ex_msg (Proc.par p₁ p₂) (TransLabel.message msg dir b) (Proc.par p₁' p₂')
+      Reduces ex_msg (Proc.par p₁ p₂) (TransLabel.message msg MessageDir.complete b) (Proc.par p₁' p₂')
     -- | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
     --                      (msg : MessageId) (p' : Proc) (b : Bool) :
     --   ChoiceBranch.recv msg var p' ∈ branches →

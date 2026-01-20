@@ -89,10 +89,10 @@ inductive ProcTyNonInstantMsg : ProcTy → (MessageId × MessageDir) → Prop wh
 inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → AbstractTransLabel → ProcTy → Prop where
   | tock ex_msg :
     ProcTyTransition ex_msg ProcTy.cycle AbstractTransLabel.tock ProcTy.skip
-  | message_send ex_msg (msg : MessageId) (τ : ProcTy) :
-    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.send msg) (AbstractTransLabel.message msg MessageDir.send) τ
-  | message_recv ex_msg (msg : MessageId) (τ : ProcTy) :
-    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.recv msg) (AbstractTransLabel.message msg MessageDir.recv) τ
+  | message_send ex_msg (msg : MessageId) :
+    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.send msg) (AbstractTransLabel.message msg MessageDir.send) ProcTy.skip
+  | message_recv ex_msg (msg : MessageId) :
+    ProcTyTransition ex_msg (ProcTy.message $ MessageExch.recv msg) (AbstractTransLabel.message msg MessageDir.recv) ProcTy.skip
   | par_left ex_msg ex_msg' (τ₁ τ₁' τ₂ : ProcTy) (lbl : AbstractTransLabel) :
     lbl ≠ AbstractTransLabel.tock →
     ex_msg' ⊆ ex_msg →
@@ -114,13 +114,14 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
   | par_skip_right ex_msg (τ₁ : ProcTy) :
     ProcTyTransition ex_msg (ProcTy.par τ₁ ProcTy.skip) AbstractTransLabel.ε τ₁
   | par_message ex_msg ex_msg₁ ex_msg₂ (τ₁ τ₂ τ'₁ τ'₂ : ProcTy) (msg : MessageId) (d₁ d₂ : MessageDir) :
+    -- TODO: this can be simplified
     MessageDir.dual d₁ d₂ →
     ex_msg₁ ⊆ ex_msg →
     ex_msg₂ ⊆ ex_msg →
     (∀ mx ∈ ex_msg₂, ProcTyNonInstantMsg τ₁ mx) →
     (∀ mx ∈ ex_msg₁, ProcTyNonInstantMsg τ₂ mx) →
-    ProcTyTransition ∅ τ₁ (AbstractTransLabel.message msg d₁) τ'₁ →
-    ProcTyTransition ∅ τ₂ (AbstractTransLabel.message msg d₂) τ'₂ →
+    ProcTyTransition ex_msg₁ τ₁ (AbstractTransLabel.message msg d₁) τ'₁ →
+    ProcTyTransition ex_msg₂ τ₂ (AbstractTransLabel.message msg d₂) τ'₂ →
     ProcTyTransition ex_msg (ProcTy.par τ₁ τ₂) (AbstractTransLabel.message msg MessageDir.complete) (ProcTy.par τ'₁ τ'₂)
   | seq_step ex_msg (τ₁ τ₁' τ₂ : ProcTy) (lbl : AbstractTransLabel) :
     ProcTyTransition ex_msg τ₁ lbl τ₁' →
@@ -188,10 +189,10 @@ lemma procty_trans_preserved_under_extended_exmsg :
   case tock =>
     intro H_subset
     apply ProcTyTransition.tock
-  case message_send ex_msg msg τ =>
+  case message_send ex_msg msg =>
     intro H_subset
     apply ProcTyTransition.message_send
-  case message_recv ex_msg msg τ =>
+  case message_recv ex_msg msg =>
     intro H_subset
     apply ProcTyTransition.message_recv
   case par_left ex_msg ex_msg' τ₁ τ₁' τ₂ lbl H_neq H_subset H_non_instant H_transition IH =>
