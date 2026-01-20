@@ -1,5 +1,6 @@
 import Mathlib.Data.Finset.Basic
 import Anvilpp.Base
+import Anvilpp.Proc
 
 inductive MessageExch : Type where
   | send : MessageId → MessageExch
@@ -10,6 +11,13 @@ namespace MessageExch
   def messageId : MessageExch → MessageId
     | send msg => msg
     | recv msg => msg
+
+  def direction : MessageExch → MessageDir
+    | send _ => MessageDir.send
+    | recv _ => MessageDir.recv
+
+  def toPair (me : MessageExch) : MessageId × MessageDir :=
+    (me.messageId, me.direction)
 end MessageExch
 
 /-- Process type. -/

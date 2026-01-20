@@ -29,6 +29,12 @@ namespace MessageDir
     | send, recv => true
     | recv, send => true
     | _, _ => false
+
+  def invert (dir : MessageDir) : MessageDir :=
+    match dir with
+    | send => recv
+    | recv => send
+    | complete => complete
 end MessageDir
 
 mutual
@@ -368,36 +374,167 @@ namespace Semantics
       Reduces ex_msg₁ p₁ (TransLabel.message msg dir b) p₁' →
       Reduces ex_msg₂ p₂ (TransLabel.message msg dir' b) p₂' →
       Reduces ex_msg (Proc.par p₁ p₂) (TransLabel.message msg MessageDir.complete b) (Proc.par p₁' p₂')
-    -- | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
-    --                      (msg : MessageId) (p' : Proc) (b : Bool) :
-    --   ChoiceBranch.recv msg var p' ∈ branches →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.recv b) (procExprReplace p' var b)
-    -- | xoffer_branch_send ex_msg (msg : MessageId) (e : Expr) (p_else p' : Proc)
-    --                      (branches : List ChoiceBranch) (b : Bool) :
-    --   ChoiceBranch.send msg e p' ∈ branches →
-    --   e ↓ b →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.send b) p'
-    -- | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-    --   ∀ mx ∈ branches.map ChoiceBranch.getMessage, mx ∈ ex_msg →
-    --   Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
-    -- | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
-    --                      (msg : MessageId) (b : Bool) (lbranches rbranches : List ChoiceBranch) :
-    --   branches = lbranches ++ (ChoiceBranch.recv msg var p_branch) :: rbranches →
-    --   branches' = lbranches.map ChoiceBranch.toXOffer ++ (procExprReplace p_branch var b) :: rbranches.map ChoiceBranch.toXOffer →
-    --   p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
-    --   Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
-    -- | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
-    --                      (lbranches rbranches : List ChoiceBranch) (e : Expr) (b : Bool) :
-    --   e ↓ b →
-    --   branches = lbranches ++ (ChoiceBranch.send msg e p') :: rbranches →
-    --   branches' = lbranches.map ChoiceBranch.toXOffer ++ p_branch :: rbranches.map ChoiceBranch.toXOffer →
-    --   p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
-    --   Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.send b) p'
-    -- | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
-    --   ∀ mx ∈ branches.map ChoiceBranch.getMessage, mx ∈ ex_msg →
-    --   Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
+    | xoffer_branch_recv ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
+                         (msg : MessageId) (p' : Proc) (b : Bool) :
+      ChoiceBranch.recv msg var p' ∈ branches →
+      Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.recv b) (procExprReplace p' var b)
+    | xoffer_branch_send ex_msg (msg : MessageId) (e : Expr) (p_else p' : Proc)
+                         (branches : List ChoiceBranch) (b : Bool) :
+      ChoiceBranch.send msg e p' ∈ branches →
+      e ↓ b →
+      Reduces ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.send b) p'
+    | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
+      (∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) →
+      Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
+    | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch) (idx : Fin branches.length)
+                         (msg : MessageId) (b : Bool) (branches' : List Proc) (p' : Proc) :
+      branches.get idx = ChoiceBranch.recv msg var p_branch →
+      branches' = (branches.map ChoiceBranch.toXOffer).set idx (procExprReplace p_branch var b) →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
+      Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
+    | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
+                         (branches : List ChoiceBranch) (idx : Fin $ branches.length + 1) (branches' : List Proc) (p' : Proc) (e : Expr) (b : Bool) :
+      e ↓ b →
+      branches' = branches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip (p_branch::branches') →
+      Reduces ex_msg (Proc.offer p_else $ branches.insertIdx ↑idx (ChoiceBranch.send msg e p_branch)) (TransLabel.message msg MessageDir.send b) p'
+    | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
+      (∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) →
+      Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
+
+  -- namespace Reduces
+  --   #check rec -- the default induction principle is not strong enough
+
+  --   set_option autoImplicit false
+
+    -- TODO: check if this is actually needed
+    /-- Custom induction principle. -/
+    -- lemma ind {P : (ex_msg : Finset (MessageId × MessageDir)) → (p : Proc) → (α : TransLabel) → (p' : Proc) → Reduces ex_msg p α p' → Prop}
+    --   (tock : ∀ ex_msg,
+    --     P ex_msg Proc.cycle TransLabel.tock Proc.skip (Reduces.tock ex_msg))
+    --   (send : ∀ ex_msg (msg : MessageId) (e : Expr) (b : Bool),
+    --     (H_eval : e ↓ b) →
+    --     P ex_msg (Proc.send msg e) (TransLabel.message msg MessageDir.send b) Proc.skip
+    --       (Reduces.send ex_msg msg e b H_eval))
+    --   (recv : ∀ ex_msg (msg : MessageId) (var : String) (p : Proc) (b : Bool),
+    --     P ex_msg (Proc.recv msg var p) (TransLabel.message msg MessageDir.recv b)
+    --       (Proc.seq Proc.skip (procExprReplace p var b))
+    --       (Reduces.recv ex_msg msg var p b))
+    --   (seq_step : ∀ ex_msg (p₁ p₁' p₂ : Proc) (α : TransLabel)
+    --                     (H_red : Reduces ex_msg p₁ α p₁'),
+    --     (H_ind : P ex_msg p₁ α p₁' H_red) →
+    --     P ex_msg (Proc.seq p₁ p₂) α (Proc.seq p₁' p₂)
+    --       (Reduces.seq_step ex_msg p₁ p₁' p₂ α H_red))
+    --   (seq_skip : ∀ ex_msg (p₂ : Proc),
+    --     P ex_msg (Proc.seq Proc.skip p₂) TransLabel.ε p₂
+    --       (Reduces.seq_skip ex_msg p₂))
+    --   (ifunfair_true : ∀ ex_msg (e : Expr) (p₁ p₂ : Proc) (b : Bool)
+    --                            (H_eval : e ↓ b) (H_bool : b = true),
+    --     P ex_msg (Proc.ifunfair e p₁ p₂) TransLabel.ε p₁
+    --       (Reduces.ifunfair_true ex_msg e p₁ p₂ b H_eval H_bool))
+    --   (ifunfair_false : ∀ ex_msg (e : Expr) (p₁ p₂ : Proc) (b : Bool)
+    --                             (H_eval : e ↓ b) (H_bool : b = false),
+    --     P ex_msg (Proc.ifunfair e p₁ p₂) TransLabel.ε p₂
+    --       (Reduces.ifunfair_false ex_msg e p₁ p₂ b H_eval H_bool))
+    --   (iffair_true : ∀ ex_msg (bid : BranchId) (e : Expr) (p₁ p₂ : Proc) (b : Bool)
+    --                           (H_eval : e ↓ b) (H_bool : b = true),
+    --     P ex_msg (Proc.iffair bid e p₁ p₂) (TransLabel.branchTrue bid) p₁
+    --       (Reduces.iffair_true ex_msg bid e p₁ p₂ b H_eval H_bool))
+    --   (iffair_false : ∀ ex_msg (bid : BranchId) (e : Expr) (p₁ p₂ : Proc) (b : Bool)
+    --                            (H_eval : e ↓ b) (H_bool : b = false),
+    --     P ex_msg (Proc.iffair bid e p₁ p₂) (TransLabel.branchFalse bid) p₂
+    --       (Reduces.iffair_false ex_msg bid e p₁ p₂ b H_eval H_bool))
+    --   (par_left : ∀ ex_msg ex_msg' (p₁ p₁' p₂ : Proc) (α : TransLabel)
+    --                      (H_neq : α ≠ TransLabel.tock)
+    --                      (H_subset : ex_msg' ⊆ ex_msg)
+    --                      (H_noninst : ∀ mx ∈ ex_msg', NonInstantMessage p₂ mx)
+    --                      (H_red : Reduces ex_msg' p₁ α p₁'),
+    --     (H_ind : P ex_msg' p₁ α p₁' H_red) →
+    --     P ex_msg (Proc.par p₁ p₂) α (Proc.par p₁' p₂)
+    --       (Reduces.par_left ex_msg ex_msg' p₁ p₁' p₂ α H_neq H_subset H_noninst H_red))
+    --   (par_right : ∀ ex_msg ex_msg' (p₁ p₂ p₂' : Proc) (α : TransLabel)
+    --                       (H_neq : α ≠ TransLabel.tock)
+    --                       (H_subset : ex_msg' ⊆ ex_msg)
+    --                       (H_noninst : ∀ mx ∈ ex_msg', NonInstantMessage p₁ mx)
+    --                       (H_red : Reduces ex_msg' p₂ α p₂'),
+    --     (H_ind : P ex_msg' p₂ α p₂' H_red) →
+    --     P ex_msg (Proc.par p₁ p₂) α (Proc.par p₁ p₂')
+    --       (Reduces.par_right ex_msg ex_msg' p₁ p₂ p₂' α H_neq H_subset H_noninst H_red))
+    --   (par_tock : ∀ ex_msg (p₁ p₂ p₁' p₂' : Proc)
+    --                      (H_red₁ : Reduces ex_msg p₁ TransLabel.tock p₁')
+    --                      (H_red₂ : Reduces ex_msg p₂ TransLabel.tock p₂'),
+    --     (H_ind₁ : P ex_msg p₁ TransLabel.tock p₁' H_red₁) →
+    --     (H_ind₂ : P ex_msg p₂ TransLabel.tock p₂' H_red₂) →
+    --     P ex_msg (Proc.par p₁ p₂) TransLabel.tock (Proc.par p₁' p₂')
+    --       (Reduces.par_tock ex_msg p₁ p₂ p₁' p₂' H_red₁ H_red₂))
+    --   (par_skip_right : ∀ ex_msg (p₁ : Proc),
+    --     P ex_msg (Proc.par p₁ Proc.skip) TransLabel.ε p₁
+    --       (Reduces.par_skip_right ex_msg p₁))
+    --   (par_skip_left : ∀ ex_msg (p₂ : Proc),
+    --     P ex_msg (Proc.par Proc.skip p₂) TransLabel.ε p₂
+    --       (Reduces.par_skip_left ex_msg p₂))
+    --   (par_message : ∀ ex_msg ex_msg₁ ex_msg₂ (msg : MessageId) (dir dir' : MessageDir) (b : Bool)
+    --                        (p₁ p₁' p₂ p₂' : Proc)
+    --                        (H_dual : MessageDir.dual dir dir')
+    --                        (H_subset₁ : ex_msg₁ ⊆ ex_msg)
+    --                        (H_subset₂ : ex_msg₂ ⊆ ex_msg)
+    --                        (H_noninst₁ : ∀ mx ∈ ex_msg₂, NonInstantMessage p₁ mx)
+    --                        (H_noninst₂ : ∀ mx ∈ ex_msg₁, NonInstantMessage p₂ mx)
+    --                        (H_red₁ : Reduces ex_msg₁ p₁ (TransLabel.message msg dir b) p₁')
+    --                        (H_red₂ : Reduces ex_msg₂ p₂ (TransLabel.message msg dir' b) p₂'),
+    --     (H_ind₁ : P ex_msg₁ p₁ (TransLabel.message msg dir b) p₁' H_red₁) →
+    --     (H_ind₂ : P ex_msg₂ p₂ (TransLabel.message msg dir' b) p₂' H_red₂) →
+    --     P ex_msg (Proc.par p₁ p₂) (TransLabel.message msg MessageDir.complete b) (Proc.par p₁' p₂')
+    --       (Reduces.par_message ex_msg ex_msg₁ ex_msg₂ msg dir dir' b p₁ p₁' p₂ p₂' H_dual H_subset₁ H_subset₂ H_noninst₁ H_noninst₂ H_red₁ H_red₂))
+    --   (xoffer_branch_recv : ∀ ex_msg (var : String) (p_else : Proc) (branches : List ChoiceBranch)
+    --                                (msg : MessageId) (p' : Proc) (b : Bool)
+    --                                (H_in : ChoiceBranch.recv msg var p' ∈ branches),
+    --     P ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.recv b) (procExprReplace p' var b)
+    --       (Reduces.xoffer_branch_recv ex_msg var p_else branches msg p' b H_in))
+    --   (xoffer_branch_send : ∀ ex_msg (msg : MessageId) (e : Expr) (p_else p' : Proc)
+    --                                (branches : List ChoiceBranch) (b : Bool)
+    --                                (H_in : ChoiceBranch.send msg e p' ∈ branches)
+    --                                (H_eval : e ↓ b),
+    --     P ex_msg (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.send b) p'
+    --       (Reduces.xoffer_branch_send ex_msg msg e p_else p' branches b H_in H_eval))
+    --   (xoffer_branch_else : ∀ ex_msg (p_else : Proc) (branches : List ChoiceBranch)
+    --                                (H_cond : ∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg),
+    --     P ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
+    --       (Reduces.xoffer_branch_else ex_msg p_else branches H_cond))
+    --   (offer_branch_recv : ∀ ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch)
+    --                                (msg : MessageId) (b : Bool)
+    --                                (lbranches rbranches : List ChoiceBranch)
+    --                                (branches' : List Proc)
+    --                                (p' : Proc)
+    --                                (H_eq₁ : branches = lbranches ++ (ChoiceBranch.recv msg var p_branch) :: rbranches)
+    --                                (H_eq₂ : branches' = lbranches.map ChoiceBranch.toXOffer ++ (procExprReplace p_branch var b) :: rbranches.map ChoiceBranch.toXOffer)
+    --                                (H_eq₃ : p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches'),
+    --     P ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
+    --       (Reduces.offer_branch_recv ex_msg var p_branch p_else branches msg b lbranches rbranches branches' p' H_eq₁ H_eq₂ H_eq₃))
+    --   (offer_branch_send : ∀ ex_msg (msg : MessageId) (p_else p_branch : Proc)
+    --                                (branches lbranches rbranches : List ChoiceBranch)
+    --                                (branches' : List Proc)
+    --                                (p' : Proc)
+    --                                (e : Expr) (b : Bool)
+    --                                (H_eval : e ↓ b)
+    --                                (H_eq₁ : branches = lbranches ++ (ChoiceBranch.send msg e p') :: rbranches)
+    --                                (H_eq₂ : branches' = lbranches.map ChoiceBranch.toXOffer ++ p_branch :: rbranches.map ChoiceBranch.toXOffer)
+    --                                (H_eq₃ : p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches'),
+    --     P ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.send b) p'
+    --       (Reduces.offer_branch_send ex_msg msg p_else p_branch branches lbranches rbranches branches' p' e b H_eval H_eq₁ H_eq₂ H_eq₃))
+    --   (offer_branch_else : ∀ ex_msg (p_else : Proc) (branches : List ChoiceBranch)
+    --                                (H_cond : ∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg),
+    --     P ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
+    --       (Reduces.offer_branch_else ex_msg p_else branches H_cond))
+    --   (recur_unfold : ∀ ex_msg (f : String) (p_body : Proc),
+    --     P ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
+    --       (Reduces.recur_unfold ex_msg f p_body))
+
+    --     : ∀ {ex_msg p α p'} (H_red : Reduces ex_msg p α p'), P ex_msg p α p' H_red := by sorry
+
+  -- end Reduces
 
   abbrev ProcComp := Proc
   def CompReduces (c₁ : ProcComp) (α : TransLabel) (c₂ : ProcComp) : Prop :=

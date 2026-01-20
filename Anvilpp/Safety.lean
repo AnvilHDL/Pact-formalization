@@ -2,6 +2,7 @@ import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Insert
 import Mathlib.Data.Finset.Image
 import Mathlib.Data.Finset.Prod
+import Mathlib.Data.List.Zip
 import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
@@ -299,9 +300,11 @@ lemma non_instant_red_preservation :
   case H_xoffer =>
     intro ctx p H_typing
     cases H_typing -- TODO: would need to complete once we add xoffer back
+    sorry
   case H_offer =>
     intro ctx p H_typing
     cases H_typing -- TODO: would need to complete once we add offer back
+    sorry
 
 
 lemma non_instant_msg_preservation :
@@ -408,6 +411,28 @@ lemma recursion_unfolding_preserved :
 
   sorry
 
+lemma zip_list_exists : ∀ {T U : Type} (l₁ : List T) (l₂ : List U) (v₁ : T),
+    l₁.length ≤ l₂.length → v₁ ∈ l₁ → ∃ v₂, (v₁, v₂) ∈ List.zip l₁ l₂ := by sorry -- FIXME: obvious
+
+lemma zip_list_split : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (l₂ : List U),
+    (ll₁ ++ e₁ :: rl₁).length = l₂.length →
+    ∃ (ll₂ rl₂ : List U) (e₂ : U),
+      l₂ = ll₂ ++ e₂ :: rl₂ ∧ (ll₁ ++ e₁ :: rl₁).zip l₂ = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂
+        ∧ ll₁.length = ll₂.length ∧ rl₁.length = rl₂.length := by sorry -- FIXME: obvious
+
+lemma zip_list_split₂ : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (ll₂ rl₂ : List U) (e₂ : U),
+    ll₁.length = ll₂.length → rl₁.length = rl₂.length →
+    (ll₁ ++ e₁ :: rl₁).zip (ll₂ ++ e₂ :: rl₂) = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂ := by sorry -- FIXME: obvious
+
+lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
+    (H_len : procs.length = tys.length) →
+    (∀ p τ, (p, τ) ∈ List.zip procs tys → ProcTyJudgement ProcTyContext.empty p τ) →
+    ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
+      by sorry -- FIXME: obvious
+
+lemma list_insert_idx : ∀ {T : Type} (l : List T) (idx : ℕ) (v : T),
+    idx ≤ l.length →
+      v ∈ l.insertIdx idx v := by sorry -- FIXME: obvious
 
 
 -- TODO: the most important proof
@@ -427,7 +452,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
 
     intro p p' τ c_lbl ex_msg H_typing H_reduces
     revert H_typing τ
-    induction H_reduces
+    induction H_reduces -- using Semantics.Reduces.ind
     case tock ex_msg' =>
       intro τ H_typing
       cases H_typing
@@ -587,9 +612,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       exists τ₁
       constructor
       . exact H_typing₁
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        apply ProcTyTransition.choice_left
+      . apply ProcTyTransition.choice_left
     case ifunfair_false =>
       -- symmetrical
       intro τ H_typing
@@ -598,9 +621,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       exists τ₂
       constructor
       . exact H_typing₂
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        apply ProcTyTransition.choice_right
+      . apply ProcTyTransition.choice_right
     case iffair_true =>
       intro τ H_typing
       cases H_typing
@@ -608,9 +629,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       exists τ₁
       constructor
       . exact H_typing₁
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        apply ProcTyTransition.choice_fair_left
+      . apply ProcTyTransition.choice_fair_left
     case iffair_false =>
       -- symmetrical
       intro τ H_typing
@@ -619,9 +638,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       exists τ₂
       constructor
       . exact H_typing₂
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        apply ProcTyTransition.choice_fair_right
+      . apply ProcTyTransition.choice_fair_right
     case par_message =>
       intro τ H_typing
       rename_i H_sub₁ H_sub₂ H_nim₁ H_nim₂ H_red₁ H_red₂ H_ih₁ H_ih₂
@@ -647,6 +664,151 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           assumption
         . exact H_ih₁'.2
         . exact H_ih₂'.2
+    case xoffer_branch_else ex_msg' p_else branches H_mx =>
+      intro τ H_typing
+      cases H_typing
+      rename ProcTy => τ_else
+      exists τ_else
+      constructor
+      . assumption
+      . apply ProcTyTransition.xoffer_else
+        sorry -- FIXME: prove separately
+    case offer_branch_else ex_msg' p_else branches H_mx =>
+      -- similar to above
+      intro τ H_typing
+      cases H_typing
+      rename ProcTy => τ_else
+      exists τ_else
+      constructor
+      . assumption
+      . apply ProcTyTransition.offer_else
+        sorry -- FIXME: prove separately
+    case xoffer_branch_send ex_msg' msg e p_else p_send br b br_send H_eval =>
+      intro τ H_typing
+      cases H_typing
+      rename ProcTy => τ_else
+      rename ProcTyJudgement _ _ _ => H_typing
+      rename_i H_len H_br_expr H_br_typing
+      rename List (MessageExch × ProcTy) => br_tys
+      have H_exists_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_send, br_ty) ∈ List.zip br br_tys := by
+        apply zip_list_exists br br_tys (ChoiceBranch.send msg e p_send)
+        . aesop
+        . assumption
+      have ⟨br_ty, H_br_ty⟩ := H_exists_br_ty
+      have H_br_typing' := H_br_typing (ChoiceBranch.send msg e p_send) br_ty H_br_ty
+      cases H_br_typing'
+      rename_i τ_br H_expr_ty H_br_typing'
+      exists τ_br
+      constructor
+      . exact H_br_typing'
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        apply ProcTyTransition.xoffer_branch (me := MessageExch.send msg)
+        exact (List.of_mem_zip H_br_ty).2
+    case xoffer_branch_recv ex_msg' var p_else branches msg p_br b H_br =>
+      intro τ H_typing
+      cases H_typing
+      rename ProcTy => τ_else
+      rename ProcTyJudgement _ _ _ => H_typing
+      rename_i H_len H_br_expr H_br_typing
+      rename List (MessageExch × ProcTy) => br_tys
+      have H_exists_br_ty : ∃ br_ty, (ChoiceBranch.recv msg var p_br, br_ty) ∈ List.zip branches br_tys := by
+        apply zip_list_exists branches br_tys (ChoiceBranch.recv msg var p_br)
+        . aesop
+        . assumption
+      have ⟨br_ty, H_br_ty⟩ := H_exists_br_ty
+      have H_br_typing' := H_br_typing (ChoiceBranch.recv msg var p_br) br_ty H_br_ty
+      cases H_br_typing'
+      rename_i τ_br H_br_typing'
+      exists τ_br
+      constructor
+      . sorry -- FIXME: prove separately
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        apply ProcTyTransition.xoffer_branch (me := MessageExch.recv msg)
+        exact (List.of_mem_zip H_br_ty).2
+    -- NOW BELOW IS THE TRICKIEST PART
+    case offer_branch_send ex_msg' msg p_else p_br branches idx
+                           branches_proc p_o e b H_eval H_branches H_p =>
+        intro τ H_typing
+        cases H_typing
+        rename ProcTy => τ_else
+        rename ProcTyJudgement _ _ _ => H_typing
+        rename_i H_len H_br_expr H_br_typing
+        rename List (MessageExch × ProcTy) => br_tys
+        have H_len' : branches.length = branches_proc.length := by
+          aesop
+        have H_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_br, br_ty) ∈ (List.zip $ branches.insertIdx ↑idx (ChoiceBranch.send msg e p_br)) br_tys := by
+          apply zip_list_exists
+          . rewrite [H_len] -- FIXME: trivial
+            simp
+          . apply list_insert_idx
+            have ⟨idx', H_idx'⟩ := idx
+            simp
+            apply Nat.lt_add_one_iff.mp
+            exact H_idx'
+        have ⟨br_ty, H_br_ty⟩ := H_br_ty
+        -- exists (br_ty.2::(br_tys.map branch_to_xoffer_ty)).foldl (fun acc e => ProcTy.par acc e) ProcTy.skip
+        -- constructor
+        -- . rewrite [H_p]
+        --   rewrite [H_branches]
+        --   apply par_list_ty
+        --   . simp
+
+        -- . simp
+        --   rewrite [H_p]
+        --   apply par_list_ty
+
+        sorry
+      -- intro τ H_typing
+      -- cases H_typing
+      -- rename ProcTy => τ_else
+      -- rename ProcTyJudgement _ _ _ => H_typing
+      -- rename_i H_len H_br_expr H_br_typing
+      -- rename List (MessageExch × ProcTy) => br_tys
+      -- have H_exists_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_br, br_ty) ∈ List.zip branches br_tys := by
+      --   apply zip_list_exists branches br_tys (ChoiceBranch.send msg e p_br)
+      --   . aesop
+      --   . rewrite [H_branches]
+      --     simp
+      -- have ⟨br_ty, H_br_ty⟩ := H_exists_br_ty
+      -- have H_br_typing' := H_br_typing (ChoiceBranch.send msg e p_br) br_ty H_br_ty
+      -- cases H_br_typing'
+      -- rename_i τ_br H_expr_ty H_br_typing'
+      -- rewrite [H_branches] at H_len
+      -- have H_split := zip_list_split lbranches rbranches (ChoiceBranch.send msg e p_br) br_tys H_len
+      -- have ⟨lbr_tys, rbr_tys, br_ty', H_br_split₁, H_br_split₂⟩ := H_split
+      -- exists List.foldl (fun acc e => ProcTy.par acc e)
+      --     ProcTy.skip ((lbr_tys.map branch_to_xoffer_ty) ++ br_ty'.2 :: (rbr_tys.map branch_to_xoffer_ty))
+      -- constructor
+      -- . rewrite [H_p]
+      --   rewrite [H_branch_proc]
+      --   apply par_list_ty
+      --   . simp
+      --     rewrite [H_br_split₂.2.1]
+      --     rewrite [H_br_split₂.2.2]
+      --     rfl
+      --   . rewrite [zip_list_split₂ (lbranches.map ChoiceBranch.toXOffer) (rbranches.map ChoiceBranch.toXOffer) p_br
+      --             (lbr_tys.map branch_to_xoffer_ty) (rbr_tys.map branch_to_xoffer_ty) br_ty'.2]
+      --     . simp
+      --       intro p τ H_x
+      --       cases H_x
+      --       . rename_i H_x
+
+      --     . simp
+      --       exact H_br_split₂.2.1
+      --     . simp
+      --       exact H_br_split₂.2.2
+      -- . apply ProcTyTransition.offer_branch (me := MessageExch.send msg) <;> try trivial
+      --   rewrite [← H_branches] at H_br_split₂
+      --   have H_i : (ChoiceBranch.send msg e p_br, br_ty') ∈ List.zip branches br_tys := by
+      --     rewrite [H_br_split₂.1]
+      --     simp
+      --   have H_br_typing' := H_br_typing (ChoiceBranch.send msg e p_br) br_ty' H_i
+      --   cases H_br_typing'
+      --   simp
+      --   exact H_br_split₁
+    all_goals sorry -- FIXME: complete
 
 lemma deadend_preserved_by_typing :
   ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (l : AbstractTransLabel),

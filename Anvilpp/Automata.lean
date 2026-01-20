@@ -25,14 +25,14 @@ inductive ProcTyNonInstant : ProcTy → Prop where
   | par_right (τ₁ τ₂ : ProcTy) :
     ProcTyNonInstant τ₂ →
     ProcTyNonInstant (ProcTy.par τ₁ τ₂)
-  -- | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   ProcTyNonInstant τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant ty) →
-  --   ProcTyNonInstant (ProcTy.xoffer τ_else branch_tys)
-  -- | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   ProcTyNonInstant τ_else →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant ty) →
-  --   ProcTyNonInstant (ProcTy.offer τ_else branch_tys)
+  | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyNonInstant τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant ty) →
+    ProcTyNonInstant (ProcTy.xoffer τ_else branch_tys)
+  | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyNonInstant τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant ty) →
+    ProcTyNonInstant (ProcTy.offer τ_else branch_tys)
   | recur (x : String) (τ : ProcTy) :
     ProcTyNonInstant τ →
     ProcTyNonInstant (ProcTy.recur x τ)
@@ -60,16 +60,16 @@ inductive ProcTyNonInstantMsg : ProcTy → (MessageId × MessageDir) → Prop wh
     ProcTyNonInstantMsg τ₁ mx →
     ProcTyNonInstantMsg τ₂ mx →
     ProcTyNonInstantMsg (ProcTy.par τ₁ τ₂) mx
-  -- | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) (msg : MessageId) :
-  --   ProcTyNonInstantMsg τ_else msg →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg ty msg) →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → m.messageId ≠ msg) →
-  --   ProcTyNonInstantMsg (ProcTy.xoffer τ_else branch_tys) msg
-  -- | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) (msg : MessageId) :
-  --   ProcTyNonInstantMsg τ_else msg →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg ty msg) →
-  --   (∀ m ty, (m, ty) ∈ branch_tys → m.messageId ≠ msg) →
-  --   ProcTyNonInstantMsg (ProcTy.offer τ_else branch_tys) msg
+  | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) mx :
+    ProcTyNonInstantMsg τ_else mx →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg ty mx) →
+    (∀ m ty, (m, ty) ∈ branch_tys → m.toPair ≠ mx) →
+    ProcTyNonInstantMsg (ProcTy.xoffer τ_else branch_tys) mx
+  | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) mx :
+    ProcTyNonInstantMsg τ_else mx →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg ty mx) →
+    (∀ m ty, (m, ty) ∈ branch_tys → m.toPair ≠ mx) →
+    ProcTyNonInstantMsg (ProcTy.offer τ_else branch_tys) mx
   | recur (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
     ProcTyNonInstantMsg τ mx →
     ProcTyNonInstantMsg (ProcTy.recur x τ) mx
@@ -85,6 +85,9 @@ inductive ProcTyNonInstantMsg : ProcTy → (MessageId × MessageDir) → Prop wh
     ProcTyNonInstantMsg (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.recv)
   | recv_opposite (msg msg' : MessageId) :
     ProcTyNonInstantMsg (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.send)
+
+
+def branch_to_xoffer_ty (br : MessageExch × ProcTy) : ProcTy := ProcTy.xoffer ProcTy.skip [br]
 
 inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → AbstractTransLabel → ProcTy → Prop where
   | tock ex_msg :
@@ -138,24 +141,28 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
     ProcTyTransition ex_msg (ProcTy.choice_fair bid τ₁ τ₂) (AbstractTransLabel.branchFalse bid) τ₂
   | recur_unfold ex_msg (x : String) (τ : ProcTy) :
     ProcTyTransition ex_msg (ProcTy.recur x τ) AbstractTransLabel.ε (τ.replaceVar x (ProcTy.recur x τ))
-  -- | xoffer_else ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   (∀ m ty, (m, ty) ∈ branch_tys →
-  --     m.messageId ∈ ex_msg) →
-  --   ProcTyTransition ex_msg (ProcTy.xoffer τ_else branch_tys) AbstractTransLabel.ε τ_else
-  -- | offer_else ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-  --   (∀ m ty, (m, ty) ∈ branch_tys →
-  --     m.messageId ∈ ex_msg) →
-  --   ProcTyTransition ex_msg (ProcTy.offer τ_else branch_tys) AbstractTransLabel.ε τ_else
-  -- | xoffer_branch ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy))
-  --     (me : MessageExch) (ty : ProcTy) :
-  --   (me, ty) ∈ branch_tys →
-  --   ProcTyTransition ex_msg (ProcTy.xoffer τ_else branch_tys)
-  --     (AbstractTransLabel.message me.messageId) ty
-  -- | offer_branch ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy))
-  --     (me : MessageExch) (ty : ProcTy) :
-  --   (me, ty) ∈ branch_tys →
-  --   ProcTyTransition ex_msg (ProcTy.offer τ_else branch_tys)
-  --     (AbstractTransLabel.message me.messageId) ty
+  | xoffer_else ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    (∀ m ty, (m, ty) ∈ branch_tys →
+      (m.messageId, m.direction.invert) ∈ ex_msg) →
+    ProcTyTransition ex_msg (ProcTy.xoffer τ_else branch_tys) AbstractTransLabel.ε τ_else
+  | offer_else ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    (∀ m ty, (m, ty) ∈ branch_tys →
+      (m.messageId, m.direction.invert) ∈ ex_msg) →
+    ProcTyTransition ex_msg (ProcTy.offer τ_else branch_tys) AbstractTransLabel.ε τ_else
+  | xoffer_branch ex_msg (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy))
+      (me : MessageExch) (ty : ProcTy) :
+    (me, ty) ∈ branch_tys →
+    ProcTyTransition ex_msg (ProcTy.xoffer τ_else branch_tys)
+      (AbstractTransLabel.message me.messageId me.direction) ty
+  | offer_branch ex_msg (τ_else : ProcTy)
+                        (branch_tys : List (MessageExch × ProcTy))
+                        (idx : Fin $ branch_tys.length + 1)
+                        (branch_tys' : List ProcTy)
+      (me : MessageExch) (ty ty' : ProcTy) :
+    branch_tys' = branch_tys.map branch_to_xoffer_ty →
+    ty' = List.foldl (fun acc e => ProcTy.par acc e) ProcTy.skip (ty::branch_tys') →
+    ProcTyTransition ex_msg (ProcTy.offer τ_else $ branch_tys.insertIdx ↑idx (me, ty))
+      (AbstractTransLabel.message me.messageId me.direction) ty'
 
 def ProcTyCompTransition (τ₁ : ProcTyComposition) (lbl : AbstractTransLabel) (τ₂ : ProcTyComposition) : Prop :=
   lbl.isComplete ∧
