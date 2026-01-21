@@ -796,8 +796,74 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
             rewrite [← H_len'']
             simp
             exact H_idx
-
-    all_goals sorry -- FIXME: complete
+    case offer_branch_recv ex_msg' var p_br p_else branches idx msg b branches' p' H_branches H_p H_idx =>
+      -- largely the same as for send
+      intro τ H_typing
+      cases H_typing
+      rename ProcTy => τ_else
+      rename ProcTyJudgement _ _ _ => H_typing
+      rename_i H_len H_br_expr H_br_typing
+      rename List (MessageExch × ProcTy) => br_tys
+      have H_len' : branches.length = branches'.length := by
+        aesop
+      have H_len'' : branches.length + 1 = br_tys.length := by
+        rewrite [← H_len]
+        rewrite [List.length_insertIdx_of_le_length]
+        . rfl
+        . apply Nat.lt_add_one_iff.mp
+          exact H_idx
+      have H_br_ty : ∃ br_ty, (ChoiceBranch.recv msg var p_br, br_ty) ∈ (List.zip $ branches.insertIdx idx (ChoiceBranch.recv msg var p_br)) br_tys := by
+        apply zip_list_exists
+        . rewrite [H_len]
+          simp
+        . apply list_insert_idx
+          apply Nat.lt_add_one_iff.mp
+          exact H_idx
+      have ⟨br_ty, H_br_ty⟩ := H_br_ty
+      have H_br_ty_1 : br_ty.1 = MessageExch.recv msg := by sorry -- TRIVIAL
+      exists (br_ty.2::(br_tys.map branch_to_xoffer_ty).eraseIdx idx).foldl (fun acc e => ProcTy.par acc e) ProcTy.skip
+      constructor
+      . rewrite [H_p]
+        rewrite [H_branches]
+        apply par_list_ty
+        . simp
+          rewrite [List.length_eraseIdx_of_lt]
+          . simp
+            rewrite [← H_len'']
+            rfl
+          . simp
+            rewrite [← H_len'']
+            exact H_idx
+        . intro p τ H_x
+          simp at H_x
+          cases H_x
+          . rename_i H_x
+            rewrite [H_x.1]
+            rewrite [H_x.2]
+            sorry -- TRIVIAL
+          . sorry -- FIXME: prove separately about membership with insertIdx
+            -- can use List.subset_insertIdx, List.eraseIdx_subset
+      . have H_br_tys : br_tys = (br_tys.eraseIdx idx).insertIdx idx br_ty := by
+          sorry -- trivial
+        rewrite [H_br_tys]
+        have H_br_ty' : br_ty = (br_ty.1, br_ty.2) := by rfl
+        rewrite [H_br_ty']
+        rewrite [H_br_ty_1]
+        unfold AbstractTransLabel.fromConcrete
+        simp
+        have H_msg : msg = (MessageExch.recv msg).messageId := by rfl
+        have H_msg_dir : MessageDir.recv = (MessageExch.recv msg).direction := by rfl
+        conv in AbstractTransLabel.message _ _ =>
+          rewrite [H_msg, H_msg_dir]
+        apply ProcTyTransition.offer_branch (me := MessageExch.recv msg) (ty := br_ty.2) (ex_msg := ex_msg') (idx := idx) <;> try trivial
+        . simp
+          sorry -- trivial
+        . have H_br_tys_len : (br_tys.eraseIdx idx).length = br_tys.length - 1 := by
+            sorry -- trivial
+          rewrite [H_br_tys_len]
+          rewrite [← H_len'']
+          simp
+          exact H_idx
 
 lemma deadend_preserved_by_typing :
   ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (l : AbstractTransLabel),

@@ -386,12 +386,12 @@ namespace Semantics
     | xoffer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
       (∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) →
       Reduces ex_msg (Proc.xoffer p_else branches) TransLabel.ε p_else
-    | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch) (idx : Fin branches.length)
+    | offer_branch_recv ex_msg (var : String) (p_branch p_else : Proc) (branches : List ChoiceBranch) (idx : ℕ)
                          (msg : MessageId) (b : Bool) (branches' : List Proc) (p' : Proc) :
-      branches.get idx = ChoiceBranch.recv msg var p_branch →
-      branches' = (branches.map ChoiceBranch.toXOffer).set idx (procExprReplace p_branch var b) →
-      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
-      Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
+      branches' = branches.map ChoiceBranch.toXOffer →
+      p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip ((procExprReplace p_branch var b)::branches') →
+      idx < branches.length + 1 →
+      Reduces ex_msg (Proc.offer p_else $ branches.insertIdx idx (ChoiceBranch.recv msg var p_branch)) (TransLabel.message msg MessageDir.recv b) p'
     | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
                          (branches : List ChoiceBranch) (idx : ℕ) (branches' : List Proc) (p' : Proc) (e : Expr) (b : Bool) :
       e ↓ b →
