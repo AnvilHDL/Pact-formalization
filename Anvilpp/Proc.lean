@@ -393,11 +393,12 @@ namespace Semantics
       p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip branches' →
       Reduces ex_msg (Proc.offer p_else branches) (TransLabel.message msg MessageDir.recv b) p'
     | offer_branch_send ex_msg (msg : MessageId) (p_else p_branch : Proc)
-                         (branches : List ChoiceBranch) (idx : Fin $ branches.length + 1) (branches' : List Proc) (p' : Proc) (e : Expr) (b : Bool) :
+                         (branches : List ChoiceBranch) (idx : ℕ) (branches' : List Proc) (p' : Proc) (e : Expr) (b : Bool) :
       e ↓ b →
       branches' = branches.map ChoiceBranch.toXOffer →
       p' = List.foldl (fun acc br => Proc.par acc br) Proc.skip (p_branch::branches') →
-      Reduces ex_msg (Proc.offer p_else $ branches.insertIdx ↑idx (ChoiceBranch.send msg e p_branch)) (TransLabel.message msg MessageDir.send b) p'
+      idx < branches.length + 1 →
+      Reduces ex_msg (Proc.offer p_else $ branches.insertIdx idx (ChoiceBranch.send msg e p_branch)) (TransLabel.message msg MessageDir.send b) p'
     | offer_branch_else ex_msg (p_else : Proc) (branches : List ChoiceBranch) :
       (∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) →
       Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else

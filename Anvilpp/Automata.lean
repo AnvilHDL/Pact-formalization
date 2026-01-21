@@ -156,11 +156,12 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
       (AbstractTransLabel.message me.messageId me.direction) ty
   | offer_branch ex_msg (τ_else : ProcTy)
                         (branch_tys : List (MessageExch × ProcTy))
-                        (idx : Fin $ branch_tys.length + 1)
+                        (idx : ℕ)
                         (branch_tys' : List ProcTy)
       (me : MessageExch) (ty ty' : ProcTy) :
     branch_tys' = branch_tys.map branch_to_xoffer_ty →
     ty' = List.foldl (fun acc e => ProcTy.par acc e) ProcTy.skip (ty::branch_tys') →
+    idx < branch_tys.length + 1 →
     ProcTyTransition ex_msg (ProcTy.offer τ_else $ branch_tys.insertIdx ↑idx (me, ty))
       (AbstractTransLabel.message me.messageId me.direction) ty'
 

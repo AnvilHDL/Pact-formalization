@@ -412,27 +412,27 @@ lemma recursion_unfolding_preserved :
   sorry
 
 lemma zip_list_exists : ∀ {T U : Type} (l₁ : List T) (l₂ : List U) (v₁ : T),
-    l₁.length ≤ l₂.length → v₁ ∈ l₁ → ∃ v₂, (v₁, v₂) ∈ List.zip l₁ l₂ := by sorry -- FIXME: obvious
+    l₁.length ≤ l₂.length → v₁ ∈ l₁ → ∃ v₂, (v₁, v₂) ∈ List.zip l₁ l₂ := by sorry -- obvious
 
 lemma zip_list_split : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (l₂ : List U),
     (ll₁ ++ e₁ :: rl₁).length = l₂.length →
     ∃ (ll₂ rl₂ : List U) (e₂ : U),
       l₂ = ll₂ ++ e₂ :: rl₂ ∧ (ll₁ ++ e₁ :: rl₁).zip l₂ = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂
-        ∧ ll₁.length = ll₂.length ∧ rl₁.length = rl₂.length := by sorry -- FIXME: obvious
+        ∧ ll₁.length = ll₂.length ∧ rl₁.length = rl₂.length := by sorry -- obvious
 
 lemma zip_list_split₂ : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (ll₂ rl₂ : List U) (e₂ : U),
     ll₁.length = ll₂.length → rl₁.length = rl₂.length →
-    (ll₁ ++ e₁ :: rl₁).zip (ll₂ ++ e₂ :: rl₂) = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂ := by sorry -- FIXME: obvious
+    (ll₁ ++ e₁ :: rl₁).zip (ll₂ ++ e₂ :: rl₂) = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂ := by sorry -- obvious
 
 lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     (H_len : procs.length = tys.length) →
     (∀ p τ, (p, τ) ∈ List.zip procs tys → ProcTyJudgement ProcTyContext.empty p τ) →
     ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
-      by sorry -- FIXME: obvious
+      by sorry -- obvious
 
 lemma list_insert_idx : ∀ {T : Type} (l : List T) (idx : ℕ) (v : T),
     idx ≤ l.length →
-      v ∈ l.insertIdx idx v := by sorry -- FIXME: obvious
+      v ∈ l.insertIdx idx v := by sorry -- obvious
 
 
 -- TODO: the most important proof
@@ -729,7 +729,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         exact (List.of_mem_zip H_br_ty).2
     -- NOW BELOW IS THE TRICKIEST PART
     case offer_branch_send ex_msg' msg p_else p_br branches idx
-                           branches_proc p_o e b H_eval H_branches H_p =>
+                           branches_proc p_o e b H_eval H_branches H_p H_idx =>
         intro τ H_typing
         cases H_typing
         rename ProcTy => τ_else
@@ -738,76 +738,65 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         rename List (MessageExch × ProcTy) => br_tys
         have H_len' : branches.length = branches_proc.length := by
           aesop
-        have H_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_br, br_ty) ∈ (List.zip $ branches.insertIdx ↑idx (ChoiceBranch.send msg e p_br)) br_tys := by
+        have H_len'' : branches.length + 1 = br_tys.length := by
+          rewrite [← H_len]
+          rewrite [List.length_insertIdx_of_le_length]
+          . rfl
+          . apply Nat.lt_add_one_iff.mp
+            exact H_idx
+        have H_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_br, br_ty) ∈ (List.zip $ branches.insertIdx idx (ChoiceBranch.send msg e p_br)) br_tys := by
           apply zip_list_exists
-          . rewrite [H_len] -- FIXME: trivial
+          . rewrite [H_len]
             simp
           . apply list_insert_idx
-            have ⟨idx', H_idx'⟩ := idx
-            simp
             apply Nat.lt_add_one_iff.mp
-            exact H_idx'
+            exact H_idx
         have ⟨br_ty, H_br_ty⟩ := H_br_ty
-        -- exists (br_ty.2::(br_tys.map branch_to_xoffer_ty)).foldl (fun acc e => ProcTy.par acc e) ProcTy.skip
-        -- constructor
-        -- . rewrite [H_p]
-        --   rewrite [H_branches]
-        --   apply par_list_ty
-        --   . simp
+        have H_br_ty_1 : br_ty.1 = MessageExch.send msg := by sorry -- TRIVIAL
+        exists (br_ty.2::(br_tys.map branch_to_xoffer_ty).eraseIdx idx).foldl (fun acc e => ProcTy.par acc e) ProcTy.skip
+        constructor
+        . rewrite [H_p]
+          rewrite [H_branches]
+          apply par_list_ty
+          . simp
+            rewrite [List.length_eraseIdx_of_lt]
+            . simp
+              rewrite [← H_len'']
+              rfl
+            . simp
+              rewrite [← H_len'']
+              exact H_idx
+          . intro p τ H_x
+            simp at H_x
+            cases H_x
+            . rename_i H_x
+              rewrite [H_x.1]
+              rewrite [H_x.2]
+              sorry -- TRIVIAL
+            . sorry -- FIXME: prove separately about membership with insertIdx
+              -- can use List.subset_insertIdx, List.eraseIdx_subset
+        . have H_br_tys : br_tys = (br_tys.eraseIdx idx).insertIdx idx br_ty := by
+            sorry -- trivial
+          rewrite [H_br_tys]
+          have H_br_ty' : br_ty = (br_ty.1, br_ty.2) := by rfl
+          rewrite [H_br_ty']
+          rewrite [H_br_ty_1]
+          unfold AbstractTransLabel.fromConcrete
+          simp
+          have H_msg : msg = (MessageExch.send msg).messageId := by rfl
+          have H_msg_dir : MessageDir.send = (MessageExch.send msg).direction := by rfl
+          conv in AbstractTransLabel.message _ _ =>
+            rewrite [H_msg, H_msg_dir]
+          apply ProcTyTransition.offer_branch (me := MessageExch.send msg) (ty := br_ty.2) (ex_msg := ex_msg') (idx := idx) <;> try trivial
+          . simp
+            sorry -- trivial
+          . have H_br_tys_len : (br_tys.eraseIdx idx).length = br_tys.length - 1 := by
+              sorry -- trivial
+            rewrite [H_br_tys_len]
+            rewrite [← H_len'']
+            simp
+            exact H_idx
 
-        -- . simp
-        --   rewrite [H_p]
-        --   apply par_list_ty
-
-        sorry
-      -- intro τ H_typing
-      -- cases H_typing
-      -- rename ProcTy => τ_else
-      -- rename ProcTyJudgement _ _ _ => H_typing
-      -- rename_i H_len H_br_expr H_br_typing
-      -- rename List (MessageExch × ProcTy) => br_tys
-      -- have H_exists_br_ty : ∃ br_ty, (ChoiceBranch.send msg e p_br, br_ty) ∈ List.zip branches br_tys := by
-      --   apply zip_list_exists branches br_tys (ChoiceBranch.send msg e p_br)
-      --   . aesop
-      --   . rewrite [H_branches]
-      --     simp
-      -- have ⟨br_ty, H_br_ty⟩ := H_exists_br_ty
-      -- have H_br_typing' := H_br_typing (ChoiceBranch.send msg e p_br) br_ty H_br_ty
-      -- cases H_br_typing'
-      -- rename_i τ_br H_expr_ty H_br_typing'
-      -- rewrite [H_branches] at H_len
-      -- have H_split := zip_list_split lbranches rbranches (ChoiceBranch.send msg e p_br) br_tys H_len
-      -- have ⟨lbr_tys, rbr_tys, br_ty', H_br_split₁, H_br_split₂⟩ := H_split
-      -- exists List.foldl (fun acc e => ProcTy.par acc e)
-      --     ProcTy.skip ((lbr_tys.map branch_to_xoffer_ty) ++ br_ty'.2 :: (rbr_tys.map branch_to_xoffer_ty))
-      -- constructor
-      -- . rewrite [H_p]
-      --   rewrite [H_branch_proc]
-      --   apply par_list_ty
-      --   . simp
-      --     rewrite [H_br_split₂.2.1]
-      --     rewrite [H_br_split₂.2.2]
-      --     rfl
-      --   . rewrite [zip_list_split₂ (lbranches.map ChoiceBranch.toXOffer) (rbranches.map ChoiceBranch.toXOffer) p_br
-      --             (lbr_tys.map branch_to_xoffer_ty) (rbr_tys.map branch_to_xoffer_ty) br_ty'.2]
-      --     . simp
-      --       intro p τ H_x
-      --       cases H_x
-      --       . rename_i H_x
-
-      --     . simp
-      --       exact H_br_split₂.2.1
-      --     . simp
-      --       exact H_br_split₂.2.2
-      -- . apply ProcTyTransition.offer_branch (me := MessageExch.send msg) <;> try trivial
-      --   rewrite [← H_branches] at H_br_split₂
-      --   have H_i : (ChoiceBranch.send msg e p_br, br_ty') ∈ List.zip branches br_tys := by
-      --     rewrite [H_br_split₂.1]
-      --     simp
-      --   have H_br_typing' := H_br_typing (ChoiceBranch.send msg e p_br) br_ty' H_i
-      --   cases H_br_typing'
-      --   simp
-      --   exact H_br_split₁
     all_goals sorry -- FIXME: complete
 
 lemma deadend_preserved_by_typing :
