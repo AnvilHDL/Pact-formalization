@@ -448,14 +448,15 @@ lemma deadend_preserved_by_typing :
       Semantics.CompReduces p α p' := by
 
     intro p τ τ' l H_typing
+    revert p τ' l
     induction τ using ProcTy.ind
     case H_skip =>
+      intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       cases H_typing
-      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       cases H_trans
     case H_cycle =>
+      intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       cases H_typing
-      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       exists Proc.skip, TransLabel.tock
       unfold Semantics.CompReduces
       exists ∅
@@ -463,16 +464,41 @@ lemma deadend_preserved_by_typing :
       . apply Semantics.Reduces.tock
       . aesop
     case H_dollar pid =>
+      intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       cases H_typing
-      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       exists Proc.skip, TransLabel.dollar pid
     case H_message msg =>
+      intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       cases H_typing
-      intro ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
       rename MessageId => msg
       rename Proc => p
       rename Expr => e
       cases H_trans
       unfold AbstractTransLabel.isComplete at H_complete
       simp at H_complete
+    case H_seq τ₁ τ₂ H_ih₁ H_ih₂ =>
+      intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+      cases H_typing
+      . rename_i msg x p H_typing
+        cases H_trans
+        rename_i τ₁' H_trans
+        cases H_trans
+        cases H_complete
+      . rename_i p₁ p₂ H_typing₁ H_typing₂
+        cases H_trans
+        . rename_i τ₁' H_trans
+          have ⟨p₁', α₁, ⟨ex_msg₁, H_red₁⟩⟩ := H_ih₁ p₁ τ₁' l H_typing₁ ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
+          unfold Semantics.CompReduces
+          exists Proc.seq p₁' p₂, α₁, ex_msg₁
+          constructor
+          . apply Semantics.Reduces.seq_step
+            exact H_red₁.1
+          . exact H_red₁.2
+        . cases H_typing₁
+          unfold Semantics.CompReduces
+          exists p₂, TransLabel.ε, ∅
+          constructor
+          . apply Semantics.Reduces.seq_skip
+          . trivial
+
     all_goals sorry
