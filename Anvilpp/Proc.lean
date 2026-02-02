@@ -37,6 +37,13 @@ namespace MessageDir
     | complete => complete
 end MessageDir
 
+inductive Action : Type where
+  | tock : Action
+  | message : MessageId → MessageDir → Bool → Action
+  | branchTrue : BranchId → Action
+  | branchFalse : BranchId → Action
+  | dollar : ProcId → Action
+
 mutual
   /-- A branch in `offer` or `xoffer`. -/
   inductive ChoiceBranch : Type where
@@ -404,6 +411,14 @@ namespace Semantics
       Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
+    | eps_elim₁ ex_msg (p p' p'' : Proc) (α : TransLabel) :
+      Reduces ex_msg p TransLabel.ε p' →
+      Reduces ex_msg p' α p'' →
+      Reduces ex_msg p α p''
+    | eps_elim₂ ex_msg (p p' p'' : Proc) (α : TransLabel) :
+      Reduces ex_msg p α p' →
+      Reduces ex_msg p' TransLabel.ε p'' →
+      Reduces ex_msg p α p''
 
   -- namespace Reduces
   --   #check rec -- the default induction principle is not strong enough

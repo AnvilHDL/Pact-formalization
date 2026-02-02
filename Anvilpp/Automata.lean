@@ -164,6 +164,14 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
     idx < branch_tys.length + 1 →
     ProcTyTransition ex_msg (ProcTy.offer τ_else $ branch_tys.insertIdx ↑idx (me, ty))
       (AbstractTransLabel.message me.messageId me.direction) ty'
+  | eps_elim₁ ex_msg (τ τ' τ'' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTyTransition ex_msg τ AbstractTransLabel.ε τ' →
+    ProcTyTransition ex_msg τ' lbl τ'' →
+    ProcTyTransition ex_msg τ lbl τ''
+  | eps_elim₂ ex_msg (τ τ' τ'' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTyTransition ex_msg τ lbl τ' →
+    ProcTyTransition ex_msg τ' AbstractTransLabel.ε τ'' →
+    ProcTyTransition ex_msg τ lbl τ''
 
 def ProcTyCompTransition (τ₁ : ProcTyComposition) (lbl : AbstractTransLabel) (τ₂ : ProcTyComposition) : Prop :=
   lbl.isComplete ∧
