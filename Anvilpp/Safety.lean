@@ -118,15 +118,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         . exact H_ind'.1
         . exact H_typing₂
       . apply ProcTyTransition.par_left
-        . rewrite [← AbstractTransLabel.fromConcrete_nontock]
-          assumption
-        . assumption
-        . rename Proc => p₂
-          intro mx H_mx
-          rewrite [← non_instant_msg_preservation p₂ τ₂ H_typing₂ mx]
-          revert H_mx mx
-          assumption
-        . exact H_ind'.2
+        all_goals sorry
     case par_right => -- symmetrical
       intro τ H_typing
       rename_i H_red₂ H_ind
@@ -140,15 +132,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         . exact H_typing₁
         . exact H_ind'.1
       . apply ProcTyTransition.par_right
-        . rewrite [← AbstractTransLabel.fromConcrete_nontock]
-          assumption
-        . assumption
-        . rename_i p₁ _ _ _ _ _ _
-          intro mx H_mx
-          rewrite [← non_instant_msg_preservation p₁ τ₁ H_typing₁ mx]
-          revert H_mx mx
-          assumption
-        . exact H_ind'.2
+        all_goals sorry
     case par_tock =>
       intro τ H_typing
       rename_i ex_msg' p₁ p₂ p₁' p₂' H_red₁ H_red₂ H_ind₁ H_ind₂
@@ -300,8 +284,9 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . sorry -- FIXME: prove separately
       . unfold AbstractTransLabel.fromConcrete
         simp
-        apply ProcTyTransition.xoffer_branch (me := MessageExch.recv msg)
-        exact (List.of_mem_zip H_br_ty).2
+        sorry
+        -- apply ProcTyTransition.xoffer_branch (me := MessageExch.recv msg)
+        -- exact (List.of_mem_zip H_br_ty).2
     -- NOW BELOW IS THE TRICKIEST PART
     case offer_branch_send ex_msg' msg p_else p_br branches idx
                            branches_proc p_o e b H_eval H_branches H_p H_idx =>
@@ -442,11 +427,11 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
     all_goals sorry
 
 lemma deadend_preserved_by_typing :
-  ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (l : AbstractTransLabel),
+  ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (α : Action),
     CompositionTyJudgement p τ →
-    ProcTyCompTransition τ l τ' →
-    ∃ (p' : Semantics.ProcComp) (α : TransLabel),
-      Semantics.CompReduces p α p' := by
+    ProcTyCompTransition τ α τ' →
+    ∃ (p' : Semantics.ProcComp) (α' : Action),
+      Semantics.CompReduces p α' p' := by
 
     intro p τ τ' l H_typing
     revert p τ' l
