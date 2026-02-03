@@ -215,8 +215,11 @@ namespace Semantics
       NonInstantReducible Γ p₁ →
       NonInstantReducible Γ p₂ →
       NonInstantReducible Γ (Proc.iffair bid e p₁ p₂)
+    | var (Γ : Finset String) (x : String) :
+      x ∈ Γ →
+      NonInstantReducible Γ (Proc.var x)
     | recur (Γ : Finset String) (f : String) (p_body : Proc) :
-      NonInstantReducible Γ p_body →
+      NonInstantReducible (Γ ∪ {f}) p_body →
       NonInstantReducible Γ (Proc.recur f p_body)
     | recv (Γ : Finset String) (msg : MessageId) (var : String) (p : Proc) :
       NonInstantReducible Γ p →
@@ -269,8 +272,15 @@ namespace Semantics
       NonInstantMessage Γ₁ Γ₂ p₁ mx →
       NonInstantMessage Γ₁ Γ₂ p₂ mx →
       NonInstantMessage Γ₁ Γ₂ (Proc.iffair bid e p₁ p₂) mx
-    | recur (Γ₁ Γ₂ : Finset String) (f : String) (p_body : Proc) (mx : MessageId × MessageDir) :
-      NonInstantMessage Γ₁ Γ₂ p_body mx →
+    | var (Γ₁ Γ₂ : Finset String) (x : String) (mx : MessageId × MessageDir) :
+      x ∈ Γ₂ →
+      NonInstantMessage Γ₁ Γ₂ (Proc.var x) mx
+    | recur_instant (Γ₁ Γ₂ : Finset String) (f : String) (p_body : Proc) (mx : MessageId × MessageDir) :
+      NonInstantReducible Γ₁ (Proc.recur f p_body) →
+      NonInstantMessage (Γ₁ ∪ {f}) (Γ₂ ∪ {f}) p_body mx →
+      NonInstantMessage Γ₁ Γ₂ (Proc.recur f p_body) mx
+    | recur_noninstant (Γ₁ Γ₂ : Finset String) (f : String) (p_body : Proc) (mx : MessageId × MessageDir) :
+      NonInstantMessage (Γ₁ \ {f}) (Γ₂ ∪ {f}) p_body mx →
       NonInstantMessage Γ₁ Γ₂ (Proc.recur f p_body) mx
 
 

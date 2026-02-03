@@ -73,8 +73,15 @@ inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (
     (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg Γₙ Γₘ ty mx) →
     (∀ m ty, (m, ty) ∈ branch_tys → m.toPair ≠ mx) →
     ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.offer τ_else branch_tys) mx
-  | recur (Γₙ Γₘ : Finset String) (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
-    ProcTyNonInstantMsg (Γₙ ∪ {x}) Γₘ τ mx →
+  | var (Γₙ Γₘ : Finset String) (x : String) (mx : MessageId × MessageDir) :
+    x ∈ Γₘ →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.var x) mx
+  | recur_instant (Γₙ Γₘ : Finset String) (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstant Γₙ (ProcTy.recur x τ) →
+    ProcTyNonInstantMsg (Γₙ ∪ {x}) (Γₘ ∪ {x}) τ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.recur x τ) mx
+  | recur_noninstant (Γₙ Γₘ : Finset String) (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg (Γₙ \ {x}) (Γₘ ∪ {x}) τ mx →
     ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.recur x τ) mx
   | skip (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
     ProcTyNonInstantMsg Γₙ Γₘ ProcTy.skip mx
