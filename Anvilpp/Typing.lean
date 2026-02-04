@@ -99,7 +99,6 @@ mutual
     | recur (ctx : ProcTyContext) (x : String) (p : Proc) (τ : ProcTy) :
       ProcTyJudgement (ctx.extendProcVar x) p τ →
       ProcTyJudgement ctx (Proc.recur x p) (ProcTy.recur x τ)
-
 end
 
 def CompositionTyJudgement := ProcTyJudgement ProcTyContext.empty

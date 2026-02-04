@@ -18,46 +18,39 @@ import Anvilpp.Helpers
   - Maybe need to ignore ε transitions
 -/
 lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
-                             (τ : ProcTyComposition) (c_lbl : TransLabel) (ex_msg : Finset (MessageId × MessageDir)),
+                             (τ : ProcTyComposition) (lbl : TransLabel) (ex_msg : Finset (MessageId × MessageDir)),
+    lbl ≠ TransLabel.ε →
     CompositionTyJudgement p τ →
-    Semantics.Reduces ex_msg p c_lbl p' →
+    Semantics.Reduces ex_msg p lbl p' →
     ∃ τ',
       CompositionTyJudgement p' τ' ∧
-      ProcTyTransition ex_msg τ (AbstractTransLabel.fromConcrete c_lbl) τ' := by
+      ProcTyTransition ex_msg τ (AbstractTransLabel.fromConcrete lbl) τ' := by
 
-    intro p p' τ c_lbl ex_msg H_typing H_reduces
-    revert H_typing τ
+    intro p p' τ lbl ex_msg H_not_eps H_typing H_reduces
+    revert H_typing τ H_not_eps
     induction H_reduces -- using Semantics.Reduces.ind
     case tock ex_msg' =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       exists ProcTy.skip
       constructor
       . unfold CompositionTyJudgement
         apply ProcTyJudgement.skip
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        constructor
+      . apply ProcTyTransition.tock
     case seq_skip =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
       exists τ₂
-      constructor
-      . exact H_typing₂
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        cases H_typing₁
-        apply ProcTyTransition.seq_done
     case seq_step =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       rename_i H_ind
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
       rename TransLabel => α
       rename Finset _ => ex_msg'
       rename_i H_red
-      have H_ind' := H_ind τ₁ H_typing₁
+      have H_ind' := H_ind τ₁ H_not_eps H_typing₁
       have ⟨τ₁', H_ind'⟩ := H_ind'
       exists ProcTy.seq τ₁' τ₂
       constructor
@@ -67,7 +60,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . apply ProcTyTransition.seq_step
         exact H_ind'.2
     case send =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       exists ProcTy.skip
       constructor
       . apply ProcTyJudgement.skip
@@ -75,43 +68,38 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         simp
         cases H_typing
         apply ProcTyTransition.message_send
+
     case recv =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i msg x p b τ' H_typing_body
       exists ProcTy.seq ProcTy.skip τ'
       constructor
-      . sorry -- FIXME: prove separately
-      . sorry-- FIXME: something subtle is wrong in the definition
+      . apply ProcTyJudgement.seq
+        . apply ProcTyJudgement.skip
+        . sorry -- FIXME: prove separately
+      . unfold AbstractTransLabel.fromConcrete
+        simp
+        apply ProcTyTransition.seq_step
+        apply ProcTyTransition.message_recv
+        -- apply ProcTyTransition.message_recv
     case par_skip_left =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
       exists τ₂
-      constructor
-      . exact H_typing₂
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        cases H_typing₁
-        apply ProcTyTransition.par_skip_left
     case par_skip_right =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
       exists τ₁
-      constructor
-      . exact H_typing₁
-      . unfold AbstractTransLabel.fromConcrete
-        simp
-        cases H_typing₂
-        apply ProcTyTransition.par_skip_right
     case par_left =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       rename_i H_red₁ H_ind
       rename Finset _ => ex_msg'
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
-      have ⟨τ₁', H_ind'⟩ := H_ind τ₁ H_typing₁
+      have ⟨τ₁', H_ind'⟩ := H_ind τ₁ H_not_eps H_typing₁
       exists ProcTy.par τ₁' τ₂
       constructor
       . apply ProcTyJudgement.par
@@ -120,12 +108,12 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . apply ProcTyTransition.par_left
         all_goals sorry
     case par_right => -- symmetrical
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       rename_i H_red₂ H_ind
       rename Finset _ => ex_msg'
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
-      have ⟨τ₂', H_ind'⟩ := H_ind τ₂ H_typing₂
+      have ⟨τ₂', H_ind'⟩ := H_ind τ₂ H_not_eps H_typing₂
       exists ProcTy.par τ₁ τ₂'
       constructor
       . apply ProcTyJudgement.par
@@ -134,12 +122,12 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . apply ProcTyTransition.par_right
         all_goals sorry
     case par_tock =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       rename_i ex_msg' p₁ p₂ p₁' p₂' H_red₁ H_red₂ H_ind₁ H_ind₂
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
-      have ⟨τ₁', H_ind₁'⟩ := H_ind₁ τ₁ H_typing₁
-      have ⟨τ₂', H_ind₂'⟩ := H_ind₂ τ₂ H_typing₂
+      have ⟨τ₁', H_ind₁'⟩ := H_ind₁ τ₁ H_not_eps H_typing₁
+      have ⟨τ₂', H_ind₂'⟩ := H_ind₂ τ₂ H_not_eps H_typing₂
       exists ProcTy.par τ₁' τ₂'
       constructor
       . apply ProcTyJudgement.par
@@ -153,36 +141,24 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           . trivial
           . exact H_ind₂'.2
     case recur_unfold =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename String => X
       rename ProcTy => τ
       exists τ.replaceVar X (ProcTy.recur X τ)
-      unfold CompositionTyJudgement
-      constructor
-      . rename Proc => p_body
-        apply recursion_unfolding_preserved p_body τ
-        assumption
-      . apply ProcTyTransition.recur_unfold
     case ifunfair_true =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i τ₁ τ₂ ctx H_typing₁ H_typing₂
       exists τ₁
-      constructor
-      . exact H_typing₁
-      . apply ProcTyTransition.choice_left
     case ifunfair_false =>
       -- symmetrical
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i τ₁ τ₂ ctx H_typing₁ H_typing₂
       exists τ₂
-      constructor
-      . exact H_typing₂
-      . apply ProcTyTransition.choice_right
     case iffair_true =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i bid τ₁ τ₂ ctx H_typing₁ H_typing₂
       exists τ₁
@@ -191,7 +167,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . apply ProcTyTransition.choice_fair_left
     case iffair_false =>
       -- symmetrical
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename_i bid τ₁ τ₂ ctx H_typing₁ H_typing₂
       exists τ₂
@@ -199,14 +175,15 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       . exact H_typing₂
       . apply ProcTyTransition.choice_fair_right
     case par_message =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       rename_i H_sub₁ H_sub₂ H_nim₁ H_nim₂ H_red₁ H_red₂ H_ih₁ H_ih₂
       rename MessageId => msg
       rename_i ex_msg' ex_msg₁ ex_msg₂ dir dir' b p₁ p₁' p₂ p₂' H_dual
       cases H_typing
       rename_i τ₁ τ₂ H_typing₁ H_typing₂
-      have ⟨τ₁', H_ih₁'⟩ := H_ih₁ τ₁ H_typing₁
-      have ⟨τ₂', H_ih₂'⟩ := H_ih₂ τ₂ H_typing₂
+
+      have ⟨τ₁', H_ih₁'⟩ := H_ih₁ τ₁ (by simp) H_typing₁
+      have ⟨τ₂', H_ih₂'⟩ := H_ih₂ τ₂ (by simp) H_typing₂
       exists ProcTy.par τ₁' τ₂'
       constructor
       . apply ProcTyJudgement.par
@@ -224,26 +201,18 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         . exact H_ih₁'.2
         . exact H_ih₂'.2
     case xoffer_branch_else ex_msg' p_else branches H_mx =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename ProcTy => τ_else
       exists τ_else
-      constructor
-      . assumption
-      . apply ProcTyTransition.xoffer_else
-        sorry -- FIXME: prove separately
     case offer_branch_else ex_msg' p_else branches H_mx =>
       -- similar to above
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename ProcTy => τ_else
       exists τ_else
-      constructor
-      . assumption
-      . apply ProcTyTransition.offer_else
-        sorry -- FIXME: prove separately
     case xoffer_branch_send ex_msg' msg e p_else p_send br b br_send H_eval =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename ProcTy => τ_else
       rename ProcTyJudgement _ _ _ => H_typing
@@ -265,7 +234,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
         apply ProcTyTransition.xoffer_branch (me := MessageExch.send msg)
         exact (List.of_mem_zip H_br_ty).2
     case xoffer_branch_recv ex_msg' var p_else branches msg p_br b H_br =>
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename ProcTy => τ_else
       rename ProcTyJudgement _ _ _ => H_typing
@@ -290,7 +259,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
     -- NOW BELOW IS THE TRICKIEST PART
     case offer_branch_send ex_msg' msg p_else p_br branches idx
                            branches_proc p_o e b H_eval H_branches H_p H_idx =>
-        intro τ H_typing
+        intro τ H_not_eps H_typing
         cases H_typing
         rename ProcTy => τ_else
         rename ProcTyJudgement _ _ _ => H_typing
@@ -358,7 +327,7 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
             exact H_idx
     case offer_branch_recv ex_msg' var p_br p_else branches idx msg b branches' p' H_branches H_p H_idx =>
       -- largely the same as for send
-      intro τ H_typing
+      intro τ H_not_eps H_typing
       cases H_typing
       rename ProcTy => τ_else
       rename ProcTyJudgement _ _ _ => H_typing
