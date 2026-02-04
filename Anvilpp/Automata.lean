@@ -174,56 +174,58 @@ inductive ProcTyTransition : Finset (MessageId × MessageDir) → ProcTy → Abs
     idx < branch_tys.length + 1 →
     ProcTyTransition ex_msg (ProcTy.offer τ_else $ branch_tys.insertIdx ↑idx (me, ty))
       (AbstractTransLabel.message me.messageId me.direction) ty'
-  | eps_elim₁ ex_msg (τ τ' τ'' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTyTransition ex_msg τ AbstractTransLabel.ε τ' →
-    ProcTyTransition ex_msg τ' lbl τ'' →
-    ProcTyTransition ex_msg τ lbl τ''
-  | eps_elim₂ ex_msg (τ τ' τ'' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTyTransition ex_msg τ lbl τ' →
-    ProcTyTransition ex_msg τ' AbstractTransLabel.ε τ'' →
-    ProcTyTransition ex_msg τ lbl τ''
 
-def ProcTyCompTransition (τ₁ : ProcTyComposition) (α : Action) (τ₂ : ProcTyComposition) : Prop :=
-  ∃ ex_msg : Finset (MessageId × MessageDir),
-    ProcTyTransition ex_msg τ₁ (AbstractTransLabel.ac α) τ₂
+inductive ProcTyCompElim : Finset (MessageId × MessageDir) → ProcTyComposition → ProcTyComposition → Prop where
+  | refl (ex_msg : Finset (MessageId × MessageDir)) (τs : ProcTyComposition) :
+    ProcTyCompElim ex_msg τs τs
+  | eps_elim (ex_msg : Finset (MessageId × MessageDir)) (τs τs' τs'' : ProcTyComposition) :
+    ProcTyTransition ex_msg τs AbstractTransLabel.ε τs' →
+    ProcTyCompElim ex_msg τs' τs'' →
+    ProcTyCompElim ex_msg τs τs''
 
-inductive ProcTyReachable : ProcTy → ProcTy → Prop where
-  | base (τ : ProcTy) :
-    ProcTyReachable τ τ
-  | step (τ₁ τ₂ τ₃ : ProcTy) (ex_msg : Finset (MessageId × MessageDir)) (lbl : AbstractTransLabel) :
-    ProcTyTransition ex_msg τ₁ lbl τ₂ →
-    ProcTyReachable τ₂ τ₃ →
-    ProcTyReachable τ₁ τ₃
+@[reducible]
+def ProcTyCompTransition (ex_msg : Finset (MessageId × MessageDir)) (τ₁ : ProcTy) (α : Action) (τ₂ : ProcTy) :=
+  ∃ τ₁' τ₂', ProcTyTransition ex_msg τ₁' (AbstractTransLabel.ac α) τ₂' ∧
+               ProcTyCompElim ex_msg τ₁ τ₁' ∧
+               ProcTyCompElim ex_msg τ₂' τ₂
 
-inductive ProcTyCompReachable : ProcTyComposition → ProcTyComposition → Prop where
-  | base (τs : ProcTyComposition) :
-    ProcTyCompReachable τs τs
-  | step (τs₁ τs₂ τs₃ : ProcTyComposition) (α : Action) :
-    ProcTyCompTransition τs₁ α τs₂ →
-    ProcTyCompReachable τs₂ τs₃ →
-    ProcTyCompReachable τs₁ τs₃
+-- inductive ProcTyReachable : ProcTy → ProcTy → Prop where
+--   | base (τ : ProcTy) :
+--     ProcTyReachable τ τ
+--   | step (τ₁ τ₂ τ₃ : ProcTy) (ex_msg : Finset (MessageId × MessageDir)) (lbl : AbstractTransLabel) :
+--     ProcTyTransition ex_msg τ₁ lbl τ₂ →
+--     ProcTyReachable τ₂ τ₃ →
+--     ProcTyReachable τ₁ τ₃
 
-lemma procty_trans_preserved_under_extended_exmsg :
-      ∀ (ex_msg ex_msg' : Finset (MessageId × MessageDir)) (τ₁ τ₂ : ProcTy) (lbl : AbstractTransLabel),
-        ex_msg ⊆ ex_msg' →
-        ProcTyTransition ex_msg τ₁ lbl τ₂ →
-        ProcTyTransition ex_msg' τ₁ lbl τ₂ := by
-  intro ex_msg ex_msg' τ₁ τ₂ lbl H_subset H_transition
-  revert H_subset
-  induction H_transition
-  case tock =>
-    intro H_subset
-    apply ProcTyTransition.tock
-  case message_send ex_msg msg =>
-    intro H_subset
-    apply ProcTyTransition.message_send
-  case message_recv ex_msg msg =>
-    intro H_subset
-    apply ProcTyTransition.message_recv
-  case par_left ex_msg ex_msg' τ₁ τ₁' τ₂ lbl H_neq H_subset H_non_instant H_transition IH =>
-    intro H_subset_total
-    apply ProcTyTransition.par_left
-    . exact H_neq
-    . sorry
-    all_goals sorry
-  all_goals sorry
+-- inductive ProcTyCompReachable : ProcTyComposition → ProcTyComposition → Prop where
+--   | base (τs : ProcTyComposition) :
+--     ProcTyCompReachable τs τs
+--   | step (τs₁ τs₂ τs₃ : ProcTyComposition) (α : Action) :
+--     ProcTyCompTransition τs₁ α τs₂ →
+--     ProcTyCompReachable τs₂ τs₃ →
+--     ProcTyCompReachable τs₁ τs₃
+
+-- lemma procty_trans_preserved_under_extended_exmsg :
+--       ∀ (ex_msg ex_msg' : Finset (MessageId × MessageDir)) (τ₁ τ₂ : ProcTy) (lbl : AbstractTransLabel),
+--         ex_msg ⊆ ex_msg' →
+--         ProcTyTransition ex_msg τ₁ lbl τ₂ →
+--         ProcTyTransition ex_msg' τ₁ lbl τ₂ := by
+--   intro ex_msg ex_msg' τ₁ τ₂ lbl H_subset H_transition
+--   revert H_subset
+--   induction H_transition
+--   case tock =>
+--     intro H_subset
+--     apply ProcTyTransition.tock
+--   case message_send ex_msg msg =>
+--     intro H_subset
+--     apply ProcTyTransition.message_send
+--   case message_recv ex_msg msg =>
+--     intro H_subset
+--     apply ProcTyTransition.message_recv
+--   case par_left ex_msg ex_msg' τ₁ τ₁' τ₂ lbl H_neq H_subset H_non_instant H_transition IH =>
+--     intro H_subset_total
+--     apply ProcTyTransition.par_left
+--     . exact H_neq
+--     . sorry
+--     all_goals sorry
+--   all_goals sorry

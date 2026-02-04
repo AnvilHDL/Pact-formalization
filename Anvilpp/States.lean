@@ -52,5 +52,5 @@ decreasing_by
   TODO: do we need further assumptions, e.g., all variables are bound?
 -/
 
-lemma reachable_types_in_set :
-  ∀ (τ τ' : ProcTy), ProcTyReachable τ τ' → τ' ∈ reachableTySet (fun _ => none) τ := sorry
+-- lemma reachable_types_in_set :
+--   ∀ (τ τ' : ProcTy), ProcTyReachable τ τ' → τ' ∈ reachableTySet (fun _ => none) τ := sorry

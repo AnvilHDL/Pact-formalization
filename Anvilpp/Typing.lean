@@ -136,4 +136,5 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
       ProcTySub τ₁ τ₂ →
       ProcTyJudgement ctx p τ₂
 
+@[reducible]
 def CompositionTyJudgement := ProcTyJudgement ProcTyContext.empty

@@ -10,6 +10,19 @@ import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
 
+
+macro "induction_prep" H_p:ident p'':ident H_ctx:ident ctx:ident p:term " at " H_typing:ident : tactic =>
+  `(tactic| (
+    generalize $H_p : $p = $p''
+    rewrite [$(Lean.mkIdent H_p.getId):term] at ($(Lean.mkIdent H_typing.getId):term)
+    unfold CompositionTyJudgement at $(Lean.mkIdent H_typing.getId):term
+    generalize $H_ctx : ProcTyContext.empty = $ctx
+    rewrite [$(Lean.mkIdent H_ctx.getId):term] at $(Lean.mkIdent H_typing.getId):term
+    -- revert $H_p $H_ctx
+    induction $(Lean.mkIdent H_typing.getId):term
+    all_goals (try { intro H; cases H }; try contradiction)
+    ))
+
 -- TODO: the most important proof
 /-
   Issues:
@@ -27,44 +40,47 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       ProcTyTransition ex_msg τ (AbstractTransLabel.fromConcrete lbl) τ' := by
 
     intro p p' τ lbl ex_msg H_not_eps H_typing H_reduces
-    revert H_typing τ H_not_eps
-    induction H_reduces -- using Semantics.Reduces.ind
-    case tock ex_msg' =>
-      intro τ H_not_eps H_typing
-      generalize H_p : Proc.cycle = p''
-      rewrite [H_p] at H_typing
-      unfold CompositionTyJudgement at H_typing
-      generalize H_ctx : ProcTyContext.empty = ctx
-      rewrite [H_ctx] at H_typing
-      revert H_p H_ctx
-      induction H_typing
-      all_goals (try { intro H; cases H })
-      . intro _ H_empt
-        rename ProcTyContext => ctx'
-        exists ProcTy.skip
-        constructor
-        . apply ProcTyJudgement.skip
-        . unfold AbstractTransLabel.fromConcrete
-          simp
-          apply ProcTyTransition.tock
-      . rename_i p'' τ₁ τ₂ H_typing H_sub H_ih
-        intro H_p H_empt
-        have ⟨τ', H_ind⟩ := H_ih H_p H_empt
-        have ⟨τ₂', H_ty⟩ := subtype_preserves_reduction ex_msg' τ₁ τ' τ₂
-          (AbstractTransLabel.fromConcrete (TransLabel.ac Action.tock))
-          (by simp) H_ind.2 H_sub
-        exists τ₂'
-        constructor
-        . apply ProcTyJudgement.subtype (τ₁ := τ')
-          . exact H_ind.1
-          . exact H_ty.2
-        . exact H_ty.1
+    revert H_not_eps H_reduces p'
+    unfold CompositionTyJudgement at H_typing
+    generalize H_ctx : ProcTyContext.empty = ctx
+    rewrite [H_ctx] at H_typing
+    induction H_typing <;> intro p' H_not_eps H_reduces
     all_goals sorry
+
+
+    -- induction H_reduces <;> intro τ H_not_eps H_typing
+    -- case tock ex_msg' =>
+    --   induction_prep H_p p'' H_ctx ctx Proc.cycle at H_typing
+    --   all_goals sorry
+      -- . rename ProcTyContext => ctx'
+      --   exists ProcTy.skip
+      --   constructor
+      --   . apply ProcTyJudgement.skip
+      --   . unfold AbstractTransLabel.fromConcrete
+      --     simp
+      --     apply ProcTyTransition.tock
+      -- . rename_i p'' τ₁ τ₂ H_typing H_sub H_ih
+      --   have ⟨τ', H_ind⟩ := H_ih H_p
+      --   have ⟨τ₂', H_ty⟩ := subtype_preserves_reduction ex_msg' τ₁ τ' τ₂
+      --     (AbstractTransLabel.fromConcrete (TransLabel.ac Action.tock))
+      --     (by simp) H_ind.2 H_sub
+      --   exists τ₂'
+      --   constructor
+      --   . apply ProcTyJudgement.subtype (τ₁ := τ')
+      --     . exact H_ind.1
+      --     . exact H_ty.2
+      --   . exact H_ty.1
     -- case seq_skip =>
-    --   intro τ H_not_eps H_typing
-    --   cases H_typing
-    --   rename_i τ₁ τ₂ H_typing₁ H_typing₂
-    --   exists τ₂
+    --   rename Proc => p₂
+    --   induction_prep H_p p'' H_ctx ctx (Proc.skip.seq p₂) at H_typing
+    -- case seq_step =>
+    --   rename_i ex_msg' p₁ p₁' p₂ c H_red H_ind
+    --   induction_prep H_p p'' H_ctx ctx (Proc.seq p₁ p₂) at H_typing
+    --   . intro H_eq H_empt
+    --     rename ProcTyContext => ctx'
+    --     rename_i H_ind₁ H_ind₂
+    --     have H_ind := H_ind₁
+    -- all_goals sorry
     -- case seq_step =>
     --   intro τ H_not_eps H_typing
     --   rename_i H_ind
@@ -418,17 +434,17 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
     --       exact H_idx
     -- all_goals sorry
 
-lemma deadend_preserved_by_typing :
-  ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (α : Action),
-    CompositionTyJudgement p τ →
-    ProcTyCompTransition τ α τ' →
-    ∃ (p' : Semantics.ProcComp) (α' : Action),
-      Semantics.CompReduces p α' p' := by
+-- lemma deadend_preserved_by_typing :
+--   ∀ (p : Semantics.ProcComp) (τ τ' : ProcTyComposition) (α : Action),
+--     CompositionTyJudgement p τ →
+--     ProcTyCompTransition τ α τ' →
+--     ∃ (p' : Semantics.ProcComp) (α' : Action),
+--       Semantics.CompReduces p α' p' := by
 
-    intro p τ τ' l H_typing
-    revert p τ' l
-    induction τ using ProcTy.ind
-    all_goals sorry
+--     intro p τ τ' l H_typing
+--     revert p τ' l
+--     induction τ using ProcTy.ind
+--     all_goals sorry
     -- case H_skip =>
     --   intro p τ' l H_typing ⟨H_complete, ⟨ex_msg, H_trans⟩⟩
     --   cases H_typing
@@ -480,4 +496,4 @@ lemma deadend_preserved_by_typing :
     --       . apply Semantics.Reduces.seq_skip
     --       . trivial
 
-    all_goals sorry
+    -- all_goals sorry

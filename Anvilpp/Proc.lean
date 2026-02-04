@@ -376,17 +376,19 @@ namespace Semantics
       Reduces ex_msg (Proc.offer p_else branches) TransLabel.ε p_else
     | recur_unfold ex_msg (f : String) (p_body : Proc) :
       Reduces ex_msg (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
-    | eps_elim₁ ex_msg (p p' p'' : Proc) (c : TransLabel) :
-      Reduces ex_msg p TransLabel.ε p' →
-      Reduces ex_msg p' c p'' →
-      Reduces ex_msg p c p''
-    | eps_elim₂ ex_msg (p p' p'' : Proc) (c : TransLabel) :
-      Reduces ex_msg p c p' →
-      Reduces ex_msg p' TransLabel.ε p'' →
-      Reduces ex_msg p c p''
 
   abbrev ProcComp := Proc
-  def CompReduces (c₁ : ProcComp) (α : Action) (c₂ : ProcComp) : Prop :=
-    ∃ ex_msg : Finset (MessageId × MessageDir), Reduces ex_msg c₁ (TransLabel.ac α) c₂
+  -- def CompReduces (c₁ : ProcComp) (α : Action) (c₂ : ProcComp) : Prop :=
+  --   ∃ ex_msg : Finset (MessageId × MessageDir), Reduces ex_msg c₁ (TransLabel.ac α) c₂
+  inductive CompElim : Finset (MessageId × MessageDir) → Proc → Proc → Prop where
+    | refl ex_msg (p : Proc) :
+      CompElim ex_msg p p
+    | eps_elim ex_msg (p p' p'' : Proc) :
+      Reduces ex_msg p TransLabel.ε p' →
+      CompElim ex_msg p' p'' →
+      CompElim ex_msg p p''
 
+  @[reducible]
+  def CompReduces (ex_msg : Finset (MessageId × MessageDir)) (p₁ : Proc) (α : Action) (p₂ : Proc) : Prop :=
+    ∃ p₁' p₂' : Proc, Reduces ex_msg p₁' (TransLabel.ac α) p₂' ∧ CompElim ex_msg p₁ p₁' ∧ CompElim ex_msg p₂' p₂
 end Semantics
