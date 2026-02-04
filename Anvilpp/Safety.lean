@@ -34,10 +34,10 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
                              (τ : ProcTyComposition) (lbl : TransLabel) (ex_msg : Finset (MessageId × MessageDir)),
     lbl ≠ TransLabel.ε →
     CompositionTyJudgement p τ →
-    Semantics.Reduces ex_msg p lbl p' →
+    Semantics.IncompReduces ex_msg p lbl p' →
     ∃ τ',
       CompositionTyJudgement p' τ' ∧
-      ProcTyTransition ex_msg τ (AbstractTransLabel.fromConcrete lbl) τ' := by
+      ProcTyIncompTransition ex_msg τ (AbstractTransLabel.fromConcrete lbl) τ' := by
 
     intro p p' τ lbl ex_msg H_not_eps H_typing H_reduces
     revert H_not_eps H_reduces p'
@@ -45,6 +45,74 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
     generalize H_ctx : ProcTyContext.empty = ctx
     rewrite [H_ctx] at H_typing
     induction H_typing <;> intro p' H_not_eps H_reduces
+    case cycle =>
+      unfold Semantics.IncompReduces at H_reduces
+      have ⟨p₁', ⟨p₂', H_reduces⟩⟩ := H_reduces
+      have ⟨H_red, ⟨H_elim₁, H_elim₂⟩⟩ := H_reduces
+      have H_p : p₁' = Proc.cycle := by
+        generalize H_cycle : Proc.cycle = p₁ at H_elim₁
+        rewrite [← H_cycle]
+        -- revert H_cycle
+        induction H_elim₁
+        . symm
+          exact H_cycle
+        . rename_i Hr H_elim H_ind
+          have H_ind := H_ind H_reduces H_red
+          rewrite [← H_cycle] at Hr
+          cases Hr
+      rewrite [H_p] at H_red
+      cases H_red
+      have H_p' : p' = Proc.skip := by
+        cases H_elim₂
+        . rfl
+        . rename_i H_contra _
+          cases H_contra
+      rewrite [H_p']
+      exists ProcTy.skip
+      constructor
+      . apply ProcTyJudgement.skip
+      . unfold ProcTyIncompTransition
+        exists ProcTy.cycle, ProcTy.skip
+        constructor
+        . apply ProcTyTransition.tock
+        . constructor
+          . apply ProcTyCompElim.refl
+          . apply ProcTyCompElim.refl
+    case dollar pid =>
+      unfold Semantics.IncompReduces at H_reduces
+      have ⟨p₁', ⟨p₂', H_reduces⟩⟩ := H_reduces
+      have ⟨H_red, ⟨H_elim₁, H_elim₂⟩⟩ := H_reduces
+      have H_p : p₁' = Proc.endp pid := by
+        generalize H_dollar : Proc.endp pid = p₁ at H_elim₁
+        rewrite [← H_dollar]
+        -- revert H_dollar
+        induction H_elim₁
+        . symm
+          exact H_dollar
+        . rename_i Hr H_elim H_ind
+          have H_ind := H_ind H_reduces H_red
+          rewrite [← H_dollar] at Hr
+          cases Hr
+      rewrite [H_p] at H_red
+      cases H_red
+    case skip =>
+      unfold Semantics.IncompReduces at H_reduces
+      have ⟨p₁', ⟨p₂', H_reduces⟩⟩ := H_reduces
+      have ⟨H_red, ⟨H_elim₁, H_elim₂⟩⟩ := H_reduces
+      have H_p : p₁' = Proc.skip := by
+        generalize H_skip : Proc.skip = p₁ at H_elim₁
+        rewrite [← H_skip]
+        -- revert H_skip
+        induction H_elim₁
+        . symm
+          exact H_skip
+        . rename_i Hr H_elim H_ind
+          have H_ind := H_ind H_reduces H_red
+          rewrite [← H_skip] at Hr
+          cases Hr
+      rewrite [H_p] at H_red
+      cases H_red
+    case message_send => sorry
     all_goals sorry
 
 

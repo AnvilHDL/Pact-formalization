@@ -389,6 +389,10 @@ namespace Semantics
       CompElim ex_msg p p''
 
   @[reducible]
+  def IncompReduces (ex_msg : Finset (MessageId × MessageDir)) (p₁ : Proc) (lbl : TransLabel) (p₂ : Proc) : Prop :=
+    ∃ p₁' p₂' : Proc, Reduces ex_msg p₁' lbl p₂' ∧ CompElim ex_msg p₁ p₁' ∧ CompElim ex_msg p₂' p₂
+
+  @[reducible]
   def CompReduces (ex_msg : Finset (MessageId × MessageDir)) (p₁ : Proc) (α : Action) (p₂ : Proc) : Prop :=
-    ∃ p₁' p₂' : Proc, Reduces ex_msg p₁' (TransLabel.ac α) p₂' ∧ CompElim ex_msg p₁ p₁' ∧ CompElim ex_msg p₂' p₂
+    IncompReduces ex_msg p₁ (TransLabel.ac α) p₂
 end Semantics
