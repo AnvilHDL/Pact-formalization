@@ -34,17 +34,33 @@ inductive ExprTyJudgement : ExprTyContext → Expr → Prop where
     ExprTyJudgement ctx e2 →
     ExprTyJudgement ctx (Expr.bin e1 bop e2)
 
-mutual
+inductive ProcTyCongr : ProcTy → ProcTy → Prop where
+  | refl (τ : ProcTy) :
+    ProcTyCongr τ τ
+  | symm (τ₁ τ₂ : ProcTy) :
+    ProcTyCongr τ₁ τ₂ →
+    ProcTyCongr τ₂ τ₁
+  | trans (τ₁ τ₂ τ₃ : ProcTy) :
+    ProcTyCongr τ₁ τ₂ →
+    ProcTyCongr τ₂ τ₃ →
+    ProcTyCongr τ₁ τ₃
+  | seq_skip (τ : ProcTy) :
+    ProcTyCongr (ProcTy.seq ProcTy.skip τ) τ
+  | par_comm (τ₁ τ₂ : ProcTy) :
+    ProcTyCongr (ProcTy.par τ₁ τ₂) (ProcTy.par τ₂ τ₁)
+  | choice_lift_right (τ₁ τ₂ τ' : ProcTy) :
+    ProcTyCongr (ProcTy.choice (ProcTy.seq τ₁ τ') (ProcTy.seq τ₂ τ')) (ProcTy.seq (ProcTy.choice τ₁ τ₂) τ')
+  | choice_lift_left (τ₁ τ₂ τ' : ProcTy) :
+    ProcTyCongr (ProcTy.choice (ProcTy.seq τ' τ₁) (ProcTy.seq τ' τ₂)) (ProcTy.seq τ' (ProcTy.choice τ₁ τ₂))
+  -- TODO: add more
 
-  inductive ChoiceBranchTyJudgement : ProcTyContext → ChoiceBranch → (MessageExch × ProcTy) → Prop where
-    | send (ctx : ProcTyContext) (msg : MessageId) (e : Expr) (p : Proc) (τ : ProcTy) :
-      ExprTyJudgement ctx.exprVars e →
-      ProcTyJudgement ctx p τ →
-      ChoiceBranchTyJudgement ctx (ChoiceBranch.send msg e p) (MessageExch.send msg, τ)
-    | recv (ctx : ProcTyContext) (msg : MessageId) (x : String) (p : Proc) (τ : ProcTy) :
-      ProcTyJudgement (ctx.extendExprVar x) p τ →
-      ChoiceBranchTyJudgement ctx (ChoiceBranch.recv msg x p) (MessageExch.recv msg, τ)
-
+/-- Subtyping -/
+inductive ProcTySub : ProcTy → ProcTy → Prop where
+  | congr (τ₁ τ₂ : ProcTy) :
+    ProcTyCongr τ₁ τ₂ →
+    ProcTySub τ₁ τ₂
+  | choice_relax (τ₁ τ₂ : ProcTy) :
+    ProcTySub τ₁ (ProcTy.choice τ₁ τ₂)
 
   @[aesop safe [constructors, cases]]
   inductive ProcTyJudgement : ProcTyContext → Proc → ProcTy → Prop where
@@ -80,16 +96,32 @@ mutual
       ProcTyJudgement ctx (Proc.iffair b e p₁ p₂) (ProcTy.choice_fair b τ₁ τ₂)
     | xoffer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
         (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-      (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
       branches.length = branch_tys.length →
-      (∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+          ExprTyJudgement ctx.exprVars e) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+          br_ty.1 = MessageExch.send m) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+        ProcTyJudgement ctx p br_ty.2) →
+      (∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys →
+        br_ty.1 = MessageExch.recv m) →
+      (∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys →
+        ProcTyJudgement (ctx.extendExprVar x) p br_ty.2) →
       ProcTyJudgement ctx p_else τ_else →
       ProcTyJudgement ctx (Proc.xoffer p_else branches) (ProcTy.xoffer τ_else branch_tys)
     | offer (ctx : ProcTyContext) (p_else : Proc) (branches : List ChoiceBranch)
         (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-      (∀ m e p, ChoiceBranch.send m e p ∈ branches → ExprTyJudgement ctx.exprVars e) →
       branches.length = branch_tys.length →
-      (∀ br br_ty, (br, br_ty) ∈ branches.zip branch_tys → ChoiceBranchTyJudgement ctx br br_ty) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+          ExprTyJudgement ctx.exprVars e) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+          br_ty.1 = MessageExch.send m) →
+      (∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys →
+        ProcTyJudgement ctx p br_ty.2) →
+      (∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys →
+        br_ty.1 = MessageExch.recv m) →
+      (∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys →
+        ProcTyJudgement (ctx.extendExprVar x) p br_ty.2) →
       ProcTyJudgement ctx p_else τ_else →
       ProcTyJudgement ctx (Proc.offer p_else branches) (ProcTy.offer τ_else branch_tys)
     | var (ctx : ProcTyContext) (x : String) :
@@ -99,6 +131,9 @@ mutual
     | recur (ctx : ProcTyContext) (x : String) (p : Proc) (τ : ProcTy) :
       ProcTyJudgement (ctx.extendProcVar x) p τ →
       ProcTyJudgement ctx (Proc.recur x p) (ProcTy.recur x τ)
-end
+    | subtype (ctx : ProcTyContext) (p : Proc) (τ₁ τ₂ : ProcTy) :
+      ProcTyJudgement ctx p τ₁ →
+      ProcTySub τ₁ τ₂ →
+      ProcTyJudgement ctx p τ₂
 
 def CompositionTyJudgement := ProcTyJudgement ProcTyContext.empty

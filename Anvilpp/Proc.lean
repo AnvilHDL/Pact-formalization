@@ -97,6 +97,7 @@ inductive AbstractTransLabel : Type where
   | message : MessageId → MessageDir → AbstractTransLabel
 
 namespace AbstractTransLabel
+  @[reducible]
   def fromConcrete : TransLabel → AbstractTransLabel
     | TransLabel.ac act => AbstractTransLabel.ac act
     | TransLabel.ε => AbstractTransLabel.ε

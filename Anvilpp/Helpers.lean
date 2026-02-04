@@ -436,3 +436,11 @@ lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     (∀ p τ, (p, τ) ∈ List.zip procs tys → ProcTyJudgement ProcTyContext.empty p τ) →
     ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
       by sorry -- obvious
+
+
+lemma subtype_preserves_reduction : ∀ (ex_msg : Finset (MessageId × MessageDir)) (τ₁ τ₂ τ₁' : ProcTy)
+        (lbl : AbstractTransLabel),
+      lbl ≠ AbstractTransLabel.ε →
+      ProcTyTransition ex_msg τ₁ lbl τ₂ →
+      ProcTySub τ₁ τ₁' →
+      (∃ τ₂', ProcTyTransition ex_msg τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
