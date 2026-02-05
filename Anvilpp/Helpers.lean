@@ -445,6 +445,13 @@ lemma subtype_preserves_reduction : ∀ (ex_msg : Finset (MessageId × MessageDi
       ProcTySub τ₁ τ₁' →
       (∃ τ₂', ProcTyTransition ex_msg τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
 
+namespace Semantics.Reduces
+  lemma enlarge_ex_msg_preserves_reduces :
+        ∀ {p₁ p₂ : Semantics.ProcComp} {ex_msg ex_msg' : Finset (MessageId × MessageDir)} {lbl : TransLabel},
+          ex_msg ⊆ ex_msg' →
+          Semantics.Reduces ex_msg p₁ lbl p₂ →
+          Semantics.Reduces ex_msg' p₁ lbl p₂ := by sorry
+end Semantics.Reduces
 
 namespace Semantics.CompElim
   lemma comp_elim_preseves_skip : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p : Semantics.ProcComp},
@@ -480,13 +487,21 @@ namespace Semantics.CompElim
     intro ex_msg p₁ p₂ p' H_elim
     sorry -- FIXME: prove this
 
+  lemma par_elim : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p₁ p₂ p' : Semantics.ProcComp},
+      CompElim ex_msg (Proc.par p₁ p₂) p' →
+      (∃ p₁' p₂', CompElim ex_msg p₁ p₁' ∧ CompElim ex_msg p₂ p₂' ∧ p' = Proc.par p₁' p₂') ∨
+      (CompElim ex_msg p₁ Proc.skip ∧ CompElim ex_msg p₂ Proc.skip ∧ p' = Proc.skip) := by
+    intro ex_msg p₁ p₂ p' H_elim
+    sorry -- FIXME: prove this
+
+
   lemma seq_elim_fwd_r : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p₁ p₂ p₂' : Semantics.ProcComp},
       CompElim ex_msg p₁ Proc.skip →
       CompElim ex_msg p₂ p₂' →
       CompElim ex_msg (Proc.seq p₁ p₂) p₂' := by
     sorry -- FIXME: prove this
 
-  lemma elim_preseves_typing :
+  lemma elim_preserves_typing :
         ∀ {p p' : Semantics.ProcComp} {τ : ProcTyComposition} {ex_msg : Finset (MessageId × MessageDir)},
           Semantics.CompElim ex_msg p p' →
           CompositionTyJudgement p τ →
@@ -500,12 +515,10 @@ namespace Semantics.ProcIncompReduces
           Semantics.IncompReduces ex_msg p₁ lbl p₂ := by
     intro p₁ p₂ ex_msg lbl H_reduces
     unfold IncompReduces
-    exists p₁, p₂
+    exists p₁
     constructor
     . exact H_reduces
-    . constructor
-      . apply Semantics.CompElim.refl
-      . apply Semantics.CompElim.refl
+    . apply Semantics.CompElim.refl
 end Semantics.ProcIncompReduces
 
 
@@ -521,6 +534,28 @@ namespace ProcTyIncompTransition
           ProcTyCompElim ex_msg τ₁ ProcTy.skip →
           ProcTyIncompTransition ex_msg τ₂ lbl τ₂' →
           ProcTyIncompTransition ex_msg (ProcTy.seq τ₁ τ₂) lbl τ₂' := by
+    sorry -- FIXME: prove this
+
+  lemma reduces_par_left :
+        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)} {lbl : AbstractTransLabel},
+          ProcTyIncompTransition ex_msg τ₁ lbl τ₁' →
+          ProcTyCompElim ex_msg τ₂ τ₂' →
+          ProcTyIncompTransition ex_msg (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
+    sorry -- FIXME: prove this
+
+  lemma reduces_par_right :
+        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)} {lbl : AbstractTransLabel},
+          ProcTyCompElim ex_msg τ₁ τ₁' →
+          ProcTyIncompTransition ex_msg τ₂ lbl τ₂' →
+          ProcTyIncompTransition ex_msg (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
+    sorry -- FIXME: prove this
+
+  -- FIXME: not quite right due to the set of excluded messages
+  lemma reduces_par_tock :
+        ∀ {τ₁ τ₂ τ₁' τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
+          ProcTyIncompTransition ex_msg τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
+          ProcTyIncompTransition ex_msg τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
+          ProcTyIncompTransition ex_msg (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
     sorry -- FIXME: prove this
 
   lemma reduces_extend_r :

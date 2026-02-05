@@ -29,6 +29,7 @@ macro "induction_prep" H_p:ident p'':ident H_ctx:ident ctx:ident p:term " at " H
   - Need to ensure that if process is a deadend, then type is also a deadend (i.e., no deadend is removed by typing)
     - Equivalently, if type is not a deadend, then process is also not a deadend
   - Maybe need to ignore ε transitions
+  - Variable binding (the induction principle might need to consider this)
 -/
 lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
                              (τ : ProcTyComposition) (lbl : TransLabel) (ex_msg : Finset (MessageId × MessageDir)),
@@ -46,14 +47,14 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
     rewrite [H_ctx] at H_typing
     induction H_typing <;> intro p' H_not_eps H_reduces <;>
     unfold Semantics.IncompReduces at H_reduces <;>
-    have ⟨p₁', ⟨p₂', H_reduces⟩⟩ := H_reduces <;>
-    have ⟨H_red, ⟨H_elim₁, H_elim₂⟩⟩ := H_reduces
+    have ⟨p₁', H_reduces⟩ := H_reduces <;>
+    have ⟨H_red, H_elim⟩ := H_reduces
     case cycle =>
       have H_p : p₁' = Proc.cycle := by
-        generalize H_cycle : Proc.cycle = p₁ at H_elim₁
+        generalize H_cycle : Proc.cycle = p₁ at H_elim
         rewrite [← H_cycle]
         -- revert H_cycle
-        induction H_elim₁
+        induction H_elim
         . symm
           exact H_cycle
         . rename_i Hr H_elim H_ind
@@ -62,25 +63,21 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           cases Hr
       rewrite [H_p] at H_red
       cases H_red
-      have H_p' : p' = Proc.skip := Semantics.CompElim.comp_elim_preseves_skip H_elim₂
-      rewrite [H_p']
       exists ProcTy.skip
       constructor
       . apply ProcTyJudgement.skip
       . unfold ProcTyIncompTransition
-        exists ProcTy.cycle, ProcTy.skip
+        exists ProcTy.cycle
         constructor
         . apply ProcTyTransition.tock
-        . constructor
-          . apply ProcTyCompElim.refl
-          . apply ProcTyCompElim.refl
+        . apply ProcTyCompElim.refl
     case dollar =>
       rename ProcId => pid
       have H_p : p₁' = Proc.endp pid := by
-        generalize H_dollar : Proc.endp pid = p₁ at H_elim₁
+        generalize H_dollar : Proc.endp pid = p₁ at H_elim
         rewrite [← H_dollar]
         -- revert H_dollar
-        induction H_elim₁
+        induction H_elim
         . symm
           exact H_dollar
         . rename_i Hr H_elim H_ind
@@ -91,10 +88,10 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       cases H_red
     case skip =>
       have H_p : p₁' = Proc.skip := by
-        generalize H_skip : Proc.skip = p₁ at H_elim₁
+        generalize H_skip : Proc.skip = p₁ at H_elim
         rewrite [← H_skip]
         -- revert H_skip
-        induction H_elim₁
+        induction H_elim
         . symm
           exact H_skip
         . rename_i Hr H_elim H_ind
@@ -107,9 +104,9 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
       rename MessageId => msg
       rename Expr => e
       have H_p : p₁' = Proc.send msg e := by
-        generalize H_send : Proc.send msg e = p₁ at H_elim₁
+        generalize H_send : Proc.send msg e = p₁ at H_elim
         rewrite [← H_send]
-        induction H_elim₁
+        induction H_elim
         . symm
           exact H_send
         . rename_i Hr H_elim H_ind
@@ -118,122 +115,66 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           cases Hr
       rewrite [H_p] at H_red
       cases H_red
-      have H_p' : p' = Proc.skip := Semantics.CompElim.comp_elim_preseves_skip H_elim₂
-      rewrite [H_p']
       exists ProcTy.skip
       constructor
       . apply ProcTyJudgement.skip
       . unfold ProcTyIncompTransition
-        exists ProcTy.message $ MessageExch.send msg, ProcTy.skip
+        exists ProcTy.message $ MessageExch.send msg
         constructor
         . apply ProcTyTransition.message_send
-        . constructor
-          . apply ProcTyCompElim.refl
-          . apply ProcTyCompElim.refl
+        . apply ProcTyCompElim.refl
     case message_recv =>
       rename_i ctx' msg x p_body τ_body H_typing H_ind _
-      have H_p : p₁' = Proc.recv msg x p_body := Semantics.CompElim.comp_elim_preserves_recv H_elim₁
+      have H_p : p₁' = Proc.recv msg x p_body := Semantics.CompElim.comp_elim_preserves_recv H_elim
       rewrite [H_p] at H_red
-      cases H_red
-      have H_elim_c := Semantics.CompElim.seq_elim H_reduces.2.2
-      -- different cases of seq elim
-      cases H_elim_c <;> rename_i H_elim_c
-      . have ⟨p₁'', H_elim_c⟩ := H_elim_c
-        have H_p₁'' : p₁'' = Proc.skip := Semantics.CompElim.comp_elim_preseves_skip H_elim_c.1
-        rewrite [H_p₁''] at H_elim_c
-        rewrite [H_elim_c.2]
-        exists (ProcTy.seq ProcTy.skip τ_body)
-        constructor
-        . apply ProcTyJudgement.seq
-          . apply ProcTyJudgement.skip
-          . sorry -- trivial
-        . unfold ProcTyIncompTransition
-          exists (ProcTy.message $ MessageExch.recv msg).seq τ_body, ProcTy.skip.seq τ_body
-          constructor
-          . apply ProcTyTransition.seq_step
-            apply ProcTyTransition.message_recv
-          . constructor
-            . apply ProcTyCompElim.refl
-            . apply ProcTyCompElim.refl
-      . -- now this case the induction principles seem off
-        sorry -- FIXME: requires slight adjustment to induction principle (due to variable bindings)
+      cases H_red <;> sorry
+      -- have H_elim_c := Semantics.CompElim.seq_elim H_reduces
+      -- -- different cases of seq elim
+      -- cases H_elim_c <;> rename_i H_elim_c
+      -- . have ⟨p₁'', H_elim_c⟩ := H_elim_c
+      --   have H_p₁'' : p₁'' = Proc.skip := Semantics.CompElim.comp_elim_preserves_skip H_elim_c.1
+      --   rewrite [H_p₁''] at H_elim_c
+      --   rewrite [H_elim_c.2]
+      --   exists (ProcTy.seq ProcTy.skip τ_body)
+      --   constructor
+      --   . apply ProcTyJudgement.seq
+      --     . apply ProcTyJudgement.skip
+      --     . sorry -- trivial
+      --   . unfold ProcTyIncompTransition
+      --     exists (ProcTy.message $ MessageExch.recv msg).seq τ_body, ProcTy.skip.seq τ_body
+      --     constructor
+      --     . apply ProcTyTransition.seq_step
+      --       apply ProcTyTransition.message_recv
+      --     . constructor
+      --       . apply ProcTyCompElim.refl
+      --       . apply ProcTyCompElim.refl
+      -- . -- now this case the induction principles seem off
     case seq =>
       rename_i ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ H_reduces'
-      have H_elim := Semantics.CompElim.seq_elim H_elim₁
+      have H_elim := Semantics.CompElim.seq_elim H_elim
       cases H_elim
       case inl H_elim =>
         have ⟨pₑ, H_elim⟩ := H_elim
         rewrite [H_elim.2] at H_red
         cases H_red
         case seq_step p₁'' H_red =>
-          have H_elim' := Semantics.CompElim.seq_elim H_elim₂
-          cases H_elim'
-          case inl H_elim' =>
-            have ⟨pₑ', H_elim'⟩ := H_elim'
-            rewrite [H_elim'.2]
-            have H_ind₁ := H_ind₁ H_ctx pₑ' H_not_eps
-              (by exists pₑ, p₁''; constructor; exact H_red; constructor; exact H_elim.1; exact H_elim'.1)
-            have ⟨τ₁', H_ind₁⟩ := H_ind₁
-            exists (ProcTy.seq τ₁' τ₂)
-            constructor
-            . apply ProcTyJudgement.seq
-              . exact H_ind₁.1
-              . rewrite [H_ctx]
-                exact H_typing₂
-            . apply ProcTyIncompTransition.reduces_seq
-              exact H_ind₁.2
-          case inr H_elim' =>
-            rewrite [← H_ctx] at H_typing₂
-            have H_ty := Semantics.CompElim.elim_preseves_typing H_elim'.2 H_typing₂
-            have ⟨τ₂', H_ty⟩ := H_ty
-            exists τ₂'
-            constructor
-            . exact H_ty.2
-            . have H_p₁_red : Semantics.IncompReduces ex_msg p₁ lbl Proc.skip := by
-                unfold Semantics.IncompReduces
-                exists pₑ, p₁''
-                constructor
-                . exact H_red
-                . constructor
-                  . exact H_elim.1
-                  . exact H_elim'.1
-              have H_ind₁ := H_ind₁ H_ctx Proc.skip H_not_eps H_p₁_red
-              have ⟨τ₁'', ⟨H_ind_typing, H_ind_trans⟩⟩ := H_ind₁
-              have H_skip_elim := ProcTyIncompTransition.skip_typing_implies_skip_elim (ex_msg := ex_msg) H_ind_typing
-              have H_seq_red : ProcTyIncompTransition ex_msg (ProcTy.seq τ₁ τ₂)
-                               (AbstractTransLabel.fromConcrete lbl) (ProcTy.seq ProcTy.skip τ₂) := by
-                apply ProcTyIncompTransition.reduces_seq
-                apply ProcTyIncompTransition.reduces_extend_r
-                . exact H_ind_trans
-                . exact H_skip_elim
-              have H_seq_red₂ : ProcTyIncompTransition ex_msg (ProcTy.seq τ₁ τ₂)
-                                (AbstractTransLabel.fromConcrete lbl) τ₂ := by
-                apply ProcTyIncompTransition.reduces_extend_r (τ₂ := ProcTy.seq ProcTy.skip τ₂)
-                . exact H_seq_red
-                . apply ProcTyCompElim.eps_elim (τs' := τ₂)
-                  . apply ProcTyTransition.seq_done
-                  . apply ProcTyCompElim.refl
-              apply ProcTyIncompTransition.reduces_extend_r (τ₂ := τ₂)
-              . exact H_seq_red₂
-              . exact H_ty.1
+          sorry
         case seq_skip =>
           contradiction
       case inr H_elim =>
         have H_p₂_red : Semantics.IncompReduces ex_msg p₂ lbl p' := by
           unfold Semantics.IncompReduces
-          exists p₁', p₂'
+          exists p₁'
           constructor
           . exact H_red
-          . constructor
-            . exact H_elim.2
-            . exact H_elim₂
+          . exact H_elim.2
         have H_ind₂ := H_ind₂ H_ctx p' H_not_eps H_p₂_red
         have ⟨τ₂', H_ind₂⟩ := H_ind₂
         exists τ₂'
         constructor
         . exact H_ind₂.1
         . rewrite [← H_ctx] at H_typing₁
-          have H_elim_seg₁ := Semantics.CompElim.elim_preseves_typing (ex_msg := ex_msg) H_elim.1 H_typing₁
+          have H_elim_seg₁ := Semantics.CompElim.elim_preserves_typing (ex_msg := ex_msg) H_elim.1 H_typing₁
           have ⟨τ₁', H_elim_seg₁⟩ := H_elim_seg₁
           have H_elim_seg₂ : ProcTyCompElim ex_msg τ₁ ProcTy.skip := by
             apply ProcTyCompElim.elim_transitivity (τ₂ := τ₁')
@@ -243,6 +184,65 @@ lemma type_emulates_proc : ∀ (p p' : Semantics.ProcComp)
           apply ProcTyIncompTransition.reduces_seq_skip
           . exact H_elim_seg₂
           . exact H_ind₂.2
+    case par =>
+      clear τ p ctx
+      rename_i ctx p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ _
+      have H_elim_par := Semantics.CompElim.par_elim H_elim
+      cases H_elim_par
+      case inl H_elim_par =>
+        have ⟨p₁ₘ, p₂ₘ, H_elim_f₁, H_elim_f₂, H_p₁⟩ := H_elim_par
+        rewrite [H_p₁] at H_red
+        cases H_red <;> try trivial
+        case par_left H_red =>
+          rename Proc => p₁ₘ'
+          rename _ ⊆ _ => H_ex_msg
+          rename Finset _ => ex_msg'
+          have H_p₁_red_relax : Semantics.Reduces ex_msg p₁ₘ lbl p₁ₘ' := by
+            apply Semantics.Reduces.enlarge_ex_msg_preserves_reduces
+            . exact H_ex_msg
+            . assumption
+          have H_ind₁ := H_ind₁ H_ctx p₁ₘ' H_not_eps (by exists p₁ₘ)
+          have ⟨τ₁', H_ind₁⟩ := H_ind₁
+          rewrite [← H_ctx] at H_typing₂
+          have H_p₂_typing := Semantics.CompElim.elim_preserves_typing H_elim_f₂ H_typing₂
+          have ⟨τ₂', H_p₂_typing⟩ := H_p₂_typing
+          exists (ProcTy.par τ₁' τ₂')
+          constructor
+          . apply ProcTyJudgement.par
+            . exact H_ind₁.1
+            . exact H_p₂_typing.2
+          . apply ProcTyIncompTransition.reduces_par_left
+            . exact H_ind₁.2
+            . exact H_p₂_typing.1
+        case par_right =>
+          -- completely symmetrical
+          rename Proc => p₂ₘ'
+          rename _ ⊆ _ => H_ex_msg
+          rename Finset _ => ex_msg'
+          have H_p₂_red_relax : Semantics.Reduces ex_msg p₂ₘ lbl p₂ₘ' := by
+            apply Semantics.Reduces.enlarge_ex_msg_preserves_reduces
+            . exact H_ex_msg
+            . assumption
+          have H_ind₂ := H_ind₂ H_ctx p₂ₘ' H_not_eps (by exists p₂ₘ)
+          have ⟨τ₂', H_ind₂⟩ := H_ind₂
+          rewrite [← H_ctx] at H_typing₁
+          have H_p₁_typing := Semantics.CompElim.elim_preserves_typing H_elim_f₁ H_typing₁
+          have ⟨τ₁', H_p₁_typing⟩ := H_p₁_typing
+          exists (ProcTy.par τ₁' τ₂')
+          constructor
+          . apply ProcTyJudgement.par
+            . exact H_p₁_typing.2
+            . exact H_ind₂.1
+          . apply ProcTyIncompTransition.reduces_par_right
+            . exact H_p₁_typing.1
+            . exact H_ind₂.2
+        case par_tock =>
+          rename_i p₁'' p₂'' H_red₁ H_red₂ _
+          sorry
+        case par_message =>
+          sorry
+      case inr H_elim_par =>
+        sorry
 
     all_goals sorry
 

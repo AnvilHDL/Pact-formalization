@@ -185,9 +185,8 @@ inductive ProcTyCompElim : Finset (MessageId × MessageDir) → ProcTyCompositio
 
 @[reducible]
 def ProcTyIncompTransition (ex_msg : Finset (MessageId × MessageDir)) (τ₁ : ProcTy) (lbl : AbstractTransLabel) (τ₂ : ProcTy) :=
-  ∃ τ₁' τ₂', ProcTyTransition ex_msg τ₁' lbl τ₂' ∧
-               ProcTyCompElim ex_msg τ₁ τ₁' ∧
-               ProcTyCompElim ex_msg τ₂' τ₂
+  ∃ τ₁', ProcTyTransition ex_msg τ₁' lbl τ₂ ∧
+               ProcTyCompElim ex_msg τ₁ τ₁'
 
 @[reducible]
 def ProcTyCompTransition (ex_msg : Finset (MessageId × MessageDir)) (τ₁ : ProcTy) (α : Action) (τ₂ : ProcTy) :=
