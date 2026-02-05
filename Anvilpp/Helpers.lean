@@ -444,3 +444,105 @@ lemma subtype_preserves_reduction : ∀ (ex_msg : Finset (MessageId × MessageDi
       ProcTyTransition ex_msg τ₁ lbl τ₂ →
       ProcTySub τ₁ τ₁' →
       (∃ τ₂', ProcTyTransition ex_msg τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
+
+
+namespace Semantics.CompElim
+  lemma comp_elim_preseves_skip : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p : Semantics.ProcComp},
+                                  CompElim ex_msg Proc.skip p → p = Proc.skip := by
+    intro ex_msg p H_elim
+    generalize H_skip : Proc.skip = p at H_elim
+    induction H_elim
+    case refl =>
+      rfl
+    case eps_elim =>
+      rename Reduces _ _ _ _ => H_reduces
+      rewrite [← H_skip] at H_reduces
+      cases H_reduces
+
+  lemma comp_elim_preserves_recv : ∀ {ex_msg : Finset (MessageId × MessageDir)} {msg : MessageId}
+      {x : String} {p p' : Semantics.ProcComp},
+        CompElim ex_msg (Proc.recv msg x p) p' →
+        p' = Proc.recv msg x p := by
+    intro ex_msg msg x p p' H_elim
+    generalize H_recv : Proc.recv msg x p = p' at H_elim
+    induction H_elim
+    case refl =>
+      rfl
+    case eps_elim =>
+      rename Reduces _ _ _ _ => H_reduces
+      rewrite [← H_recv] at H_reduces
+      cases H_reduces
+
+  lemma seq_elim : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p₁ p₂ p' : Semantics.ProcComp},
+      CompElim ex_msg (Proc.seq p₁ p₂) p' →
+      (∃ p₁', CompElim ex_msg p₁ p₁' ∧ p' = Proc.seq p₁' p₂) ∨
+      (CompElim ex_msg p₁ Proc.skip ∧ CompElim ex_msg p₂ p') := by
+    intro ex_msg p₁ p₂ p' H_elim
+    sorry -- FIXME: prove this
+
+  lemma seq_elim_fwd_r : ∀ {ex_msg : Finset (MessageId × MessageDir)} {p₁ p₂ p₂' : Semantics.ProcComp},
+      CompElim ex_msg p₁ Proc.skip →
+      CompElim ex_msg p₂ p₂' →
+      CompElim ex_msg (Proc.seq p₁ p₂) p₂' := by
+    sorry -- FIXME: prove this
+
+  lemma elim_preseves_typing :
+        ∀ {p p' : Semantics.ProcComp} {τ : ProcTyComposition} {ex_msg : Finset (MessageId × MessageDir)},
+          Semantics.CompElim ex_msg p p' →
+          CompositionTyJudgement p τ →
+          ∃ τ', ProcTyCompElim ex_msg τ τ' ∧ CompositionTyJudgement p' τ' := by sorry -- FIXME: prove this
+end Semantics.CompElim
+
+namespace Semantics.ProcIncompReduces
+  lemma reduces_implies_incomp_reduces :
+        ∀ {p₁ p₂ : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)} {lbl : TransLabel},
+          Semantics.Reduces ex_msg p₁ lbl p₂ →
+          Semantics.IncompReduces ex_msg p₁ lbl p₂ := by
+    intro p₁ p₂ ex_msg lbl H_reduces
+    unfold IncompReduces
+    exists p₁, p₂
+    constructor
+    . exact H_reduces
+    . constructor
+      . apply Semantics.CompElim.refl
+      . apply Semantics.CompElim.refl
+end Semantics.ProcIncompReduces
+
+
+namespace ProcTyIncompTransition
+  lemma reduces_seq :
+        ∀ {τ₁ τ₂ τ₁' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)} {lbl : AbstractTransLabel},
+          ProcTyIncompTransition ex_msg τ₁ lbl τ₁' →
+          ProcTyIncompTransition ex_msg (ProcTy.seq τ₁ τ₂) lbl (ProcTy.seq τ₁' τ₂) := by
+    sorry -- FIXME: prove this
+
+  lemma reduces_seq_skip :
+        ∀ {τ₁ τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)} {lbl : AbstractTransLabel},
+          ProcTyCompElim ex_msg τ₁ ProcTy.skip →
+          ProcTyIncompTransition ex_msg τ₂ lbl τ₂' →
+          ProcTyIncompTransition ex_msg (ProcTy.seq τ₁ τ₂) lbl τ₂' := by
+    sorry -- FIXME: prove this
+
+  lemma reduces_extend_r :
+        ∀ {τ₁ τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)} {lbl : AbstractTransLabel},
+          ProcTyIncompTransition ex_msg τ₁ lbl τ₂ →
+          ProcTyCompElim ex_msg τ₂ τ₂' →
+          ProcTyIncompTransition ex_msg τ₁ lbl τ₂' := by
+    sorry -- FIXME: prove this
+
+  lemma skip_typing_implies_skip_elim :
+        ∀ {ex_msg : Finset (MessageId × MessageDir)} {τ : ProcTy},
+          ProcTyJudgement ProcTyContext.empty Proc.skip τ →
+          ProcTyCompElim ex_msg τ ProcTy.skip := by
+    intro ex_msg τ H_typing
+    sorry -- FIXME: prove this
+end ProcTyIncompTransition
+
+namespace ProcTyCompElim
+  lemma elim_transitivity :
+        ∀ {ex_msg : Finset (MessageId × MessageDir)} {τ₁ τ₂ τ₃ : ProcTy},
+          ProcTyCompElim ex_msg τ₁ τ₂ →
+          ProcTyCompElim ex_msg τ₂ τ₃ →
+          ProcTyCompElim ex_msg τ₁ τ₃ := by
+    sorry -- FIXME: prove this
+end ProcTyCompElim
