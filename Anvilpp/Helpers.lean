@@ -530,6 +530,7 @@ namespace ProcTyIncompTransition
 
   lemma reduces_par_left :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
+          ¬ lbl.isEx →
           ProcTyIncompTransition τ₁ lbl τ₁' →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
@@ -537,18 +538,18 @@ namespace ProcTyIncompTransition
 
   lemma reduces_par_right :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
+          ¬ lbl.isEx →
           ProcTyCompElim τ₁ τ₁' →
           ProcTyIncompTransition τ₂ lbl τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
     sorry -- FIXME: prove this
 
-  -- -- FIXME: not quite right due to the set of excluded messages
-  -- lemma reduces_par_tock :
-  --       ∀ {τ₁ τ₂ τ₁' τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
-  --         ProcTyIncompTransition ex_msg τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
-  --         ProcTyIncompTransition ex_msg τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
-  --         ProcTyIncompTransition ex_msg (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
-  --   sorry -- FIXME: prove this
+  lemma reduces_par_tock :
+        ∀ {τ₁ τ₂ τ₁' τ₂' : ProcTy},
+          ProcTyIncompTransition τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
+          ProcTyIncompTransition τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
+          ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
+    sorry -- FIXME: prove this
 
   lemma reduces_extend_r :
         ∀ {τ₁ τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
@@ -556,6 +557,13 @@ namespace ProcTyIncompTransition
           ProcTyCompElim τ₂ τ₂' →
           ProcTyIncompTransition τ₁ lbl τ₂' := by
     sorry -- FIXME: prove this
+
+  lemma reduces_extend_l :
+        ∀ {τ₁' τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
+          ProcTyIncompTransition τ₁ lbl τ₂ →
+          ProcTyCompElim τ₁' τ₁ →
+          ProcTyIncompTransition τ₁' lbl τ₂ := by
+    sorry
 
   lemma skip_typing_implies_skip_elim :
         ∀ {τ : ProcTy},
@@ -572,4 +580,32 @@ namespace ProcTyCompElim
           ProcTyCompElim τ₂ τ₃ →
           ProcTyCompElim τ₁ τ₃ := by
     sorry -- FIXME: prove this
+
+  lemma elim_right :
+    ∀ {τ₁ τ₂ τ₃ : ProcTy},
+      ProcTyCompElim τ₁ τ₂ →
+      ProcTyTransition τ₂ AbstractTransLabel.ε τ₃ →
+      ProcTyCompElim τ₁ τ₃ := by
+    sorry -- FIXME: prove this
+
+  lemma elim_par :
+        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy},
+          ProcTyCompElim τ₁ τ₁' →
+          ProcTyCompElim τ₂ τ₂' →
+          ProcTyCompElim (ProcTy.par τ₁ τ₂) (ProcTy.par τ₁' τ₂') := by
+    sorry -- FIXME: prove this
+
+  lemma elim_seq_step :
+        ∀ {τ₁ τ₁' τ₂ : ProcTy},
+          ProcTyCompElim τ₁ τ₁' →
+          ProcTyCompElim (ProcTy.seq τ₁ τ₂) (ProcTy.seq τ₁' τ₂) := by
+    sorry -- FIXME: prove this
+
+  lemma elim_seq_skip :
+        ∀ {τ₁ τ₂ τ₂' : ProcTy},
+          ProcTyCompElim τ₁ ProcTy.skip →
+          ProcTyCompElim τ₂ τ₂' →
+          ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂ := by
+    sorry -- FIXME: prove this
+
 end ProcTyCompElim

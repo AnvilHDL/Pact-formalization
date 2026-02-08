@@ -393,8 +393,8 @@ namespace Semantics
     | offer_branch_else (ex_msg : Finset (MessageId × MessageDir)) (p_else : Proc) (branches : List ChoiceBranch) :
       (∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) →
       Reduces (Proc.offer p_else branches) (TransLabel.ex ex_msg) p_else
-    | recur_unfold (ex_msg : Finset (MessageId × MessageDir)) (f : String) (p_body : Proc) :
-      Reduces (Proc.recur f p_body) (TransLabel.ex ex_msg) (procReplace p_body f $ Proc.recur f p_body)
+    | recur_unfold (f : String) (p_body : Proc) :
+      Reduces (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
 
   abbrev ProcComp := Proc
   -- def CompReduces (c₁ : ProcComp) (α : Action) (c₂ : ProcComp) : Prop :=
