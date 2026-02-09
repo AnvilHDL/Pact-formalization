@@ -656,3 +656,13 @@ namespace ProcTyCompElim
     sorry -- FIXME: prove this
 
 end ProcTyCompElim
+
+section ProcTyCongr
+  lemma congr_preserves_behaviour (τ₁ τ₂ τ₁' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTyCongr τ₁ τ₂ → ProcTyTransition τ₁ lbl τ₁' → ∃ τ₂', ProcTyTransition τ₂ lbl τ₂' ∧ ProcTyCongr τ₁' τ₂' := by sorry -- FIXME: prove
+end ProcTyCongr
+
+section ProcTySub
+  lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
+end ProcTySub

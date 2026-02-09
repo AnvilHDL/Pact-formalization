@@ -442,5 +442,19 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     cases H_trans
     simp at H_not_ε
   case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
-    sorry
+    clear p τ ctx
+    have H_τ₁'' := sub_preserves_behaviour τ₁ τ₂ τ' lbl H_sub H_trans
+    have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
+    exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
+    -- revert p' lbl τ'
+    -- induction H_sub <;> intro p' H_typing H_ind τ' lbl H_not_ε H_trans
+    -- case congr τ₁' τ₂' H_congr =>
+    --   clear τ₁ τ₂ ctx
+    --   have H_τ₁'' := congr_preserves_behaviour τ₂' τ₁' τ' lbl (by apply ProcTyCongr.symm; exact H_congr) H_trans
+    --   have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
+    --   exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
+    -- case choice_relax τ₁' τ₂' =>
+    --   clear ctx τ₁ τ₂
+    --   cases H_trans <;> simp at H_not_ε
+    -- case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
   all_goals sorry

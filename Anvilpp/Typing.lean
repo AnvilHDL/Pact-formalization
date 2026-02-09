@@ -44,14 +44,15 @@ inductive ProcTyCongr : ProcTy → ProcTy → Prop where
     ProcTyCongr τ₁ τ₂ →
     ProcTyCongr τ₂ τ₃ →
     ProcTyCongr τ₁ τ₃
-  | seq_skip (τ : ProcTy) :
-    ProcTyCongr (ProcTy.seq ProcTy.skip τ) τ
   | par_comm (τ₁ τ₂ : ProcTy) :
     ProcTyCongr (ProcTy.par τ₁ τ₂) (ProcTy.par τ₂ τ₁)
-  | choice_lift_right (τ₁ τ₂ τ' : ProcTy) :
-    ProcTyCongr (ProcTy.choice (ProcTy.seq τ₁ τ') (ProcTy.seq τ₂ τ')) (ProcTy.seq (ProcTy.choice τ₁ τ₂) τ')
-  | choice_lift_left (τ₁ τ₂ τ' : ProcTy) :
-    ProcTyCongr (ProcTy.choice (ProcTy.seq τ' τ₁) (ProcTy.seq τ' τ₂)) (ProcTy.seq τ' (ProcTy.choice τ₁ τ₂))
+    -- FIXME: these are tricky
+  -- | seq_skip (τ : ProcTy) :
+  --   ProcTyCongr (ProcTy.seq ProcTy.skip τ) τ
+  -- | choice_lift_right (τ₁ τ₂ τ' : ProcTy) :
+  --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ₁ τ') (ProcTy.seq τ₂ τ')) (ProcTy.seq (ProcTy.choice τ₁ τ₂) τ')
+  -- | choice_lift_left (τ₁ τ₂ τ' : ProcTy) :
+  --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ' τ₁) (ProcTy.seq τ' τ₂)) (ProcTy.seq τ' (ProcTy.choice τ₁ τ₂))
   -- TODO: add more
 
 /-- Subtyping -/
