@@ -327,9 +327,10 @@ lemma non_instant_red_preservation :
   --   sorry
 
 
+-- FIXME: important
 lemma non_instant_msg_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition),
-        CompositionTyJudgement p τ → ∀ mx, (Semantics.NonInstantMessage ∅ ∅ p mx ↔ ProcTyNonInstantMsg ∅ ∅ τ mx) := by sorry
+        CompositionTyJudgement p τ → ∀ mx, (ProcTyNonInstantMsg ∅ ∅ τ mx → Semantics.NonInstantMessage ∅ ∅ p mx) := by sorry
 
   -- intro p τ mx
   -- revert p
@@ -500,7 +501,7 @@ namespace Semantics.CompElim
           ∃ τ', ProcTyCompElim τ τ' ∧ CompositionTyJudgement p' τ' := by sorry -- FIXME: prove this
 end Semantics.CompElim
 
-namespace Semantics.ProcIncompReduces
+namespace Semantics.IncompReduces
   lemma reduces_implies_incomp_reduces :
         ∀ {p₁ p₂ : Semantics.ProcComp} {lbl : TransLabel},
           Semantics.Reduces p₁ lbl p₂ →
@@ -511,7 +512,53 @@ namespace Semantics.ProcIncompReduces
     constructor
     . exact H_reduces
     . apply Semantics.CompElim.refl
-end Semantics.ProcIncompReduces
+
+  lemma par_non_ex_left :
+    ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
+      ¬ lbl.isEx →
+      Semantics.IncompReduces p₁ lbl p₁' →
+      Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁' p₂) := by
+      sorry
+
+  lemma par_non_ex_right :
+    ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {lbl : TransLabel},
+      ¬ lbl.isEx →
+      Semantics.IncompReduces p₂ lbl p₂' →
+      Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁ p₂') := by
+      sorry
+
+  lemma par_ex_left :
+    ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
+      Semantics.IncompReduces p₁ (TransLabel.ex ex_msg) p₁' →
+      (∀ mx ∈ ex_msg,
+        Semantics.NonInstantMessage ∅ ∅ p₂ mx) →
+      Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁' p₂) := by
+      sorry
+
+  lemma par_ex_right :
+    ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
+      Semantics.IncompReduces p₂ (TransLabel.ex ex_msg) p₂' →
+      (∀ mx ∈ ex_msg,
+        Semantics.NonInstantMessage ∅ ∅ p₁ mx) →
+      Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁ p₂') := by
+      sorry
+
+  lemma par_tock :
+    ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp},
+      Semantics.IncompReduces p₁ (TransLabel.ac Action.tock) p₁' →
+      Semantics.IncompReduces p₂ (TransLabel.ac Action.tock) p₂' →
+      Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac Action.tock) (Proc.par p₁' p₂') := by
+      sorry
+
+  lemma par_message :
+    ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp} {msg : MessageId} {d₁ d₂ : MessageDir} {v₁ v₂ : Bool},
+      MessageDir.dual d₁ d₂ →
+      -- note that we weaken the condition on the values as if the receiver side can receive at all, it can receive any value
+      Semantics.IncompReduces p₁ (TransLabel.message msg d₁ v₁) p₁' →
+      Semantics.IncompReduces p₂ (TransLabel.message msg d₂ v₂) p₂' →
+      Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁' p₂') := by
+        sorry
+end Semantics.IncompReduces
 
 
 namespace ProcTyIncompTransition
