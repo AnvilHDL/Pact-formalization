@@ -458,3 +458,26 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     --   cases H_trans <;> simp at H_not_ε
     -- case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
   all_goals sorry
+
+lemma type_preserves_deadend_elim : ∀ (p : Proc) (τ : ProcTy),
+    CompositionTyJudgement p τ →
+    (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
+
+    sorry -- FIXME: prove
+
+theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
+    CompositionTyJudgement p τ →
+    (¬ ∃ p' α, Semantics.CompReduces p α p') →
+    (∃ τ', ProcTyCompElim τ τ' ∧ (¬ ∃ τ'' α, ProcTyCompTransition τ' α τ'')) := by
+  intro p τ H_typing H_deadend
+  have H_deadend_elim := type_preserves_deadend_elim p τ H_typing
+  have ⟨τ', H_τ', H_prop⟩ := H_deadend_elim
+  by_contra H_contra
+  push_neg at H_contra
+  have H_contra' := H_contra τ' H_τ'
+  have ⟨τ'', α, H_τ''⟩ := H_contra'
+  have H_p'' := H_prop α τ'' H_τ''
+  have H_contra'' : ∃ p'' α , Semantics.CompReduces p α p'' := by
+    have ⟨p'', H_p''⟩ := H_p''
+    exists p'', α
+  contradiction
