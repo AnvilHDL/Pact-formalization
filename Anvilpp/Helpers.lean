@@ -652,7 +652,7 @@ namespace ProcTyCompElim
         ∀ {τ₁ τ₂ τ₂' : ProcTy},
           ProcTyCompElim τ₁ ProcTy.skip →
           ProcTyCompElim τ₂ τ₂' →
-          ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂ := by
+          ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂' := by
     sorry -- FIXME: prove this
 
 end ProcTyCompElim
