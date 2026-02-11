@@ -22,7 +22,7 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
     revert H_reduces p'
     unfold CompositionTyJudgement at H_typing
     generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    induction H_typing <;> intro p' H_reduces
+    induction H_typing <;> (intro p' H_reduces; try contradiction)
     case par =>
       rename_i ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂
       cases H_reduces
@@ -85,7 +85,14 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
     case recur =>
       rename_i ctx' pid body τ_body H_typing_body H_ind
       cases H_reduces
-      sorry -- FIXME: prove
+      exists ProcTy.replaceVar τ_body pid (ProcTy.recur pid τ_body)
+      constructor
+      . apply recursion_unfolding_preserved
+        rewrite [H_ctx]
+        exact H_typing_body
+      . apply ProcTyCompElim.eps_elim (τs' := τ_body.replaceVar pid (ProcTy.recur pid τ_body))
+        . apply ProcTyTransition.recur_unfold
+        . apply ProcTyCompElim.refl
     case seq =>
       rename_i ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂
       cases H_reduces
@@ -113,15 +120,31 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
               exact H_typing₁
             exact H_τ₁
           . apply ProcTyCompElim.refl
-    case var =>
-      rename_i ctx' x H_x
+    case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+      clear p τ ctx
       cases H_reduces
+      case ifunfair_true v H_v H_eval =>
+        exists τ₁
+        constructor
+        . unfold CompositionTyJudgement
+          rewrite [H_ctx]
+          exact H_typing₁
+        . apply ProcTyCompElim.eps_elim (τs' := τ₁)
+          . apply ProcTyTransition.choice_left
+          . apply ProcTyCompElim.refl
+      case ifunfair_false v H_v H_eval =>
+        exists τ₂
+        constructor
+        . unfold CompositionTyJudgement
+          rewrite [H_ctx]
+          exact H_typing₂
+        . apply ProcTyCompElim.eps_elim (τs' := τ₂)
+          . apply ProcTyTransition.choice_right
+          . apply ProcTyCompElim.refl
     case subtype =>
       rename_i ctx' p'' τ₁ τ₂ H_typing H_subtype H_ind
       revert H_ctx
       sorry -- FIXME: prove
-    all_goals sorry -- FIXME: prove
-
 
 lemma type_emulates_proc_multi_ε : ∀ (p p' : Semantics.ProcComp) (τ : ProcTy),
     CompositionTyJudgement p τ →
@@ -212,7 +235,19 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
           . exact H_ind₁.2
           . apply ProcTyCompElim.refl
       case par_right p₂' H_lbl H_nonex H_red =>
-        sorry -- completely symmetrical
+        have H_ind₂ := H_ind₂ H_ctx p₂' lbl H_red H_not_ε
+        have ⟨τ₂', H_ind₂⟩ := H_ind₂
+        exists (ProcTy.par τ₁ τ₂')
+        constructor
+        . apply ProcTyJudgement.par
+          . rewrite [H_ctx]
+            exact H_typing₁
+          . exact H_ind₂.1
+        . apply ProcTyIncompTransition.reduces_par_right
+          . rewrite [label_abstraction_preserves_ex (lbl := lbl)]
+            exact H_nonex
+          . apply ProcTyCompElim.refl
+          . exact H_ind₂.2
       case par_left_ex ex_msg p₁' H_red H_m =>
         have H_ind₁ := H_ind₁ H_ctx p₁' (TransLabel.ex ex_msg) H_red H_not_ε
         have ⟨τ₁', H_ind₁⟩ := H_ind₁
@@ -343,7 +378,18 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
           exact H_not_ex
         . exact H_reduces
     case par_right τ₂' H_not_tock H_not_ex H_trans₂ =>
-      sorry -- symmetrical
+      have H_p₂' := H_ind₂ H_ctx τ₂' lbl H_not_ε H_trans₂
+      have ⟨p₂', lbl', H_lbl', H_reduces⟩ := H_p₂'
+      exists (Proc.par p₁ p₂'), lbl'
+      constructor
+      . exact H_lbl'
+      . apply Semantics.IncompReduces.par_non_ex_right
+        . have H_lbl_nonex : lbl.isEx ↔ lbl'.isEx := by
+            rewrite [H_lbl']
+            apply label_abstraction_preserves_ex
+          rewrite [← H_lbl_nonex]
+          exact H_not_ex
+        . exact H_reduces
     case par_left_ex ex_msg τ₁' H_trans H_m =>
       have H_p₁' := H_ind₁ H_ctx τ₁' (AbstractTransLabel.ex ex_msg) H_not_ε H_trans
       have ⟨p₁', lbl', H_lbl', H_reduces⟩ := H_p₁'
@@ -368,8 +414,30 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
         . rewrite [← H_lbl_ex']
           exact H_reduces
         . exact H_m'
-    case par_right_ex ex_msg τ₂' H_trans H_m =>
-      sorry -- symmetrical
+    case par_right_ex ex_msg τ₂' H_m H_trans =>
+      have H_p₂' := H_ind₂ H_ctx τ₂' (AbstractTransLabel.ex ex_msg) H_not_ε H_trans
+      have ⟨p₂', lbl', H_lbl', H_reduces⟩ := H_p₂'
+      exists (Proc.par p₁ p₂'), lbl'
+      constructor
+      . exact H_lbl'
+      . have H_m' : ∀ mx ∈ ex_msg, Semantics.NonInstantMessage ∅ ∅ p₁ mx := by
+          intro mx H_mx
+          apply non_instant_msg_preservation (p := p₁) (τ := τ₁)
+          . unfold CompositionTyJudgement
+            rewrite [H_ctx]
+            exact H_typing₁
+          . exact H_m mx H_mx
+        unfold AbstractTransLabel.fromConcrete at H_lbl'
+        have H_lbl_ex' : lbl' = TransLabel.ex ex_msg := by
+          cases lbl' <;> (simp at H_lbl'; try contradiction)
+          rename_i ex_msg'
+          rewrite [H_lbl']
+          rfl
+        rewrite [H_lbl_ex']
+        apply Semantics.IncompReduces.par_ex_right
+        . rewrite [← H_lbl_ex']
+          exact H_reduces
+        . exact H_m'
     case par_skip_left =>
       simp at H_not_ε
     case par_skip_right =>
@@ -505,7 +573,16 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
             rewrite [H_ctx]
             exact H_typing₁
       case false =>
-        sorry -- symmetrical
+        exists τ₂, p₂
+        constructor
+        . apply ProcTyTransition.choice_right
+        . constructor
+          . apply Semantics.CompElim.eps_elim (p' := p₂)
+            . apply Semantics.Reduces.ifunfair_false <;> trivial
+            . apply Semantics.CompElim.refl
+          . unfold CompositionTyJudgement
+            rewrite [H_ctx]
+            exact H_typing₂
     case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
       sorry -- FIXME: prove it
     all_goals sorry
