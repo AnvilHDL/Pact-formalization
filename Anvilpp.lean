@@ -4,5 +4,6 @@ import Anvilpp.Proc
 import Anvilpp.Types
 import Anvilpp.Typing
 import Anvilpp.Automata
-import Anvilpp.Safety
+import Anvilpp.Refinement
+import Anvilpp.Deadend
 import Anvilpp.States
