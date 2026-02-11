@@ -99,6 +99,7 @@ inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (
 
 def branch_to_xoffer_ty (br : MessageExch × ProcTy) : ProcTy := ProcTy.xoffer ProcTy.skip [br]
 
+@[aesop unsafe]
 inductive ProcTyTransition : ProcTy → AbstractTransLabel → ProcTy → Prop where
   | tock :
     ProcTyTransition ProcTy.cycle (AbstractTransLabel.ac Action.tock) ProcTy.skip
@@ -177,6 +178,7 @@ inductive ProcTyTransition : ProcTy → AbstractTransLabel → ProcTy → Prop w
     ProcTyTransition (ProcTy.offer τ_else $ branch_tys.insertIdx ↑idx (me, ty))
       (AbstractTransLabel.message me.messageId me.direction) ty'
 
+@[aesop unsafe]
 inductive ProcTyCompElim : ProcTyComposition → ProcTyComposition → Prop where
   | refl (τs : ProcTyComposition) :
     ProcTyCompElim τs τs

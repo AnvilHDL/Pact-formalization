@@ -67,6 +67,7 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
     ProcTySub τ₂ τ₃ →
     ProcTySub τ₁ τ₃
 
+  @[aesop unsafe]
   inductive ProcTyJudgement : ProcTyContext → Proc → ProcTy → Prop where
     | cycle (ctx : ProcTyContext) :
       ProcTyJudgement ctx Proc.cycle ProcTy.cycle

@@ -186,7 +186,7 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
     revert H_reduces p' lbl
     unfold CompositionTyJudgement at H_typing
     generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    induction H_typing <;> intro p' lbl H_reduces H_not_ε
+    induction H_typing <;> intro p' lbl H_reduces H_not_ε <;> try (cases H_reduces; done)
     case seq =>
       rename_i ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂
       cases H_reduces
@@ -257,7 +257,11 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
           . exact H_ind₁.1
           . rewrite [H_ctx]
             exact H_typing₂
-        . sorry -- FIXME: prove separately
+        . apply ProcTyIncompTransition.reduces_par_ex_left
+          . unfold AbstractTransLabel.fromConcrete at H_ind₁
+            simp at H_ind₁
+            exact H_ind₁.2
+          . sorry -- FIXME: some issue here (if τ₁ is unguarded recur), might need to make slight adjustment
       case par_right_ex ex_msg p₂' H_m H_red =>
         have H_ind₂ := H_ind₂ H_ctx p₂' (TransLabel.ex ex_msg) H_red H_not_ε
         have ⟨τ₂', H_ind₂⟩ := H_ind₂
@@ -267,7 +271,11 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
           . rewrite [H_ctx]
             exact H_typing₁
           . exact H_ind₂.1
-        . sorry -- FIXME: prove separately
+        . apply ProcTyIncompTransition.reduces_par_ex_right
+          . unfold AbstractTransLabel.fromConcrete at H_ind₂
+            simp at H_ind₂
+            exact H_ind₂.2
+          . sorry -- FIXME: some issue here
       case par_skip_left =>
         simp at H_not_ε
       case par_skip_right =>
@@ -282,18 +290,72 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
         . apply ProcTyJudgement.par
           . exact H_ind₁.1
           . exact H_ind₂.1
-        . sorry -- FIXME: prove separately
-    case recur ctx' x p_body τ_body H_body_typing H_ind =>
+        . apply ProcTyIncompTransition.reduces_par_message (τ₁ := τ₁) (τ₂ := τ₂)
+          . exact H_dual
+          . exact H_ind₁.2
+          . exact H_ind₂.2
+    case cycle =>
+      rename_i ctx'
       cases H_reduces
-      simp at H_not_ε
-    case var ctx' x H_x =>
+      exists ProcTy.skip
+      constructor
+      . unfold CompositionTyJudgement
+        rewrite [H_ctx]
+        apply ProcTyJudgement.skip
+      . exists ProcTy.cycle
+        constructor <;> aesop
+    case message_send ctx' msg p'' e H_typing =>
+      clear p τ ctx
       cases H_reduces
+      exists ProcTy.skip
+      constructor
+      . unfold CompositionTyJudgement
+        rewrite [H_ctx]
+        apply ProcTyJudgement.skip
+      . exists (ProcTy.message $ MessageExch.send msg)
+        constructor <;> aesop
+    case message_recv ctx' msg x p'' τ_body H_typing_body H_ind =>
+      clear p τ ctx
+      cases H_reduces
+      rename_i v
+      exists ProcTy.seq ProcTy.skip τ_body
+      constructor
+      . apply ProcTyJudgement.seq
+        . aesop
+        . apply val_replacement_preserves_typing (ctx := ctx')
+          rewrite [H_ctx]
+          exact H_typing_body
+      . exists ((ProcTy.message (MessageExch.recv msg)).seq τ_body)
+        constructor <;> aesop
+    case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+      clear p τ ctx
+      cases H_reduces <;> simp at H_not_ε
+    case choice_fair ctx' e p₁ p₂ τ₁ τ₂ bid H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+      clear p τ ctx
+      cases H_reduces
+      case iffair_true v H_v H_eval =>
+        exists τ₁
+        constructor
+        . unfold CompositionTyJudgement
+          rewrite [H_ctx]
+          exact H_typing₁
+        . aesop
+      case iffair_false v H_v H_eval =>
+        exists τ₂
+        constructor
+        . unfold CompositionTyJudgement
+          rewrite [H_ctx]
+          exact H_typing₂
+        . aesop
     case subtype ctx' p₀ τ₁ τ₂ H_typing₁ H_sub H_ind =>
       have H_ind₁ := H_ind H_ctx p' lbl H_reduces H_not_ε
       have ⟨τ₁', H_ind₁⟩ := H_ind₁
       sorry -- FIXME: prove separately
-
-    all_goals sorry -- FIXME: complete
+    case recur ctx' x p'' τ' H_typing H_ind=>
+      cases H_reduces
+      simp at H_not_ε
+    case offer => sorry -- FIXME: low prioirity
+    case xoffer => sorry -- FIXME: low priority
 
 lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : TransLabel),
     CompositionTyJudgement p τ →

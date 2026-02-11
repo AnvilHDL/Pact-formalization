@@ -156,6 +156,12 @@ lemma recursion_unfolding_preserved :
 
   sorry -- FIXME: prove
 
+lemma val_replacement_preserves_typing :
+      ∀ (ctx : ProcTyContext) (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String) (v : Bool),
+        ProcTyJudgement (ctx.extendExprVar x) p τ →
+        ProcTyJudgement ctx (Semantics.procExprReplace p x v) τ := by
+  sorry -- FIXME: prove
+
 lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     (H_len : procs.length = tys.length) →
     (∀ p τ, (p, τ) ∈ List.zip procs tys → ProcTyJudgement ProcTyContext.empty p τ) →
@@ -195,6 +201,20 @@ namespace Semantics.CompElim
     case eps_elim =>
       rename Reduces _ _ _ => H_reduces
       rewrite [← H_recv] at H_reduces
+      cases H_reduces
+
+  lemma comp_elim_preserves_send : ∀ {msg : MessageId} {e : Expr}
+      {p : Semantics.ProcComp},
+        CompElim (Proc.send msg e) p →
+        p = Proc.send msg e := by
+    intro msg e p H_elim
+    generalize H_send : Proc.send msg e = p at H_elim
+    induction H_elim
+    case refl =>
+      rfl
+    case eps_elim =>
+      rename Reduces _ _ _ => H_reduces
+      rewrite [← H_send] at H_reduces
       cases H_reduces
 
   lemma seq_elim : ∀ {p₁ p₂ p' : Semantics.ProcComp},
@@ -327,6 +347,30 @@ namespace ProcTyIncompTransition
           ProcTyIncompTransition τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
     sorry -- trivial
+
+  lemma reduces_par_ex_left :
+        ∀ {τ₁ τ₁' τ₂ : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
+          ProcTyIncompTransition τ₁ (AbstractTransLabel.ex ex_msg) τ₁' →
+          (∀ mx ∈ ex_msg,
+            ProcTyNonInstantMsg ∅ ∅ τ₂ mx) →
+          ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ex ex_msg) (ProcTy.par τ₁' τ₂) := by
+    sorry -- FIXME: prove
+
+  lemma reduces_par_ex_right :
+        ∀ {τ₁ τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
+          ProcTyIncompTransition τ₂ (AbstractTransLabel.ex ex_msg) τ₂' →
+          (∀ mx ∈ ex_msg,
+            ProcTyNonInstantMsg ∅ ∅ τ₁ mx) →
+          ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ex ex_msg) (ProcTy.par τ₁ τ₂') := by
+    sorry -- FIXME: prove
+
+  lemma reduces_par_message :
+        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {msg : MessageId} {d₁ d₂ : MessageDir},
+          MessageDir.dual d₁ d₂ →
+          ProcTyIncompTransition τ₁ (AbstractTransLabel.message msg d₁) τ₁' →
+          ProcTyIncompTransition τ₂ (AbstractTransLabel.message msg d₂) τ₂' →
+          ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac $ Action.fullMessage msg) (ProcTy.par τ₁' τ₂') := by
+    sorry -- FIXME: prove
 
   lemma reduces_extend_l :
         ∀ {τ₁' τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
