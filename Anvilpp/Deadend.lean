@@ -23,7 +23,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
   revert τ' lbl
   unfold CompositionTyJudgement at H_typing
   generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-  induction H_typing <;>  intro τ' lbl H_not_ε H_trans
+  induction H_typing <;> (intro τ' lbl H_not_ε H_trans; try (cases H_trans; done))
   case cycle ctx' =>
     cases H_trans
     exists Proc.skip, TransLabel.ac Action.tock
@@ -165,19 +165,56 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
           exact H_reduces₁
         . rewrite [← H_lbl₂_msg]
           exact H_reduces₂
-  case var ctx' x H_x =>
-    cases H_trans
-  case skip ctx' =>
-    cases H_trans
   case recur =>
     cases H_trans
     simp at H_not_ε
+  case message_send ctx' msg p' e H_typing =>
+    cases H_trans
+    rewrite [← H_ctx] at H_typing
+    unfold ProcTyContext.empty at H_typing
+    simp at H_typing
+    have H_e_eval : ∃ v, e ↓ v := by
+      apply welltyped_expr_evaluates_to_something
+      exact H_typing
+    have ⟨v, H_eval⟩ := H_e_eval
+    exists Proc.skip, (TransLabel.message msg MessageDir.send v)
+    constructor
+    . simp
+    . exists Proc.send msg e
+      constructor <;> aesop
+  case message_recv ctx' msg x p' τ' H_typing H_ind =>
+    cases H_trans
+    rename_i τ₁' H_trans
+    cases H_trans
+    exists Proc.skip.seq (Semantics.procExprReplace p' x true), (TransLabel.message msg MessageDir.recv true)
+    constructor
+    . simp
+    . exists Proc.recv msg x p'
+      constructor <;> aesop
+  case seq ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_trans
+    case seq_step τ₁' H_trans =>
+      have H_p₁' := H_ind₁ H_ctx τ₁' lbl H_not_ε H_trans
+      have ⟨p₁', lbl', H_lbl', H_reduces⟩ := H_p₁'
+      exists (Proc.seq p₁' p₂), lbl'
+      constructor
+      . exact H_lbl'
+      . sorry -- FIXME: complete
+    case seq_done =>
+      simp at H_not_ε
+  case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_trans <;> simp at H_not_ε
+  case choice_fair ctx' e p₁ p₂ τ₁ τ₂ b H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_trans
+    case choice_fair_left => sorry -- trivial
+    case choice_fair_right => sorry -- trivial
+  case xoffer => sorry -- FIXME: low priority
+  case offer => sorry -- FIXME: low priority
   case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
     clear p τ ctx
     have H_τ₁'' := sub_preserves_behaviour τ₁ τ₂ τ' lbl H_sub H_trans
     have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
     exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
-  all_goals sorry -- FIXME: complete
 
 -- If the type can transition through ε in any way at all, at least one of
 -- them can be matched by the process.
@@ -206,24 +243,56 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
           . exact H_non_ex
           . exact H_trans₁
         . constructor
-          . sorry -- trivial
+          . apply Semantics.CompElim.par_elim_fwd
+            . exact H_elim₁
+            . apply Semantics.CompElim.refl
           . apply ProcTyJudgement.par
             . exact H_typing₁'
             . rewrite [H_ctx]
               exact H_typing₂
       case par_right τ₂' H_not_ε H_non_ex H_trans =>
-        sorry -- symmetrical
+        have H_p₂' := H_ind₂ H_ctx τ₂' H_trans
+        have ⟨τ₂'', p₂'', H_trans₂, H_elim₂, H_typing₂'⟩ := H_p₂'
+        exists (ProcTy.par τ₁ τ₂''), (Proc.par p₁ p₂'')
+        constructor
+        . apply ProcTyTransition.par_right
+          . exact H_not_ε
+          . exact H_non_ex
+          . exact H_trans₂
+        . constructor
+          . apply Semantics.CompElim.par_elim_fwd
+            . apply Semantics.CompElim.refl
+            . exact H_elim₂
+          . apply ProcTyJudgement.par
+            . rewrite [H_ctx]
+              exact H_typing₁
+            . exact H_typing₂'
       case par_skip_left =>
         exists τ₂, p₂
         constructor
         . apply ProcTyTransition.par_skip_left
         . constructor
-          . sorry -- trivial
+          . apply Semantics.CompElim.par_elim_fwd_skip_l
+            . apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
+              rewrite [H_ctx]
+              exact H_typing₁
+            . apply Semantics.CompElim.refl
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₂
       case par_skip_right =>
-        sorry -- symmetrical
+        exists τ₁, p₁
+        constructor
+        . apply ProcTyTransition.par_skip_right
+        . constructor
+          . apply Semantics.CompElim.par_elim_fwd_skip_r
+            . apply Semantics.CompElim.refl
+            . apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
+              rewrite [H_ctx]
+              exact H_typing₂
+          . unfold CompositionTyJudgement
+            rewrite [H_ctx]
+            exact H_typing₁
     case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
       have H_eval : ∃ v, e ↓ v := by
         apply welltyped_expr_evaluates_to_something

@@ -231,6 +231,23 @@ namespace Semantics.CompElim
     intro p₁ p₂ p' H_elim
     sorry -- FIXME: prove this
 
+  lemma par_elim_fwd : ∀ {p₁ p₂ p₁' p₂' : Semantics.ProcComp},
+      CompElim p₁ p₁' →
+      CompElim p₂ p₂' →
+      CompElim (Proc.par p₁ p₂) (Proc.par p₁' p₂') := by sorry -- trivial
+
+  lemma par_elim_fwd_skip_l : ∀ {p₁ p₂ p₂' : Semantics.ProcComp},
+      CompElim p₁ Proc.skip →
+      CompElim p₂ p₂' →
+      CompElim (Proc.par p₁ p₂) p₂' := by
+    sorry -- trivial
+
+  lemma par_elim_fwd_skip_r : ∀ {p₁ p₁' p₂ : Semantics.ProcComp},
+      CompElim p₁ p₁' →
+      CompElim p₂ Proc.skip →
+      CompElim (Proc.par p₁ p₂) p₁' := by
+    sorry -- trivial
+
 
   lemma seq_elim_fwd_r : ∀ {p₁ p₂ p₂' : Semantics.ProcComp},
       CompElim p₁ Proc.skip →
@@ -385,6 +402,12 @@ namespace ProcTyIncompTransition
           ProcTyCompElim τ ProcTy.skip := by
     intro τ H_typing
     sorry -- FIXME: prove this
+
+  lemma skip_typing_implies_skip_elim_rev :
+        ∀ {p : Semantics.ProcComp},
+          ProcTyJudgement ProcTyContext.empty p ProcTy.skip →
+          Semantics.CompElim p Proc.skip := by
+          sorry -- FIXME: prove this
 end ProcTyIncompTransition
 
 namespace ProcTyCompElim

@@ -299,8 +299,7 @@ namespace Semantics
       NonInstantMessage (Γ₁ \ {f}) (Γ₂ ∪ {f}) p_body mx →
       NonInstantMessage Γ₁ Γ₂ (Proc.recur f p_body) mx
 
-
-
+  @[aesop unsafe]
   inductive Reduces : Proc → TransLabel → Proc → Prop where
     | tock :
       Reduces Proc.cycle (TransLabel.ac Action.tock) Proc.skip
@@ -399,6 +398,7 @@ namespace Semantics
   abbrev ProcComp := Proc
   -- def CompReduces (c₁ : ProcComp) (α : Action) (c₂ : ProcComp) : Prop :=
   --   ∃ ex_msg : Finset (MessageId × MessageDir), Reduces ex_msg c₁ (TransLabel.ac α) c₂
+  @[aesop unsafe]
   inductive CompElim : Proc → Proc → Prop where
     | refl (p : Proc) :
       CompElim p p
