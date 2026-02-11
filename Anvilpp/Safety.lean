@@ -85,7 +85,7 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
     case recur =>
       rename_i ctx' pid body τ_body H_typing_body H_ind
       cases H_reduces
-      sorry
+      sorry -- FIXME: prove
     case seq =>
       rename_i ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂
       cases H_reduces
@@ -119,8 +119,8 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
     case subtype =>
       rename_i ctx' p'' τ₁ τ₂ H_typing H_subtype H_ind
       revert H_ctx
-      sorry
-    all_goals sorry
+      sorry -- FIXME: prove
+    all_goals sorry -- FIXME: prove
 
 
 lemma type_emulates_proc_multi_ε : ∀ (p p' : Semantics.ProcComp) (τ : ProcTy),
@@ -149,15 +149,6 @@ lemma type_emulates_proc_multi_ε : ∀ (p p' : Semantics.ProcComp) (τ : ProcTy
     . apply ProcTyCompElim.elim_transitivity (τ₂ := τ')
       . exact H_τ'.2
       . exact H_τ''.2
-
-lemma label_abstraction_preserves_ex : ∀ {lbl : TransLabel},
-    (AbstractTransLabel.fromConcrete lbl).isEx ↔ lbl.isEx := by
-  intro lbl
-  unfold AbstractTransLabel.isEx
-  unfold AbstractTransLabel.fromConcrete
-  unfold TransLabel.isEx
-  simp
-  cases lbl <;> simp
 
 lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
                                 (τ : ProcTyComposition) (lbl : TransLabel),
@@ -267,7 +258,7 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
       have ⟨τ₁', H_ind₁⟩ := H_ind₁
       sorry -- FIXME: prove separately
 
-    all_goals sorry
+    all_goals sorry -- FIXME: complete
 
 lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : TransLabel),
     CompositionTyJudgement p τ →
@@ -446,39 +437,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     have H_τ₁'' := sub_preserves_behaviour τ₁ τ₂ τ' lbl H_sub H_trans
     have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
     exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
-    -- revert p' lbl τ'
-    -- induction H_sub <;> intro p' H_typing H_ind τ' lbl H_not_ε H_trans
-    -- case congr τ₁' τ₂' H_congr =>
-    --   clear τ₁ τ₂ ctx
-    --   have H_τ₁'' := congr_preserves_behaviour τ₂' τ₁' τ' lbl (by apply ProcTyCongr.symm; exact H_congr) H_trans
-    --   have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
-    --   exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
-    -- case choice_relax τ₁' τ₂' =>
-    --   clear ctx τ₁ τ₂
-    --   cases H_trans <;> simp at H_not_ε
-    -- case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
-  all_goals sorry
-
-lemma par_elims_to_skip_or_par : ∀ (p₁ p₂ p' : Proc),
-    Semantics.CompElim (Proc.par p₁ p₂) p' →
-    (p' = Proc.skip ∨
-      (∃ p₁' p₂',
-        p' = Proc.par p₁' p₂' ∧
-        Semantics.CompElim p₁ p₁' ∧
-        Semantics.CompElim p₂ p₂')) := by
-  sorry
-
-lemma type_par_elims_to_skip_or_par : ∀ (τ₁ τ₂ τ' : ProcTy),
-    ProcTyCompElim (ProcTy.par τ₁ τ₂) τ' →
-    (τ' = ProcTy.skip ∨
-      (∃ τ₁' τ₂',
-        τ' = ProcTy.par τ₁' τ₂' ∧
-        ProcTyCompElim τ₁ τ₁' ∧
-        ProcTyCompElim τ₂ τ₂')) := by sorry
-
-lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
-  ExprTyJudgement ∅ e →
-  ∃ v, e ↓ v := by sorry -- straightforward induction
+  all_goals sorry -- FIXME: complete
 
 -- If the type can transition through ε in any way at all, at least one of
 -- them can be matched by the process.
@@ -558,7 +517,7 @@ lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : P
     (∃ p' τ', CompositionTyJudgement p' τ' ∧ ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ P τ') := by
     -- (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
 
-    sorry
+    sorry -- FIXME: prove it (low priority)
 
 theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
     CompositionTyJudgement p τ →

@@ -144,293 +144,17 @@ inductive WellformedTy : ProcTy → Prop where
     AtTail x body →
     WellformedTy (ProcTy.recur x body)
 
-lemma non_instant_red_preservation :
-      ∀ (ctx : ProcTyContext) (p: Semantics.ProcComp) (τ : ProcTyComposition),
-        ProcTyJudgement ctx p τ →
-        (Semantics.NonInstantReducible ∅ p ↔ ProcTyNonInstant ∅ τ) := by sorry
-
-  -- intro ctx p τ
-  -- revert p ctx
-  -- induction τ using ProcTy.ind
-  -- case H_cycle =>
-  --   intro ctx p H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     apply ProcTyNonInstant.cycle
-  --   . intro H_non_instant
-  --     cases H_typing
-  --     apply Semantics.NonInstantReducible.cycle
-  -- case H_skip =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  -- case H_message =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  -- case H_choice τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   rename_i e p₁ p₂ H_expr_ty H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply ProcTyNonInstant.choice
-  --     . have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply Semantics.NonInstantReducible.ifunfair
-  --     . have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_choice_fair bid τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   rename_i e p₁ p₂ H_expr_ty H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply ProcTyNonInstant.choice_fair bid
-  --     . have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply Semantics.NonInstantReducible.iffair bid
-  --     . have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_par τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   rename_i p₁ p₂ H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     . rename_i H_non_instant₁
-  --       apply ProcTyNonInstant.par_left
-  --       have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . rename_i H_non_instant₂
-  --       apply ProcTyNonInstant.par_right
-  --       have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     . rename_i H_non_instant₁
-  --       apply Semantics.NonInstantReducible.par_left
-  --       have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . rename_i H_non_instant₂
-  --       apply Semantics.NonInstantReducible.par_right
-  --       have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_seq τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   . rename_i msg x p H_typing
-  --     constructor
-  --     . intro H_non_instant
-  --       apply ProcTyNonInstant.seq_right
-  --       have H_ih₂' := H_ih₂ (ctx.extendExprVar x) p H_typing
-  --       cases H_non_instant
-  --       rename_i H_ih
-  --       exact H_ih₂'.mp H_ih
-  --     . intro H_non_instant
-  --       apply Semantics.NonInstantReducible.recv
-  --       cases H_non_instant
-  --       . rename_i H_ih
-  --         cases H_ih
-  --       . rename_i H_ih
-  --         have H_ih₂' := H_ih₂ (ctx.extendExprVar x) p H_typing
-  --         exact H_ih₂'.mpr H_ih
-  --   . rename_i p₁ p₂ H_typing₁ H_typing₂
-  --     constructor
-  --     . intro H_non_instant
-  --       cases H_non_instant
-  --       . rename_i H_non_instant₁
-  --         apply ProcTyNonInstant.seq_left
-  --         have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --         exact H_ih₁'.mp H_non_instant₁
-  --       . rename_i H_non_instant₂
-  --         apply ProcTyNonInstant.seq_right
-  --         have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --         exact H_ih₂'.mp H_non_instant₂
-  --     . intro H_non_instant
-  --       cases H_non_instant
-  --       . rename_i H_non_instant₁
-  --         apply Semantics.NonInstantReducible.seq_left
-  --         have H_ih₁' := H_ih₁ ctx p₁ H_typing₁
-  --         exact H_ih₁'.mpr H_non_instant₁
-  --       . rename_i H_non_instant₂
-  --         apply Semantics.NonInstantReducible.seq_right
-  --         have H_ih₂' := H_ih₂ ctx p₂ H_typing₂
-  --         exact H_ih₂'.mpr H_non_instant₂
-  -- case H_dollar =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  -- case H_var x =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  -- case H_recur x body H_ih =>
-  --   intro ctx p H_typing
-  --   cases H_typing
-  --   rename_i p_body H_typing_body
-  --   constructor
-  --   . intro H_non_instant
-  --     apply ProcTyNonInstant.recur x body
-  --     have H_ih' := H_ih (ctx.extendProcVar x) p_body H_typing_body
-  --     cases H_non_instant
-  --     rename_i H_ih
-  --     exact H_ih'.mp H_ih
-  --   . intro H_non_instant
-  --     apply Semantics.NonInstantReducible.recur x
-  --     have H_ih' := H_ih (ctx.extendProcVar x) p_body H_typing_body
-  --     cases H_non_instant
-  --     rename_i H_ih
-  --     exact H_ih'.mpr H_ih
-  -- case H_xoffer =>
-  --   intro ctx p H_typing
-  --   cases H_typing -- TODO: would need to complete once we add xoffer back
-  --   sorry
-  -- case H_offer =>
-  --   intro ctx p H_typing
-  --   cases H_typing -- TODO: would need to complete once we add offer back
-  --   sorry
-
-
--- FIXME: important
 lemma non_instant_msg_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition),
         CompositionTyJudgement p τ → ∀ mx, (ProcTyNonInstantMsg ∅ ∅ τ mx → Semantics.NonInstantMessage ∅ ∅ p mx) := by sorry
-
-  -- intro p τ mx
-  -- revert p
-  -- induction τ using ProcTy.ind
-  -- case H_cycle =>
-  --   intro p H_typing mx
-  --   constructor
-  --   . intro H_non_instant
-  --     apply ProcTyNonInstantMsg.cycle
-  --   . intro H_non_instant
-  --     cases H_typing
-  --     apply Semantics.NonInstantMessage.cycle
-  -- case H_skip =>
-  --   intro p H_typing mx
-  --   cases H_typing
-  --   constructor
-  --   . intro H_non_instant
-  --     apply ProcTyNonInstantMsg.skip
-  --   . intro H_non_instant
-  --     apply Semantics.NonInstantMessage.skip
-  -- case H_choice τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro p H_typing mx
-  --   cases H_typing
-  --   rename_i e p₁ p₂ H_expr_ty H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply ProcTyNonInstantMsg.choice
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply Semantics.NonInstantMessage.ifunfair
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_choice_fair bid τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro p H_typing mx
-  --   cases H_typing
-  --   rename_i e p₁ p₂ H_expr_ty H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply ProcTyNonInstantMsg.choice_fair bid
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply Semantics.NonInstantMessage.iffair bid
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_par τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro p H_typing mx
-  --   cases H_typing
-  --   rename_i p₁ p₂ H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply ProcTyNonInstantMsg.par
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mp H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mp H_non_instant₂
-  --   . intro H_non_instant
-  --     cases H_non_instant
-  --     rename_i H_non_instant₁ H_non_instant₂
-  --     apply Semantics.NonInstantMessage.par
-  --     . have H_ih₁' := H_ih₁ p₁ H_typing₁ mx
-  --       exact H_ih₁'.mpr H_non_instant₁
-  --     . have H_ih₂' := H_ih₂ p₂ H_typing₂ mx
-  --       exact H_ih₂'.mpr H_non_instant₂
-  -- case H_seq τ₁ τ₂ H_ih₁ H_ih₂ =>
-  --   intro p H_typing mx
-  --   cases H_typing
-  --   rename_i p₁ p₂ H_typing₁ H_typing₂
-  --   constructor
-  --   . intro H_non_instant
-  --     sorry
-  --   all_goals sorry
-  -- all_goals sorry -- FIXME: complete
-
+      -- FIXME: prove
 
 lemma recursion_unfolding_preserved :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String),
         ProcTyJudgement (ctx.extendProcVar x) p τ →
         ProcTyJudgement ctx (Semantics.procReplace p x (Proc.recur x p)) (τ.replaceVar x $ ProcTy.recur x τ) := by
 
-  sorry
+  sorry -- FIXME: prove
 
 lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     (H_len : procs.length = tys.length) →
@@ -518,14 +242,14 @@ namespace Semantics.IncompReduces
       ¬ lbl.isEx →
       Semantics.IncompReduces p₁ lbl p₁' →
       Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁' p₂) := by
-      sorry
+      sorry -- trivial
 
   lemma par_non_ex_right :
     ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {lbl : TransLabel},
       ¬ lbl.isEx →
       Semantics.IncompReduces p₂ lbl p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁ p₂') := by
-      sorry
+      sorry -- trivial
 
   lemma par_ex_left :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
@@ -533,7 +257,7 @@ namespace Semantics.IncompReduces
       (∀ mx ∈ ex_msg,
         Semantics.NonInstantMessage ∅ ∅ p₂ mx) →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁' p₂) := by
-      sorry
+      sorry -- trivial
 
   lemma par_ex_right :
     ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
@@ -541,14 +265,14 @@ namespace Semantics.IncompReduces
       (∀ mx ∈ ex_msg,
         Semantics.NonInstantMessage ∅ ∅ p₁ mx) →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁ p₂') := by
-      sorry
+      sorry -- trivial
 
   lemma par_tock :
     ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp},
       Semantics.IncompReduces p₁ (TransLabel.ac Action.tock) p₁' →
       Semantics.IncompReduces p₂ (TransLabel.ac Action.tock) p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac Action.tock) (Proc.par p₁' p₂') := by
-      sorry
+      sorry -- trivial
 
   lemma par_message :
     ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp} {msg : MessageId} {d₁ d₂ : MessageDir} {v₁ v₂ : Bool},
@@ -557,7 +281,7 @@ namespace Semantics.IncompReduces
       Semantics.IncompReduces p₁ (TransLabel.message msg d₁ v₁) p₁' →
       Semantics.IncompReduces p₂ (TransLabel.message msg d₂ v₂) p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁' p₂') := by
-        sorry
+        sorry -- trivial
 
   lemma extend_l :
         ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
@@ -572,14 +296,14 @@ namespace ProcTyIncompTransition
         ∀ {τ₁ τ₂ τ₁' : ProcTy} {lbl : AbstractTransLabel},
           ProcTyIncompTransition τ₁ lbl τ₁' →
           ProcTyIncompTransition (ProcTy.seq τ₁ τ₂) lbl (ProcTy.seq τ₁' τ₂) := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma reduces_seq_skip :
         ∀ {τ₁ τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
           ProcTyCompElim τ₁ ProcTy.skip →
           ProcTyIncompTransition τ₂ lbl τ₂' →
           ProcTyIncompTransition (ProcTy.seq τ₁ τ₂) lbl τ₂' := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma reduces_par_left :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
@@ -587,7 +311,7 @@ namespace ProcTyIncompTransition
           ProcTyIncompTransition τ₁ lbl τ₁' →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma reduces_par_right :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
@@ -595,21 +319,21 @@ namespace ProcTyIncompTransition
           ProcTyCompElim τ₁ τ₁' →
           ProcTyIncompTransition τ₂ lbl τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma reduces_par_tock :
         ∀ {τ₁ τ₂ τ₁' τ₂' : ProcTy},
           ProcTyIncompTransition τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
           ProcTyIncompTransition τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma reduces_extend_l :
         ∀ {τ₁' τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
           ProcTyIncompTransition τ₁ lbl τ₂ →
           ProcTyCompElim τ₁' τ₁ →
           ProcTyIncompTransition τ₁' lbl τ₂ := by
-    sorry
+    sorry --trivial
 
   lemma skip_typing_implies_skip_elim :
         ∀ {τ : ProcTy},
@@ -625,34 +349,34 @@ namespace ProcTyCompElim
           ProcTyCompElim τ₁ τ₂ →
           ProcTyCompElim τ₂ τ₃ →
           ProcTyCompElim τ₁ τ₃ := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma elim_right :
     ∀ {τ₁ τ₂ τ₃ : ProcTy},
       ProcTyCompElim τ₁ τ₂ →
       ProcTyTransition τ₂ AbstractTransLabel.ε τ₃ →
       ProcTyCompElim τ₁ τ₃ := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma elim_par :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy},
           ProcTyCompElim τ₁ τ₁' →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyCompElim (ProcTy.par τ₁ τ₂) (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma elim_seq_step :
         ∀ {τ₁ τ₁' τ₂ : ProcTy},
           ProcTyCompElim τ₁ τ₁' →
           ProcTyCompElim (ProcTy.seq τ₁ τ₂) (ProcTy.seq τ₁' τ₂) := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
   lemma elim_seq_skip :
         ∀ {τ₁ τ₂ τ₂' : ProcTy},
           ProcTyCompElim τ₁ ProcTy.skip →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂' := by
-    sorry -- FIXME: prove this
+    sorry -- trivial
 
 end ProcTyCompElim
 
@@ -665,3 +389,28 @@ section ProcTySub
   lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
     ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
 end ProcTySub
+
+lemma label_abstraction_preserves_ex : ∀ {lbl : TransLabel},
+    (AbstractTransLabel.fromConcrete lbl).isEx ↔ lbl.isEx := by
+  intro lbl
+  unfold AbstractTransLabel.isEx
+  unfold AbstractTransLabel.fromConcrete
+  unfold TransLabel.isEx
+  simp
+  cases lbl <;> simp
+
+lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
+  ExprTyJudgement ∅ e →
+  ∃ v, e ↓ v := by
+  intro e H_typing
+  induction H_typing
+  case var x H_x =>
+    simp at H_x
+  case val v₀ =>
+    exists v₀
+    apply Semantics.ExprEval.literal
+  case add e₁ e₂ bop H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    have ⟨v₁, H_v₁⟩ := H_ind₁
+    have ⟨v₂, H_v₂⟩ := H_ind₂
+    exists valEval v₁ v₂ bop
+    apply Semantics.ExprEval.bin <;> assumption

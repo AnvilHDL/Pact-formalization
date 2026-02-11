@@ -44,7 +44,7 @@ def reachableTySet (Γ : String → Option ProcTy) (τ : ProcTy) : Finset ProcTy
   | .recur x body =>
     {τ} ∪ (reachableTySet (fun x' => if x' = x then τ else Γ x') body)
 decreasing_by
-  all_goals sorry
+  all_goals sorry -- FIXME: complete
 
 
 /-
