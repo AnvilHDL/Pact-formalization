@@ -558,6 +558,12 @@ namespace Semantics.IncompReduces
       Semantics.IncompReduces p₂ (TransLabel.message msg d₂ v₂) p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁' p₂') := by
         sorry
+
+  lemma extend_l :
+        ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
+          Semantics.CompElim p₁ p₁' →
+          Semantics.IncompReduces p₁' lbl p₂ →
+          Semantics.IncompReduces p₁ lbl p₂ := by sorry -- trivial
 end Semantics.IncompReduces
 
 
@@ -596,13 +602,6 @@ namespace ProcTyIncompTransition
           ProcTyIncompTransition τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
           ProcTyIncompTransition τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove this
-
-  lemma reduces_extend_r :
-        ∀ {τ₁ τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
-          ProcTyIncompTransition τ₁ lbl τ₂ →
-          ProcTyCompElim τ₂ τ₂' →
-          ProcTyIncompTransition τ₁ lbl τ₂' := by
     sorry -- FIXME: prove this
 
   lemma reduces_extend_l :

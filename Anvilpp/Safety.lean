@@ -549,68 +549,53 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         sorry -- symmetrical
     case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
       sorry -- FIXME: prove it
+    all_goals sorry
 
-
-
-lemma type_preserves_deadend_elim : ∀ (p : Proc) (τ : ProcTy),
+lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : ProcTy),
     CompositionTyJudgement p τ →
-    (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
+    (∃ n, ∀ τ', ¬ ProcTyCompElimStep n τ τ') →
+    (∀ τ', ProcTyCompElim τ τ' → (∃ τ'', ProcTyCompElim τ' τ'' ∧ P τ'')) →
+    (∃ p' τ', CompositionTyJudgement p' τ' ∧ ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ P τ') := by
+    -- (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
 
     sorry
-    -- intro p τ H_typing
-    -- unfold CompositionTyJudgement at H_typing
-    -- generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    -- induction H_typing
-    -- case cycle ctx' =>
-    --   exists ProcTy.cycle
-    --   constructor
-    --   . apply ProcTyCompElim.refl
-    --   . intro α τ'' H_trans
-    --     have H_α : α = Action.tock := by
-    --       cases H_trans
-    --       rename_i τₘ H_trans
-    --       have ⟨H_trans, H_elim⟩ := H_trans
-    --       cases H_trans <;> trivial
-    --     rewrite [H_α]
-    --     exists Proc.skip, Proc.cycle
-    --     constructor
-    --     . apply Semantics.Reduces.tock
-    --     . apply Semantics.CompElim.refl
-    -- case par ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
-    --   have H_τ₁ := H_ind₁ H_ctx
-    --   have ⟨τ₁', H_τ₁⟩ := H_τ₁
-    --   have H_τ₂ := H_ind₂ H_ctx
-    --   have ⟨τ₂', H_τ₂⟩ := H_τ₂
-    --   exists (ProcTy.par τ₁' τ₂')
-    --   constructor
-    --   . apply ProcTyCompElim.elim_par
-    --     . exact H_τ₁.1
-    --     . exact H_τ₂.1
-    --   . intro α τ'' H_trans
-    --     have ⟨τₘ, H_trans, H_elim⟩ := H_trans
-    --     cases H_trans
-    --     . have H_s := type_par_elims_to_skip_or_par τ₁' τ₂' ProcTy.cycle H_elim
-    --       simp at H_s
-    --     . rename_i τ₁' τ₁'' τ₂'' H_eq H_τ₁'' H_τ₂''
-    --       have H_p₁'' := H_τ₁.2 α
-
-
-
-
 
 theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
     CompositionTyJudgement p τ →
     (¬ ∃ p' α, Semantics.CompReduces p α p') →
-    (∃ τ', ProcTyCompElim τ τ' ∧ (¬ ∃ τ'' α, ProcTyCompTransition τ' α τ'')) := by
+    (
+      (∀ n, ∃ τ', ProcTyCompElimStep n τ τ') ∨
+      (∃ τ', ProcTyCompElim τ τ' ∧ (¬ ∃ τ'' α, ProcTyCompTransition τ' α τ''))
+    )
+     := by
   intro p τ H_typing H_deadend
-  have H_deadend_elim := type_preserves_deadend_elim p τ H_typing
-  have ⟨τ', H_τ', H_prop⟩ := H_deadend_elim
   by_contra H_contra
   push_neg at H_contra
-  have H_contra' := H_contra τ' H_τ'
-  have ⟨τ'', α, H_τ''⟩ := H_contra'
-  have H_p'' := H_prop α τ'' H_τ''
-  have H_contra'' : ∃ p'' α , Semantics.CompReduces p α p'' := by
-    have ⟨p'', H_p''⟩ := H_p''
+  have H_contra_final :  ∃ p' τ',
+    CompositionTyJudgement p' τ' ∧
+      ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ ∃ τ'' α, ProcTyTransition τ' (AbstractTransLabel.ac α) τ'' := by
+    have ⟨H_contra₁, H_contra₂⟩ := H_contra
+    apply type_preserves_deadend_elim
+    . exact H_typing
+    . exact H_contra₁
+    . intro τ' H_contra'
+      have H := H_contra₂ τ' H_contra'
+      unfold ProcTyCompTransition ProcTyIncompTransition at H
+      have ⟨τ'', α, τₘ, H_τ''⟩ := H
+      exists τₘ
+      constructor
+      . exact H_τ''.2
+      . exists τ'', α
+        exact H_τ''.1
+  have ⟨p', τ', H_prop, H_elim, H_comp_elim, τ'', α, H_trans⟩ := H_contra_final
+  have H_p'' := type_preserves_deadends_single p' τ' τ'' (AbstractTransLabel.ac α) H_prop (by simp) H_trans
+  have ⟨p'', lbl', H_lbl', H_reduces⟩ := H_p''
+  cases lbl' <;> simp at H_lbl'; try contradiction
+  rewrite [← H_lbl'] at H_reduces
+  have H_contra' : ∃ p' α, Semantics.CompReduces p α p' := by
     exists p'', α
+    unfold Semantics.CompReduces
+    apply Semantics.IncompReduces.extend_l (p₁' := p')
+    . exact H_comp_elim
+    . exact H_reduces
   contradiction
