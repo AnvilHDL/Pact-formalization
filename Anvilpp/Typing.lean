@@ -46,14 +46,13 @@ inductive ProcTyCongr : ProcTy → ProcTy → Prop where
     ProcTyCongr τ₁ τ₃
   | par_comm (τ₁ τ₂ : ProcTy) :
     ProcTyCongr (ProcTy.par τ₁ τ₂) (ProcTy.par τ₂ τ₁)
-    -- FIXME: these are tricky
+    -- TODO: these are tricky, consider adding these later
   -- | seq_skip (τ : ProcTy) :
   --   ProcTyCongr (ProcTy.seq ProcTy.skip τ) τ
   -- | choice_lift_right (τ₁ τ₂ τ' : ProcTy) :
   --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ₁ τ') (ProcTy.seq τ₂ τ')) (ProcTy.seq (ProcTy.choice τ₁ τ₂) τ')
   -- | choice_lift_left (τ₁ τ₂ τ' : ProcTy) :
   --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ' τ₁) (ProcTy.seq τ' τ₂)) (ProcTy.seq τ' (ProcTy.choice τ₁ τ₂))
-  -- TODO: add more
 
 /-- Subtyping -/
 inductive ProcTySub : ProcTy → ProcTy → Prop where

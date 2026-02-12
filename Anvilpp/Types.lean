@@ -35,9 +35,6 @@ inductive ProcTy : Type where
   | var : String → ProcTy
   | recur : String → ProcTy → ProcTy
 
--- FIXME: Lean cannot automatically derive DecidableEq for this yet
-instance : DecidableEq ProcTy := by sorry
-
 namespace ProcTy
   mutual
     def replaceBranchVar (branch_tys : MessageExch × ProcTy) (x : String) (τ' : ProcTy) :

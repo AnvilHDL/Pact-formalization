@@ -6,4 +6,3 @@ import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Refinement
 import Anvilpp.Deadend
-import Anvilpp.States
