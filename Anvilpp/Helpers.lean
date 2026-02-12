@@ -530,3 +530,38 @@ lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
     have ⟨v₂, H_v₂⟩ := H_ind₂
     exists valEval v₁ v₂ bop
     apply Semantics.ExprEval.bin <;> assumption
+
+namespace ProcTyGuarded
+  lemma trans_preserves_guarded :
+        ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
+          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyTransition τ₁ lbl τ₂ →
+          ProcTyGuarded ∅ ∅ τ₂ := by
+    sorry -- FIXME: prove
+
+  lemma elim_preserves_guarded :
+        ∀ {τ₁ τ₂ : ProcTy},
+          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyCompElim τ₁ τ₂ →
+          ProcTyGuarded ∅ ∅ τ₂ := by
+    sorry -- trivial
+
+  lemma incomp_trans_preserves_guarded :
+        ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
+          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyIncompTransition τ₁ lbl τ₂ →
+          ProcTyGuarded ∅ ∅ τ₂ := by
+    sorry -- FIXME: prove
+
+  lemma guarded_preserves_non_instant_msg :
+       ∀ {p : Semantics.ProcComp} {τ : ProcTyComposition},
+          CompositionTyJudgement p τ →
+          ProcTyGuarded ∅ ∅ τ →
+          ∃ τ', ProcTyCompElim τ τ' ∧
+            CompositionTyJudgement p τ' ∧
+            (
+              ∀ mx,
+              Semantics.NonInstantMessage ∅ ∅ p mx →
+              ProcTyNonInstantMsg ∅ ∅ τ' mx
+            ) := by sorry -- FIXME: prove
+end ProcTyGuarded
