@@ -229,9 +229,7 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
     revert τ'
     unfold CompositionTyJudgement at H_typing
     generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    induction H_typing <;> intro τ' H_transition
-    case cycle ctx' =>
-      cases H_transition
+    induction H_typing <;> (intro τ' H_transition; try (cases H_transition; done))
     case par ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
       cases H_transition
       case par_left τ₁' H_not_ε H_non_ex H_trans =>
@@ -351,16 +349,58 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₂
+    case message_recv =>
+      cases H_transition
+      rename_i H_trans
+      cases H_trans
+    case seq ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+      cases H_transition
+      case seq_step τ₁' H_trans =>
+        have H_p₁' := H_ind₁ H_ctx τ₁' H_trans
+        have ⟨τ₁'', p₁'', H_trans₁, H_elim₁, H_typing₁'⟩ := H_p₁'
+        exists (ProcTy.seq τ₁'' τ₂), (Proc.seq p₁'' p₂)
+        constructor
+        . apply ProcTyTransition.seq_step
+          exact H_trans₁
+        . constructor
+          . cases H_elim₁
+            . rename_i h
+              left
+              rewrite [h]
+              rfl
+            . aesop
+          . apply ProcTyJudgement.seq
+            . exact H_typing₁'
+            . rewrite [H_ctx]
+              exact H_typing₂
+      case seq_done =>
+        exists τ₂, p₂
+        constructor
+        . apply ProcTyTransition.seq_done
+        . constructor
+          . right
+            have H_p₁ : p₁ = Proc.skip := by
+              apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
+              rewrite [H_ctx]
+              exact H_typing₁
+            rewrite [H_p₁]
+            aesop
+          . unfold CompositionTyJudgement
+            rewrite [H_ctx]
+            exact H_typing₂
+    case recur ctx' x p_body τ_body H_typing H_ind =>
+      cases H_transition
+      exists τ_body.replaceVar x (ProcTy.recur x τ_body), Semantics.procReplace p_body x (Proc.recur x p_body)
+      constructor
+      . aesop
+      . constructor
+        . right
+          aesop
+        . apply recursion_unfolding_preserved
+          rewrite [H_ctx]
+          exact H_typing
     case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
-      clear p τ ctx
-      induction H_sub
-      case congr => sorry -- FIXME: prove it (basically needs to prove the same thing but between types)
-      case choice_relax τ₁' τ₂' =>
-        exists τ₁', p'
-        constructor <;> aesop
-      case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
-        sorry -- FIXME: prove it
-    all_goals sorry
+      sorry -- FIXME: prove it (basically needs to prove the same thing but between types)
 
 lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : ProcTy),
     CompositionTyJudgement p τ →
