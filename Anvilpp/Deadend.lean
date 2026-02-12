@@ -9,7 +9,7 @@ import Anvilpp.Types
 import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
-
+import Anvilpp.Subtyping
 
 lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : AbstractTransLabel),
     CompositionTyJudgement p τ →

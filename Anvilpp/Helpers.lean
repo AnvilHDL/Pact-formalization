@@ -168,42 +168,7 @@ lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
       by sorry -- obvious
 
-
-lemma subtype_preserves_reduction : ∀ (τ₁ τ₂ τ₁' : ProcTy)
-        (lbl : AbstractTransLabel),
-      lbl ≠ AbstractTransLabel.ε →
-      ProcTyTransition τ₁ lbl τ₂ →
-      ProcTySub τ₁ τ₁' →
-      (∃ τ₂', ProcTyTransition τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
-
-namespace ProcTyCongr
-  lemma congr_preserves_behaviour (τ₁ τ₂ τ₁' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTyCongr τ₁ τ₂ → ProcTyTransition τ₁ lbl τ₁' → ∃ τ₂', ProcTyTransition τ₂ lbl τ₂' ∧ ProcTyCongr τ₁' τ₂' := by sorry -- FIXME: prove
-
-  lemma congr_of_skip_is_skip (τ₁ τ₂ : ProcTy) :
-    (ProcTyCongr τ₁ τ₂) → (τ₁ = ProcTy.skip ↔ τ₂ = ProcTy.skip) := by
-      intro H_congr
-      generalize H_skip : ProcTy.skip = τ at H_congr
-      induction H_congr
-      case refl =>
-        rfl
-      case symm τ₁ τ₂ H_congr =>
-        symm
-        exact H_congr
-      case trans τ₁' τ₂' τ₃ H_congr₁ H_congr₂ H_ind₁ H_ind₂ =>
-        rewrite [H_ind₁]
-        rewrite [H_ind₂]
-        rfl
-      case par_comm τ₁' τ₂' =>
-        rewrite [← H_skip]
-        simp
-
-end ProcTyCongr
-
 namespace ProcTySub
-  lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
-
   lemma sub_of_skip_is_skip (τ : ProcTy) :
     ProcTySub τ ProcTy.skip → τ = ProcTy.skip := by
       intro H_sub
@@ -216,6 +181,7 @@ namespace ProcTySub
         sorry
       case trans => sorry -- FIXME: prove
 end ProcTySub
+
 
 namespace Semantics.CompElim
   lemma comp_elim_preseves_skip : ∀ {p : Semantics.ProcComp},
@@ -505,6 +471,12 @@ namespace ProcTyCompElim
     sorry -- trivial
 
 end ProcTyCompElim
+
+lemma label_abstraction_preserves_ε : ∀ {lbl : TransLabel},
+    (AbstractTransLabel.fromConcrete lbl) = AbstractTransLabel.ε ↔ lbl = TransLabel.ε := by
+  intro lbl
+  unfold AbstractTransLabel.fromConcrete
+  cases lbl <;> simp
 
 lemma label_abstraction_preserves_ex : ∀ {lbl : TransLabel},
     (AbstractTransLabel.fromConcrete lbl).isEx ↔ lbl.isEx := by

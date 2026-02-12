@@ -9,6 +9,7 @@ import Anvilpp.Types
 import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
+import Anvilpp.Subtyping
 
 lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
                              (τ : ProcTyComposition),
@@ -143,8 +144,20 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
           . apply ProcTyCompElim.refl
     case subtype =>
       rename_i ctx' p'' τ₁ τ₂ H_typing H_subtype H_ind
-      revert H_ctx
-      sorry -- FIXME: prove
+      clear p τ ctx
+      have H_ind := H_ind H_ctx p' H_reduces
+      have ⟨τ₁', H_ind'⟩ := H_ind
+      have H_τ₂' : ∃ τ₂', ProcTyCompElim τ₂ τ₂' ∧ ProcTySub τ₁' τ₂' := by
+        apply ProcTySub.subtype_refinement_elim_multi
+        . exact H_subtype
+        . exact H_ind'.2
+      have ⟨τ₂', H_τ₂'⟩ := H_τ₂'
+      exists τ₂'
+      constructor
+      . apply ProcTyJudgement.subtype (τ₁ := τ₁')
+        . exact H_ind'.1
+        . exact H_τ₂'.2
+      . exact H_τ₂'.1
 
 lemma type_emulates_proc_multi_ε : ∀ (p p' : Semantics.ProcComp) (τ : ProcTy),
     CompositionTyJudgement p τ →
@@ -437,7 +450,27 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
             . apply ProcTyTransition.choice_fair_right
             . apply ProcTyCompElim.refl
     case subtype ctx' p₀ τ₁ τ₂ H_typing₁ H_sub H_ind =>
-      sorry -- FIXME: prove separately
+      have H_guarded₁ : ProcTyGuarded ∅ ∅ τ₁ := by
+        apply ProcTySub.subtype_preserves_guarded
+        . exact H_sub
+        . exact H_guarded
+      have H_ind := H_ind H_ctx p' lbl H_guarded₁ H_reduces H_not_ε
+      have ⟨τ₁', H_ind⟩ := H_ind
+      have H_τ₂' : ∃ τ₂', ProcTyIncompTransition τ₂ (AbstractTransLabel.fromConcrete lbl) τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by
+        apply ProcTySub.subtype_refinement_label_multi (τ₁ := τ₁) (lbl := AbstractTransLabel.fromConcrete lbl) <;> try assumption
+        . unfold AbstractTransLabel.fromConcrete
+          cases lbl <;> simp
+          simp at H_not_ε
+        . exact H_ind.2.2
+      have ⟨τ₂', H_τ₂'⟩ := H_τ₂'
+      exists τ₂'
+      constructor
+      . apply ProcTyJudgement.subtype (τ₁ := τ₁')
+        . exact H_ind.1
+        . exact H_τ₂'.2.2
+      . constructor
+        . exact H_τ₂'.2.1
+        . exact H_τ₂'.1
     case recur ctx' x p'' τ' H_typing H_ind=>
       cases H_reduces
       simp at H_not_ε
