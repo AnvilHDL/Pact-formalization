@@ -60,7 +60,7 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
     ProcTyCongr τ₁ τ₂ →
     ProcTySub τ₁ τ₂
   | choice_relax (τ₁ τ₂ : ProcTy) :
-    ProcTySub τ₁ (ProcTy.choice τ₁ τ₂)
+    ProcTySub τ₁ (ProcTy.choice τ₁ τ₂) -- FIXME: this requires that τ₂ does not include potentially instant messages
   | trans (τ₁ τ₂ τ₃ : ProcTy) :
     ProcTySub τ₁ τ₂ →
     ProcTySub τ₂ τ₃ →

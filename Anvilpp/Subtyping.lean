@@ -35,15 +35,48 @@ namespace ProcTyCongr
 
 end ProcTyCongr
 
+-- Being eliminated to another type while keeping being a supertype of a given type
+inductive ProcTyCompElimWithSub : ProcTy → ProcTy → ProcTy → Prop where
+  | base (τ₁ τ₂ : ProcTy) :
+    ProcTySub τ₂ τ₁ →
+    ProcTyCompElimWithSub τ₁ τ₁ τ₂
+  | step (τ₁ τ₁' τₑ τ₂ : ProcTy) :
+    ProcTySub τ₂ τ₁ →
+    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
+    ProcTyCompElimWithSub τ₁' τₑ τ₂ →
+    ProcTyCompElimWithSub τ₁ τₑ τ₂
+
+lemma procty_comp_elim_with_sub_implies_comp_elim : ∀ (τ₁ τ₂ τ₃ : ProcTy),
+    ProcTyCompElimWithSub τ₁ τ₂ τ₃ →
+    ProcTyCompElim τ₁ τ₂ := by sorry -- trivial
+
 namespace ProcTySub
-  -- FIXME: slight adjustment needed. Used in deadend proof
   lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
+    lbl ≠ AbstractTransLabel.ε →
+    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' →
+    ∃ τ₁'', ProcTyTransition τ₁ lbl τ₁'' ∧ ProcTySub τ₁'' τ₂' := by sorry -- FIXME: prove
+
+  lemma sub_preserves_behaviour_elim (τ₁ τ₂ τ₂' : ProcTy) :
+    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ AbstractTransLabel.ε τ₂' →
+    ∃ τ₂'', (
+      ProcTyTransition τ₂ AbstractTransLabel.ε τ₂'' ∧
+      ∃ τ₁', (τ₁' = τ₁ ∨ ProcTyTransition τ₁ AbstractTransLabel.ε τ₁') ∧ ProcTySub τ₁' τ₂'') := by sorry -- FIXME: prove
 
   lemma subtype_refinement_elim (τ₁ τ₁' τ₂ : ProcTy) :
     ProcTySub τ₁ τ₂ →
     ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
     ∃ τ₂', ProcTyCompElim τ₂ τ₂' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
+
+  lemma subtype_refinement_elim_strong (τ₁ τ₁' τ₂ : ProcTy) :
+    ProcTySub τ₁ τ₂ →
+    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
+    ∃ τ₂' τ₂'', ProcTyCompElimWithSub τ₂ τ₂' τ₁
+      ∧ ProcTyTransition τ₂' AbstractTransLabel.ε τ₂'' ∧ ProcTySub τ₁' τ₂'' := by sorry -- FIXME: prove
+
+  lemma subtype_refinement_elim_single (τ₁ τ₁' τ₂ : ProcTy) :
+    ProcTySub τ₁ τ₂ →
+    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
+    ∃ τ₂', ProcTyTransition τ₂ AbstractTransLabel.ε τ₂' ∧ (ProcTySub τ₁ τ₂' ∨ ProcTySub τ₁' τ₂') := by sorry -- FIXME: prove
 
   lemma subtype_refinement_elim_multi (τ₁ τ₁' τ₂ : ProcTy) :
     ProcTySub τ₁ τ₂ →
@@ -76,6 +109,14 @@ namespace ProcTySub
       ProcTySub τ₁ τ₂ →
       ProcTyGuarded ∅ ∅ τ₂ →
       ProcTyGuarded ∅ ∅ τ₁ := by sorry -- FIXME: prove
+
+  lemma subtype_refinement_label_strong : ∀ (τ₁ τ₁' τ₂ : ProcTy)
+      (lbl : AbstractTransLabel),
+      lbl ≠ AbstractTransLabel.ε →
+      ProcTySub τ₁ τ₂ →
+      ProcTyGuarded ∅ ∅ τ₂ →
+      ProcTyTransition τ₁ lbl τ₁' →
+      ∃ τ₂' τ₂'', ProcTyCompElimWithSub τ₂ τ₂' τ₁ ∧ ProcTyTransition τ₂' lbl τ₂'' ∧ ProcTySub τ₁' τ₂'' := by sorry -- FIXME: prove
 
   lemma subtype_refinement_label : ∀ (τ₁ τ₁' τ₂ : ProcTy)
       (lbl : AbstractTransLabel),
