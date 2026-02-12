@@ -199,7 +199,8 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       exists (Proc.seq p₁' p₂), lbl'
       constructor
       . exact H_lbl'
-      . sorry -- FIXME: complete
+      . apply Semantics.IncompReduces.seq_reduces
+        exact H_reduces
     case seq_done =>
       simp at H_not_ε
   case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
@@ -212,7 +213,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
   case offer => sorry -- FIXME: low priority
   case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
     clear p τ ctx
-    have H_τ₁'' := sub_preserves_behaviour τ₁ τ₂ τ' lbl H_sub H_trans
+    have H_τ₁'' := ProcTySub.sub_preserves_behaviour τ₁ τ₂ τ' lbl H_sub H_trans
     have ⟨τ₁'', H_τ₁''⟩ := H_τ₁''
     exact H_ind H_ctx τ₁'' lbl H_not_ε H_τ₁''.1
 
@@ -222,7 +223,7 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
     CompositionTyJudgement p τ →
     ProcTyTransition τ AbstractTransLabel.ε τ' →
     ∃ τ'' p'', ProcTyTransition τ AbstractTransLabel.ε τ'' ∧
-       Semantics.CompElim p p'' ∧ CompositionTyJudgement p'' τ'' := by
+       (p'' = p ∨ Semantics.Reduces p TransLabel.ε p'') ∧ CompositionTyJudgement p'' τ'' := by
 
     intro p τ τ' H_typing H_transition
     revert τ'
@@ -243,9 +244,12 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
           . exact H_non_ex
           . exact H_trans₁
         . constructor
-          . apply Semantics.CompElim.par_elim_fwd
-            . exact H_elim₁
-            . apply Semantics.CompElim.refl
+          . cases H_elim₁
+            . rename_i h
+              left
+              rewrite [h]
+              rfl
+            . aesop
           . apply ProcTyJudgement.par
             . exact H_typing₁'
             . rewrite [H_ctx]
@@ -260,9 +264,12 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
           . exact H_non_ex
           . exact H_trans₂
         . constructor
-          . apply Semantics.CompElim.par_elim_fwd
-            . apply Semantics.CompElim.refl
-            . exact H_elim₂
+          . cases H_elim₂
+            . rename_i h
+              left
+              rewrite [h]
+              rfl
+            . aesop
           . apply ProcTyJudgement.par
             . rewrite [H_ctx]
               exact H_typing₁
@@ -272,11 +279,22 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         constructor
         . apply ProcTyTransition.par_skip_left
         . constructor
-          . apply Semantics.CompElim.par_elim_fwd_skip_l
-            . apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
-              rewrite [H_ctx]
-              exact H_typing₁
-            . apply Semantics.CompElim.refl
+          . cases H_typing₁
+            case skip =>
+              right
+              aesop
+            case subtype τ₁ H_typing H_sub =>
+              have H_τ₁_skip : τ₁ = ProcTy.skip := by
+                apply ProcTySub.sub_of_skip_is_skip
+                exact H_sub
+              rewrite [H_τ₁_skip] at H_typing
+              have H_p₁_skip : p₁ = Proc.skip := by
+                apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
+                rewrite [H_ctx]
+                exact H_typing
+              right
+              rewrite [H_p₁_skip]
+              aesop
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₂
@@ -285,11 +303,22 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         constructor
         . apply ProcTyTransition.par_skip_right
         . constructor
-          . apply Semantics.CompElim.par_elim_fwd_skip_r
-            . apply Semantics.CompElim.refl
-            . apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
-              rewrite [H_ctx]
-              exact H_typing₂
+          . cases H_typing₂
+            case skip =>
+              right
+              aesop
+            case subtype τ₂ H_typing H_sub =>
+              have H_τ₂_skip : τ₂ = ProcTy.skip := by
+                apply ProcTySub.sub_of_skip_is_skip
+                exact H_sub
+              rewrite [H_τ₂_skip] at H_typing
+              have H_p₂_skip : p₂ = Proc.skip := by
+                apply ProcTyIncompTransition.skip_typing_implies_skip_elim_rev
+                rewrite [H_ctx]
+                exact H_typing
+              right
+              rewrite [H_p₂_skip]
+              aesop
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₁
@@ -307,9 +336,8 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         constructor
         . apply ProcTyTransition.choice_left
         . constructor
-          . apply Semantics.CompElim.eps_elim (p' := p₁)
-            . apply Semantics.Reduces.ifunfair_true <;> trivial
-            . apply Semantics.CompElim.refl
+          . right
+            aesop
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₁
@@ -318,14 +346,20 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         constructor
         . apply ProcTyTransition.choice_right
         . constructor
-          . apply Semantics.CompElim.eps_elim (p' := p₂)
-            . apply Semantics.Reduces.ifunfair_false <;> trivial
-            . apply Semantics.CompElim.refl
+          . right
+            aesop
           . unfold CompositionTyJudgement
             rewrite [H_ctx]
             exact H_typing₂
     case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
-      sorry -- FIXME: prove it
+      clear p τ ctx
+      induction H_sub
+      case congr => sorry -- FIXME: prove it (basically needs to prove the same thing but between types)
+      case choice_relax τ₁' τ₂' =>
+        exists τ₁', p'
+        constructor <;> aesop
+      case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
+        sorry -- FIXME: prove it
     all_goals sorry
 
 lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : ProcTy),

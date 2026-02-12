@@ -176,6 +176,47 @@ lemma subtype_preserves_reduction : ∀ (τ₁ τ₂ τ₁' : ProcTy)
       ProcTySub τ₁ τ₁' →
       (∃ τ₂', ProcTyTransition τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
 
+namespace ProcTyCongr
+  lemma congr_preserves_behaviour (τ₁ τ₂ τ₁' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTyCongr τ₁ τ₂ → ProcTyTransition τ₁ lbl τ₁' → ∃ τ₂', ProcTyTransition τ₂ lbl τ₂' ∧ ProcTyCongr τ₁' τ₂' := by sorry -- FIXME: prove
+
+  lemma congr_of_skip_is_skip (τ₁ τ₂ : ProcTy) :
+    (ProcTyCongr τ₁ τ₂) → (τ₁ = ProcTy.skip ↔ τ₂ = ProcTy.skip) := by
+      intro H_congr
+      generalize H_skip : ProcTy.skip = τ at H_congr
+      induction H_congr
+      case refl =>
+        rfl
+      case symm τ₁ τ₂ H_congr =>
+        symm
+        exact H_congr
+      case trans τ₁' τ₂' τ₃ H_congr₁ H_congr₂ H_ind₁ H_ind₂ =>
+        rewrite [H_ind₁]
+        rewrite [H_ind₂]
+        rfl
+      case par_comm τ₁' τ₂' =>
+        rewrite [← H_skip]
+        simp
+
+end ProcTyCongr
+
+namespace ProcTySub
+  lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
+    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
+
+  lemma sub_of_skip_is_skip (τ : ProcTy) :
+    ProcTySub τ ProcTy.skip → τ = ProcTy.skip := by
+      intro H_sub
+      generalize H_skip : ProcTy.skip = τ at H_sub
+      induction H_sub
+      case congr τ₁ τ₂ H_congr =>
+        rewrite [← H_skip]
+        sorry
+      case choice_relax τ₁ τ₂ =>
+        sorry
+      case trans => sorry -- FIXME: prove
+end ProcTySub
+
 namespace Semantics.CompElim
   lemma comp_elim_preseves_skip : ∀ {p : Semantics.ProcComp},
                                   CompElim Proc.skip p → p = Proc.skip := by
@@ -273,6 +314,11 @@ namespace Semantics.IncompReduces
     constructor
     . exact H_reduces
     . apply Semantics.CompElim.refl
+
+  lemma seq_reduces :
+    ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
+      Semantics.IncompReduces p₁ lbl p₁' →
+      Semantics.IncompReduces (Proc.seq p₁ p₂) lbl (Proc.seq p₁' p₂) := by sorry -- trivial
 
   lemma par_non_ex_left :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
@@ -406,8 +452,21 @@ namespace ProcTyIncompTransition
   lemma skip_typing_implies_skip_elim_rev :
         ∀ {p : Semantics.ProcComp},
           ProcTyJudgement ProcTyContext.empty p ProcTy.skip →
-          Semantics.CompElim p Proc.skip := by
-          sorry -- FIXME: prove this
+          p = Proc.skip := by
+    intro p H_typing
+    generalize H_ctx : ProcTyContext.empty = ctx at H_typing
+    generalize H_skip : ProcTy.skip = τ at H_typing
+    induction H_typing <;> try (cases H_skip; done)
+    case skip =>
+      rfl
+    case subtype =>
+      rename_i p' τ₁ τ₂ H_typing H_sub H_ind
+      rewrite [← H_skip] at H_sub
+      apply H_ind
+      . exact H_ctx
+      . symm
+        apply ProcTySub.sub_of_skip_is_skip
+        exact H_sub
 end ProcTyIncompTransition
 
 namespace ProcTyCompElim
@@ -446,16 +505,6 @@ namespace ProcTyCompElim
     sorry -- trivial
 
 end ProcTyCompElim
-
-section ProcTyCongr
-  lemma congr_preserves_behaviour (τ₁ τ₂ τ₁' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTyCongr τ₁ τ₂ → ProcTyTransition τ₁ lbl τ₁' → ∃ τ₂', ProcTyTransition τ₂ lbl τ₂' ∧ ProcTyCongr τ₁' τ₂' := by sorry -- FIXME: prove
-end ProcTyCongr
-
-section ProcTySub
-  lemma sub_preserves_behaviour (τ₁ τ₂ τ₂' : ProcTy) (lbl : AbstractTransLabel) :
-    ProcTySub τ₁ τ₂ → ProcTyTransition τ₂ lbl τ₂' → ∃ τ₁', ProcTyTransition τ₁ lbl τ₁' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
-end ProcTySub
 
 lemma label_abstraction_preserves_ex : ∀ {lbl : TransLabel},
     (AbstractTransLabel.fromConcrete lbl).isEx ↔ lbl.isEx := by
