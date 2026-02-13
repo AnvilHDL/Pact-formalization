@@ -70,10 +70,11 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . exact H_lbl'
       . have H_m' : ∀ mx ∈ ex_msg, Semantics.NonInstantMessage ∅ ∅ p₂ mx := by
           intro mx H_mx
-          apply non_instant_msg_preservation (p := p₂) (τ := τ₂)
-          . unfold CompositionTyJudgement
-            rewrite [H_ctx]
-            exact H_typing₂
+          apply non_instant_msg_preservation (p := p₂) (τ := τ₂) (ctx := ctx')
+          . rewrite [← H_ctx]
+            unfold ProcTyContext.empty
+            simp
+          . exact H_typing₂
           . exact H_m mx H_mx
         unfold AbstractTransLabel.fromConcrete at H_lbl'
         have H_lbl_ex' : lbl' = TransLabel.ex ex_msg := by
@@ -94,10 +95,11 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . exact H_lbl'
       . have H_m' : ∀ mx ∈ ex_msg, Semantics.NonInstantMessage ∅ ∅ p₁ mx := by
           intro mx H_mx
-          apply non_instant_msg_preservation (p := p₁) (τ := τ₁)
-          . unfold CompositionTyJudgement
-            rewrite [H_ctx]
-            exact H_typing₁
+          apply non_instant_msg_preservation (p := p₁) (τ := τ₁) (ctx := ctx')
+          . rewrite [← H_ctx]
+            unfold ProcTyContext.empty
+            simp
+          . exact H_typing₁
           . exact H_m mx H_mx
         unfold AbstractTransLabel.fromConcrete at H_lbl'
         have H_lbl_ex' : lbl' = TransLabel.ex ex_msg := by
@@ -168,7 +170,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
   case recur =>
     cases H_trans
     simp at H_not_ε
-  case message_send ctx' msg p' e H_typing =>
+  case message_send ctx' msg e H_typing =>
     cases H_trans
     rewrite [← H_ctx] at H_typing
     unfold ProcTyContext.empty at H_typing

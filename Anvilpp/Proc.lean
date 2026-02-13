@@ -241,6 +241,7 @@ namespace Semantics
       NonInstantReducible Γ p →
       NonInstantReducible Γ (Proc.recv msg var p)
 
+  @[aesop unsafe]
   inductive NonInstantMessage : Finset String → Finset String → Proc → (MessageId × MessageDir) → Prop where
     | recv (Γ₁ Γ₂ : Finset String) (msg m : MessageId) (var : String) (p : Proc) :
       msg ≠ m →
@@ -298,6 +299,8 @@ namespace Semantics
     | recur_noninstant (Γ₁ Γ₂ : Finset String) (f : String) (p_body : Proc) (mx : MessageId × MessageDir) :
       NonInstantMessage (Γ₁ \ {f}) (Γ₂ ∪ {f}) p_body mx →
       NonInstantMessage Γ₁ Γ₂ (Proc.recur f p_body) mx
+    | dollar (Γ₁ Γ₂ : Finset String) (pid : ProcId) (mx : MessageId × MessageDir) :
+      NonInstantMessage Γ₁ Γ₂ (Proc.endp pid) mx
 
   @[aesop unsafe]
   inductive Reduces : Proc → TransLabel → Proc → Prop where

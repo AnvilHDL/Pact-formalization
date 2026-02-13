@@ -144,10 +144,59 @@ inductive WellformedTy : ProcTy → Prop where
     AtTail x body →
     WellformedTy (ProcTy.recur x body)
 
+lemma non_instant_preservation :
+      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (Γ : Finset String),
+        ctx.procVars = ∅ → ProcTyJudgement ctx p τ → ProcTyNonInstant Γ τ → Semantics.NonInstantReducible Γ p := by
+
+    sorry
+
 lemma non_instant_msg_preservation :
-      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition),
-        CompositionTyJudgement p τ → ∀ mx, (ProcTyNonInstantMsg ∅ ∅ τ mx → Semantics.NonInstantMessage ∅ ∅ p mx) := by sorry
-      -- FIXME: prove
+      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext),
+        ctx.procVars = ∅ → ProcTyJudgement ctx p τ → ∀ mx Γₙ Γₘ, (ProcTyNonInstantMsg Γₙ Γₘ τ mx → Semantics.NonInstantMessage Γₙ Γₘ p mx) := by
+  intro p τ ctx H_ctx H_typing
+  -- generalize H_ctx : ProcTyContext.empty = ctx at H_typing
+  revert H_ctx
+  induction H_typing <;> (intro H_ctx' mx Γₙ Γₘ H_noninst_msg)
+  case cycle ctx => aesop
+  case dollar ctx pid => aesop
+  case skip ctx => aesop
+  case message_send =>
+    cases H_noninst_msg <;> aesop
+  case message_recv ctx msg x p τ H_typing H_ind =>
+    cases H_noninst_msg
+    case seq_left H_noninst H_noninst_msg =>
+      cases H_noninst
+    case seq_right H_noninst H_noninst_msg =>
+      have H_ind' := H_ind H_ctx' mx Γₙ Γₘ H_noninst_msg
+      cases H_noninst <;> aesop
+  case par ctx p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_noninst_msg
+    aesop
+  case seq ctx p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_noninst_msg
+    case seq_left H_noninst H_noninst_msg =>
+      have H_ind₁' := H_ind₁ H_ctx' mx Γₙ Γₘ H_noninst_msg
+      have H_noninst₁ : Semantics.NonInstantReducible Γₙ p₁ := by
+        apply non_instant_preservation (ctx := ctx) <;> assumption
+      aesop
+    case seq_right H_noninst_msg₁ H_noninst_msg₂ =>
+      have H_ind₁' := H_ind₁ H_ctx' mx Γₙ Γₘ H_noninst_msg₁
+      have H_ind₂' := H_ind₂ H_ctx' mx Γₙ Γₘ H_noninst_msg₂
+      aesop
+  case choice ctx e p₁ p₂ τ₁ τ₂ H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_noninst_msg
+    aesop
+  case choice_fair ctx e p₁ p₂ τ₁ τ₂ b H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    cases H_noninst_msg
+    aesop
+  case var ctx x =>
+    aesop
+  case recur ctx x body τ_body H_typing H_ind =>
+    cases H_noninst_msg
+    case recur_instant H_noninst H_noninst_msg =>
+      sorry
+    sorry
+  all_goals sorry -- FIXME: complete
 
 lemma recursion_unfolding_preserved :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String),
@@ -156,11 +205,156 @@ lemma recursion_unfolding_preserved :
 
   sorry -- FIXME: prove
 
+
+lemma val_replacement_preserves_expr_typing :
+      ∀ (ctx : ExprTyContext) (e : Expr) (x : String) (v : Bool),
+        ExprTyJudgement (ctx ∪ {x}) e →
+        ExprTyJudgement ctx (Semantics.exprReplace e x v) := by
+  intro ctx e x v H_typing
+  induction H_typing
+  case var y H_ctx =>
+    unfold Semantics.exprReplace
+    by_cases h : x = y
+    case pos =>
+      rewrite [h]
+      simp
+      apply ExprTyJudgement.val
+    case neg =>
+      simp [h]
+      apply ExprTyJudgement.var
+      grind
+  case val b =>
+    unfold Semantics.exprReplace
+    apply ExprTyJudgement.val
+  case add e1 e2 bop H_typing1 H_typing2 H_ind1 H_ind2 =>
+    unfold Semantics.exprReplace
+    apply ExprTyJudgement.add
+    . exact H_ind1
+    . exact H_ind2
+
+
 lemma val_replacement_preserves_typing :
-      ∀ (ctx : ProcTyContext) (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String) (v : Bool),
+      ∀ (ctx : ProcTyContext) (p : Semantics.ProcComp) (τ : ProcTyComposition) (x : String) (v : Bool),
         ProcTyJudgement (ctx.extendExprVar x) p τ →
         ProcTyJudgement ctx (Semantics.procExprReplace p x v) τ := by
-  sorry -- FIXME: prove
+  intro ctx p τ x v H_typing
+  generalize H_ctx : ctx.extendExprVar x = ctx' at H_typing
+  revert ctx
+  induction H_typing <;> intro ctx''' H_ctx
+  case cycle ctx' =>
+    unfold Semantics.procExprReplace
+    aesop
+  case dollar ctx' pid =>
+    unfold Semantics.procExprReplace
+    aesop
+  case skip ctx' =>
+    unfold Semantics.procExprReplace
+    aesop
+  case message_send ctx'' msg e H_ind =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.message_send
+    apply val_replacement_preserves_expr_typing
+    rewrite [← H_ctx] at H_ind
+    unfold ProcTyContext.extendExprVar at H_ind
+    simp at H_ind
+    exact H_ind
+  case message_recv ctx'' msg x' p τ H_typing H_ind =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.message_recv
+    . rewrite [← H_ctx] at H_ind
+      unfold ProcTyContext.extendExprVar at H_ind
+      simp at H_ind
+      by_cases h : x = x'
+      case pos =>
+        rewrite [h]
+        simp
+        rewrite [← H_ctx] at H_typing
+        rewrite [h] at H_typing
+        unfold ProcTyContext.extendExprVar at H_typing
+        simp at H_typing
+        unfold ProcTyContext.extendExprVar
+        exact H_typing
+      case neg =>
+        simp [h]
+        rewrite [← H_ctx] at H_typing
+        apply H_ind
+        . unfold ProcTyContext.extendExprVar
+          simp
+        . unfold ProcTyContext.extendExprVar
+          grind
+  case par ctx' p1 p2 τ1 τ2 H_typing1 H_typing2 H_ind1 H_ind2 =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.par
+    . rewrite [← H_ctx] at H_ind1
+      apply H_ind1
+      unfold ProcTyContext.extendExprVar
+      simp
+    . rewrite [← H_ctx] at H_ind2
+      apply H_ind2
+      unfold ProcTyContext.extendExprVar
+      simp
+  case seq ctx' p1 p2 τ1 τ2 H_typing1 H_typing2 H_ind1 H_ind2 =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.seq
+    . rewrite [← H_ctx] at H_ind1
+      apply H_ind1
+      unfold ProcTyContext.extendExprVar
+      simp
+    . rewrite [← H_ctx] at H_ind2
+      apply H_ind2
+      unfold ProcTyContext.extendExprVar
+      simp
+  case choice ctx' e p1 p2 τ1 τ2 H_expr_typing H_typing1 H_typing2 H_ind1 H_ind2 =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.choice
+    . apply val_replacement_preserves_expr_typing
+      rewrite [← H_ctx] at H_expr_typing
+      unfold ProcTyContext.extendExprVar at H_expr_typing
+      simp at H_expr_typing
+      exact H_expr_typing
+    . rewrite [← H_ctx] at H_ind1
+      apply H_ind1
+      unfold ProcTyContext.extendExprVar
+      simp
+    . rewrite [← H_ctx] at H_ind2
+      apply H_ind2
+      unfold ProcTyContext.extendExprVar
+      simp
+  case choice_fair ctx' e p1 p2 τ1 τ2 b H_expr_typing H_typing1 H_typing2 H_ind1 H_ind2 =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.choice_fair
+    . apply val_replacement_preserves_expr_typing
+      rewrite [← H_ctx] at H_expr_typing
+      unfold ProcTyContext.extendExprVar at H_expr_typing
+      simp at H_expr_typing
+      exact H_expr_typing
+    . rewrite [← H_ctx] at H_ind1
+      apply H_ind1
+      unfold ProcTyContext.extendExprVar
+      simp
+    . rewrite [← H_ctx] at H_ind2
+      apply H_ind2
+      unfold ProcTyContext.extendExprVar
+      simp
+  case var ctx' x' =>
+    unfold Semantics.procExprReplace
+    aesop
+  case recur ctx' x' body τ_body H_typing H_ind =>
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.recur
+    rewrite [← H_ctx] at H_ind
+    apply H_ind
+    unfold ProcTyContext.extendExprVar
+    unfold ProcTyContext.extendProcVar
+    simp
+  case subtype ctx' p τ₁ τ₂ H_typing H_sub H_ind =>
+    apply ProcTyJudgement.subtype (τ₁ := τ₁)
+    . apply H_ind
+      exact H_ctx
+    . exact H_sub
+  case xoffer => sorry -- low priority
+  case offer => sorry -- low priority
+
 
 lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     (H_len : procs.length = tys.length) →
@@ -223,50 +417,6 @@ namespace Semantics.CompElim
       rename Reduces _ _ _ => H_reduces
       rewrite [← H_send] at H_reduces
       cases H_reduces
-
-  lemma seq_elim : ∀ {p₁ p₂ p' : Semantics.ProcComp},
-      CompElim (Proc.seq p₁ p₂) p' →
-      (∃ p₁', CompElim p₁ p₁' ∧ p' = Proc.seq p₁' p₂) ∨
-      (CompElim p₁ Proc.skip ∧ CompElim p₂ p') := by
-    intro p₁ p₂ p' H_elim
-    sorry -- FIXME: prove this
-
-  lemma par_elim : ∀ {p₁ p₂ p' : Semantics.ProcComp},
-      CompElim (Proc.par p₁ p₂) p' →
-      (∃ p₁' p₂', CompElim p₁ p₁' ∧ CompElim p₂ p₂' ∧ p' = Proc.par p₁' p₂') ∨
-      (CompElim p₁ Proc.skip ∧ CompElim p₂ Proc.skip ∧ p' = Proc.skip) := by
-    intro p₁ p₂ p' H_elim
-    sorry -- FIXME: prove this
-
-  lemma par_elim_fwd : ∀ {p₁ p₂ p₁' p₂' : Semantics.ProcComp},
-      CompElim p₁ p₁' →
-      CompElim p₂ p₂' →
-      CompElim (Proc.par p₁ p₂) (Proc.par p₁' p₂') := by sorry -- trivial
-
-  lemma par_elim_fwd_skip_l : ∀ {p₁ p₂ p₂' : Semantics.ProcComp},
-      CompElim p₁ Proc.skip →
-      CompElim p₂ p₂' →
-      CompElim (Proc.par p₁ p₂) p₂' := by
-    sorry -- trivial
-
-  lemma par_elim_fwd_skip_r : ∀ {p₁ p₁' p₂ : Semantics.ProcComp},
-      CompElim p₁ p₁' →
-      CompElim p₂ Proc.skip →
-      CompElim (Proc.par p₁ p₂) p₁' := by
-    sorry -- trivial
-
-
-  lemma seq_elim_fwd_r : ∀ {p₁ p₂ p₂' : Semantics.ProcComp},
-      CompElim p₁ Proc.skip →
-      CompElim p₂ p₂' →
-      CompElim (Proc.seq p₁ p₂) p₂' := by
-    sorry -- FIXME: prove this
-
-  lemma elim_preserves_typing :
-        ∀ {p p' : Semantics.ProcComp} {τ : ProcTyComposition},
-          Semantics.CompElim p p' →
-          CompositionTyJudgement p τ →
-          ∃ τ', ProcTyCompElim τ τ' ∧ CompositionTyJudgement p' τ' := by sorry -- FIXME: prove this
 end Semantics.CompElim
 
 namespace Semantics.IncompReduces
@@ -339,6 +489,44 @@ namespace Semantics.IncompReduces
           Semantics.IncompReduces p₁ lbl p₂ := by sorry -- trivial
 end Semantics.IncompReduces
 
+namespace ProcTyCompElim
+  lemma elim_transitivity :
+        ∀ {τ₁ τ₂ τ₃ : ProcTy},
+          ProcTyCompElim τ₁ τ₂ →
+          ProcTyCompElim τ₂ τ₃ →
+          ProcTyCompElim τ₁ τ₃ := by
+    sorry -- trivial
+
+  lemma elim_right :
+    ∀ {τ₁ τ₂ τ₃ : ProcTy},
+      ProcTyCompElim τ₁ τ₂ →
+      ProcTyTransition τ₂ AbstractTransLabel.ε τ₃ →
+      ProcTyCompElim τ₁ τ₃ := by
+    sorry -- trivial
+
+  lemma elim_par :
+        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy},
+          ProcTyCompElim τ₁ τ₁' →
+          ProcTyCompElim τ₂ τ₂' →
+          ProcTyCompElim (ProcTy.par τ₁ τ₂) (ProcTy.par τ₁' τ₂') := by
+    sorry -- trivial
+
+  lemma elim_seq_step :
+        ∀ {τ₁ τ₁' τ₂ : ProcTy},
+          ProcTyCompElim τ₁ τ₁' →
+          ProcTyCompElim (ProcTy.seq τ₁ τ₂) (ProcTy.seq τ₁' τ₂) := by
+    sorry -- trivial
+
+  lemma elim_seq_skip :
+        ∀ {τ₁ τ₂ τ₂' : ProcTy},
+          ProcTyCompElim τ₁ ProcTy.skip →
+          ProcTyCompElim τ₂ τ₂' →
+          ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂' := by
+    sorry -- trivial
+
+end ProcTyCompElim
+
+
 
 namespace ProcTyIncompTransition
   lemma reduces_seq :
@@ -383,7 +571,18 @@ namespace ProcTyIncompTransition
           (∀ mx ∈ ex_msg,
             ProcTyNonInstantMsg ∅ ∅ τ₂ mx) →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ex ex_msg) (ProcTy.par τ₁' τ₂) := by
-    sorry -- FIXME: prove
+    intro τ₁ τ₁' τ₂ ex_msg H_transition H_noninst_msg
+    have ⟨τ₁'', H_τ₁'⟩ := H_transition
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁''.par τ₂) := by
+      apply ProcTyCompElim.elim_par
+      . exact H_τ₁'.2
+      . apply ProcTyCompElim.refl
+    exists τ₁''.par τ₂
+    constructor
+    . apply ProcTyTransition.par_left_ex
+      . exact H_noninst_msg
+      . exact H_τ₁'.1
+    . exact H_τ'
 
   lemma reduces_par_ex_right :
         ∀ {τ₁ τ₂ τ₂' : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
@@ -391,7 +590,18 @@ namespace ProcTyIncompTransition
           (∀ mx ∈ ex_msg,
             ProcTyNonInstantMsg ∅ ∅ τ₁ mx) →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ex ex_msg) (ProcTy.par τ₁ τ₂') := by
-    sorry -- FIXME: prove
+    intro τ₁ τ₂ τ₂' ex_msg H_transition H_noninst_msg
+    have ⟨τ₂'', H_τ₂'⟩ := H_transition
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁.par τ₂'') := by
+      apply ProcTyCompElim.elim_par
+      . apply ProcTyCompElim.refl
+      . exact H_τ₂'.2
+    exists τ₁.par τ₂''
+    constructor
+    . apply ProcTyTransition.par_right_ex
+      . exact H_noninst_msg
+      . exact H_τ₂'.1
+    . exact H_τ'
 
   lemma reduces_par_message :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {msg : MessageId} {d₁ d₂ : MessageDir},
@@ -399,7 +609,20 @@ namespace ProcTyIncompTransition
           ProcTyIncompTransition τ₁ (AbstractTransLabel.message msg d₁) τ₁' →
           ProcTyIncompTransition τ₂ (AbstractTransLabel.message msg d₂) τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac $ Action.fullMessage msg) (ProcTy.par τ₁' τ₂') := by
-    sorry -- FIXME: prove
+    intro τ₁ τ₁' τ₂ τ₂' msg d₁ d₂ H_dual H_trans₁ H_trans₂
+    have ⟨τ₁'', H_τ₁'⟩ := H_trans₁
+    have ⟨τ₂'', H_τ₂'⟩ := H_trans₂
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁''.par τ₂'') := by
+      apply ProcTyCompElim.elim_par
+      . exact H_τ₁'.2
+      . exact H_τ₂'.2
+    exists τ₁''.par τ₂''
+    constructor
+    . apply ProcTyTransition.par_message
+      . exact H_dual
+      . exact H_τ₁'.1
+      . exact H_τ₂'.1
+    . exact H_τ'
 
   lemma reduces_extend_l :
         ∀ {τ₁' τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
@@ -413,7 +636,18 @@ namespace ProcTyIncompTransition
           ProcTyJudgement ProcTyContext.empty Proc.skip τ →
           ProcTyCompElim τ ProcTy.skip := by
     intro τ H_typing
-    sorry -- FIXME: prove this
+    generalize H_ctx : ProcTyContext.empty = ctx at H_typing
+    generalize H_skip : Proc.skip = p at H_typing
+    induction H_typing <;> try (cases H_skip; done)
+    case skip =>
+      apply ProcTyCompElim.refl
+    case subtype =>
+      rename_i ctx' p' τ₁ τ₂ H_typing H_sub H_ind
+      have H_ind' := H_ind H_ctx H_skip
+      induction H_sub
+      case congr τ₁ τ₂ H_congr =>
+        sorry -- FIXME: prove separately
+      all_goals sorry
 
   lemma skip_typing_implies_skip_elim_rev :
         ∀ {p : Semantics.ProcComp},
@@ -433,44 +667,8 @@ namespace ProcTyIncompTransition
       . symm
         apply ProcTySub.sub_of_skip_is_skip
         exact H_sub
+
 end ProcTyIncompTransition
-
-namespace ProcTyCompElim
-  lemma elim_transitivity :
-        ∀ {τ₁ τ₂ τ₃ : ProcTy},
-          ProcTyCompElim τ₁ τ₂ →
-          ProcTyCompElim τ₂ τ₃ →
-          ProcTyCompElim τ₁ τ₃ := by
-    sorry -- trivial
-
-  lemma elim_right :
-    ∀ {τ₁ τ₂ τ₃ : ProcTy},
-      ProcTyCompElim τ₁ τ₂ →
-      ProcTyTransition τ₂ AbstractTransLabel.ε τ₃ →
-      ProcTyCompElim τ₁ τ₃ := by
-    sorry -- trivial
-
-  lemma elim_par :
-        ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy},
-          ProcTyCompElim τ₁ τ₁' →
-          ProcTyCompElim τ₂ τ₂' →
-          ProcTyCompElim (ProcTy.par τ₁ τ₂) (ProcTy.par τ₁' τ₂') := by
-    sorry -- trivial
-
-  lemma elim_seq_step :
-        ∀ {τ₁ τ₁' τ₂ : ProcTy},
-          ProcTyCompElim τ₁ τ₁' →
-          ProcTyCompElim (ProcTy.seq τ₁ τ₂) (ProcTy.seq τ₁' τ₂) := by
-    sorry -- trivial
-
-  lemma elim_seq_skip :
-        ∀ {τ₁ τ₂ τ₂' : ProcTy},
-          ProcTyCompElim τ₁ ProcTy.skip →
-          ProcTyCompElim τ₂ τ₂' →
-          ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂' := by
-    sorry -- trivial
-
-end ProcTyCompElim
 
 lemma label_abstraction_preserves_ε : ∀ {lbl : TransLabel},
     (AbstractTransLabel.fromConcrete lbl) = AbstractTransLabel.ε ↔ lbl = TransLabel.ε := by
@@ -509,7 +707,9 @@ namespace ProcTyGuarded
           ProcTyGuarded ∅ ∅ τ₁ →
           ProcTyTransition τ₁ lbl τ₂ →
           ProcTyGuarded ∅ ∅ τ₂ := by
-    sorry -- FIXME: prove
+    intro τ₁ τ₂ lbl H_guarded H_transition
+    induction H_transition
+    all_goals sorry -- FIXME: prove
 
   lemma elim_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy},

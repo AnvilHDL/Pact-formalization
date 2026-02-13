@@ -388,7 +388,7 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
         . aesop
         . exists ProcTy.cycle
           constructor <;> aesop
-    case message_send ctx' msg p'' e H_typing =>
+    case message_send ctx' msg p'' H_typing =>
       clear p τ ctx
       cases H_reduces
       exists ProcTy.skip
@@ -408,7 +408,7 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
       constructor
       . apply ProcTyJudgement.seq
         . aesop
-        . apply val_replacement_preserves_typing (ctx := ctx')
+        . apply val_replacement_preserves_typing (ctx := ProcTyContext.empty)
           rewrite [H_ctx]
           exact H_typing_body
       . constructor

@@ -74,7 +74,7 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
       ProcTyJudgement ctx (Proc.endp pid) (ProcTy.dollar pid)
     | skip (ctx : ProcTyContext) :
       ProcTyJudgement ctx Proc.skip ProcTy.skip
-    | message_send (ctx : ProcTyContext) (msg : MessageId) (p : Proc) (e : Expr) :
+    | message_send (ctx : ProcTyContext) (msg : MessageId) (e : Expr) :
       ExprTyJudgement ctx.exprVars e →
       ProcTyJudgement ctx (Proc.send msg e) (ProcTy.message $ MessageExch.send msg)
     | message_recv (ctx : ProcTyContext) (msg : MessageId) (x : String) (p : Proc) (τ : ProcTy) :
