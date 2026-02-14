@@ -403,6 +403,19 @@ namespace Semantics.CompElim
       rename Reduces _ _ _ => H_reduces
       rewrite [← H_send] at H_reduces
       cases H_reduces
+
+  lemma comp_elim_seq_step : ∀ {p₁ p₁' p₂ : Semantics.ProcComp},
+      CompElim p₁ p₁' →
+      CompElim (Proc.seq p₁ p₂) (Proc.seq p₁' p₂) := by
+    intro p₁ p₁' p₂ H_elim
+    induction H_elim
+    case refl =>
+      apply CompElim.refl
+    case eps_elim p p' p'' H_red H_elim H_elim' =>
+      apply CompElim.eps_elim (p' := Proc.seq p' p₂)
+      . aesop
+      . exact H_elim'
+
 end Semantics.CompElim
 
 namespace Semantics.IncompReduces
@@ -420,21 +433,43 @@ namespace Semantics.IncompReduces
   lemma seq_reduces :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
       Semantics.IncompReduces p₁ lbl p₁' →
-      Semantics.IncompReduces (Proc.seq p₁ p₂) lbl (Proc.seq p₁' p₂) := by sorry -- trivial
+      Semantics.IncompReduces (Proc.seq p₁ p₂) lbl (Proc.seq p₁' p₂) := by
+      intro p₁ p₁' p₂ lbl H_incomp_reduces
+      unfold IncompReduces at H_incomp_reduces
+      have ⟨p₁'', H_incomp_reduces'⟩ := H_incomp_reduces
+      exists (Proc.seq p₁'' p₂)
+      constructor
+      . aesop
+      . apply CompElim.comp_elim_seq_step
+        exact H_incomp_reduces'.2
 
   lemma par_non_ex_left :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
       ¬ lbl.isEx →
+      lbl ≠ TransLabel.ac Action.tock →
       Semantics.IncompReduces p₁ lbl p₁' →
       Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁' p₂) := by
-      sorry -- trivial
+      intro p₁ p₁' p₂ lbl H_non_ex H_not_tock H_incomp_reduces
+      unfold IncompReduces at H_incomp_reduces
+      have ⟨p₁'', H_incomp_reduces'⟩ := H_incomp_reduces
+      exists (Proc.par p₁'' p₂)
+      constructor
+      . aesop
+      . sorry -- trivial
 
   lemma par_non_ex_right :
     ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {lbl : TransLabel},
       ¬ lbl.isEx →
+      lbl ≠ TransLabel.ac Action.tock →
       Semantics.IncompReduces p₂ lbl p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) lbl (Proc.par p₁ p₂') := by
-      sorry -- trivial
+      intro p₁ p₂ p₂' lbl H_non_ex H_not_tock H_incomp_reduces
+      unfold IncompReduces at H_incomp_reduces
+      have ⟨p₂'', H_incomp_reduces'⟩ := H_incomp_reduces
+      exists (Proc.par p₁ p₂'')
+      constructor
+      . aesop
+      . sorry -- trivial
 
   lemma par_ex_left :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
@@ -481,35 +516,91 @@ namespace ProcTyCompElim
           ProcTyCompElim τ₁ τ₂ →
           ProcTyCompElim τ₂ τ₃ →
           ProcTyCompElim τ₁ τ₃ := by
-    sorry -- trivial
+    intro τ₁ τ₂ τ₃ H_elim₁ H_elim₂
+    induction H_elim₁
+    case refl τ' =>
+      exact H_elim₂
+    case eps_elim τ' τ'' τ''' H_transition H_elim H_ind =>
+      have H_elim' := H_ind H_elim₂
+      apply ProcTyCompElim.eps_elim
+      . exact H_transition
+      . exact H_elim'
 
   lemma elim_right :
     ∀ {τ₁ τ₂ τ₃ : ProcTy},
       ProcTyCompElim τ₁ τ₂ →
       ProcTyTransition τ₂ AbstractTransLabel.ε τ₃ →
       ProcTyCompElim τ₁ τ₃ := by
-    sorry -- trivial
+    intro τ₁ τ₂ τ₃ H_elim H_transition
+    have H_elim' := H_elim
+    induction H_elim
+    case refl τ' =>
+      apply ProcTyCompElim.eps_elim
+      . exact H_transition
+      . apply ProcTyCompElim.refl
+    case eps_elim τ' τ'' τ''' H_transition' H_elim'' H_ind =>
+      apply ProcTyCompElim.eps_elim
+      . exact H_transition'
+      . apply H_ind
+        . exact H_transition
+        . exact H_elim''
 
   lemma elim_par :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy},
           ProcTyCompElim τ₁ τ₁' →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyCompElim (ProcTy.par τ₁ τ₂) (ProcTy.par τ₁' τ₂') := by
-    sorry -- trivial
+    intro τ₁ τ₁' τ₂ τ₂' H_elim₁ H_elim₂
+    induction H_elim₁
+    case refl τ₁'' =>
+      induction H_elim₂
+      case refl τ₂'' =>
+        apply ProcTyCompElim.refl
+      case eps_elim τ₂'' τ₂''' τ₂'''' H_transition H_elim H_ind =>
+        apply ProcTyCompElim.eps_elim
+        . apply ProcTyTransition.par_right (τ₂' := τ₂''')
+          . simp
+          . simp
+          . exact H_transition
+        . apply H_ind
+    case eps_elim τ₁'' τ₁''' τ₁'''' H_transition H_elim H_ind =>
+      apply ProcTyCompElim.eps_elim
+      . apply ProcTyTransition.par_left (τ₁' := τ₁''')
+        . simp
+        . simp
+        . exact H_transition
+      . apply H_ind
 
   lemma elim_seq_step :
         ∀ {τ₁ τ₁' τ₂ : ProcTy},
           ProcTyCompElim τ₁ τ₁' →
           ProcTyCompElim (ProcTy.seq τ₁ τ₂) (ProcTy.seq τ₁' τ₂) := by
-    sorry -- trivial
+    intro τ₁ τ₁' τ₂ H_elim
+    induction H_elim
+    case refl τ₁'' =>
+      apply ProcTyCompElim.refl
+    case eps_elim τ₁'' τ₁''' τ₁'''' H_transition H_elim H_ind =>
+      apply ProcTyCompElim.eps_elim
+      . apply ProcTyTransition.seq_step (τ₁' := τ₁''')
+        exact H_transition
+      . exact H_ind
 
   lemma elim_seq_skip :
         ∀ {τ₁ τ₂ τ₂' : ProcTy},
           ProcTyCompElim τ₁ ProcTy.skip →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyCompElim (ProcTy.seq τ₁ τ₂) τ₂' := by
-    sorry -- trivial
-
+    intro τ₁ τ₂ τ₂' H_elim₁ H_elim₂
+    generalize H_skip : ProcTy.skip = τ₁ at H_elim₁
+    induction H_elim₁
+    case refl τ₁'' =>
+      rewrite [← H_skip]
+      apply ProcTyCompElim.eps_elim (τs' := τ₂) <;> aesop
+    case eps_elim τ₁'' τ₁''' τ₁'''' H_transition H_elim H_ind =>
+      have H_ind' := H_ind H_skip
+      have H_elim' : ProcTyCompElim (ProcTy.seq τ₁'' τ₂) (ProcTy.seq τ₁''' τ₂) := by
+        aesop
+      apply ProcTyCompElim.eps_elim (τs' := ProcTy.seq τ₁''' τ₂) <;> aesop
 end ProcTyCompElim
 
 
@@ -519,37 +610,83 @@ namespace ProcTyIncompTransition
         ∀ {τ₁ τ₂ τ₁' : ProcTy} {lbl : AbstractTransLabel},
           ProcTyIncompTransition τ₁ lbl τ₁' →
           ProcTyIncompTransition (ProcTy.seq τ₁ τ₂) lbl (ProcTy.seq τ₁' τ₂) := by
-    sorry -- trivial
+    intro τ₁ τ₂ τ₁' lbl H_transition
+    have ⟨τ₁'', H_τ₁', H_elim₁⟩ := H_transition
+    exists τ₁''.seq τ₂
+    constructor
+    . apply ProcTyTransition.seq_step
+      exact H_τ₁'
+    . apply ProcTyCompElim.elim_seq_step
+      exact H_elim₁
 
   lemma reduces_seq_skip :
         ∀ {τ₁ τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
           ProcTyCompElim τ₁ ProcTy.skip →
           ProcTyIncompTransition τ₂ lbl τ₂' →
           ProcTyIncompTransition (ProcTy.seq τ₁ τ₂) lbl τ₂' := by
-    sorry -- trivial
+    intro τ₁ τ₂ τ₂' lbl H_elim₁ H_transition
+    have ⟨τ₂'', H_τ₂', H_elim₂⟩ := H_transition
+    exists τ₂''
+    constructor
+    . exact H_τ₂'
+    . apply ProcTyCompElim.elim_seq_skip
+      . exact H_elim₁
+      . exact H_elim₂
 
   lemma reduces_par_left :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
           ¬ lbl.isEx →
+          lbl ≠ AbstractTransLabel.ac Action.tock →
           ProcTyIncompTransition τ₁ lbl τ₁' →
           ProcTyCompElim τ₂ τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
-    sorry -- trivial
+    intro τ₁ τ₁' τ₂ τ₂' lbl H_non_ex H_not_tock H_transition H_elim
+    have ⟨τ₁'', H_τ₁', H_elim₁⟩ := H_transition
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁''.par τ₂') := by
+      apply ProcTyCompElim.elim_par
+      . exact H_elim₁
+      . exact H_elim
+    exists τ₁''.par τ₂'
+    constructor
+    . aesop
+    . exact H_τ'
 
   lemma reduces_par_right :
         ∀ {τ₁ τ₁' τ₂ τ₂' : ProcTy} {lbl : AbstractTransLabel},
           ¬ lbl.isEx →
+          lbl ≠ AbstractTransLabel.ac Action.tock →
           ProcTyCompElim τ₁ τ₁' →
           ProcTyIncompTransition τ₂ lbl τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) lbl (ProcTy.par τ₁' τ₂') := by
-    sorry -- trivial
+    intro τ₁ τ₁' τ₂ τ₂' lbl H_non_ex H_not_tock H_elim H_transition
+    have ⟨τ₂'', H_τ₂', H_elim₂⟩ := H_transition
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁'.par τ₂'') := by
+      apply ProcTyCompElim.elim_par
+      . exact H_elim
+      . exact H_elim₂
+    exists τ₁'.par τ₂''
+    constructor
+    . aesop
+    . exact H_τ'
 
   lemma reduces_par_tock :
         ∀ {τ₁ τ₂ τ₁' τ₂' : ProcTy},
           ProcTyIncompTransition τ₁ (AbstractTransLabel.ac Action.tock) τ₁' →
           ProcTyIncompTransition τ₂ (AbstractTransLabel.ac Action.tock) τ₂' →
           ProcTyIncompTransition (ProcTy.par τ₁ τ₂) (AbstractTransLabel.ac Action.tock) (ProcTy.par τ₁' τ₂') := by
-    sorry -- trivial
+    intro τ₁ τ₂ τ₁' τ₂' H_transition₁ H_transition₂
+    have ⟨τ₁'', H_τ₁', H_elim₁⟩ := H_transition₁
+    have ⟨τ₂'', H_τ₂', H_elim₂⟩ := H_transition₂
+    have H_τ' : ProcTyCompElim (τ₁.par τ₂) (τ₁''.par τ₂'') := by
+      apply ProcTyCompElim.elim_par
+      . exact H_elim₁
+      . exact H_elim₂
+    exists τ₁''.par τ₂''
+    constructor
+    . apply ProcTyTransition.par_tock
+      . exact H_τ₁'
+      . exact H_τ₂'
+    . exact H_τ'
 
   lemma reduces_par_ex_left :
         ∀ {τ₁ τ₁' τ₂ : ProcTy} {ex_msg : Finset (MessageId × MessageDir)},
@@ -615,25 +752,14 @@ namespace ProcTyIncompTransition
           ProcTyIncompTransition τ₁ lbl τ₂ →
           ProcTyCompElim τ₁' τ₁ →
           ProcTyIncompTransition τ₁' lbl τ₂ := by
-    sorry --trivial
-
-  lemma skip_typing_implies_skip_elim :
-        ∀ {τ : ProcTy},
-          ProcTyJudgement ProcTyContext.empty Proc.skip τ →
-          ProcTyCompElim τ ProcTy.skip := by
-    intro τ H_typing
-    generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    generalize H_skip : Proc.skip = p at H_typing
-    induction H_typing <;> try (cases H_skip; done)
-    case skip =>
-      apply ProcTyCompElim.refl
-    case subtype =>
-      rename_i ctx' p' τ₁ τ₂ H_typing H_sub H_ind
-      have H_ind' := H_ind H_ctx H_skip
-      induction H_sub
-      case congr τ₁ τ₂ H_congr =>
-        sorry -- FIXME: prove separately
-      all_goals sorry
+    intro τ₁' τ₁ τ₂ lbl H_transition H_elim
+    have ⟨τ₁'', H_τ₂', H_elim'⟩ := H_transition
+    exists τ₁''
+    constructor
+    . exact H_τ₂'
+    . apply ProcTyCompElim.elim_transitivity
+      . exact H_elim
+      . exact H_elim'
 
 end ProcTyIncompTransition
 

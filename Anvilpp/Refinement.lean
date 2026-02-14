@@ -261,6 +261,11 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
           . apply ProcTyIncompTransition.reduces_par_left
             . rewrite [label_abstraction_preserves_ex (lbl := lbl)]
               exact H_nonex
+            . by_contra H_tock
+              unfold AbstractTransLabel.fromConcrete at H_tock
+              cases lbl <;> simp at H_tock
+              simp at H_lbl
+              contradiction
             . exact H_ind₁.2.2
             . apply ProcTyCompElim.refl
       case par_right p₂' H_lbl H_nonex H_red =>
@@ -277,6 +282,11 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
           . apply ProcTyIncompTransition.reduces_par_right
             . rewrite [label_abstraction_preserves_ex (lbl := lbl)]
               exact H_nonex
+            . by_contra H_tock
+              unfold AbstractTransLabel.fromConcrete at H_tock
+              cases lbl <;> simp at H_tock
+              simp at H_lbl
+              contradiction
             . apply ProcTyCompElim.refl
             . exact H_ind₂.2.2
       case par_left_ex ex_msg p₁' H_red H_m =>

@@ -49,6 +49,11 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
             apply label_abstraction_preserves_ex
           rewrite [← H_lbl_nonex]
           exact H_not_ex
+        . by_contra H_tock
+          rewrite [H_lbl'] at H_not_tock
+          rewrite [H_tock] at H_not_tock
+          unfold AbstractTransLabel.fromConcrete at H_not_tock
+          simp at H_not_tock
         . exact H_reduces
     case par_right τ₂' H_not_tock H_not_ex H_trans₂ =>
       have H_p₂' := H_ind₂ H_ctx τ₂' lbl H_not_ε H_trans₂
@@ -62,6 +67,11 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
             apply label_abstraction_preserves_ex
           rewrite [← H_lbl_nonex]
           exact H_not_ex
+        . by_contra H_tock
+          rewrite [H_lbl'] at H_not_tock
+          rewrite [H_tock] at H_not_tock
+          unfold AbstractTransLabel.fromConcrete at H_not_tock
+          simp at H_not_tock
         . exact H_reduces
     case par_left_ex ex_msg τ₁' H_trans H_m =>
       have H_p₁' := H_ind₁ H_ctx τ₁' (AbstractTransLabel.ex ex_msg) H_not_ε H_trans
