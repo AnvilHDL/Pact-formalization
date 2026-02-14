@@ -362,20 +362,6 @@ lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
     ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
       by sorry -- obvious
 
-namespace ProcTySub
-  lemma sub_of_skip_is_skip (τ : ProcTy) :
-    ProcTySub τ ProcTy.skip → τ = ProcTy.skip := by
-      intro H_sub
-      generalize H_skip : ProcTy.skip = τ at H_sub
-      induction H_sub
-      case congr τ₁ τ₂ H_congr =>
-        rewrite [← H_skip]
-        sorry
-      case choice_relax τ₁ τ₂ =>
-        sorry
-      case trans => sorry -- FIXME: prove
-end ProcTySub
-
 
 namespace Semantics.CompElim
   lemma comp_elim_preseves_skip : ∀ {p : Semantics.ProcComp},
@@ -648,25 +634,6 @@ namespace ProcTyIncompTransition
       case congr τ₁ τ₂ H_congr =>
         sorry -- FIXME: prove separately
       all_goals sorry
-
-  lemma skip_typing_implies_skip_elim_rev :
-        ∀ {p : Semantics.ProcComp},
-          ProcTyJudgement ProcTyContext.empty p ProcTy.skip →
-          p = Proc.skip := by
-    intro p H_typing
-    generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-    generalize H_skip : ProcTy.skip = τ at H_typing
-    induction H_typing <;> try (cases H_skip; done)
-    case skip =>
-      rfl
-    case subtype =>
-      rename_i p' τ₁ τ₂ H_typing H_sub H_ind
-      rewrite [← H_skip] at H_sub
-      apply H_ind
-      . exact H_ctx
-      . symm
-        apply ProcTySub.sub_of_skip_is_skip
-        exact H_sub
 
 end ProcTyIncompTransition
 

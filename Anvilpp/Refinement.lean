@@ -10,6 +10,7 @@ import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
 import Anvilpp.Subtyping
+import Anvilpp.Trans
 
 lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
                              (τ : ProcTyComposition),

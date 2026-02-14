@@ -29,6 +29,10 @@ namespace MessageDir
     | recv, send => true
     | _, _ => false
 
+  lemma dual_symm : ∀ (d₁ d₂ : MessageDir), dual d₁ d₂ = dual d₂ d₁ := by
+    intros d₁ d₂
+    cases d₁ <;> cases d₂ <;> rfl
+
   def invert (dir : MessageDir) : MessageDir :=
     match dir with
     | send => recv
