@@ -203,7 +203,33 @@ lemma recursion_unfolding_preserved :
         ProcTyJudgement (ctx.extendProcVar x) p τ →
         ProcTyJudgement ctx (Semantics.procReplace p x (Proc.recur x p)) (τ.replaceVar x $ ProcTy.recur x τ) := by
 
-  sorry -- FIXME: prove
+  intro p τ ctx x H_typing
+  generalize H_ctx : ctx.extendProcVar x = ctx' at H_typing
+  revert x ctx
+  induction H_typing <;> (intro ctx' x H_ctx; unfold Semantics.procReplace ProcTy.replaceVar)
+  case cycle | dollar | skip | message_send =>
+    aesop
+  case var ctx'' ctx''' x' H_x =>
+    by_cases h : x = x'
+    case pos =>
+      rewrite [h]
+      simp
+      rewrite [← H_ctx] at H_x
+      aesop
+    case neg =>
+      simp [h]
+      rewrite [← H_ctx] at H_x
+      unfold ProcTyContext.extendProcVar at H_x
+      simp at H_x
+      cases H_x
+      case inr H_x => grind
+      case inl H_x => aesop
+  case seq ctx'' ctx''' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    apply ProcTyJudgement.seq
+    . have H_ind₁' := H_ind₁ ctx' x H_ctx
+      sorry
+    sorry
+  all_goals sorry -- FIXME: complete
 
 
 lemma val_replacement_preserves_expr_typing :
@@ -795,6 +821,20 @@ lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
     apply Semantics.ExprEval.bin <;> assumption
 
 namespace ProcTyGuarded
+  -- lemma replace_preserves_guarded :
+  --       ∀ (x : String) (τ : ProcTy) (Γₙ : Finset String) (Γₘ : Finset String),
+  --         ProcTyGuarded Γₙ Γₘ (ProcTy.recur x τ) →
+  --         ProcTyGuarded Γₙ Γₘ (τ.replaceVar x (ProcTy.recur x τ)) := by
+
+  --   intro x τ Γₙ Γₘ
+  --   revert x τ Γₙ
+  --   induction Γₘ using Finset.induction_on'
+  --   case empty =>
+  --     intro x τ Γₙ H_guarded
+  --     cases H_guarded
+
+
+
   lemma trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
           ProcTyGuarded ∅ ∅ τ₁ →
@@ -802,7 +842,74 @@ namespace ProcTyGuarded
           ProcTyGuarded ∅ ∅ τ₂ := by
     intro τ₁ τ₂ lbl H_guarded H_transition
     induction H_transition
-    all_goals sorry -- FIXME: prove
+    case tock | message_send | message_recv =>
+      aesop
+    case par_left τ₁ τ₁' τ₂ lbl H_lbl H_non_ex H_trans H_ind =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind' := H_ind H_guarded₁
+      apply ProcTyGuarded.par <;> assumption
+    case par_right τ₁ τ₂ τ₂' lbl H_lbl H_non_ex H_trans H_ind =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind' := H_ind H_guarded₂
+      apply ProcTyGuarded.par <;> assumption
+    case par_tock τ₁ τ₂ τ₁' τ₂' H_trans₁ H_trans₂ H_ind₁ H_ind₂ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind₁' := H_ind₁ H_guarded₁
+      have H_ind₂' := H_ind₂ H_guarded₂
+      apply ProcTyGuarded.par <;> assumption
+    case par_left_ex ex_msg τ₁ τ₁' τ₂' H_mx H_trans₁ H_ind =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind' := H_ind H_guarded₁
+      apply ProcTyGuarded.par <;> assumption
+    case par_right_ex ex_msg τ₁ τ₂ τ₂' H_mx H_trans₂ H_ind =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind' := H_ind H_guarded₂
+      apply ProcTyGuarded.par <;> assumption
+    case par_message τ₁ τ₂ τ₁' τ₂' msg d₁ d₂ H_dual H_trans₁ H_trans₂ H_ind₁ H_ind₂ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      have H_ind₁' := H_ind₁ H_guarded₁
+      have H_ind₂' := H_ind₂ H_guarded₂
+      apply ProcTyGuarded.par <;> assumption
+    case par_skip_left τ₂ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₂
+    case par_skip_right τ₁ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₁
+    case seq_step τ₁ τ₁' τ₂ lbl H_trans₁ H_ind =>
+      cases H_guarded <;> aesop
+    case seq_done =>
+      cases H_guarded <;> aesop
+    case choice_left τ₁ τ₂ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₁
+    case choice_right τ₁ τ₂ =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₂
+    case choice_fair_left τ₁ τ₂ b =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₁
+    case choice_fair_right τ₁ τ₂ b =>
+      cases H_guarded
+      rename_i H_guarded₁ H_guarded₂
+      exact H_guarded₂
+    case recur_unfold x τ =>
+      cases H_guarded
+      all_goals sorry
+    all_goals sorry
+      -- FIXME: we need some stronger induction hypothesis
+
 
   lemma elim_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy},
