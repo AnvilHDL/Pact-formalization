@@ -196,11 +196,6 @@ inductive ProcTyCompElimStep : ℕ → ProcTyComposition → ProcTyComposition �
     ProcTyCompElimStep n τs' τs'' →
     ProcTyCompElimStep (n + 1) τs τs''
 
-lemma procty_comp_elim_step_iff :
-      ∀ (τs τs' : ProcTyComposition),
-        (∃ n, ProcTyCompElimStep n τs τs') ↔
-        ProcTyCompElim τs τs' := by sorry -- trivial
-
 @[reducible]
 def ProcTyIncompTransition (τ₁ : ProcTy) (lbl : AbstractTransLabel) (τ₂ : ProcTy) :=
   ∃ τ₁', ProcTyTransition τ₁' lbl τ₂ ∧

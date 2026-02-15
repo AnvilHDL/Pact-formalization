@@ -4,13 +4,6 @@ import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
 
-lemma subtype_preserves_reduction : ∀ (τ₁ τ₂ τ₁' : ProcTy)
-        (lbl : AbstractTransLabel),
-      lbl ≠ AbstractTransLabel.ε →
-      ProcTyTransition τ₁ lbl τ₂ →
-      ProcTySub τ₁ τ₁' →
-      (∃ τ₂', ProcTyTransition τ₁' lbl τ₂' ∧ ProcTySub τ₂ τ₂') := by sorry
-
 lemma par_symm_trans_congr : ∀ (τ₁ τ₂ τ : ProcTy) (lbl : AbstractTransLabel),
     ProcTyTransition (ProcTy.par τ₁ τ₂) lbl τ →
     ∃ τ', ProcTyTransition (ProcTy.par τ₂ τ₁) lbl τ' ∧ ProcTyCongr τ τ' := by
@@ -375,47 +368,6 @@ namespace ProcTySub
     induction H_elim <;> aesop
 
 
-  lemma subtype_refinement_elim (τ₁ τ₁' τ₂ : ProcTy) :
-    ProcTySub τ₁ τ₂ →
-    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
-    ∃ τ₂', ProcTyCompElim τ₂ τ₂' ∧ ProcTySub τ₁' τ₂' := by
-
-    intro H_sub H_trans
-    revert H_trans τ₁'
-    induction H_sub
-    case congr τ₁'' τ₂'' H_congr =>
-      intro τ₁' H_trans
-      have H := (ProcTyCongr.congr_preserves_behaviour τ₁'' τ₂'' H_congr).left τ₁' AbstractTransLabel.ε H_trans
-      have ⟨τ₂', H_trans₂, H_congr'⟩ := H
-      exists τ₂'
-      constructor
-      . apply ProcTyCompElim.eps_elim (τs := τ₂'')
-        . exact H_trans₂
-        . apply ProcTyCompElim.refl
-      . apply ProcTySub.congr
-        exact H_congr'
-    case choice_relax τ₁'' τ₂'' =>
-      intro τ₁' H_trans
-      exists τ₁'
-      constructor
-      . aesop
-      . apply ProcTySub.congr
-        apply ProcTyCongr.refl
-    case trans τ₁'' τ₂'' τ₃'' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
-      intro τ₁' H_trans
-      have H_ind₁' := H_ind₁ τ₁' H_trans
-      have ⟨τ₂', H_trans₂, H_sub₂'⟩ := H_ind₁'
-      induction H_trans₂
-      case refl τ' =>
-        exists τ₃''
-        constructor
-        . apply ProcTyCompElim.refl
-        . apply ProcTySub.trans (τ₂ := τ')
-          . exact H_sub₂'
-          . exact H_sub₂
-      case eps_elim τ τ' τ'' H_trans' H_elim' H_ind' =>
-        sorry -- FIXME: complete
-
   lemma subtype_preserves_elim_sub : ∀ (τ₁ τ₁' τ₂ τ₂' : ProcTy),
     ProcTyCompElimWithSub τ₁ τ₁' τ₂' →
     ProcTySub τ₂ τ₂' →
@@ -439,73 +391,6 @@ namespace ProcTySub
       . apply H_ind
         exact H_sub
 
-  lemma subtype_refinement_elim_strong (τ₁ τ₁' τ₂ : ProcTy) :
-    ProcTySub τ₁ τ₂ →
-    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
-    ∃ τ₂' τ₂'', ProcTyCompElimWithSub τ₂ τ₂' τ₁
-      ∧ ProcTyTransition τ₂' AbstractTransLabel.ε τ₂'' ∧ ProcTySub τ₁' τ₂'' := by
-
-    intro H_sub
-    revert τ₁'
-    induction H_sub
-    case congr τ₁'' τ₂'' H_congr =>
-      intro τ₁' H_trans
-      have H :=
-        (ProcTyCongr.congr_preserves_behaviour τ₂'' τ₁'' (by apply ProcTyCongr.symm; exact H_congr)).right
-        τ₁' AbstractTransLabel.ε H_trans
-      have ⟨τ₂', H_trans₂, H_congr'⟩ := H
-      exists τ₂'', τ₂'
-      constructor
-      . apply ProcTyCompElimWithSub.base
-        apply ProcTySub.congr
-        exact H_congr
-      . constructor
-        . exact H_trans₂
-        . apply ProcTySub.congr
-          apply ProcTyCongr.symm
-          exact H_congr'
-    case choice_relax τ₁'' τ₂'' =>
-      intro τ₁' H_trans
-      exists τ₁'', τ₁'
-      constructor
-      . apply ProcTyCompElimWithSub.step (τ₁' := τ₁'')
-        . apply ProcTySub.choice_relax
-        . aesop
-        . apply ProcTyCompElimWithSub.base
-          apply ProcTySub.congr
-          apply ProcTyCongr.refl
-      . constructor
-        . exact H_trans
-        . apply ProcTySub.congr
-          apply ProcTyCongr.refl
-    case trans τ₁'' τ₂'' τ₃'' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
-      intro τ₁' H_trans
-      have H_ind₁' := H_ind₁ τ₁' H_trans
-      have ⟨τ₂''', τ₂'''', H_elim₁, H_trans₂, H_sub₂'⟩ := H_ind₁'
-      revert τ₂''''
-      clear H_ind₁
-      induction H_elim₁
-      case base τ₁'' τ₂''' H_sub =>
-        intro τ₂'''' H_trans₂  H_sub₂'
-        have H_ind₂' := H_ind₂ τ₂'''' H_trans₂
-        have ⟨τ₃'', τ₃''', H_elim₂, H_trans₃, H_sub₃'⟩ := H_ind₂'
-        exists τ₃'', τ₃'''
-        constructor
-        . apply subtype_preserves_elim_sub (τ₂' := τ₁'')
-          . exact H_elim₂
-          . exact H_sub
-        . constructor
-          . exact H_trans₃
-          . apply ProcTySub.trans (τ₂ := τ₂'''')
-              <;> assumption
-      case step τ₂ₘ τ₂'''' τₑ τ₂''' H_sub H_trans' H_elim H_ind =>
-        intro τ₃'' H_trans₃ H_sub₂'
-        have H_sub' : ProcTySub τ₂''' τ₂'''' := by
-          apply elim_sub_implies_sub_head (τ₁' := τₑ)
-          exact H_elim
-        have H_ind' := H_ind H_sub'
-        sorry -- FIXME: complete (might need to strengthen the induction hypothesis)
-
   lemma subtype_refinement_elim_multi (τ₁ τ₁' τ₂ : ProcTy) :
     ProcTySub τ₁ τ₂ →
     ProcTyCompElim τ₁ τ₁' →
@@ -515,7 +400,28 @@ namespace ProcTySub
     revert τ₁'
     induction H_sub
     case congr τ₁ τ₂ H_congr =>
-      sorry
+      intro τ₁' H_elim
+      revert τ₂
+      induction H_elim
+      case refl τ' =>
+        intro τ₂ H_congr
+        exists τ₂
+        constructor
+        . apply ProcTyCompElim.refl
+        . apply ProcTySub.congr
+          exact H_congr
+      case eps_elim τs τs' τs'' H_trans H_elim H_ind =>
+        intro τ₂ H_congr
+        have H := (ProcTyCongr.congr_preserves_behaviour τs τ₂ H_congr).left τs' AbstractTransLabel.ε H_trans
+        have ⟨τ₂', H_trans₂, H_congr'⟩ := H
+        have H_ind' := H_ind τ₂' H_congr'
+        have ⟨τ₂'', H_elim'', H_congr''⟩ := H_ind'
+        exists τ₂''
+        constructor
+        . apply ProcTyCompElim.eps_elim (τs' := τ₂')
+          . exact H_trans₂
+          . exact H_elim''
+        . exact H_congr''
     case choice_relax τ₁ τ₂ =>
       intro τ₁' H_elim
       exists τ₁'
@@ -576,14 +482,6 @@ namespace ProcTySub
       apply H_ind₂
       exact H_guarded
 
-  lemma subtype_refinement_label_strong : ∀ (τ₁ τ₁' τ₂ : ProcTy)
-      (lbl : AbstractTransLabel),
-      lbl ≠ AbstractTransLabel.ε →
-      ProcTySub τ₁ τ₂ →
-      ProcTyGuarded ∅ ∅ τ₂ →
-      ProcTyTransition τ₁ lbl τ₁' →
-      ∃ τ₂' τ₂'', ProcTyCompElimWithSub τ₂ τ₂' τ₁ ∧ ProcTyTransition τ₂' lbl τ₂'' ∧ ProcTySub τ₁' τ₂'' := by sorry -- FIXME: prove
-
   lemma subtype_refinement_label : ∀ (τ₁ τ₁' τ₂ : ProcTy)
       (lbl : AbstractTransLabel),
       lbl ≠ AbstractTransLabel.ε →
@@ -592,13 +490,124 @@ namespace ProcTySub
       ProcTyTransition τ₁ lbl τ₁' →
       ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
 
+  lemma congr_refinement_label_multi : ∀ (τ₁ τ₂ : ProcTy)
+      (lbl : AbstractTransLabel),
+      lbl ≠ AbstractTransLabel.ε →
+      ProcTyCongr τ₁ τ₂ →
+      ProcTyGuarded ∅ ∅ τ₂ →
+      (
+        ∀ τ₁', ProcTyIncompTransition τ₁ lbl τ₁' →
+        ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTyCongr τ₁' τ₂'
+      )
+        ∧
+      (
+        ∀ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' →
+        ∃ τ₁', ProcTyIncompTransition τ₁ lbl τ₁' ∧ ProcTyGuarded ∅ ∅ τ₁' ∧ ProcTyCongr τ₁' τ₂'
+      ) := by
+    intro τ₁ τ₂ lbl H_not_ε H_congr H_guarded
+    revert lbl
+    induction H_congr
+    case refl τ' =>
+      intro lbl H_not_ε
+      constructor
+      . intro τ₁' H_trans
+        exists τ₁'
+        constructor
+        . exact H_trans
+        . constructor
+          . apply ProcTyGuarded.incomp_trans_preserves_guarded (τ₁ := τ') (lbl := lbl) <;> assumption
+          . apply ProcTyCongr.refl
+      . intro τ₂' H_trans
+        exists τ₂'
+        constructor
+        . exact H_trans
+        . constructor
+          . apply ProcTyGuarded.incomp_trans_preserves_guarded (τ₁ := τ') (lbl := lbl) <;> assumption
+          . apply ProcTyCongr.refl
+    case symm τ₁' τ₂' H_congr H_ind =>
+      intro lbl H_not_ε
+      have H_guarded₂ : ProcTyGuarded ∅ ∅ τ₂' := by
+        apply (congr_preserves_guarded τ₁' τ₂' H_congr).mpr
+        exact H_guarded
+      have H_ind' := H_ind H_guarded₂ lbl H_not_ε
+      constructor
+      . intro τ₁' H_trans
+        have H_ind'' := H_ind'.2 τ₁' H_trans
+        have ⟨τ₂', H_trans', H_congr'⟩ := H_ind''
+        exists τ₂'
+        constructor
+        . exact H_trans'
+        . constructor
+          . exact H_congr'.1
+          . apply ProcTyCongr.symm
+            exact H_congr'.2
+      . intro τ₂' H_trans
+        have H_ind'' := H_ind'.1 τ₂' H_trans
+        have ⟨τ₁', H_trans', H_congr'⟩ := H_ind''
+        exists τ₁'
+        constructor
+        . exact H_trans'
+        . constructor
+          . exact H_congr'.1
+          . apply ProcTyCongr.symm
+            exact H_congr'.2
+    case trans τ₁' τ₂' τ₃ H_congr₁ H_congr₂ H_ind₁ H_ind₂ =>
+      intro lbl H_not_ε
+      have H_ind₂' := H_ind₂ H_guarded lbl H_not_ε
+      have H_guarded₂ := (congr_preserves_guarded τ₂' τ₃ H_congr₂).mp H_guarded
+      have H_ind₁' := H_ind₁ H_guarded₂ lbl H_not_ε
+      constructor
+      . intro τ₁ H_trans
+        have H_ind₁'' := H_ind₁'.1 τ₁ H_trans
+        have ⟨τ₂', H_trans', H_congr'⟩ := H_ind₁''
+        have H_ind₂'' := H_ind₂'.1 τ₂' H_trans'
+        have ⟨τ₃', H_trans'', H_congr''⟩ := H_ind₂''
+        exists τ₃'
+        constructor
+        . exact H_trans''
+        . constructor
+          . exact H_congr''.1
+          . apply ProcTyCongr.trans (τ₂ := τ₂')
+            . exact H_congr'.2
+            . exact H_congr''.2
+      . intro τ₃ H_trans
+        have H_ind₂'' := H_ind₂'.2 τ₃ H_trans
+        have ⟨τ₂', H_trans', H_congr''⟩ := H_ind₂''
+        have H_ind₁'' := H_ind₁'.2 τ₂' H_trans'
+        have ⟨τ₁', H_trans'', H_congr'⟩ := H_ind₁''
+        exists τ₁'
+        constructor
+        . exact H_trans''
+        . constructor
+          . exact H_congr'.1
+          . apply ProcTyCongr.trans (τ₂ := τ₂')
+            . exact H_congr'.2
+            . exact H_congr''.2
+    case par_comm τ₁' τ₂' =>
+      intro lbl H_not_ε
+      constructor
+      . intro τ₁' H_trans
+        have ⟨τ₀, H_trans, H_elim⟩ := H_trans
+        rename_i τ' H_trans
+        sorry -- FIXME: prove
+      . sorry
+
+
+
+
   lemma subtype_refinement_label_multi : ∀ (τ₁ τ₁' τ₂ : ProcTy)
       (lbl : AbstractTransLabel),
       lbl ≠ AbstractTransLabel.ε →
       ProcTySub τ₁ τ₂ →
       ProcTyGuarded ∅ ∅ τ₂ →
       ProcTyIncompTransition τ₁ lbl τ₁' →
-      ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by sorry -- FIXME: prove
+      ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by
+
+    intro τ₁ τ₁' τ₂ lbl H_not_ε H_sub
+    revert lbl τ₁'
+    induction H_sub
+    all_goals sorry -- FIXME: prove
+
 
   lemma sub_of_skip_is_skip (τ : ProcTy) :
     ProcTySub τ ProcTy.skip → τ = ProcTy.skip := by
