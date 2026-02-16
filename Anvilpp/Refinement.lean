@@ -192,12 +192,12 @@ set_option maxHeartbeats 20000000
 lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
                                 (τ : ProcTyComposition) (lbl : TransLabel),
     CompositionTyJudgement p τ →
-    ProcTyGuarded ∅ ∅ τ →
+    ProcTyGuardedClosed τ →
     Semantics.Reduces p lbl p' →
     lbl ≠ TransLabel.ε →
     ∃ τ',
       CompositionTyJudgement p' τ' ∧
-      ProcTyGuarded ∅ ∅ τ' ∧
+      ProcTyGuardedClosed τ' ∧
       ProcTyIncompTransition τ (AbstractTransLabel.fromConcrete lbl) τ' := by
 
     intro p p' τ lbl H_typing H_guarded H_reduces H_not_ε
@@ -461,13 +461,13 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
             . apply ProcTyTransition.choice_fair_right
             . apply ProcTyCompElim.refl
     case subtype ctx' p₀ τ₁ τ₂ H_typing₁ H_sub H_ind =>
-      have H_guarded₁ : ProcTyGuarded ∅ ∅ τ₁ := by
+      have H_guarded₁ : ProcTyGuardedClosed τ₁ := by
         apply ProcTySub.subtype_preserves_guarded
         . exact H_sub
         . exact H_guarded
       have H_ind := H_ind H_ctx p' lbl H_guarded₁ H_reduces H_not_ε
       have ⟨τ₁', H_ind⟩ := H_ind
-      have H_τ₂' : ∃ τ₂', ProcTyIncompTransition τ₂ (AbstractTransLabel.fromConcrete lbl) τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by
+      have H_τ₂' : ∃ τ₂', ProcTyIncompTransition τ₂ (AbstractTransLabel.fromConcrete lbl) τ₂' ∧ ProcTyGuardedClosed τ₂' ∧ ProcTySub τ₁' τ₂' := by
         apply ProcTySub.subtype_refinement_label_multi (τ₁ := τ₁) (lbl := AbstractTransLabel.fromConcrete lbl) <;> try assumption
         . unfold AbstractTransLabel.fromConcrete
           cases lbl <;> simp
@@ -490,11 +490,11 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
 
 lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : TransLabel),
     CompositionTyJudgement p τ →
-    ProcTyGuarded ∅ ∅ τ →
+    ProcTyGuardedClosed τ →
     lbl ≠ TransLabel.ε →
     Semantics.IncompReduces p lbl p' →
     ∃ τ', CompositionTyJudgement p' τ'
-      ∧ ProcTyGuarded ∅ ∅ τ'
+      ∧ ProcTyGuardedClosed τ'
       ∧ ProcTyIncompTransition τ (AbstractTransLabel.fromConcrete lbl) τ' := by
 
   intro p p' τ lbl H_typing H_guarded H_not_ε H_reduces
@@ -506,7 +506,7 @@ lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : Trans
     . exact H_reduces.2
   have ⟨τ', H_τ'⟩ := H_mid_τ
   have H_end_τ : ∃ τ'', CompositionTyJudgement p' τ''
-    ∧ ProcTyGuarded ∅ ∅ τ''
+    ∧ ProcTyGuardedClosed τ''
     ∧ ProcTyIncompTransition τ' (AbstractTransLabel.fromConcrete lbl) τ'' := by
     apply type_emulates_proc_label (p := p₁) (p' := p')
     . exact H_τ'.1
@@ -528,10 +528,10 @@ lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : Trans
 -- TODO: may need to consider the ex labels
 theorem process_refines_type : ∀ (p p' : Proc) (τ : ProcTy) (α : Action),
     CompositionTyJudgement p τ →
-    ProcTyGuarded ∅ ∅ τ →
+    ProcTyGuardedClosed τ →
     Semantics.CompReduces p α p' →
     ∃ τ', CompositionTyJudgement p' τ'
-      ∧ ProcTyGuarded ∅ ∅ τ'
+      ∧ ProcTyGuardedClosed τ'
       ∧ ProcTyCompTransition τ α τ' := by
 
   intro p p' τ α H_typing H_guarded H_reduces

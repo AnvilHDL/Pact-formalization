@@ -236,7 +236,7 @@ set_option maxHeartbeats 5000000
 -- them can be matched by the process.
 lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
     CompositionTyJudgement p τ →
-    ProcTyGuarded ∅ ∅ τ →
+    ProcTyGuardedClosed τ →
     ProcTyTransition τ AbstractTransLabel.ε τ' →
     ∃ τ'' p'', ProcTyTransition τ AbstractTransLabel.ε τ'' ∧
        (p'' = p ∨ Semantics.Reduces p TransLabel.ε p'') ∧ CompositionTyJudgement p'' τ'' := by
@@ -442,7 +442,7 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
               exact H_typing
             . exact H_sub'
       case inr H =>
-        have H_guarded₁ : ProcTyGuarded ∅ ∅ τ₁ := by
+        have H_guarded₁ : ProcTyGuardedClosed τ₁ := by
           apply ProcTySub.subtype_preserves_guarded (τ₁ := τ₁) (τ₂ := τ₂) <;> assumption
         have H_ind := H_ind H_ctx τ₁'' H_guarded₁ H
         have ⟨τ₁''', p'', H_trans₁, H_elim₁, H_typing₁'⟩ := H_ind

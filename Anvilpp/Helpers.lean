@@ -102,48 +102,6 @@ inductive AtTail : String → ProcTy → Prop where
     AtTail x body →
     AtTail x (ProcTy.recur x' body)
 
-
-/-- Well-formed process types. All recursion variables appear only at tail locations. -/
-inductive WellformedTy : ProcTy → Prop where
-  | message (me : MessageExch) :
-    WellformedTy (ProcTy.message me)
-  | cycle :
-    WellformedTy ProcTy.cycle
-  | skip :
-    WellformedTy ProcTy.skip
-  | dollar (pid : ProcId) :
-    WellformedTy (ProcTy.dollar pid)
-  | choice (τ₁ τ₂ : ProcTy) :
-    WellformedTy τ₁ →
-    WellformedTy τ₂ →
-    WellformedTy (ProcTy.choice τ₁ τ₂)
-  | choice_fair (bid : BranchId) (τ₁ τ₂ : ProcTy) :
-    WellformedTy τ₁ →
-    WellformedTy τ₂ →
-    WellformedTy (ProcTy.choice_fair bid τ₁ τ₂)
-  | par (τ₁ τ₂ : ProcTy) :
-    WellformedTy τ₁ →
-    WellformedTy τ₂ →
-    WellformedTy (ProcTy.par τ₁ τ₂)
-  | seq (τ₁ τ₂ : ProcTy) :
-    WellformedTy τ₁ →
-    WellformedTy τ₂ →
-    WellformedTy (ProcTy.seq τ₁ τ₂)
-  | xoffer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    WellformedTy τ_else →
-    (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
-    WellformedTy (ProcTy.xoffer τ_else branch_tys)
-  | offer (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    WellformedTy τ_else →
-    (∀ m ty, (m, ty) ∈ branch_tys → WellformedTy ty) →
-    WellformedTy (ProcTy.offer τ_else branch_tys)
-  | var (x : String) :
-    WellformedTy (ProcTy.var x)
-  | recur (x : String) (body : ProcTy) :
-    WellformedTy body →
-    AtTail x body →
-    WellformedTy (ProcTy.recur x body)
-
 lemma non_instant_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (Γ : Finset String),
         ctx.procVars = ∅ → ProcTyJudgement ctx p τ → ProcTyNonInstant Γ τ → Semantics.NonInstantReducible Γ p := by
@@ -821,25 +779,39 @@ lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
     apply Semantics.ExprEval.bin <;> assumption
 
 namespace ProcTyGuarded
-  -- lemma replace_preserves_guarded :
-  --       ∀ (x : String) (τ : ProcTy) (Γₙ : Finset String) (Γₘ : Finset String),
-  --         ProcTyGuarded Γₙ Γₘ (ProcTy.recur x τ) →
-  --         ProcTyGuarded Γₙ Γₘ (τ.replaceVar x (ProcTy.recur x τ)) := by
+  lemma replace_preserves_guarded :
+        ∀ (x : String) (τ τ' : ProcTy) (Γₙ Γₘ Γₒ : Finset String),
+          ProcTyGuarded Γₙ (Γₘ ∪ {x}) Γₒ τ →
+          ProcTyGuarded Γₙ Γₘ Γₒ τ' →
+          ProcTyGuarded Γₙ Γₘ Γₒ (τ.replaceVar x τ') := by
 
-  --   intro x τ Γₙ Γₘ
-  --   revert x τ Γₙ
-  --   induction Γₘ using Finset.induction_on'
-  --   case empty =>
-  --     intro x τ Γₙ H_guarded
-  --     cases H_guarded
-
+    intro x τ
+    revert x
+    induction τ using ProcTy.ind
+    case H_recur x' body H_ind =>
+      intro x τ' Γₙ Γₘ Γₒ H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      by_cases h : x = x'
+      case pos =>
+        rewrite [h]
+        simp
+        rewrite [← h] at H_guarded₁
+        cases H_guarded₁
+        case recur H_guarded₁ =>
+          simp at H_guarded₁
+          have H_ind' := H_ind x τ' Γₙ Γₘ Γₒ H_guarded₁ H_guarded₂
+          sorry
+        apply ProcTyGuarded.recur
+        sorry
+      all_goals sorry
+    all_goals sorry
 
 
   lemma trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
-          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyGuardedClosed τ₁ →
           ProcTyTransition τ₁ lbl τ₂ →
-          ProcTyGuarded ∅ ∅ τ₂ := by
+          ProcTyGuardedClosed τ₂ := by
     intro τ₁ τ₂ lbl H_guarded H_transition
     induction H_transition
     case tock | message_send | message_recv =>
@@ -913,22 +885,22 @@ namespace ProcTyGuarded
 
   lemma elim_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy},
-          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyGuardedClosed τ₁ →
           ProcTyCompElim τ₁ τ₂ →
-          ProcTyGuarded ∅ ∅ τ₂ := by
+          ProcTyGuardedClosed τ₂ := by
     sorry -- trivial
 
   lemma incomp_trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
-          ProcTyGuarded ∅ ∅ τ₁ →
+          ProcTyGuardedClosed τ₁ →
           ProcTyIncompTransition τ₁ lbl τ₂ →
-          ProcTyGuarded ∅ ∅ τ₂ := by
+          ProcTyGuardedClosed τ₂ := by
     sorry -- FIXME: prove
 
   lemma guarded_preserves_non_instant_msg :
        ∀ {p : Semantics.ProcComp} {τ : ProcTyComposition},
           CompositionTyJudgement p τ →
-          ProcTyGuarded ∅ ∅ τ →
+          ProcTyGuardedClosed τ →
           ∃ τ', ProcTyCompElim τ τ' ∧
             CompositionTyJudgement p τ' ∧
             (

@@ -91,36 +91,36 @@ namespace ProcTy
 
   /-- Well-formedness of process types.
       This says that the type only includes tail recursions. -/
-  inductive wellformed : Finset String → ProcTy → Prop where
+  inductive Wellformed : Finset String → ProcTy → Prop where
     | var (Γ : Finset String) (x : String) :
-        x ∈ Γ → wellformed Γ (ProcTy.var x)
+        x ∈ Γ → Wellformed Γ (ProcTy.var x)
     | cycle (Γ : Finset String) :
-        wellformed Γ ProcTy.cycle
+        Wellformed Γ ProcTy.cycle
     | skip (Γ : Finset String) :
-        wellformed Γ ProcTy.skip
+        Wellformed Γ ProcTy.skip
     | message (Γ : Finset String) (me : MessageExch) :
-        wellformed Γ (ProcTy.message me)
+        Wellformed Γ (ProcTy.message me)
     | dollar (Γ : Finset String) (pid : ProcId) :
-        wellformed Γ (ProcTy.dollar pid)
+        Wellformed Γ (ProcTy.dollar pid)
     | seq (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
-        wellformed ∅ τ₁ → wellformed Γ τ₂ → wellformed Γ (ProcTy.seq τ₁ τ₂)
+        Wellformed ∅ τ₁ → Wellformed Γ τ₂ → Wellformed Γ (ProcTy.seq τ₁ τ₂)
     | par (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
-        wellformed ∅ τ₁ → wellformed ∅ τ₂ → wellformed Γ (ProcTy.par τ₁ τ₂)
+        Wellformed ∅ τ₁ → Wellformed ∅ τ₂ → Wellformed Γ (ProcTy.par τ₁ τ₂)
     | recur (Γ : Finset String) (x : String) (body : ProcTy) :
-        wellformed (Γ ∪ {x}) body → wellformed Γ (ProcTy.recur x body)
+        Wellformed (Γ ∪ {x}) body → Wellformed Γ (ProcTy.recur x body)
     | choice (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
-        wellformed Γ τ₁ → wellformed Γ τ₂ → wellformed Γ (ProcTy.choice τ₁ τ₂)
+        Wellformed Γ τ₁ → Wellformed Γ τ₂ → Wellformed Γ (ProcTy.choice τ₁ τ₂)
     | choice_fair (Γ : Finset String) (bid : BranchId) (τ₁ τ₂ : ProcTy) :
-        wellformed Γ τ₁ → wellformed Γ τ₂ →
-        wellformed Γ (ProcTy.choice_fair bid τ₁ τ₂)
+        Wellformed Γ τ₁ → Wellformed Γ τ₂ →
+        Wellformed Γ (ProcTy.choice_fair bid τ₁ τ₂)
     | xoffer (Γ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-        wellformed Γ τ_else →
-        (∀ me ty, (me, ty) ∈ branch_tys → wellformed Γ ty) →
-        wellformed Γ (ProcTy.xoffer τ_else branch_tys)
+        Wellformed Γ τ_else →
+        (∀ me ty, (me, ty) ∈ branch_tys → Wellformed Γ ty) →
+        Wellformed Γ (ProcTy.xoffer τ_else branch_tys)
     | offer (Γ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-        wellformed Γ τ_else →
-        (∀ me ty, (me, ty) ∈ branch_tys → wellformed ∅ ty) →
-        wellformed Γ (ProcTy.offer τ_else branch_tys)
+        Wellformed Γ τ_else →
+        (∀ me ty, (me, ty) ∈ branch_tys → Wellformed ∅ ty) →
+        Wellformed Γ (ProcTy.offer τ_else branch_tys)
 end ProcTy
 
 abbrev ProcTyComposition := ProcTy

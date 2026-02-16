@@ -482,7 +482,7 @@ namespace ProcTySub
 
   lemma congr_preserves_guarded : ∀ (τ₁ τ₂ : ProcTy),
       ProcTyCongr τ₁ τ₂ →
-      (ProcTyGuarded ∅ ∅ τ₂ ↔ ProcTyGuarded ∅ ∅ τ₁) := by
+      (ProcTyGuardedClosed τ₂ ↔ ProcTyGuardedClosed τ₁) := by
 
     intro τ₁ τ₂ H_congr
     induction H_congr
@@ -507,8 +507,8 @@ namespace ProcTySub
 
   lemma subtype_preserves_guarded : ∀ (τ₁ τ₂ : ProcTy),
       ProcTySub τ₁ τ₂ →
-      ProcTyGuarded ∅ ∅ τ₂ →
-      ProcTyGuarded ∅ ∅ τ₁ := by
+      ProcTyGuardedClosed τ₂ →
+      ProcTyGuardedClosed τ₁ := by
 
     intro τ₁ τ₂ H_sub H_guarded
     induction H_sub
@@ -527,15 +527,15 @@ namespace ProcTySub
       (lbl : AbstractTransLabel),
       lbl ≠ AbstractTransLabel.ε →
       ProcTyCongr τ₁ τ₂ →
-      ProcTyGuarded ∅ ∅ τ₂ →
+      ProcTyGuardedClosed τ₂ →
       (
         ∀ τ₁', ProcTyIncompTransition τ₁ lbl τ₁' →
-        ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTyCongr τ₁' τ₂'
+        ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuardedClosed τ₂' ∧ ProcTyCongr τ₁' τ₂'
       )
         ∧
       (
         ∀ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' →
-        ∃ τ₁', ProcTyIncompTransition τ₁ lbl τ₁' ∧ ProcTyGuarded ∅ ∅ τ₁' ∧ ProcTyCongr τ₁' τ₂'
+        ∃ τ₁', ProcTyIncompTransition τ₁ lbl τ₁' ∧ ProcTyGuardedClosed τ₁' ∧ ProcTyCongr τ₁' τ₂'
       ) := by
     intro τ₁ τ₂ lbl H_not_ε H_congr H_guarded
     constructor
@@ -565,9 +565,9 @@ namespace ProcTySub
       (lbl : AbstractTransLabel),
       lbl ≠ AbstractTransLabel.ε →
       ProcTySub τ₁ τ₂ →
-      ProcTyGuarded ∅ ∅ τ₂ →
+      ProcTyGuardedClosed τ₂ →
       ProcTyIncompTransition τ₁ lbl τ₁' →
-      ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuarded ∅ ∅ τ₂' ∧ ProcTySub τ₁' τ₂' := by
+      ∃ τ₂', ProcTyIncompTransition τ₂ lbl τ₂' ∧ ProcTyGuardedClosed τ₂' ∧ ProcTySub τ₁' τ₂' := by
 
     intro τ₁ τ₁' τ₂ lbl H_not_ε H_sub
     revert lbl τ₁'
@@ -601,9 +601,9 @@ namespace ProcTySub
           apply ProcTyCongr.refl
     case trans τ₁'' τ₂'' τ₃'' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
       intro τ₁' lbl H_not_ε H_guarded H_trans
-      have H_guarded₂ : ProcTyGuarded ∅ ∅ τ₂'' := by
+      have H_guarded₂ : ProcTyGuardedClosed τ₂'' := by
         apply ProcTySub.subtype_preserves_guarded (τ₂ := τ₃'') <;> assumption
-      have H_guarded₁ : ProcTyGuarded ∅ ∅ τ₁'' := by
+      have H_guarded₁ : ProcTyGuardedClosed τ₁'' := by
         apply ProcTySub.subtype_preserves_guarded (τ₂ := τ₂'') <;> assumption
       have H_ind₁' := H_ind₁ τ₁' lbl H_not_ε H_guarded₂ H_trans
       have ⟨τ₂''', H_trans₂, H_guarded₂', H_sub₂'⟩ := H_ind₁'
