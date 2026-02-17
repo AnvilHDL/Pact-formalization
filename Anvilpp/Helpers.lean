@@ -108,6 +108,34 @@ lemma non_instant_preservation :
 
     sorry -- trivial
 
+lemma congr_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
+    ProcTyCongr τ₁ τ₂ → ∀ Γₙ Γₘ mx, (ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx ↔ ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx) := by
+
+    intro H_congr
+    induction H_congr
+    case refl | symm | trans => aesop
+    case par_comm τ₁' τ₂' =>
+      intro Γₙ Γₘ mx
+      constructor <;> (
+        intro H_noninst_msg
+        cases H_noninst_msg
+        aesop
+      )
+
+lemma subtype_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
+      ProcTySub τ₁ τ₂ → ∀ Γₙ Γₘ mx, (ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx → ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx) := by
+
+    intro H_sub
+    induction H_sub
+    case congr τ₁' τ₂' H_congr =>
+      intro Γₙ Γₘ mx
+      apply (congr_non_instant_msg_preservation τ₁' τ₂' H_congr Γₙ Γₘ mx).mp
+    case choice_relax τ₁' τ₂' =>
+      intro Γₙ Γₘ mx H_noninst_msg
+      cases H_noninst_msg
+      aesop
+    case trans => aesop
+
 lemma non_instant_msg_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext),
         ProcTyJudgement ctx p τ → ∀ mx Γₙ Γₘ, (ProcTyNonInstantMsg Γₙ Γₘ τ mx → Semantics.NonInstantMessage Γₙ Γₘ p mx) := by
@@ -166,7 +194,8 @@ lemma non_instant_msg_preservation :
       apply H_ind
       exact H_noninst_msg
   case subtype ctx p τ₁ τ₂ H_typing H_sub H_ind =>
-    sorry -- FIXME: complete
+    apply H_ind
+    apply subtype_non_instant_msg_preservation (τ₂ := τ₂) <;> assumption
   case xoffer => sorry -- low priority
   case offer => sorry -- low priority
 
