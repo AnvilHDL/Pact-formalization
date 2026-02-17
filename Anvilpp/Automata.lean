@@ -2,6 +2,7 @@ import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
 
+@[aesop unsafe]
 inductive ProcTyNonInstant : Finset String → ProcTy → Prop where
   | cycle (Γ : Finset String) :
     ProcTyNonInstant Γ ProcTy.cycle
@@ -40,6 +41,7 @@ inductive ProcTyNonInstant : Finset String → ProcTy → Prop where
     ProcTyNonInstant (Γ ∪ {x}) τ →
     ProcTyNonInstant Γ (ProcTy.recur x τ)
 
+@[aesop unsafe]
 inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (MessageId × MessageDir) → Prop where
   | cycle (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
     ProcTyNonInstantMsg Γₙ Γₘ ProcTy.cycle mx

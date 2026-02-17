@@ -104,17 +104,16 @@ inductive AtTail : String → ProcTy → Prop where
 
 lemma non_instant_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (Γ : Finset String),
-        ctx.procVars = ∅ → ProcTyJudgement ctx p τ → ProcTyNonInstant Γ τ → Semantics.NonInstantReducible Γ p := by
+        ProcTyJudgement ctx p τ → ProcTyNonInstant Γ τ → Semantics.NonInstantReducible Γ p := by
 
-    sorry
+    sorry -- trivial
 
 lemma non_instant_msg_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext),
-        ctx.procVars = ∅ → ProcTyJudgement ctx p τ → ∀ mx Γₙ Γₘ, (ProcTyNonInstantMsg Γₙ Γₘ τ mx → Semantics.NonInstantMessage Γₙ Γₘ p mx) := by
-  intro p τ ctx H_ctx H_typing
+        ProcTyJudgement ctx p τ → ∀ mx Γₙ Γₘ, (ProcTyNonInstantMsg Γₙ Γₘ τ mx → Semantics.NonInstantMessage Γₙ Γₘ p mx) := by
+  intro p τ ctx H_typing
   -- generalize H_ctx : ProcTyContext.empty = ctx at H_typing
-  revert H_ctx
-  induction H_typing <;> (intro H_ctx' mx Γₙ Γₘ H_noninst_msg)
+  induction H_typing <;> (intro mx Γₙ Γₘ H_noninst_msg)
   case cycle ctx => aesop
   case dollar ctx pid => aesop
   case skip ctx => aesop
@@ -125,7 +124,7 @@ lemma non_instant_msg_preservation :
     case seq_left H_noninst H_noninst_msg =>
       cases H_noninst
     case seq_right H_noninst H_noninst_msg =>
-      have H_ind' := H_ind H_ctx' mx Γₙ Γₘ H_noninst_msg
+      have H_ind' := H_ind mx Γₙ Γₘ H_noninst_msg
       cases H_noninst <;> aesop
   case par ctx p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     cases H_noninst_msg
@@ -133,13 +132,13 @@ lemma non_instant_msg_preservation :
   case seq ctx p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     cases H_noninst_msg
     case seq_left H_noninst H_noninst_msg =>
-      have H_ind₁' := H_ind₁ H_ctx' mx Γₙ Γₘ H_noninst_msg
+      have H_ind₁' := H_ind₁ mx Γₙ Γₘ H_noninst_msg
       have H_noninst₁ : Semantics.NonInstantReducible Γₙ p₁ := by
         apply non_instant_preservation (ctx := ctx) <;> assumption
       aesop
     case seq_right H_noninst_msg₁ H_noninst_msg₂ =>
-      have H_ind₁' := H_ind₁ H_ctx' mx Γₙ Γₘ H_noninst_msg₁
-      have H_ind₂' := H_ind₂ H_ctx' mx Γₙ Γₘ H_noninst_msg₂
+      have H_ind₁' := H_ind₁ mx Γₙ Γₘ H_noninst_msg₁
+      have H_ind₂' := H_ind₂ mx Γₙ Γₘ H_noninst_msg₂
       aesop
   case choice ctx e p₁ p₂ τ₁ τ₂ H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     cases H_noninst_msg
@@ -148,13 +147,28 @@ lemma non_instant_msg_preservation :
     cases H_noninst_msg
     aesop
   case var ctx x =>
+    cases H_noninst_msg
     aesop
   case recur ctx x body τ_body H_typing H_ind =>
     cases H_noninst_msg
     case recur_instant H_noninst H_noninst_msg =>
-      sorry
-    sorry
-  all_goals sorry -- FIXME: complete
+      cases H_noninst
+      have H_ind' := H_ind mx (Γₙ ∪ {x}) (Γₘ ∪ {x}) H_noninst_msg
+      apply Semantics.NonInstantMessage.recur_instant
+      . apply non_instant_preservation (ctx := ctx) (τ := ProcTy.recur x τ_body) <;> try assumption
+        apply ProcTyJudgement.recur
+        . exact H_typing
+        . apply ProcTyNonInstant.recur
+          assumption
+      . exact H_ind'
+    case recur_noninstant H_noninst_msg =>
+      apply Semantics.NonInstantMessage.recur_noninstant
+      apply H_ind
+      exact H_noninst_msg
+  case subtype ctx p τ₁ τ₂ H_typing H_sub H_ind =>
+    sorry -- FIXME: complete
+  case xoffer => sorry -- low priority
+  case offer => sorry -- low priority
 
 lemma recursion_unfolding_preserved :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String),
@@ -791,22 +805,108 @@ namespace ProcTyGuarded
     (x : String) (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String) :
     ProcTyGuarded Γₙ (Γₘ ∪ {x}) (Γₒ ∪ {x}) (ProcTy.recur x τ) →
     ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x τ) := by
-      sorry -- FIXME: prove this
+      intro H_guarded
+      have H_m : Γₘ ∪ {x} ∪ {x} = Γₘ ∪ {x} := by grind
+      have H_o : (Γₒ ∪ {x}) \ {x} = Γₒ \ {x} := by grind
+      cases H_guarded <;> (
+        rename_i H_guarded
+        rewrite [H_m, H_o] at H_guarded
+        aesop
+      )
 
-  lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) :
-      ProcTyNonInstant ∅ τ → ProcTyNonInstant ∅ (τ.replaceVar x τ') := by
-      sorry -- easy
+  lemma larger_context_preserves_noninst (τ : ProcTy) (Γ Γ' : Finset String) :
+      Γ ⊆ Γ' →
+      ProcTyNonInstant Γ τ →
+      ProcTyNonInstant Γ' τ := by sorry -- trivial
+
+  lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset String) :
+      (x ∈ Γ → ProcTyNonInstant ∅ τ') →
+      ProcTyNonInstant Γ τ → ProcTyNonInstant Γ (τ.replaceVar x τ') := by
+
+    revert x τ' Γ
+    induction τ using ProcTy.ind
+    case H_cycle | H_dollar | H_skip | H_message =>
+      unfold ProcTy.replaceVar
+      aesop
+    case H_recur x' body H_ind =>
+      intro x τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      by_cases h : x = x'
+      case pos =>
+        aesop
+      case neg =>
+        simp [h]
+        cases H_noninst₂
+        rename_i H_noninst₂
+        have H_ind := H_ind x τ' (Γ ∪ {x'}) (
+          by
+            -- x ∈ Γ
+            intro H_x
+            simp [h] at H_x
+            apply H_noninst₁
+            exact H_x
+        ) H_noninst₂
+        aesop
+    case H_var x =>
+      intro x' τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      cases H_noninst₂
+      rename_i H_noninst₂
+      by_cases h : x' = x
+      case pos =>
+        simp [h]
+        apply larger_context_preserves_noninst (Γ := ∅)
+        . grind
+        . apply H_noninst₁
+          rewrite [h]
+          exact H_noninst₂
+      case neg =>
+        simp [h]
+        aesop
+    case H_choice τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      cases H_noninst₂
+      rename_i H_noninst₁' H_noninst₂'
+      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
+      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
+      aesop
+    case H_choice_fair τ₁ τ₂ b H_ind₁ H_ind₂ =>
+      intro x τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      cases H_noninst₂
+      rename_i H_noninst₁' H_noninst₂'
+      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
+      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
+      aesop
+    case H_par τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      cases H_noninst₂
+      case par_left H_noninst₂ =>
+        have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
+        aesop
+      case par_right H_noninst₂ =>
+        have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
+        aesop
+    case H_seq τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γ H_noninst₁ H_noninst₂
+      unfold ProcTy.replaceVar
+      cases H_noninst₂
+      case seq_left H_noninst₂ =>
+        have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
+        aesop
+      case seq_right H_noninst₂ =>
+        have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
+        aesop
+    case H_xoffer => sorry -- low prority
+    case H_offer => sorry -- low priority
 
   lemma replace_preserves_guarded :
         ∀ (x : String) (τ τ' : ProcTy) (Γₘ Γₒ : Finset String),
           Γₒ ⊆ Γₘ →
-          -- ((
           ProcTyGuarded ∅ (Γₘ ∪ {x}) (Γₒ ∪ {x}) τ →
           ProcTyGuarded ∅ ∅ ∅ τ' →
-          -- ) ∨ (
-          --   ProcTyGuarded Γₙ (Γₘ ∪ {x}) (Γₒ ∪ {x}) τ ∧
-          --   ProcTyGuarded Γₙ (Γₘ \ {x}) (Γₒ \ {x}) τ'
-          -- )) →
           ProcTyGuarded ∅ Γₘ Γₒ (τ.replaceVar x τ') := by
 
     intro x τ
@@ -900,8 +1000,7 @@ namespace ProcTyGuarded
           by exact H_guarded₁
         ) H_guarded₂
         apply ProcTyGuarded.seq_noninstant
-        . apply replace_preserves_noninst
-          assumption
+        . apply replace_preserves_noninst (Γ := ∅) <;> grind
         . exact H_ind₁'
         . exact H_ind₂'
     case H_message msg =>
@@ -997,24 +1096,38 @@ namespace ProcTyGuarded
           ProcTyGuardedClosed τ₁ →
           ProcTyCompElim τ₁ τ₂ →
           ProcTyGuardedClosed τ₂ := by
-    sorry -- trivial
+    intro τ₁ τ₂ H_guarded H_elim
+    induction H_elim
+    case refl τ' =>
+      exact H_guarded
+    case eps_elim τ' τ'' τ''' H_transition H_elim H_ind =>
+      apply H_ind
+      apply trans_preserves_guarded (τ₁ := τ') (lbl := AbstractTransLabel.ε)
+      . exact H_guarded
+      . exact H_transition
 
   lemma incomp_trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
           ProcTyGuardedClosed τ₁ →
           ProcTyIncompTransition τ₁ lbl τ₂ →
           ProcTyGuardedClosed τ₂ := by
-    sorry -- FIXME: prove
+    intro τ₁ τ₂ lbl H_guarded H_transition
+    have ⟨τ', H_trans, H_elim⟩ := H_transition
+    apply trans_preserves_guarded (τ₁ := τ') (lbl := lbl)
+    . apply elim_preserves_guarded (τ₁ := τ₁)
+      . exact H_guarded
+      . exact H_elim
+    . exact H_trans
 
   lemma guarded_preserves_non_instant_msg :
-       ∀ {p : Semantics.ProcComp} {τ : ProcTyComposition},
-          CompositionTyJudgement p τ →
-          ProcTyGuardedClosed τ →
-          ∃ τ', ProcTyCompElim τ τ' ∧
-            CompositionTyJudgement p τ' ∧
-            (
-              ∀ mx,
-              Semantics.NonInstantMessage ∅ ∅ p mx →
-              ProcTyNonInstantMsg ∅ ∅ τ' mx
-            ) := by sorry -- FIXME: prove
+    ∀ {p : Semantics.ProcComp} {τ : ProcTyComposition},
+      CompositionTyJudgement p τ →
+      ProcTyGuardedClosed τ →
+      ∃ τ', ProcTyCompElim τ τ' ∧
+        CompositionTyJudgement p τ' ∧
+        (
+          ∀ mx,
+          Semantics.NonInstantMessage ∅ ∅ p mx →
+          ProcTyNonInstantMsg ∅ ∅ τ' mx
+        ) := by sorry -- FIXME: prove
 end ProcTyGuarded

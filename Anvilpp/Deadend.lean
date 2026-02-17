@@ -82,9 +82,6 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . have H_m' : ∀ mx ∈ ex_msg, Semantics.NonInstantMessage ∅ ∅ p₂ mx := by
           intro mx H_mx
           apply non_instant_msg_preservation (p := p₂) (τ := τ₂) (ctx := ctx')
-          . rewrite [← H_ctx]
-            unfold ProcTyContext.empty
-            simp
           . exact H_typing₂
           . exact H_m mx H_mx
         unfold AbstractTransLabel.fromConcrete at H_lbl'
@@ -107,9 +104,6 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . have H_m' : ∀ mx ∈ ex_msg, Semantics.NonInstantMessage ∅ ∅ p₁ mx := by
           intro mx H_mx
           apply non_instant_msg_preservation (p := p₁) (τ := τ₁) (ctx := ctx')
-          . rewrite [← H_ctx]
-            unfold ProcTyContext.empty
-            simp
           . exact H_typing₁
           . exact H_m mx H_mx
         unfold AbstractTransLabel.fromConcrete at H_lbl'
