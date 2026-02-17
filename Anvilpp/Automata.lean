@@ -237,11 +237,11 @@ inductive ProcTyGuarded : Finset String → Finset String → Finset String → 
     x ∈ Γₒ →
     ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.var x)
   | recur (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
-    ProcTyGuarded Γₙ (Γₘ ∪ {x}) Γₒ body →
+    ProcTyGuarded Γₙ (Γₘ ∪ {x}) (Γₒ \ {x}) body →
     ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
   | recur_noninst (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
     ProcTyNonInstant Γₙ (ProcTy.recur x body) →
-    ProcTyGuarded (Γₙ ∪ {x}) (Γₘ ∪ {x}) Γₒ body →
+    ProcTyGuarded (Γₙ ∪ {x}) (Γₘ ∪ {x}) (Γₒ \ {x}) body →
     ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
   | choice (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
     ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →

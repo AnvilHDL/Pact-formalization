@@ -779,33 +779,137 @@ lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
     apply Semantics.ExprEval.bin <;> assumption
 
 namespace ProcTyGuarded
+  lemma larger_context_preserves_guarded
+        (τ : ProcTy) (Γₙ Γₙ' Γₘ Γₒ Γₘ' Γₒ' : Finset String) :
+        Γₘ \ Γₙ ⊆ Γₘ' \ Γₙ' →
+        Γₘ ⊆ Γₘ' →
+        Γₒ ⊆ Γₒ' →
+        ProcTyGuarded Γₙ Γₘ Γₒ τ →
+        ProcTyGuarded Γₙ' Γₘ' Γₒ' τ := by sorry -- trivial
+
+  lemma recur_extend_context_preserves_guarded
+    (x : String) (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String) :
+    ProcTyGuarded Γₙ (Γₘ ∪ {x}) (Γₒ ∪ {x}) (ProcTy.recur x τ) →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x τ) := by
+      sorry -- FIXME: prove this
+
+  lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) :
+      ProcTyNonInstant ∅ τ → ProcTyNonInstant ∅ (τ.replaceVar x τ') := by
+      sorry -- easy
+
   lemma replace_preserves_guarded :
-        ∀ (x : String) (τ τ' : ProcTy) (Γₙ Γₘ Γₒ : Finset String),
-          ProcTyGuarded Γₙ (Γₘ ∪ {x}) Γₒ τ →
-          ProcTyGuarded Γₙ Γₘ Γₒ τ' →
-          ProcTyGuarded Γₙ Γₘ Γₒ (τ.replaceVar x τ') := by
+        ∀ (x : String) (τ τ' : ProcTy) (Γₘ Γₒ : Finset String),
+          Γₒ ⊆ Γₘ →
+          -- ((
+          ProcTyGuarded ∅ (Γₘ ∪ {x}) (Γₒ ∪ {x}) τ →
+          ProcTyGuarded ∅ ∅ ∅ τ' →
+          -- ) ∨ (
+          --   ProcTyGuarded Γₙ (Γₘ ∪ {x}) (Γₒ ∪ {x}) τ ∧
+          --   ProcTyGuarded Γₙ (Γₘ \ {x}) (Γₒ \ {x}) τ'
+          -- )) →
+          ProcTyGuarded ∅ Γₘ Γₒ (τ.replaceVar x τ') := by
 
     intro x τ
     revert x
     induction τ using ProcTy.ind
     case H_recur x' body H_ind =>
-      intro x τ' Γₙ Γₘ Γₒ H_guarded₁ H_guarded₂
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
       unfold ProcTy.replaceVar
       by_cases h : x = x'
       case pos =>
         rewrite [h]
         simp
         rewrite [← h] at H_guarded₁
+        have H_guarded₁' : ProcTyGuarded ∅ Γₘ Γₒ (ProcTy.recur x body) := by
+          apply recur_extend_context_preserves_guarded
+          apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := Γₘ ∪ {x}) (Γₒ := Γₒ ∪ {x}) <;> grind
         cases H_guarded₁
         case recur H_guarded₁ =>
-          simp at H_guarded₁
-          have H_ind' := H_ind x τ' Γₙ Γₘ Γₒ H_guarded₁ H_guarded₂
-          sorry
-        apply ProcTyGuarded.recur
-        sorry
-      all_goals sorry
-    all_goals sorry
-
+          aesop
+        case recur_noninst H_non_inst H_guarded₁ =>
+          aesop
+      case neg =>
+        simp [h]
+        have H_m : Γₘ ∪ {x'} ∪ {x} = Γₘ ∪ {x} ∪ {x'} := by grind
+        have H_o : (Γₒ \ {x'}) ∪ {x} = (Γₒ ∪ {x}) \ {x'} := by grind
+        cases H_guarded₁
+        case recur H_guarded₁ =>
+          have H_ind' := H_ind x τ' (Γₘ ∪ {x'}) (Γₒ \ {x'}) (by grind) (
+            by
+              rewrite [H_m, H_o]
+              exact H_guarded₁
+          ) H_guarded₂
+          aesop
+        case recur_noninst H_non_inst H_guarded₁ =>
+          have H_ind' := H_ind x τ' (Γₘ ∪ {x'}) (Γₒ \ {x'}) (by grind) (
+            by
+              rewrite [H_m, H_o]
+              apply larger_context_preserves_guarded (Γₙ := ∅ ∪ {x'}) (Γₘ := (Γₘ ∪ {x} ∪ {x'})) (Γₒ := ((Γₒ ∪ {x}) \ {x'})) <;> grind
+          ) H_guarded₂
+          aesop
+    case H_var x =>
+      intro x' τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁
+      rename_i H_x
+      by_cases h : x' = x
+      case pos =>
+        simp [h]
+        apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := ∅) (Γₒ := ∅) <;> grind
+      case neg =>
+        simp [h]
+        aesop
+    case H_cycle | H_skip | H_dollar =>
+      unfold ProcTy.replaceVar
+      aesop
+    case H_choice τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁
+      case choice H_guarded₁ =>
+        have H_ind₁' := H_ind₁ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        have H_ind₂' := H_ind₂ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        aesop
+    case H_choice_fair τ₁ τ₂ b H_ind₁ H_ind₂ =>
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁
+      case choice_fair H_guarded₁ =>
+        have H_ind₁' := H_ind₁ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        have H_ind₂' := H_ind₂ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        aesop
+    case H_par τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁
+      case par H_guarded₁ =>
+        have H_ind₁' := H_ind₁ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        have H_ind₂' := H_ind₂ x τ' (Γₘ ∪ {x}) (Γₒ ∪ {x}) (by grind) (by grind) H_guarded₂
+        aesop
+    case H_seq τ₁ τ₂ H_ind₁ H_ind₂ =>
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁
+      case seq_instant H_guarded₁ =>
+        have H_ind₁' := H_ind₁ x τ' Γₘ Γₒ (by grind) (by grind) H_guarded₂
+        have H_ind₂' := H_ind₂ x τ' Γₘ Γₒ (by grind) (by grind) H_guarded₂
+        aesop
+      case seq_noninstant H_guarded' H_guarded₁ =>
+        have H_ind₁' := H_ind₁ x τ' Γₘ Γₒ (by grind) (by aesop) H_guarded₂
+        have H_ind₂' := H_ind₂ x τ' Γₘ Γₘ (by grind) (
+          by exact H_guarded₁
+        ) H_guarded₂
+        apply ProcTyGuarded.seq_noninstant
+        . apply replace_preserves_noninst
+          assumption
+        . exact H_ind₁'
+        . exact H_ind₂'
+    case H_message msg =>
+      intro x τ' Γₘ Γₒ H_subset H_guarded₁ H_guarded₂
+      unfold ProcTy.replaceVar
+      cases H_guarded₁ <;> aesop
+    case H_xoffer => sorry -- low priority
+    case H_offer => sorry -- low priority
 
   lemma trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
@@ -877,11 +981,16 @@ namespace ProcTyGuarded
       rename_i H_guarded₁ H_guarded₂
       exact H_guarded₂
     case recur_unfold x τ =>
-      cases H_guarded
-      all_goals sorry
-    all_goals sorry
-      -- FIXME: we need some stronger induction hypothesis
-
+      apply replace_preserves_guarded
+      . grind
+      . cases H_guarded
+        . apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
+        . apply larger_context_preserves_guarded (Γₙ := ∅ ∪ {x}) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
+      . aesop
+    case xoffer_else => sorry -- low priority
+    case offer_else => sorry
+    case xoffer_branch => sorry
+    case offer_branch => sorry
 
   lemma elim_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy},
