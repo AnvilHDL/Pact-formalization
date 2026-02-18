@@ -335,6 +335,184 @@ lemma larger_context_preserves_typing :
   case xoffer => sorry
   case offer => sorry -- low priority
 
+lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset String) :
+    (x ∈ Γ → ProcTyNonInstant ∅ τ') →
+    ProcTyNonInstant Γ τ → ProcTyNonInstant Γ (τ.replaceVar x τ') := by
+
+  revert x τ' Γ
+  induction τ using ProcTy.ind
+  case H_cycle | H_dollar | H_skip | H_message =>
+    unfold ProcTy.replaceVar
+    aesop
+  case H_recur x' body H_ind =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    by_cases h : x = x'
+    case pos =>
+      aesop
+    case neg =>
+      simp [h]
+      cases H_noninst₂
+      rename_i H_noninst₂
+      have H_ind := H_ind x τ' (Γ ∪ {x'}) (
+        by
+          -- x ∈ Γ
+          intro H_x
+          simp [h] at H_x
+          apply H_noninst₁
+          exact H_x
+      ) H_noninst₂
+      aesop
+  case H_var x =>
+    intro x' τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    rename_i H_noninst₂
+    by_cases h : x' = x
+    case pos =>
+      simp [h]
+      apply larger_context_preserves_noninst (Γ := ∅)
+      . grind
+      . apply H_noninst₁
+        rewrite [h]
+        exact H_noninst₂
+    case neg =>
+      simp [h]
+      aesop
+  case H_choice τ₁ τ₂ H_ind₁ H_ind₂ =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    rename_i H_noninst₁' H_noninst₂'
+    have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
+    have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
+    aesop
+  case H_choice_fair τ₁ τ₂ b H_ind₁ H_ind₂ =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    rename_i H_noninst₁' H_noninst₂'
+    have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
+    have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
+    aesop
+  case H_par τ₁ τ₂ H_ind₁ H_ind₂ =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    case par_left H_noninst₂ =>
+      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
+      aesop
+    case par_right H_noninst₂ =>
+      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
+      aesop
+  case H_seq τ₁ τ₂ H_ind₁ H_ind₂ =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    case seq_left H_noninst₂ =>
+      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
+      aesop
+    case seq_right H_noninst₂ =>
+      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
+      aesop
+  case H_xoffer => sorry -- low prority
+  case H_offer => sorry -- low priority
+
+lemma replace_preserves_noninst_msg (x : String) (τ τ' : ProcTy) (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
+    (x ∈ Γₙ → ProcTyNonInstant ∅ τ') →
+    (x ∈ Γₘ → ProcTyNonInstantMsg ∅ ∅ τ' mx) →
+    ProcTyNonInstantMsg Γₙ Γₘ τ mx → ProcTyNonInstantMsg Γₙ Γₘ (τ.replaceVar x τ') mx := by
+
+    intro H_x' H_x H_noninst_msg
+    revert H_x' H_x τ' x
+    induction H_noninst_msg
+    case cycle | skip | choice | choice_fair | dollar | send | send_opposite | recv | recv_opposite | par =>
+      unfold ProcTy.replaceVar
+      aesop
+    case var Γₙ' Γₘ' x mx' H_mx =>
+      intro x' τ' H_noninst H_noninst_msg
+      unfold ProcTy.replaceVar
+      by_cases h : x' = x
+      case pos =>
+        simp [h]
+        apply larger_context_preserves_noninst_msg (Γₙ := ∅) (Γₘ := ∅)
+        . grind
+        . grind
+        . apply H_noninst_msg
+          rewrite [h]
+          exact H_mx
+      case neg =>
+        simp [h]
+        aesop
+    case seq_left Γₙ' Γₘ' τ₁' τ₂' mx' H_noninstmsg H_noninst H_ind =>
+      intro x' τ' H_noninst' H_noninstmsg'
+      unfold ProcTy.replaceVar
+      apply ProcTyNonInstantMsg.seq_left
+      . apply H_ind
+        . exact H_noninst'
+        . exact H_noninstmsg'
+      . apply replace_preserves_noninst
+        . exact H_noninst'
+        . aesop
+    case seq_right Γₙ' Γₘ' τ₁' τ₂' mx' H_noninstmsg₁ H_noninstmsg₂ H_ind₁ H_ind₂ =>
+      intro x' τ' H_noninst' H_noninstmsg'
+      unfold ProcTy.replaceVar
+      apply ProcTyNonInstantMsg.seq_right
+      . apply H_ind₁
+        . exact H_noninst'
+        . exact H_noninstmsg'
+      . apply H_ind₂
+        . exact H_noninst'
+        . exact H_noninstmsg'
+    case recur_instant Γₙ' Γₘ' x' τ'' mx' H_noninst H_noninstmsg H_ind =>
+      intro x'' τ' H_noninst' H_noninstmsg'
+      unfold ProcTy.replaceVar
+      by_cases h : x'' = x'
+      case pos =>
+        simp [h]
+        apply ProcTyNonInstantMsg.recur_instant
+        . apply ProcTyNonInstant.recur
+          cases H_noninst
+          apply larger_context_preserves_noninst (Γ := Γₙ' ∪ {x'})
+          . grind
+          . assumption
+        . exact H_noninstmsg
+      case neg =>
+        simp [h]
+        apply ProcTyNonInstantMsg.recur_instant
+        . apply ProcTyNonInstant.recur
+          cases H_noninst
+          apply larger_context_preserves_noninst (Γ := Γₙ' ∪ {x'})
+          . grind
+          . apply replace_preserves_noninst
+            . simp [h]
+              exact H_noninst'
+            . assumption
+        . apply H_ind
+          . simp [h]
+            exact H_noninst'
+          . simp [h]
+            exact H_noninstmsg'
+    case recur_noninstant Γₙ' Γₘ' x' τ'' mx' H_noninstmsg H_ind =>
+      intro x'' τ' H_noninst' H_noninstmsg'
+      unfold ProcTy.replaceVar
+      by_cases h : x'' = x'
+      case pos =>
+        simp [h]
+        apply ProcTyNonInstantMsg.recur_noninstant
+        . exact H_noninstmsg
+      case neg =>
+        simp [h]
+        apply ProcTyNonInstantMsg.recur_noninstant
+        apply H_ind
+        . simp [h]
+          exact H_noninst'
+        . simp [h]
+          exact H_noninstmsg'
+    case xoffer => sorry -- low priority
+    case offer => sorry -- low priority
+
+
 lemma subtyping_replace_procty_preserved :
       ∀ (τ' τ₁ τ₂ : ProcTy) (x : String),
         ProcTySub τ₁ τ₂ →
@@ -357,13 +535,19 @@ lemma subtyping_replace_procty_preserved :
     case a.par_comm τ₁'' τ₂'' =>
       unfold ProcTy.replaceVar
       apply ProcTyCongr.par_comm
-  case choice_relax τ₁' τ₂' H_mx =>
+  case choice_relax τ₁' τ₂' H_noninst H_mx =>
     conv =>
       arg 2
       unfold ProcTy.replaceVar
     apply ProcTySub.choice_relax
-    . sorry -- FIXME: prove
-    . sorry
+    . apply replace_preserves_noninst
+      . grind
+      . exact H_noninst
+    . intro mx
+      apply replace_preserves_noninst_msg
+      . grind
+      . grind
+      . apply H_mx
   case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
     apply ProcTySub.trans (τ₂ := τ₂'.replaceVar x τ')
     . exact H_ind₁
@@ -1059,89 +1243,6 @@ namespace ProcTyGuarded
         rewrite [H_m, H_o] at H_guarded
         aesop
       )
-
-  lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset String) :
-      (x ∈ Γ → ProcTyNonInstant ∅ τ') →
-      ProcTyNonInstant Γ τ → ProcTyNonInstant Γ (τ.replaceVar x τ') := by
-
-    revert x τ' Γ
-    induction τ using ProcTy.ind
-    case H_cycle | H_dollar | H_skip | H_message =>
-      unfold ProcTy.replaceVar
-      aesop
-    case H_recur x' body H_ind =>
-      intro x τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      by_cases h : x = x'
-      case pos =>
-        aesop
-      case neg =>
-        simp [h]
-        cases H_noninst₂
-        rename_i H_noninst₂
-        have H_ind := H_ind x τ' (Γ ∪ {x'}) (
-          by
-            -- x ∈ Γ
-            intro H_x
-            simp [h] at H_x
-            apply H_noninst₁
-            exact H_x
-        ) H_noninst₂
-        aesop
-    case H_var x =>
-      intro x' τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      cases H_noninst₂
-      rename_i H_noninst₂
-      by_cases h : x' = x
-      case pos =>
-        simp [h]
-        apply larger_context_preserves_noninst (Γ := ∅)
-        . grind
-        . apply H_noninst₁
-          rewrite [h]
-          exact H_noninst₂
-      case neg =>
-        simp [h]
-        aesop
-    case H_choice τ₁ τ₂ H_ind₁ H_ind₂ =>
-      intro x τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      cases H_noninst₂
-      rename_i H_noninst₁' H_noninst₂'
-      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
-      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
-      aesop
-    case H_choice_fair τ₁ τ₂ b H_ind₁ H_ind₂ =>
-      intro x τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      cases H_noninst₂
-      rename_i H_noninst₁' H_noninst₂'
-      have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₁'
-      have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂'
-      aesop
-    case H_par τ₁ τ₂ H_ind₁ H_ind₂ =>
-      intro x τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      cases H_noninst₂
-      case par_left H_noninst₂ =>
-        have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
-        aesop
-      case par_right H_noninst₂ =>
-        have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
-        aesop
-    case H_seq τ₁ τ₂ H_ind₁ H_ind₂ =>
-      intro x τ' Γ H_noninst₁ H_noninst₂
-      unfold ProcTy.replaceVar
-      cases H_noninst₂
-      case seq_left H_noninst₂ =>
-        have H_ind₁ := H_ind₁ x τ' Γ H_noninst₁ H_noninst₂
-        aesop
-      case seq_right H_noninst₂ =>
-        have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
-        aesop
-    case H_xoffer => sorry -- low prority
-    case H_offer => sorry -- low priority
 
   lemma replace_preserves_guarded :
         ∀ (x : String) (τ τ' : ProcTy) (Γₘ Γₒ : Finset String),
