@@ -298,11 +298,12 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
         have H_τ₂' : ∃ τ₂', ProcTyCompElim τ₂ τ₂' ∧ CompositionTyJudgement p₂ τ₂' ∧ (
           ∀ mx, Semantics.NonInstantMessage ∅ ∅ p₂ mx → ProcTyNonInstantMsg ∅ ∅ τ₂' mx
         ) := by
-          apply ProcTyGuarded.guarded_preserves_non_instant_msg
-          . unfold CompositionTyJudgement
-            rewrite [H_ctx]
-            exact H_typing₂
-          . exact H_guarded₂
+          sorry -- FIXME: fix after lemma on non-instant message
+          -- apply ProcTyGuarded.guarded_preserves_non_instant_msg
+          -- . unfold CompositionTyJudgement
+          --   rewrite [H_ctx]
+          --   exact H_typing₂
+          -- . exact H_guarded₂
         have ⟨τ₂', H_τ₂'⟩ := H_τ₂'
         exists (ProcTy.par τ₁' τ₂')
         constructor
@@ -337,11 +338,12 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
         have H_τ₁' : ∃ τ₁', ProcTyCompElim τ₁ τ₁' ∧ CompositionTyJudgement p₁ τ₁' ∧ (
           ∀ mx, Semantics.NonInstantMessage ∅ ∅ p₁ mx → ProcTyNonInstantMsg ∅ ∅ τ₁' mx
         ) := by
-          apply ProcTyGuarded.guarded_preserves_non_instant_msg
-          . unfold CompositionTyJudgement
-            rewrite [H_ctx]
-            exact H_typing₁
-          . exact H_guarded₁
+          sorry -- FIXME: fix after lemma on non-instant message
+          -- apply ProcTyGuarded.guarded_preserves_non_instant_msg
+          -- . unfold CompositionTyJudgement
+          --   rewrite [H_ctx]
+          --   exact H_typing₁
+          -- . exact H_guarded₁
         have ⟨τ₁', H_τ₁'⟩ := H_τ₁'
         exists (ProcTy.par τ₁' τ₂')
         constructor

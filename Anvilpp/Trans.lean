@@ -43,7 +43,7 @@ namespace ProcTyIncompTransition
       induction H_sub
       case congr τ₁ τ₂ H_congr =>
         apply ProcTyCongr.congr_preserves_elim_to_skip (τ₁ := τ₁) <;> assumption
-      case choice_relax τ₁' τ₂' =>
+      case choice_relax τ₁' τ₂' H_noninst H_mx =>
         apply ProcTyCompElim.eps_elim (τs' := τ₁')
         . aesop
         . exact H_ind'

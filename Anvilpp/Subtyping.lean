@@ -249,7 +249,7 @@ namespace ProcTySub
       . right
         apply ProcTySub.congr
         exact H_congr'
-    case choice_relax τ₁'' τ₂'' =>
+    case choice_relax τ₁'' τ₂'' H_noninst H_mx  =>
       intro τ₁' H_trans
       exists τ₁''
       constructor
@@ -292,7 +292,7 @@ namespace ProcTySub
       . exact H_τ₁'.1
       . apply ProcTySub.congr
         exact H_τ₁'.2
-    case choice_relax τ₁'' τ₂'' =>
+    case choice_relax τ₁'' τ₂'' H_noninst H_mx =>
       have H := ProcTySub.choice_relax τ₁'' τ₂''
       cases H_trans <;> simp at H_not_ε
     case trans τ₁'' τ₂'' τ₃'' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
@@ -328,7 +328,7 @@ namespace ProcTySub
           exact H_trans₁
         . apply ProcTySub.congr
           exact H_congr'
-    case choice_relax τ₁'' τ₂'' =>
+    case choice_relax τ₁'' τ₂'' H_noninst H_mx =>
       have H := ProcTySub.choice_relax τ₁'' τ₂''
       cases H_trans <;>
       (
@@ -583,7 +583,7 @@ namespace ProcTySub
         . apply ProcTyGuarded.incomp_trans_preserves_guarded (τ₁ := τ₂'') (lbl := lbl) <;> assumption
         . apply ProcTySub.congr
           exact H_congr'
-    case choice_relax τ₁'' τ₂'' =>
+    case choice_relax τ₁'' τ₂'' H_noninst H_mx =>
       intro τ₁' lbl H_not_ε H_guarded H_trans
       have ⟨τ₁''', H_trans₁', H_elim₁'⟩ := H_trans
       exists τ₁'

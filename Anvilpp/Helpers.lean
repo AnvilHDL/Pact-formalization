@@ -130,7 +130,7 @@ lemma subtype_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
     case congr τ₁' τ₂' H_congr =>
       intro Γₙ Γₘ mx
       apply (congr_non_instant_msg_preservation τ₁' τ₂' H_congr Γₙ Γₘ mx).mp
-    case choice_relax τ₁' τ₂' =>
+    case choice_relax τ₁' τ₂' H_mx =>
       intro Γₙ Γₘ mx H_noninst_msg
       cases H_noninst_msg
       aesop
@@ -288,11 +288,13 @@ lemma subtyping_replace_procty_preserved :
     case a.par_comm τ₁'' τ₂'' =>
       unfold ProcTy.replaceVar
       apply ProcTyCongr.par_comm
-  case choice_relax τ₁' τ₂' =>
+  case choice_relax τ₁' τ₂' H_mx =>
     conv =>
       arg 2
       unfold ProcTy.replaceVar
     apply ProcTySub.choice_relax
+    . sorry -- FIXME: prove
+    . sorry
   case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
     apply ProcTySub.trans (τ₂ := τ₂'.replaceVar x τ')
     . exact H_ind₁
@@ -1294,15 +1296,79 @@ namespace ProcTyGuarded
       . exact H_elim
     . exact H_trans
 
+  -- FIXME: this seems wrong
   lemma guarded_preserves_non_instant_msg :
-    ∀ {p : Semantics.ProcComp} {τ : ProcTyComposition},
+    ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (mx : MessageId × MessageDir),
       CompositionTyJudgement p τ →
       ProcTyGuardedClosed τ →
-      ∃ τ', ProcTyCompElim τ τ' ∧
-        CompositionTyJudgement p τ' ∧
-        (
-          ∀ mx,
-          Semantics.NonInstantMessage ∅ ∅ p mx →
-          ProcTyNonInstantMsg ∅ ∅ τ' mx
-        ) := by sorry -- FIXME: prove
+      Semantics.NonInstantMessage ∅ ∅ p mx →
+      ProcTyNonInstantMsg ∅ ∅ τ mx := by sorry
+    -- intro p τ mx H_judgement H_guarded
+    -- revert H_guarded mx
+    -- unfold CompositionTyJudgement at H_judgement
+    -- generalize H_ctx : ProcTyContext.empty = Γ at H_judgement
+    -- induction H_judgement
+    -- case cycle | skip | dollar => aesop
+    -- case choice ctx' p₁ p₂ τ₁ τ₂ H_typing_e H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   rename_i H_guarded₁ H_guarded₂
+    --   cases H_noninst
+    --   apply ProcTyNonInstantMsg.choice
+    --   . apply H_ind₁ <;> assumption
+    --   . apply H_ind₂ <;> assumption
+    -- case choice_fair ctx' p₁ p₂ τ₁ τ₂ b H_typing_e H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   rename_i H_guarded₁ H_guarded₂
+    --   cases H_noninst
+    --   apply ProcTyNonInstantMsg.choice_fair
+    --   . apply H_ind₁ <;> assumption
+    --   . apply H_ind₂ <;> assumption
+    -- case par ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   rename_i H_guarded₁ H_guarded₂
+    --   cases H_noninst
+    --   apply ProcTyNonInstantMsg.par
+    --   . apply H_ind₁ <;> assumption
+    --   . apply H_ind₂ <;> assumption
+    -- case message_send ctx msg e H_typing_e =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   cases H_noninst
+    --   . apply ProcTyNonInstantMsg.send
+    --     grind
+    --   . apply ProcTyNonInstantMsg.send_opposite
+    -- case message_recv ctx msg x p' τ' H_typing H_ind =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   cases H_noninst
+    --   . apply ProcTyNonInstantMsg.seq_right
+    --     apply ProcTyNonInstantMsg.recv
+    --     . grind
+    --     . sorry
+    --   . apply ProcTyNonInstantMsg.seq_right
+    --     apply ProcTyNonInstantMsg.recv_opposite
+    --     sorry
+    --   . apply ProcTyNonInstantMsg.seq_right
+    --     . cases H_noninst
+    --       . apply ProcTyNonInstantMsg.recv
+    --         . grind
+    --         . sorry
+    --       . apply ProcTyNonInstantMsg.recv_opposite
+    --         sorry
+    --     . apply H_ind
+    --       . exact H_typing
+    --       . exact H_guarded
+    --       . exact H_noninst
+    -- case recur ctx x p' τ' H_typing H_ind =>
+    --   intro mx H_guarded H_noninst
+    --   cases H_guarded
+    --   case recur H_guarded =>
+    --     cases H_noninst
+    --     case recur_instant H_noninst H_noninstmsg =>
+    --       apply ProcTyNonInstantMsg.recur_instant
+    --       . apply non_instant_preservation
+
 end ProcTyGuarded

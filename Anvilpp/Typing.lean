@@ -2,6 +2,106 @@ import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
 
+@[aesop unsafe]
+inductive ProcTyNonInstant : Finset String → ProcTy → Prop where
+  | cycle (Γ : Finset String) :
+    ProcTyNonInstant Γ ProcTy.cycle
+  | choice (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₁ →
+    ProcTyNonInstant Γ τ₂ →
+    ProcTyNonInstant Γ (ProcTy.choice τ₁ τ₂)
+  | choice_fair (bid : BranchId) (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₁ →
+    ProcTyNonInstant Γ τ₂ →
+    ProcTyNonInstant Γ (ProcTy.choice_fair bid τ₁ τ₂)
+  | seq_left (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₁ →
+    ProcTyNonInstant Γ (ProcTy.seq τ₁ τ₂)
+  | seq_right (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₂ →
+    ProcTyNonInstant Γ (ProcTy.seq τ₁ τ₂)
+  | par_left (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₁ →
+    ProcTyNonInstant Γ (ProcTy.par τ₁ τ₂)
+  | par_right (Γ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γ τ₂ →
+    ProcTyNonInstant Γ (ProcTy.par τ₁ τ₂)
+  | xoffer (Γ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyNonInstant Γ τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant Γ ty) →
+    ProcTyNonInstant Γ (ProcTy.xoffer τ_else branch_tys)
+  | offer (Γ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyNonInstant Γ τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstant Γ ty) →
+    ProcTyNonInstant Γ (ProcTy.offer τ_else branch_tys)
+  | var (Γ : Finset String) (x : String) :
+    x ∈ Γ →
+    ProcTyNonInstant Γ (ProcTy.var x)
+  | recur (Γ : Finset String) (x : String) (τ : ProcTy) :
+    ProcTyNonInstant (Γ ∪ {x}) τ →
+    ProcTyNonInstant Γ (ProcTy.recur x τ)
+
+@[aesop unsafe]
+inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (MessageId × MessageDir) → Prop where
+  | cycle (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ ProcTy.cycle mx
+  | choice (Γₙ Γₘ : Finset String) (τ₁ τ₂ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.choice τ₁ τ₂) mx
+  | choice_fair (bid : BranchId) (Γₙ Γₘ : Finset String) (τ₁ τ₂ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.choice_fair bid τ₁ τ₂) mx
+  | seq_left (Γₙ Γₘ : Finset String) (τ₁ τ₂ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx →
+    ProcTyNonInstant Γₙ τ₁ →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.seq τ₁ τ₂) mx
+  | seq_right (Γₙ Γₘ : Finset String) (τ₁ τ₂ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.seq τ₁ τ₂) mx
+  | par (Γₙ Γₘ : Finset String) (τ₁ τ₂ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.par τ₁ τ₂) mx
+  | xoffer (Γₙ Γₘ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ_else mx →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg Γₙ Γₘ ty mx) →
+    (∀ m ty, (m, ty) ∈ branch_tys → m.toPair ≠ mx) →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.xoffer τ_else branch_tys) mx
+  | offer (Γₙ Γₘ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ τ_else mx →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyNonInstantMsg Γₙ Γₘ ty mx) →
+    (∀ m ty, (m, ty) ∈ branch_tys → m.toPair ≠ mx) →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.offer τ_else branch_tys) mx
+  | var (Γₙ Γₘ : Finset String) (x : String) (mx : MessageId × MessageDir) :
+    x ∈ Γₘ →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.var x) mx
+  | recur_instant (Γₙ Γₘ : Finset String) (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstant Γₙ (ProcTy.recur x τ) →
+    ProcTyNonInstantMsg (Γₙ ∪ {x}) (Γₘ ∪ {x}) τ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.recur x τ) mx
+  | recur_noninstant (Γₙ Γₘ : Finset String) (x : String) (τ : ProcTy) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg (Γₙ \ {x}) (Γₘ ∪ {x}) τ mx →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.recur x τ) mx
+  | skip (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ ProcTy.skip mx
+  | dollar (Γₙ Γₘ : Finset String) (pid : ProcId) (mx : MessageId × MessageDir) :
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.dollar pid) mx
+  | send (Γₙ Γₘ : Finset String) (msg msg' : MessageId) :
+    msg ≠ msg' →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.message $ MessageExch.send msg') (msg, MessageDir.send)
+  | send_opposite (Γₙ Γₘ : Finset String) (msg msg' : MessageId) :
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.message $ MessageExch.send msg') (msg, MessageDir.recv)
+  | recv (Γₙ Γₘ : Finset String) (msg msg' : MessageId) :
+    msg ≠ msg' →
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.recv)
+  | recv_opposite (Γₙ Γₘ : Finset String) (msg msg' : MessageId) :
+    ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.send)
+
+
+
 abbrev ExprTyContext := Finset String
 
 structure ProcTyContext where
@@ -60,6 +160,8 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
     ProcTyCongr τ₁ τ₂ →
     ProcTySub τ₁ τ₂
   | choice_relax (τ₁ τ₂ : ProcTy) :
+    (ProcTyNonInstant ∅ τ₂) →
+    (∀ mx, ProcTyNonInstantMsg ∅ ∅ τ₂ mx) →
     ProcTySub τ₁ (ProcTy.choice τ₁ τ₂) -- FIXME: this requires that τ₂ does not include potentially instant messages
   | trans (τ₁ τ₂ τ₃ : ProcTy) :
     ProcTySub τ₁ τ₂ →
