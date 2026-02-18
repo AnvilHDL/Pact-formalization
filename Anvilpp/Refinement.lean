@@ -90,8 +90,11 @@ lemma type_emulates_proc_ε : ∀ (p p' : Semantics.ProcComp)
       exists ProcTy.replaceVar τ_body pid (ProcTy.recur pid τ_body)
       constructor
       . apply recursion_unfolding_preserved
-        rewrite [H_ctx]
-        exact H_typing_body
+        . rewrite [H_ctx]
+          exact H_typing_body
+        . apply ProcTyJudgement.recur
+          rewrite [H_ctx]
+          exact H_typing_body
       . apply ProcTyCompElim.eps_elim (τs' := τ_body.replaceVar pid (ProcTy.recur pid τ_body))
         . apply ProcTyTransition.recur_unfold
         . apply ProcTyCompElim.refl

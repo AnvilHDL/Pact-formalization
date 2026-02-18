@@ -199,19 +199,119 @@ lemma non_instant_msg_preservation :
   case xoffer => sorry -- low priority
   case offer => sorry -- low priority
 
-lemma recursion_unfolding_preserved :
-      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (x : String),
-        ProcTyJudgement (ctx.extendProcVar x) p τ →
-        ProcTyJudgement ctx (Semantics.procReplace p x (Proc.recur x p)) (τ.replaceVar x $ ProcTy.recur x τ) := by
+lemma procty_double_extend_does_nothing : ∀ (ctx : ProcTyContext) (x : String),
+    ctx.extendProcVar x = (ctx.extendProcVar x).extendProcVar x := by
+  intro ctx x
+  unfold ProcTyContext.extendProcVar
+  grind
 
-  intro p τ ctx x H_typing
+@[aesop unsafe]
+lemma larger_context_preserves_expr_typing :
+      ∀ (e : Expr) (ctx ctx' : Finset String),
+      ctx ⊆ ctx' →
+      ExprTyJudgement ctx e →
+      ExprTyJudgement ctx' e := by
+  intro e ctx ctx' H_subset H_typing
+  revert ctx'
+  induction H_typing
+  case var x H_ctx =>
+    intro ctx' H_subset
+    apply ExprTyJudgement.var
+    grind
+  case val b =>
+    intro ctx' H_subset
+    apply ExprTyJudgement.val
+  case add e₁ e₂ bop H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    intro ctx' H_subset
+    apply ExprTyJudgement.add
+    . apply H_ind₁
+      exact H_subset
+    . apply H_ind₂
+      exact H_subset
+
+lemma larger_context_preserves_typing :
+      ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx ctx' : ProcTyContext),
+      ctx.procVars ⊆ ctx'.procVars →
+      ctx.exprVars ⊆ ctx'.exprVars →
+      ProcTyJudgement ctx p τ →
+      ProcTyJudgement ctx' p τ := by
+
+  intro p τ ctx ctx' H_proc_subset H_expr_subset H_typing
+  revert ctx'
+  induction H_typing
+  case cycle | dollar | skip | message_send | seq | par | choice | choice_fair | var => aesop
+  case recur ctx x body τ_body H_typing H_ind =>
+    intro ctx' H_proc_subset H_expr_subset
+    apply ProcTyJudgement.recur
+    apply H_ind
+    . unfold ProcTyContext.extendProcVar
+      grind
+    . unfold ProcTyContext.extendProcVar
+      grind
+  case message_recv ctx msg x p τ H_typing H_ind =>
+    intro ctx' H_proc_subset H_expr_subset
+    apply ProcTyJudgement.message_recv
+    apply H_ind
+    . unfold ProcTyContext.extendExprVar
+      grind
+    . unfold ProcTyContext.extendExprVar
+      grind
+  case subtype ctx p τ₁ τ₂ H_typing H_sub H_ind =>
+    intro ctx' H_proc_subset H_expr_subset
+    apply ProcTyJudgement.subtype (τ₁ := τ₁)
+    . apply H_ind
+      exact H_proc_subset
+      exact H_expr_subset
+    . exact H_sub
+  case xoffer => sorry
+  case offer => sorry -- low priority
+
+lemma subtyping_replace_procty_preserved :
+      ∀ (τ' τ₁ τ₂ : ProcTy) (x : String),
+        ProcTySub τ₁ τ₂ →
+        ProcTySub (τ₁.replaceVar x τ') (τ₂.replaceVar x τ') := by
+
+  intro τ' τ₁ τ₂ x H_sub
+  induction H_sub
+  case congr τ₁' τ₂' H_congr =>
+    apply ProcTySub.congr
+    induction H_congr
+    case a.refl =>
+      apply ProcTyCongr.refl
+    case a.symm τ₁'' τ₂'' H_congr' =>
+      apply ProcTyCongr.symm
+      exact H_congr'
+    case a.trans τ₁'' τ₂'' τ₃'' H_congr₁ H_congr₂ =>
+      apply ProcTyCongr.trans
+      . exact H_congr₁
+      . exact H_congr₂
+    case a.par_comm τ₁'' τ₂'' =>
+      unfold ProcTy.replaceVar
+      apply ProcTyCongr.par_comm
+  case choice_relax τ₁' τ₂' =>
+    conv =>
+      arg 2
+      unfold ProcTy.replaceVar
+    apply ProcTySub.choice_relax
+  case trans τ₁' τ₂' τ₃' H_sub₁ H_sub₂ H_ind₁ H_ind₂ =>
+    apply ProcTySub.trans (τ₂ := τ₂'.replaceVar x τ')
+    . exact H_ind₁
+    . exact H_ind₂
+
+lemma recursion_unfolding_preserved :
+      ∀ (p p' : Semantics.ProcComp) (τ τ' : ProcTyComposition) (ctx : ProcTyContext) (x : String),
+        ProcTyJudgement (ctx.extendProcVar x) p τ →
+        ProcTyJudgement ctx p' τ' →
+        ProcTyJudgement ctx (Semantics.procReplace p x p') (τ.replaceVar x τ') := by
+
+  intro p p' τ τ' ctx x H_typing H_typing'
   generalize H_ctx : ctx.extendProcVar x = ctx' at H_typing
-  revert x ctx
-  induction H_typing <;> (intro ctx' x H_ctx; unfold Semantics.procReplace ProcTy.replaceVar)
-  case cycle | dollar | skip | message_send =>
+  revert x ctx τ' p'
+  induction H_typing <;> (intro p' τ' ctx x H_typing' H_ctx; unfold Semantics.procReplace ProcTy.replaceVar)
+  case cycle | dollar | skip | message_send | seq | par | choice | choice_fair =>
     aesop
-  case var ctx'' ctx''' x' H_x =>
-    by_cases h : x = x'
+  case var ctx'' x' H_x =>
+    by_cases h : x' = x
     case pos =>
       rewrite [h]
       simp
@@ -225,13 +325,59 @@ lemma recursion_unfolding_preserved :
       cases H_x
       case inr H_x => grind
       case inl H_x => aesop
-  case seq ctx'' ctx''' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
-    apply ProcTyJudgement.seq
-    . have H_ind₁' := H_ind₁ ctx' x H_ctx
-      sorry
-    sorry
-  all_goals sorry -- FIXME: complete
-
+  case recur ctx'' x' p_body τ_body H_typing_body H_ind =>
+    by_cases h : x' = x
+    case pos =>
+      simp [h]
+      apply ProcTyJudgement.recur
+      rewrite [h] at H_typing_body
+      rewrite [← H_ctx] at H_typing_body
+      rewrite [← procty_double_extend_does_nothing] at H_typing_body
+      exact H_typing_body
+    case neg =>
+      have H : x ≠ x' := by grind
+      simp [H, h]
+      apply ProcTyJudgement.recur
+      apply H_ind
+      . apply larger_context_preserves_typing (ctx := ctx)
+        . unfold ProcTyContext.extendProcVar
+          grind
+        . unfold ProcTyContext.extendProcVar
+          grind
+        . exact H_typing'
+      . rewrite [← H_ctx]
+        unfold ProcTyContext.extendProcVar
+        grind
+  case message_recv ctx'' msg x' p'' τ'' H_typing H_ind =>
+    conv =>
+      arg 3
+      arg 1
+      unfold ProcTy.replaceVar
+    apply ProcTyJudgement.message_recv
+    apply H_ind
+    . apply larger_context_preserves_typing (ctx := ctx)
+      . unfold ProcTyContext.extendExprVar
+        grind
+      . unfold ProcTyContext.extendExprVar
+        grind
+      . exact H_typing'
+    . rewrite [← H_ctx]
+      unfold ProcTyContext.extendExprVar ProcTyContext.extendProcVar
+      grind
+  case subtype ctx'' p'' τ₁'' τ₂'' H_typing H_sub H_ind =>
+    have H_ind' := H_ind p' τ' ctx x H_typing' H_ctx
+    have H_sub' : ProcTySub (τ₁''.replaceVar x τ') (τ₂''.replaceVar x τ') := by
+      apply subtyping_replace_procty_preserved
+      exact H_sub
+    have H : ProcTyJudgement ctx (Semantics.procReplace p'' x p') (τ₂''.replaceVar x τ') := by
+      apply ProcTyJudgement.subtype
+      . exact H_ind'
+      . exact H_sub'
+    unfold Semantics.procReplace at H
+    unfold ProcTy.replaceVar at H
+    exact H
+  case xoffer => sorry
+  case offer => sorry -- low priority
 
 lemma val_replacement_preserves_expr_typing :
       ∀ (ctx : ExprTyContext) (e : Expr) (x : String) (v : Bool),

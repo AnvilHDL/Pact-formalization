@@ -415,8 +415,11 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
         . right
           aesop
         . apply recursion_unfolding_preserved
-          rewrite [H_ctx]
-          exact H_typing
+          . rewrite [H_ctx]
+            exact H_typing
+          . apply ProcTyJudgement.recur
+            rewrite [H_ctx]
+            exact H_typing
     case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
       clear p τ ctx
       have H₂ := ProcTySub.sub_preserves_behaviour_elim τ₁ τ₂ τ' H_sub H_transition
