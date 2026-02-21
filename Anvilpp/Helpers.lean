@@ -102,11 +102,184 @@ inductive AtTail : String → ProcTy → Prop where
     AtTail x body →
     AtTail x (ProcTy.recur x' body)
 
+lemma larger_context_preserves_noninst (τ : ProcTy) (Γ Γ' : Finset String) :
+    Γ ⊆ Γ' →
+    ProcTyNonInstant Γ τ →
+    ProcTyNonInstant Γ' τ := by
+  intro H_subset H_noninst
+  induction H_noninst generalizing Γ' with
+  | cycle Γ => exact ProcTyNonInstant.cycle Γ'
+  | choice Γ τ1 τ2 H1 H2 IH1 IH2 =>
+    exact ProcTyNonInstant.choice Γ' τ1 τ2 (IH1 Γ' H_subset) (IH2 Γ' H_subset)
+  | choice_fair bid Γ τ1 τ2 H1 H2 IH1 IH2 =>
+    exact ProcTyNonInstant.choice_fair bid Γ' τ1 τ2 (IH1 Γ' H_subset) (IH2 Γ' H_subset)
+  | seq_left Γ τ1 τ2 H IH =>
+    exact ProcTyNonInstant.seq_left Γ' τ1 τ2 (IH Γ' H_subset)
+  | seq_right Γ τ1 τ2 H IH =>
+    exact ProcTyNonInstant.seq_right Γ' τ1 τ2 (IH Γ' H_subset)
+  | par_left Γ τ1 τ2 H IH =>
+    exact ProcTyNonInstant.par_left Γ' τ1 τ2 (IH Γ' H_subset)
+  | par_right Γ τ1 τ2 H IH =>
+    exact ProcTyNonInstant.par_right Γ' τ1 τ2 (IH Γ' H_subset)
+  | xoffer Γ τ_else branch_tys H_else H_br IH_else IH_br =>
+    exact ProcTyNonInstant.xoffer Γ' τ_else branch_tys
+      (IH_else Γ' H_subset)
+      (fun m ty H_in => IH_br m ty H_in Γ' H_subset)
+  | offer Γ τ_else branch_tys H_else H_br IH_else IH_br =>
+    exact ProcTyNonInstant.offer Γ' τ_else branch_tys
+      (IH_else Γ' H_subset)
+      (fun m ty H_in => IH_br m ty H_in Γ' H_subset)
+  | var Γ x Hx =>
+    exact ProcTyNonInstant.var Γ' x (Finset.mem_of_subset H_subset Hx)
+  | recur Γ x body Hrec IH =>
+    have H_union : (Γ ∪ {x}) ⊆ (Γ' ∪ {x}) := by grind
+    exact ProcTyNonInstant.recur Γ' x body (IH (Γ' ∪ {x}) H_union)
+
+lemma congr_non_instant_preservation (τ₁ τ₂ : ProcTy) :
+    ProcTyCongr τ₁ τ₂ → ∀ Γ, (ProcTyNonInstant Γ τ₂ ↔ ProcTyNonInstant Γ τ₁) := by
+    intro H_congr
+    induction H_congr with
+    | refl τ => intro Γ; exact Iff.rfl
+    | symm τ₁' τ₂' H_congr H_ind =>
+      intro Γ
+      exact (H_ind Γ).symm
+    | trans τ₁' τ₂' τ₃' H_congr₁ H_congr₂ H_ind₁ H_ind₂ =>
+      intro Γ
+      exact Iff.trans (H_ind₂ Γ) (H_ind₁ Γ)
+    | par_comm τ₁' τ₂' =>
+      intro Γ
+      constructor <;> (
+        intro H_noninst
+        cases H_noninst with
+        | par_left Γ'' α β H => exact ProcTyNonInstant.par_right _ _ _ H
+        | par_right Γ'' α β H => exact ProcTyNonInstant.par_left _ _ _ H
+      )
+
+lemma subtype_non_instant_preservation (τ₁ τ₂ : ProcTy) :
+      ProcTySub τ₁ τ₂ → ∀ Γ, (ProcTyNonInstant Γ τ₂ → ProcTyNonInstant Γ τ₁) := by
+    intro H_sub
+    induction H_sub
+    case congr τ₁' τ₂' H_congr =>
+      intro Γ
+      apply (congr_non_instant_preservation τ₁' τ₂' H_congr Γ).mp
+    case choice_relax τ₁' τ₂' H_mx H_mx_msg =>
+      intro Γ H_noninst
+      cases H_noninst
+      aesop
+    case trans => aesop
+
+lemma subtype_non_instant_preservation_rev (τ₁ τ₂ : ProcTy) :
+      ProcTySub τ₁ τ₂ → ∀ Γ, (ProcTyNonInstant Γ τ₁ → ProcTyNonInstant Γ τ₂) := by
+    intro H_sub
+    induction H_sub
+    case congr τ₁' τ₂' H_congr =>
+      intro Γ
+      apply (congr_non_instant_preservation τ₁' τ₂' H_congr Γ).mpr
+    case choice_relax τ₁' τ₂' H_mx H_mx_msg =>
+      intro Γ H_noninst
+      apply ProcTyNonInstant.choice
+      · exact H_noninst
+      · exact larger_context_preserves_noninst τ₂' ∅ Γ (Finset.empty_subset Γ) H_mx
+    case trans => aesop
+
 lemma non_instant_preservation :
       ∀ (p : Semantics.ProcComp) (τ : ProcTyComposition) (ctx : ProcTyContext) (Γ : Finset String),
         ProcTyJudgement ctx p τ → (ProcTyNonInstant Γ τ ↔ Semantics.NonInstantReducible Γ p) := by
 
-    sorry -- trivial
+  intro p τ ctx Γ H_typing
+  revert Γ
+  induction H_typing <;> intro Γ
+  case cycle ctx' =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst
+      aesop
+    . intro H_noninst
+      apply ProcTyNonInstant.cycle
+  case dollar ctx' pid =>
+    apply Iff.intro <;> (
+      intro H_noninst
+      cases H_noninst
+    )
+  case skip ctx' =>
+    apply Iff.intro <;> (
+      intro H_noninst
+      cases H_noninst
+    )
+  case message_send =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst
+    . intro H_noninst
+      cases H_noninst
+  case var ctx' x H_x =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst
+      aesop
+    . intro H_noninst
+      cases H_noninst
+      aesop
+  case par ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst <;> aesop
+    . intro H_noninst
+      cases H_noninst <;> aesop
+  case seq ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst <;> aesop
+    . intro H_noninst
+      cases H_noninst <;> aesop
+  case choice ctx' e p₁ p₂ τ₁ τ₂ H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst <;> aesop
+    . intro H_noninst
+      cases H_noninst <;> aesop
+  case choice_fair ctx' e p₁ p₂ τ₁ τ₂ b H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst <;> aesop
+    . intro H_noninst
+      cases H_noninst <;> aesop
+  case recur ctx' x body τ_body H_typing H_ind =>
+    apply Iff.intro
+    . intro H_noninst
+      apply Semantics.NonInstantReducible.recur
+      apply (H_ind (Γ ∪ {x})).mp
+      cases H_noninst
+      assumption
+    . intro H_noninst
+      apply ProcTyNonInstant.recur
+      apply (H_ind (Γ ∪ {x})).mpr
+      cases H_noninst
+      assumption
+  case message_recv ctx' msg x p τ H_typing H_ind =>
+    apply Iff.intro
+    . intro H_noninst
+      cases H_noninst
+      case seq_left H_noninst =>
+        cases H_noninst
+      case seq_right H_noninst =>
+        apply Semantics.NonInstantReducible.recv
+        apply (H_ind Γ).mp
+        exact H_noninst
+    . intro H_noninst
+      cases H_noninst
+      case recv H_noninst =>
+      apply ProcTyNonInstant.seq_right
+      apply (H_ind Γ).mpr
+      exact H_noninst
+  case subtype ctx' p τ₁ τ₂ H_typing H_sub H_ind =>
+    apply Iff.intro
+    · intro H_noninst
+      exact (H_ind Γ).mp (subtype_non_instant_preservation τ₁ τ₂ H_sub Γ H_noninst)
+    · intro H_reducible
+      exact subtype_non_instant_preservation_rev τ₁ τ₂ H_sub Γ ((H_ind Γ).mpr H_reducible)
+  case xoffer => sorry
+  case offer => sorry -- low priority
 
 lemma congr_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
     ProcTyCongr τ₁ τ₂ → ∀ Γₙ Γₘ mx, (ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx ↔ ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx) := by
@@ -135,11 +308,6 @@ lemma subtype_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
       cases H_noninst_msg
       aesop
     case trans => aesop
-
-lemma larger_context_preserves_noninst (τ : ProcTy) (Γ Γ' : Finset String) :
-    Γ ⊆ Γ' →
-    ProcTyNonInstant Γ τ →
-    ProcTyNonInstant Γ' τ := by sorry -- trivial
 
 lemma larger_context_preserves_noninst_msg (τ : ProcTy) (Γₙ Γₘ Γₙ' Γₘ' : Finset String) (mx : MessageId × MessageDir) :
     Γₙ ⊆ Γₙ' →
@@ -804,6 +972,30 @@ namespace Semantics.CompElim
       rewrite [← H_skip] at H_reduces
       cases H_reduces
 
+  lemma comp_elim_trans {p q r : Proc} :
+    CompElim p q → CompElim q r → CompElim p r := by
+    intro Hpq Hqr
+    induction Hpq
+    case refl => exact Hqr
+    case eps_elim p p' p'' H_red H_elim H_ind =>
+      apply CompElim.eps_elim
+      . exact H_red
+      . apply H_ind
+        exact Hqr
+
+  lemma comp_elim_par_step_right : ∀ {p₁ p₂ p₂' : Semantics.ProcComp},
+      CompElim p₂ p₂' →
+      CompElim (Proc.par p₁ p₂) (Proc.par p₁ p₂') := by
+    intro p₁ p₂ p₂' H_elim
+    induction H_elim
+    case refl => apply CompElim.refl
+    case eps_elim p p' p'' H_red H_elim H_ind =>
+      apply CompElim.eps_elim (p' := Proc.par p₁ p')
+      . aesop
+      . exact H_ind
+
+  -- comp_elim_par will be placed after `comp_elim_par_step` to avoid forward-reference issues
+
   lemma comp_elim_preserves_recv : ∀ {msg : MessageId}
       {x : String} {p p' : Semantics.ProcComp},
         CompElim (Proc.recv msg x p) p' →
@@ -844,6 +1036,25 @@ namespace Semantics.CompElim
       . aesop
       . exact H_elim'
 
+  lemma comp_elim_par_step : ∀ {p₁ p₁' p₂ : Semantics.ProcComp},
+      CompElim p₁ p₁' →
+      CompElim (Proc.par p₁ p₂) (Proc.par p₁' p₂) := by
+    intro p₁ p₁' p₂ H_elim
+    induction H_elim
+    case refl =>
+      apply CompElim.refl
+    case eps_elim p p' p'' H_red H_elim H_elim' =>
+      apply CompElim.eps_elim (p' := Proc.par p' p₂)
+      . aesop
+      . exact H_elim'
+
+  lemma comp_elim_par {p₁ p₁' p₂ p₂' : Proc} :
+    CompElim p₁ p₁' → CompElim p₂ p₂' → CompElim (Proc.par p₁ p₂) (Proc.par p₁' p₂') := by
+    intro H1 H2
+    have Hleft := CompElim.comp_elim_par_step H1 (p₂ := p₂)
+    have Hright := CompElim.comp_elim_par_step_right (p₁ := p₁') H2
+    apply CompElim.comp_elim_trans Hleft Hright
+
 end Semantics.CompElim
 
 namespace Semantics.IncompReduces
@@ -883,7 +1094,8 @@ namespace Semantics.IncompReduces
       exists (Proc.par p₁'' p₂)
       constructor
       . aesop
-      . sorry -- trivial
+      . apply CompElim.comp_elim_par_step
+        exact H_incomp_reduces'.2
 
   lemma par_non_ex_right :
     ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {lbl : TransLabel},
@@ -897,7 +1109,8 @@ namespace Semantics.IncompReduces
       exists (Proc.par p₁ p₂'')
       constructor
       . aesop
-      . sorry -- trivial
+      . apply CompElim.comp_elim_par_step_right
+        exact H_incomp_reduces'.2
 
   lemma par_ex_left :
     ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
@@ -905,7 +1118,16 @@ namespace Semantics.IncompReduces
       (∀ mx ∈ ex_msg,
         Semantics.NonInstantMessage ∅ ∅ p₂ mx) →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁' p₂) := by
-      sorry -- trivial
+      intro p₁ p₁' p₂ ex_msg H_incomp H_noninst
+      unfold IncompReduces at H_incomp
+      have ⟨p₁'', H_pair⟩ := H_incomp
+      exists (Proc.par p₁'' p₂)
+      constructor
+      . apply Reduces.par_left_ex
+        exact H_noninst
+        exact H_pair.1
+      . apply CompElim.comp_elim_par_step
+        exact H_pair.2
 
   lemma par_ex_right :
     ∀ {p₁ p₂ p₂' : Semantics.ProcComp} {ex_msg : Finset (MessageId × MessageDir)},
@@ -913,14 +1135,34 @@ namespace Semantics.IncompReduces
       (∀ mx ∈ ex_msg,
         Semantics.NonInstantMessage ∅ ∅ p₁ mx) →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ex ex_msg) (Proc.par p₁ p₂') := by
-      sorry -- trivial
+      intro p₁ p₂ p₂' ex_msg H_incomp H_noninst
+      unfold IncompReduces at H_incomp
+      have ⟨p₂'', H_pair⟩ := H_incomp
+      exists (Proc.par p₁ p₂'')
+      constructor
+      . apply Reduces.par_right_ex
+        exact H_noninst
+        exact H_pair.1
+      . apply CompElim.comp_elim_par_step_right
+        exact H_pair.2
 
   lemma par_tock :
     ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp},
       Semantics.IncompReduces p₁ (TransLabel.ac Action.tock) p₁' →
       Semantics.IncompReduces p₂ (TransLabel.ac Action.tock) p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac Action.tock) (Proc.par p₁' p₂') := by
-      sorry -- trivial
+      intro p₁ p₁' p₂ p₂' H_incomp₁ H_incomp₂
+      unfold IncompReduces at H_incomp₁ H_incomp₂
+      have ⟨p₁'', H_pair₁⟩ := H_incomp₁
+      have ⟨p₂'', H_pair₂⟩ := H_incomp₂
+      exists (Proc.par p₁'' p₂'')
+      constructor
+      . apply Reduces.par_tock
+        exact H_pair₁.1
+        exact H_pair₂.1
+      . apply CompElim.comp_elim_par
+        . exact H_pair₁.2
+        . exact H_pair₂.2
 
   lemma par_message :
     ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp} {msg : MessageId} {d₁ d₂ : MessageDir} {v₁ v₂ : Bool},
@@ -929,13 +1171,22 @@ namespace Semantics.IncompReduces
       Semantics.IncompReduces p₁ (TransLabel.message msg d₁ v₁) p₁' →
       Semantics.IncompReduces p₂ (TransLabel.message msg d₂ v₂) p₂' →
       Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁' p₂') := by
-        sorry -- trivial
+        sorry -- FIXME: this is problematic. We need to care about the receiving end process
 
   lemma extend_l :
         ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},
           Semantics.CompElim p₁ p₁' →
           Semantics.IncompReduces p₁' lbl p₂ →
-          Semantics.IncompReduces p₁ lbl p₂ := by sorry -- trivial
+          Semantics.IncompReduces p₁ lbl p₂ := by
+    intro p₁ p₁' p₂ lbl H_elim H_incomp
+    unfold IncompReduces at H_incomp
+    have ⟨p₁'', H_pair⟩ := H_incomp
+    exists p₁''
+    constructor
+    . exact H_pair.1
+    . apply CompElim.comp_elim_trans
+      . exact H_elim
+      . exact H_pair.2
 end Semantics.IncompReduces
 
 namespace ProcTyCompElim

@@ -226,10 +226,6 @@ inductive ProcTyCompElimWithSub : ProcTy → ProcTy → ProcTy → Prop where
     ProcTyCompElimWithSub τ₁' τₑ τ₂ →
     ProcTyCompElimWithSub τ₁ τₑ τ₂
 
-lemma procty_comp_elim_with_sub_implies_comp_elim : ∀ (τ₁ τ₂ τ₃ : ProcTy),
-    ProcTyCompElimWithSub τ₁ τ₂ τ₃ →
-    ProcTyCompElim τ₁ τ₂ := by sorry -- trivial
-
 namespace ProcTySub
   lemma subtype_refinement_elim_single (τ₁ τ₁' τ₂ : ProcTy) :
     ProcTySub τ₁ τ₂ →
