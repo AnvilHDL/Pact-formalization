@@ -118,9 +118,30 @@ namespace AbstractTransLabel
     | TransLabel.message msg dir _ => AbstractTransLabel.message msg dir
 
   @[reducible]
+  def Related (α : AbstractTransLabel) (c : TransLabel) : Prop :=
+    match α, c with
+    | AbstractTransLabel.ac act, TransLabel.ac act' =>
+      match act, act' with
+      | Action.branchTrue bid, Action.branchFalse bid' => bid = bid'
+      | Action.branchFalse bid, Action.branchTrue bid' => bid = bid'
+      | _, _ => act = act'
+    | AbstractTransLabel.ε, TransLabel.ε => True
+    | AbstractTransLabel.ex ex_msgs, TransLabel.ex ex_msgs' => ex_msgs = ex_msgs'
+    | AbstractTransLabel.message msg dir, TransLabel.message msg' dir' _ =>
+      msg = msg' ∧ dir = dir'
+    | _, _ => False
+
+  @[reducible]
   def isEx : AbstractTransLabel → Bool
     | AbstractTransLabel.ex _ => true
     | _ => false
+
+  namespace Related
+    lemma is_ex_preserved (α : AbstractTransLabel) (c : TransLabel) :
+        AbstractTransLabel.Related α c → (α.isEx ↔ c.isEx) := by
+      intro H_related
+      cases α <;> cases c <;> simp [AbstractTransLabel.Related, AbstractTransLabel.isEx, TransLabel.isEx] at H_related ⊢
+  end Related
 end AbstractTransLabel
 
 
@@ -205,6 +226,7 @@ namespace Semantics
         if g = f then Proc.recur g p' else Proc.recur g (procReplace p' f p_body)
   end
 
+  @[aesop unsafe]
   inductive NonInstantReducible : Finset String → Proc → Prop where
     | cycle (Γ : Finset String) : NonInstantReducible Γ Proc.cycle
     | par_left (Γ : Finset String) (p₁ p₂ : Proc) :

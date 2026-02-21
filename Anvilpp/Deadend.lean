@@ -17,7 +17,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     lbl ≠ AbstractTransLabel.ε →
     ProcTyTransition τ lbl τ' →
     ∃ p' lbl',
-      lbl = AbstractTransLabel.fromConcrete lbl' ∧
+      AbstractTransLabel.Related lbl lbl' ∧
         Semantics.IncompReduces p lbl' p' := by
 
   intro p τ τ' lbl H_typing H_not_ε H_transition
@@ -29,7 +29,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     cases H_trans
     exists Proc.skip, TransLabel.ac Action.tock
     constructor
-    . simp
+    . simp [AbstractTransLabel.Related]
     . unfold Semantics.IncompReduces
       exists Proc.cycle
       constructor
@@ -45,15 +45,18 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . exact H_lbl'
       . apply Semantics.IncompReduces.par_non_ex_left
         . have H_lbl_nonex : lbl.isEx ↔ lbl'.isEx := by
-            rewrite [H_lbl']
-            apply label_abstraction_preserves_ex
+            apply AbstractTransLabel.Related.is_ex_preserved
+            exact H_lbl'
           rewrite [← H_lbl_nonex]
           exact H_not_ex
         . by_contra H_tock
-          rewrite [H_lbl'] at H_not_tock
-          rewrite [H_tock] at H_not_tock
-          unfold AbstractTransLabel.fromConcrete at H_not_tock
-          simp at H_not_tock
+          rewrite [H_tock] at H_lbl'
+          simp [AbstractTransLabel.Related] at H_lbl'
+          have H' : lbl = AbstractTransLabel.ac Action.tock := by
+            cases lbl <;> (simp at H_lbl'; try contradiction)
+            rewrite [H_lbl']
+            rfl
+          contradiction
         . exact H_reduces
     case par_right τ₂' H_not_tock H_not_ex H_trans₂ =>
       have H_p₂' := H_ind₂ H_ctx τ₂' lbl H_not_ε H_trans₂
@@ -63,15 +66,18 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . exact H_lbl'
       . apply Semantics.IncompReduces.par_non_ex_right
         . have H_lbl_nonex : lbl.isEx ↔ lbl'.isEx := by
-            rewrite [H_lbl']
-            apply label_abstraction_preserves_ex
+            apply AbstractTransLabel.Related.is_ex_preserved
+            exact H_lbl'
           rewrite [← H_lbl_nonex]
           exact H_not_ex
         . by_contra H_tock
-          rewrite [H_lbl'] at H_not_tock
-          rewrite [H_tock] at H_not_tock
-          unfold AbstractTransLabel.fromConcrete at H_not_tock
-          simp at H_not_tock
+          rewrite [H_tock] at H_lbl'
+          simp [AbstractTransLabel.Related] at H_lbl'
+          have H' : lbl = AbstractTransLabel.ac Action.tock := by
+            cases lbl <;> (simp at H_lbl'; try contradiction)
+            rewrite [H_lbl']
+            rfl
+          contradiction
         . exact H_reduces
     case par_left_ex ex_msg τ₁' H_trans H_m =>
       have H_p₁' := H_ind₁ H_ctx τ₁' (AbstractTransLabel.ex ex_msg) H_not_ε H_trans
@@ -84,9 +90,8 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
           apply non_instant_msg_preservation (p := p₂) (τ := τ₂) (ctx := ctx')
           . exact H_typing₂
           . exact H_m mx H_mx
-        unfold AbstractTransLabel.fromConcrete at H_lbl'
         have H_lbl_ex' : lbl' = TransLabel.ex ex_msg := by
-          cases lbl' <;> (simp at H_lbl'; try contradiction)
+          cases lbl' <;> (simp [AbstractTransLabel.Related] at H_lbl'; try contradiction)
           rename_i ex_msg'
           rewrite [H_lbl']
           rfl
@@ -106,9 +111,8 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
           apply non_instant_msg_preservation (p := p₁) (τ := τ₁) (ctx := ctx')
           . exact H_typing₁
           . exact H_m mx H_mx
-        unfold AbstractTransLabel.fromConcrete at H_lbl'
         have H_lbl_ex' : lbl' = TransLabel.ex ex_msg := by
-          cases lbl' <;> (simp at H_lbl'; try contradiction)
+          cases lbl' <;> (simp [AbstractTransLabel.Related] at H_lbl'; try contradiction)
           rename_i ex_msg'
           rewrite [H_lbl']
           rfl
@@ -131,13 +135,13 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       . simp
       . apply Semantics.IncompReduces.par_tock
         . have H_lbl₁_tock : lbl₁' = TransLabel.ac Action.tock := by
-            cases lbl₁' <;> (simp at H_lbl₁'; try contradiction)
+            cases lbl₁' <;> (simp [AbstractTransLabel.Related] at H_lbl₁'; try contradiction)
             rewrite [H_lbl₁']
             rfl
           rewrite [← H_lbl₁_tock]
           exact H_reduces₁
         . have H_lbl₂_tock : lbl₂' = TransLabel.ac Action.tock := by
-            cases lbl₂' <;> (simp at H_lbl₂'; try contradiction)
+            cases lbl₂' <;> (simp [AbstractTransLabel.Related] at H_lbl₂'; try contradiction)
             rewrite [H_lbl₂']
             rfl
           rewrite [← H_lbl₂_tock]
@@ -151,14 +155,14 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       constructor
       . simp
       . have H_lbl₁_msg : ∃ v₁, lbl₁' = TransLabel.message msg d₁ v₁ := by
-          cases lbl₁' <;> (simp at H_lbl₁'; try contradiction)
+          cases lbl₁' <;> (simp [AbstractTransLabel.Related] at H_lbl₁'; try contradiction)
           rename_i v₁
           exists v₁
           rewrite [H_lbl₁'.1]
           rewrite [H_lbl₁'.2]
           rfl
         have H_lbl₂_msg : ∃ v₂, lbl₂' = TransLabel.message msg d₂ v₂ := by
-          cases lbl₂' <;> (simp at H_lbl₂'; try contradiction)
+          cases lbl₂' <;> (simp [AbstractTransLabel.Related] at H_lbl₂'; try contradiction)
           rename_i v₂
           exists v₂
           rewrite [H_lbl₂'.1]
@@ -186,7 +190,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     have ⟨v, H_eval⟩ := H_e_eval
     exists Proc.skip, (TransLabel.message msg MessageDir.send v)
     constructor
-    . simp
+    . simp [AbstractTransLabel.Related]
     . exists Proc.send msg e
       constructor <;> aesop
   case message_recv ctx' msg x p' τ' H_typing H_ind =>
@@ -195,7 +199,7 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
     cases H_trans
     exists Proc.skip.seq (Semantics.procExprReplace p' x true), (TransLabel.message msg MessageDir.recv true)
     constructor
-    . simp
+    . simp [AbstractTransLabel.Related]
     . exists Proc.recv msg x p'
       constructor <;> aesop
   case seq ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
@@ -213,9 +217,42 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
   case choice ctx' e p₁ p₂ τ₁ τ₂ H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     cases H_trans <;> simp at H_not_ε
   case choice_fair ctx' e p₁ p₂ τ₁ τ₂ b H_e_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
+    have H_e_eval : ∃ v, e ↓ v := by
+      apply welltyped_expr_evaluates_to_something
+      rewrite [← H_ctx] at H_e_typing
+      unfold ProcTyContext.empty at H_e_typing
+      simp at H_e_typing
+      exact H_e_typing
+    obtain ⟨v, H_eval⟩ := H_e_eval
     cases H_trans
-    case choice_fair_left => sorry -- trivial
-    case choice_fair_right => sorry -- trivial
+    case choice_fair_left =>
+      cases v
+      case true =>
+        exact ⟨p₁, TransLabel.ac (Action.branchTrue b),
+               by simp [AbstractTransLabel.Related],
+               Proc.iffair b e p₁ p₂,
+               Semantics.Reduces.iffair_true b e p₁ p₂ true H_eval rfl,
+               Semantics.CompElim.refl _⟩
+      case false =>
+        exact ⟨p₂, TransLabel.ac (Action.branchFalse b),
+               by simp [AbstractTransLabel.Related],
+               Proc.iffair b e p₁ p₂,
+               Semantics.Reduces.iffair_false b e p₁ p₂ false H_eval rfl,
+               Semantics.CompElim.refl _⟩
+    case choice_fair_right =>
+      cases v
+      case false =>
+        exact ⟨p₂, TransLabel.ac (Action.branchFalse b),
+               by simp [AbstractTransLabel.Related],
+               Proc.iffair b e p₁ p₂,
+               Semantics.Reduces.iffair_false b e p₁ p₂ false H_eval rfl,
+               Semantics.CompElim.refl _⟩
+      case true =>
+        exact ⟨p₁, TransLabel.ac (Action.branchTrue b),
+               by simp [AbstractTransLabel.Related],
+               Proc.iffair b e p₁ p₂,
+               Semantics.Reduces.iffair_true b e p₁ p₂ true H_eval rfl,
+               Semantics.CompElim.refl _⟩
   case xoffer => sorry -- FIXME: low priority
   case offer => sorry -- FIXME: low priority
   case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
@@ -509,10 +546,10 @@ theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
   have ⟨p', τ', H_prop, H_elim, H_comp_elim, τ'', α, H_trans⟩ := H_contra_final
   have H_p'' := type_preserves_deadends_single p' τ' τ'' (AbstractTransLabel.ac α) H_prop (by simp) H_trans
   have ⟨p'', lbl', H_lbl', H_reduces⟩ := H_p''
-  cases lbl' <;> simp at H_lbl'; try contradiction
-  rewrite [← H_lbl'] at H_reduces
+  cases lbl' <;> simp [AbstractTransLabel.Related] at H_lbl'; try contradiction
+  rename Action => α'
   have H_contra' : ∃ p' α, Semantics.CompReduces p α p' := by
-    exists p'', α
+    exists p'', α'
     unfold Semantics.CompReduces
     apply Semantics.IncompReduces.extend_l (p₁' := p')
     . exact H_comp_elim
