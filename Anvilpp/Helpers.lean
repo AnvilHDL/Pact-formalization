@@ -27,6 +27,20 @@ namespace Trivia
   lemma list_insert_idx : ∀ {T : Type} (l : List T) (idx : ℕ) (v : T),
       idx ≤ l.length →
         v ∈ l.insertIdx idx v := by sorry -- obvious
+
+  lemma zip_flip {T U : Type} : ∀ (l1 : List T) (l2 : List U) (a : T) (b : U),
+      (a, b) ∈ l1.zip l2 → (b, a) ∈ l2.zip l1 := by
+    intro l1; induction l1 with
+    | nil => simp
+    | cons x xs ih =>
+      intro l2; cases l2 with
+      | nil => simp
+      | cons y ys =>
+        intro a b h
+        simp [List.mem_cons] at h ⊢
+        cases h with
+        | inl h => left; exact ⟨h.2, h.1⟩
+        | inr h => right; exact ih _ _ _ h
 end Trivia
 
 /-- A type variable is absent from a process type. -/
@@ -278,7 +292,7 @@ lemma non_instant_preservation :
       exact (H_ind Γ).mp (subtype_non_instant_preservation τ₁ τ₂ H_sub Γ H_noninst)
     · intro H_reducible
       exact subtype_non_instant_preservation_rev τ₁ τ₂ H_sub Γ ((H_ind Γ).mpr H_reducible)
-  case xoffer => sorry
+  case xoffer => sorry -- low priority
   case offer => sorry -- low priority
 
 lemma congr_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
@@ -351,8 +365,20 @@ lemma larger_context_preserves_noninst_msg (τ : ProcTy) (Γₙ Γₘ Γₙ' Γ�
       intro Γₙ'' Γₘ'' Hₙ_subset Hₘ_subset
       apply ProcTyNonInstantMsg.recur_noninstant
       apply H_ind <;> grind
-    case xoffer => sorry -- low priority
-    case offer => sorry -- low priority
+    case xoffer =>
+      rename_i Γₙ'' Γₘ'' τ_else branch_tys mx' H_else H_branch H_neq H_ind_else H_ind_branch
+      intro Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      apply ProcTyNonInstantMsg.xoffer
+      · exact H_ind_else Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      · intro m ty H_mem; exact H_ind_branch m ty H_mem Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      · exact H_neq
+    case offer =>
+      rename_i Γₙ'' Γₘ'' τ_else branch_tys mx' H_else H_branch H_neq H_ind_else H_ind_branch
+      intro Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      apply ProcTyNonInstantMsg.offer
+      · exact H_ind_else Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      · intro m ty H_mem; exact H_ind_branch m ty H_mem Γₙ' Γₘ' Hₙ_subset Hₘ_subset
+      · exact H_neq
 
 lemma subtype_non_instant_msg_preservation_rev (τ₁ τ₂ : ProcTy) :
       ProcTySub τ₁ τ₂ → ∀ Γₙ Γₘ mx, (ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx → ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx) := by
@@ -500,8 +526,42 @@ lemma larger_context_preserves_typing :
       exact H_proc_subset
       exact H_expr_subset
     . exact H_sub
-  case xoffer => sorry
-  case offer => sorry -- low priority
+  case xoffer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    intro ctx' H_proc_subset H_expr_subset
+    apply ProcTyJudgement.xoffer
+    · exact H_len
+    · intro m e p br_ty H_mem
+      exact larger_context_preserves_expr_typing e ctx''.exprVars ctx'.exprVars
+        H_expr_subset (H_send_expr m e p br_ty H_mem)
+    · exact H_send_ty
+    · intro m e p br_ty H_mem
+      exact H_ind_send m e p br_ty H_mem ctx' H_proc_subset H_expr_subset
+    · exact H_recv_ty
+    · intro m x p br_ty H_mem
+      apply H_ind_recv m x p br_ty H_mem
+      · unfold ProcTyContext.extendExprVar; grind
+      · unfold ProcTyContext.extendExprVar; grind
+    · exact H_ind_else ctx' H_proc_subset H_expr_subset
+  case offer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    intro ctx' H_proc_subset H_expr_subset
+    apply ProcTyJudgement.offer
+    · exact H_len
+    · intro m e p br_ty H_mem
+      exact larger_context_preserves_expr_typing e ctx''.exprVars ctx'.exprVars
+        H_expr_subset (H_send_expr m e p br_ty H_mem)
+    · exact H_send_ty
+    · intro m e p br_ty H_mem
+      exact H_ind_send m e p br_ty H_mem ctx' H_proc_subset H_expr_subset
+    · exact H_recv_ty
+    · intro m x p br_ty H_mem
+      apply H_ind_recv m x p br_ty H_mem
+      · unfold ProcTyContext.extendExprVar; grind
+      · unfold ProcTyContext.extendExprVar; grind
+    · exact H_ind_else ctx' H_proc_subset H_expr_subset
 
 lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset String) :
     (x ∈ Γ → ProcTyNonInstant ∅ τ') →
@@ -1476,11 +1536,48 @@ lemma welltyped_expr_evaluates_to_something : ∀ (e : Expr),
 namespace ProcTyGuarded
   lemma larger_context_preserves_guarded
         (τ : ProcTy) (Γₙ Γₙ' Γₘ Γₒ Γₘ' Γₒ' : Finset String) :
-        Γₘ \ Γₙ ⊆ Γₘ' \ Γₙ' →
+        Γₙ ⊆ Γₙ' →
         Γₘ ⊆ Γₘ' →
         Γₒ ⊆ Γₒ' →
         ProcTyGuarded Γₙ Γₘ Γₒ τ →
-        ProcTyGuarded Γₙ' Γₘ' Γₒ' τ := by sorry -- trivial
+        ProcTyGuarded Γₙ' Γₘ' Γₒ' τ := by
+    intro H_n H_m H_o H_guarded
+    induction H_guarded generalizing Γₙ' Γₘ' Γₒ'
+    case message_recv | message_send | cycle | skip | dollar => aesop
+    case var => aesop
+    case seq_instant ih1 ih2 => aesop
+    case par ih1 ih2 => aesop
+    case choice ih1 ih2 => aesop
+    case choice_fair ih1 ih2 => aesop
+    case xoffer Γₙ'' Γₘ'' Γₒ'' τ_else branch_tys H_else H_branches H_ind_else H_ind_branches =>
+      apply ProcTyGuarded.xoffer
+      · exact H_ind_else Γₙ' Γₘ' Γₒ' H_n H_m H_o
+      · intro m ty H_mem; exact H_ind_branches m ty H_mem Γₙ' Γₘ' Γₒ' H_n H_m H_o
+    case offer Γₙ'' Γₘ'' Γₒ'' τ_else branch_tys H_else H_branches H_ind_else H_ind_branches =>
+      apply ProcTyGuarded.offer
+      · exact H_ind_else Γₙ' Γₘ' Γₒ' H_n H_m H_o
+      · intro m ty H_mem; exact H_ind_branches m ty H_mem Γₙ' Γₘ' Γₒ' H_n H_m H_o
+    case seq_noninstant Γₙ'' Γₘ'' Γₒ'' τ₁ τ₂ H_noninst H_g1 H_g2 H_ind1 H_ind2 =>
+      apply ProcTyGuarded.seq_noninstant
+      · exact larger_context_preserves_noninst _ _ _ H_n H_noninst
+      · exact H_ind1 Γₙ' Γₘ' Γₒ' H_n H_m H_o
+      · exact H_ind2 Γₙ' Γₘ' Γₘ' H_n H_m H_m
+    case recur Γₙ'' Γₘ'' Γₒ'' x body H_g H_ind =>
+      apply ProcTyGuarded.recur
+      exact H_ind Γₙ' (Γₘ' ∪ {x}) (Γₒ' \ {x}) H_n (by grind) (by grind)
+    case recur_noninst Γₙ'' Γₘ'' Γₒ'' x body H_noninst H_g H_ind =>
+      apply ProcTyGuarded.recur_noninst
+      · exact larger_context_preserves_noninst _ _ _ H_n H_noninst
+      · exact H_ind (Γₙ' ∪ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x}) (by grind) (by grind) (by grind)
+
+  -- When Γₙ decreases from a singleton {x} back to ∅ (x was the recur-bound variable),
+  -- guardedness is preserved.  A dedicated sorry here isolates the remaining proof obligation.
+  lemma noninst_recur_guarded_body_transport
+        (x : String) (τ : ProcTy) (Γₘ Γₒ Γₘ' Γₒ' : Finset String) :
+        ProcTyNonInstant ∅ (ProcTy.recur x τ) →
+        ProcTyGuarded (∅ ∪ {x}) Γₘ Γₒ τ →
+        Γₘ ⊆ Γₘ' → Γₒ ⊆ Γₒ' →
+        ProcTyGuarded ∅ Γₘ' Γₒ' τ := by sorry
 
   lemma recur_extend_context_preserves_guarded
     (x : String) (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String) :
@@ -1537,7 +1634,7 @@ namespace ProcTyGuarded
           have H_ind' := H_ind x τ' (Γₘ ∪ {x'}) (Γₒ \ {x'}) (by grind) (
             by
               rewrite [H_m, H_o]
-              apply larger_context_preserves_guarded (Γₙ := ∅ ∪ {x'}) (Γₘ := (Γₘ ∪ {x} ∪ {x'})) (Γₒ := ((Γₒ ∪ {x}) \ {x'})) <;> grind
+              exact noninst_recur_guarded_body_transport x' body _ _ _ _ H_non_inst H_guarded₁ (by grind) (by grind)
           ) H_guarded₂
           aesop
     case H_var x =>
@@ -1676,8 +1773,10 @@ namespace ProcTyGuarded
       apply replace_preserves_guarded
       . grind
       . cases H_guarded
-        . apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
-        . apply larger_context_preserves_guarded (Γₙ := ∅ ∪ {x}) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
+        · rename_i H_g
+          apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
+        · rename_i H_non_inst H_g
+          exact noninst_recur_guarded_body_transport x τ _ _ _ _ H_non_inst H_g (by grind) (by grind)
       . aesop
     case xoffer_else => sorry -- low priority
     case offer_else => sorry
@@ -1807,7 +1906,73 @@ namespace ProcTyGuarded
       . exact H_subtype
       . apply H_ind
         assumption
-    case offer => sorry
-    case xoffer => sorry -- low priority
+    case offer ctx'' p_else branches τ_else branch_tys
+        H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+        H_ind_send H_ind_recv H_ind_else =>
+      intro mx Γₙ Γₘ H_noninst
+      cases H_noninst
+      rename_i H_else H_branch H_neq
+      apply ProcTyNonInstantMsg.offer
+      · exact H_ind_else mx Γₙ Γₘ H_else
+      · intro m_exch ty H_mem
+        obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+            (H_len.symm ▸ le_refl _) H_mem
+        have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+        have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+        cases br with
+        | send m e p =>
+          exact H_ind_send m e p (m_exch, ty) H_zip mx Γₙ Γₘ
+            (H_neq (ChoiceBranch.send m e p) H_br_mem)
+        | recv m x p =>
+          exact H_ind_recv m x p (m_exch, ty) H_zip mx Γₙ Γₘ
+            (H_neq (ChoiceBranch.recv m x p) H_br_mem)
+      · intro m_exch ty H_mem
+        obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+            (H_len.symm ▸ le_refl _) H_mem
+        have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+        have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+        cases br with
+        | send m e p =>
+          have H_ty1 : m_exch = MessageExch.send m := H_send_ty m e p (m_exch, ty) H_zip
+          rw [H_ty1]
+          exact H_branch (ChoiceBranch.send m e p) H_br_mem
+        | recv m x p =>
+          have H_ty1 : m_exch = MessageExch.recv m := H_recv_ty m x p (m_exch, ty) H_zip
+          rw [H_ty1]
+          exact H_branch (ChoiceBranch.recv m x p) H_br_mem
+    case xoffer ctx'' p_else branches τ_else branch_tys
+        H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+        H_ind_send H_ind_recv H_ind_else =>
+      intro mx Γₙ Γₘ H_noninst
+      cases H_noninst
+      rename_i H_else H_branch H_neq
+      apply ProcTyNonInstantMsg.xoffer
+      · exact H_ind_else mx Γₙ Γₘ H_else
+      · intro m_exch ty H_mem
+        obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+            (H_len.symm ▸ le_refl _) H_mem
+        have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+        have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+        cases br with
+        | send m e p =>
+          exact H_ind_send m e p (m_exch, ty) H_zip mx Γₙ Γₘ
+            (H_neq (ChoiceBranch.send m e p) H_br_mem)
+        | recv m x p =>
+          exact H_ind_recv m x p (m_exch, ty) H_zip mx Γₙ Γₘ
+            (H_neq (ChoiceBranch.recv m x p) H_br_mem)
+      · intro m_exch ty H_mem
+        obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+            (H_len.symm ▸ le_refl _) H_mem
+        have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+        have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+        cases br with
+        | send m e p =>
+          have H_ty1 : m_exch = MessageExch.send m := H_send_ty m e p (m_exch, ty) H_zip
+          rw [H_ty1]
+          exact H_branch (ChoiceBranch.send m e p) H_br_mem
+        | recv m x p =>
+          have H_ty1 : m_exch = MessageExch.recv m := H_recv_ty m x p (m_exch, ty) H_zip
+          rw [H_ty1]
+          exact H_branch (ChoiceBranch.recv m x p) H_br_mem
 
 end ProcTyGuarded
