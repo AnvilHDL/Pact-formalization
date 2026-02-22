@@ -396,7 +396,7 @@ namespace Semantics
     | xoffer_branch_recv (var : String) (p_else : Proc) (branches : List ChoiceBranch)
                          (msg : MessageId) (p' : Proc) (b : Bool) :
       ChoiceBranch.recv msg var p' ∈ branches →
-      Reduces (Proc.xoffer p_else branches) (TransLabel.ac $ Action.fullMessage msg) (procExprReplace p' var b)
+      Reduces (Proc.xoffer p_else branches) (TransLabel.message msg MessageDir.recv b) (procExprReplace p' var b)
     | xoffer_branch_send (msg : MessageId) (e : Expr) (p_else p' : Proc)
                          (branches : List ChoiceBranch) (b : Bool) :
       ChoiceBranch.send msg e p' ∈ branches →

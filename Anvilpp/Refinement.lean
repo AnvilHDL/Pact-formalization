@@ -3,6 +3,7 @@ import Mathlib.Data.Finset.Insert
 import Mathlib.Data.Finset.Image
 import Mathlib.Data.Finset.Prod
 import Mathlib.Data.List.Zip
+import Mathlib.Data.List.Forall2
 import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
@@ -189,6 +190,129 @@ lemma type_emulates_proc_multi_ε : ∀ (p p' : Semantics.ProcComp) (τ : ProcTy
     . apply ProcTyCompElim.elim_transitivity (τ₂ := τ')
       . exact H_τ'.2
       . exact H_τ''.2
+
+private lemma insertIdx_eq_take_drop {T : Type} : ∀ (l : List T) (i : Nat) (a : T),
+    i ≤ l.length → l.insertIdx i a = l.take i ++ a :: l.drop i := by
+  intro l
+  induction l with
+  | nil =>
+    intro i a h; cases i with
+    | zero => rfl
+    | succ n => grind
+  | cons x xs ih =>
+    intro i a h; cases i with
+    | zero => simp [List.insertIdx]
+    | succ n =>
+      simp only [List.insertIdx, List.modifyTailIdx_succ_cons, List.take_succ_cons,
+                 List.drop_succ_cons, List.cons_append]
+      exact congrArg (x :: ·) (ih n a (by simp at h; omega))
+
+private lemma list_append_cons_insertIdx_eq {T : Type} : ∀ (l₁ : List T) (e : T) (l₂ : List T),
+    l₁ ++ e :: l₂ = (l₁ ++ l₂).insertIdx l₁.length e := by
+  intro l₁; induction l₁ with
+  | nil => intros; rfl
+  | cons x xs ih =>
+    intro e l₂
+    show x :: (xs ++ e :: l₂) = x :: (xs ++ l₂).insertIdx xs.length e
+    exact congrArg (x :: ·) (ih e l₂)
+
+private lemma zip_append_of_length {T U : Type} : ∀ (l₁ l₂ : List T) (m₁ m₂ : List U),
+    l₁.length = m₁.length → (l₁ ++ l₂).zip (m₁ ++ m₂) = l₁.zip m₁ ++ l₂.zip m₂ := by
+  intro l₁; induction l₁ with
+  | nil => intro l₂ m₁ m₂ H; cases m₁ with | nil => rfl | cons h t => simp at H
+  | cons x xs ih =>
+    intro l₂ m₁ m₂ H; cases m₁ with
+    | nil => simp at H
+    | cons y ys =>
+      simp only [List.cons_append, List.zip_cons_cons]
+      exact congrArg _ (ih l₂ ys m₂ (by simp at H; exact H))
+
+private lemma toXOffer_typing'
+    {ctx : ProcTyContext} {branches : List ChoiceBranch} {branch_tys : List (MessageExch × ProcTy)}
+    (H_send_expr : ∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys → ExprTyJudgement ctx.exprVars e)
+    (H_send_ty : ∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys → br_ty.1 = MessageExch.send m)
+    (H_send_typing : ∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys → ProcTyJudgement ctx p br_ty.2)
+    (H_recv_ty : ∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys → br_ty.1 = MessageExch.recv m)
+    (H_recv_typing : ∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys → ProcTyJudgement (ctx.extendExprVar x) p br_ty.2)
+    (br : ChoiceBranch) (me : MessageExch) (ty : ProcTy)
+    (H_mem : (br, (me, ty)) ∈ branches.zip branch_tys) :
+    ProcTyJudgement ctx br.toXOffer (branch_to_xoffer_ty (me, ty)) := by
+  simp only [ChoiceBranch.toXOffer, branch_to_xoffer_ty]
+  cases br with
+  | send m₀ e₀ p₀ =>
+    have H_me : me = MessageExch.send m₀ := by have := H_send_ty m₀ e₀ p₀ (me, ty) H_mem; simp at this; exact this
+    have H_e₀ := H_send_expr m₀ e₀ p₀ (me, ty) H_mem
+    have H_p₀ : ProcTyJudgement ctx p₀ ty := by have := H_send_typing m₀ e₀ p₀ (me, ty) H_mem; simp at this; exact this
+    subst H_me
+    apply ProcTyJudgement.xoffer <;> [rfl; skip; skip; skip; skip; skip; exact ProcTyJudgement.skip _]
+    · intro m e p br_ty H; simp only [List.zip_cons_cons, List.zip_nil_right, List.mem_singleton] at H; obtain ⟨rfl, -, -, rfl⟩ := H; exact H_e₀
+    · intro m e p br_ty H; simp only [List.zip_cons_cons, List.zip_nil_right, List.mem_singleton] at H; obtain ⟨rfl, -, -, rfl⟩ := H; rfl
+    · intro m e p br_ty H; simp only [List.zip_cons_cons, List.zip_nil_right, List.mem_singleton] at H; obtain ⟨rfl, -, -, rfl⟩ := H; simpa using H_p₀
+    · intro m v p br_ty H; simp at H
+    · intro m v p br_ty H; simp at H
+  | recv m₀ v₀ p₀ =>
+    have H_me : me = MessageExch.recv m₀ := by have := H_recv_ty m₀ v₀ p₀ (me, ty) H_mem; simp at this; exact this
+    have H_p₀ : ProcTyJudgement (ctx.extendExprVar v₀) p₀ ty := by have := H_recv_typing m₀ v₀ p₀ (me, ty) H_mem; simp at this; exact this
+    subst H_me
+    apply ProcTyJudgement.xoffer <;> [rfl; skip; skip; skip; skip; skip; exact ProcTyJudgement.skip _]
+    · intro m e p br_ty H; simp at H
+    · intro m e p br_ty H; simp at H
+    · intro m e p br_ty H; simp at H
+    · intro m v p br_ty H; simp only [List.zip_cons_cons, List.zip_nil_right, List.mem_singleton] at H; obtain ⟨rfl, -, -, rfl⟩ := H; rfl
+    · intro m v p br_ty H; simp only [List.zip_cons_cons, List.zip_nil_right, List.mem_singleton] at H; obtain ⟨rfl, -, -, rfl⟩ := H; simpa using H_p₀
+
+private lemma branch_to_xoffer_ty_guarded (me : MessageExch) (ty : ProcTy)
+    (H_guarded : ProcTyGuardedClosed ty) : ProcTyGuardedClosed (branch_to_xoffer_ty (me, ty)) := by
+  simp only [branch_to_xoffer_ty]
+  apply ProcTyGuarded.xoffer <;> [exact ProcTyGuarded.skip _ _ _; skip]
+  intro m τ H_mem; simp only [List.mem_singleton] at H_mem; obtain ⟨-, rfl⟩ := H_mem; exact H_guarded
+
+private lemma foldl_par_typing' {ctx : ProcTyContext} : ∀ (ps : List Proc) (τs : List ProcTy),
+    List.Forall₂ (ProcTyJudgement ctx) ps τs → ∀ p₀ τ₀, ProcTyJudgement ctx p₀ τ₀ →
+    ProcTyJudgement ctx (List.foldl (fun acc p => Proc.par acc p) p₀ ps)
+      (List.foldl (fun acc τ => ProcTy.par acc τ) τ₀ τs) := by
+  intro ps τs H_all; induction H_all with
+  | nil => exact fun _ _ h => h
+  | @cons p τ rest_p rest_τ H_head H_tail ih =>
+    intro p₀ τ₀ H₀; simp only [List.foldl_cons]
+    exact ih _ _ (ProcTyJudgement.par _ _ _ _ _ H₀ H_head)
+
+private lemma foldl_par_guarded' : ∀ (τs : List ProcTy), (∀ τ ∈ τs, ProcTyGuardedClosed τ) →
+    ∀ τ₀, ProcTyGuardedClosed τ₀ →
+    ProcTyGuardedClosed (List.foldl (fun acc τ => ProcTy.par acc τ) τ₀ τs) := by
+  intro τs; induction τs with
+  | nil => exact fun _ _ h => h
+  | cons τ₁ rest ih =>
+    intro H_all τ₀ H₀; simp only [List.foldl_cons]
+    apply ih (fun τ hm => H_all τ (List.mem_cons_of_mem _ hm))
+    apply ProcTyGuarded.par
+    . exact H₀
+    . apply H_all
+      grind
+
+private lemma ex_cond_of_branches
+    {branches : List ChoiceBranch} {branch_tys : List (MessageExch × ProcTy)}
+    {ex_msg : Finset (MessageId × MessageDir)}
+    (H_send_ty : ∀ m e p br_ty, (ChoiceBranch.send m e p, br_ty) ∈ branches.zip branch_tys → br_ty.1 = MessageExch.send m)
+    (H_recv_ty : ∀ m x p br_ty, (ChoiceBranch.recv m x p, br_ty) ∈ branches.zip branch_tys → br_ty.1 = MessageExch.recv m)
+    (H_len : branches.length = branch_tys.length)
+    (H_ex_cond : ∀ mx ∈ branches.map ChoiceBranch.getMessage, (mx.1, mx.2.invert) ∈ ex_msg) :
+    ∀ m ty, (m, ty) ∈ branch_tys → (m.messageId, m.direction.invert) ∈ ex_msg := by
+  intro m ty H_mem
+  obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m, ty) H_len.symm.le H_mem
+  have H_zip : (br, (m, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+  have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+  cases br with
+  | send msg' e' p' =>
+    have H_m : m = MessageExch.send msg' := by have := H_send_ty msg' e' p' (m, ty) H_zip; simp at this; exact this
+    subst H_m
+    have := @H_ex_cond (msg', MessageDir.send) (by simp only [List.mem_map]; exact ⟨_, H_br_mem, rfl⟩)
+    simpa [MessageExch.messageId, MessageExch.direction, MessageDir.invert] using this
+  | recv msg' var' p' =>
+    have H_m : m = MessageExch.recv msg' := by have := H_recv_ty msg' var' p' (m, ty) H_zip; simp at this; exact this
+    subst H_m
+    have := @H_ex_cond (msg', MessageDir.recv) (by simp only [List.mem_map]; exact ⟨_, H_br_mem, rfl⟩)
+    simpa [MessageExch.messageId, MessageExch.direction, MessageDir.invert] using this
 
 set_option maxHeartbeats 20000000
 
@@ -496,8 +620,8 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
     case recur ctx' x p'' τ' H_typing H_ind=>
       cases H_reduces
       simp at H_not_ε
-    case offer => sorry -- FIXME: low prioirity
-    case xoffer => sorry -- FIXME: low priority
+    case offer => sorry
+    case xoffer => sorry -- TODO: to prove
 
 lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : TransLabel),
     CompositionTyJudgement p τ →

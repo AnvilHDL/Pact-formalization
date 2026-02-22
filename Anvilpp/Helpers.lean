@@ -737,8 +737,40 @@ lemma replace_preserves_noninst_msg (x : String) (τ τ' : ProcTy) (Γₙ Γₘ 
           exact H_noninst'
         . simp [h]
           exact H_noninstmsg'
-    case xoffer => sorry -- low priority
-    case offer => sorry -- low priority
+    case xoffer Γₙ' Γₘ' τ_else branch_tys mx' H_else H_branch H_neq H_ind_else H_ind_branch =>
+      intro x' τ'' H_noninst' H_noninstmsg'
+      simp only [ProcTy.replaceVar]
+      apply ProcTyNonInstantMsg.xoffer
+      · exact H_ind_else x' τ'' H_noninst' H_noninstmsg'
+      · intro m ty H_mem
+        simp only [List.mem_map] at H_mem
+        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
+        simp only [Prod.mk.injEq] at H_eq
+        obtain ⟨rfl, rfl⟩ := H_eq
+        exact H_ind_branch me₀ ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
+      · intro m ty H_mem
+        simp only [List.mem_map] at H_mem
+        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
+        simp only [Prod.mk.injEq] at H_eq
+        obtain ⟨rfl, _⟩ := H_eq
+        exact H_neq me₀ ty₀ H_mem₀
+    case offer Γₙ' Γₘ' τ_else branch_tys mx' H_else H_branch H_neq H_ind_else H_ind_branch =>
+      intro x' τ'' H_noninst' H_noninstmsg'
+      simp only [ProcTy.replaceVar]
+      apply ProcTyNonInstantMsg.offer
+      · exact H_ind_else x' τ'' H_noninst' H_noninstmsg'
+      · intro m ty H_mem
+        simp only [List.mem_map] at H_mem
+        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
+        simp only [Prod.mk.injEq] at H_eq
+        obtain ⟨rfl, rfl⟩ := H_eq
+        exact H_ind_branch me₀ ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
+      · intro m ty H_mem
+        simp only [List.mem_map] at H_mem
+        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
+        simp only [Prod.mk.injEq] at H_eq
+        obtain ⟨rfl, _⟩ := H_eq
+        exact H_neq me₀ ty₀ H_mem₀
 
 
 lemma subtyping_replace_procty_preserved :
@@ -780,6 +812,22 @@ lemma subtyping_replace_procty_preserved :
     apply ProcTySub.trans (τ₂ := τ₂'.replaceVar x τ')
     . exact H_ind₁
     . exact H_ind₂
+
+private lemma mem_zip_of_map {α β γ δ : Type} (f : α → γ) (g : β → δ)
+    {l₁ : List α} {l₂ : List β} {a' : γ} {b' : δ}
+    (h : (a', b') ∈ (l₁.map f).zip (l₂.map g)) :
+    ∃ a b, (a, b) ∈ l₁.zip l₂ ∧ f a = a' ∧ g b = b' := by
+  induction l₁ generalizing l₂ with
+  | nil => simp at h
+  | cons a₀ as ih =>
+    cases l₂ with
+    | nil => simp at h
+    | cons b₀ bs =>
+      simp only [List.map_cons, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩ | h
+      · exact ⟨a₀, b₀, List.mem_cons.mpr (Or.inl rfl), rfl, rfl⟩
+      · obtain ⟨a, b, hmem, hfa, hgb⟩ := ih h
+        exact ⟨a, b, List.mem_cons.mpr (Or.inr hmem), hfa, hgb⟩
 
 lemma recursion_unfolding_preserved :
       ∀ (p p' : Semantics.ProcComp) (τ τ' : ProcTyComposition) (ctx : ProcTyContext) (x : String),
@@ -859,8 +907,140 @@ lemma recursion_unfolding_preserved :
     unfold Semantics.procReplace at H
     unfold ProcTy.replaceVar at H
     exact H
-  case xoffer => sorry
-  case offer => sorry -- low priority
+  case xoffer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    have H_exprVars : ctx''.exprVars = ctx.exprVars := by
+      have := congr_arg ProcTyContext.exprVars H_ctx
+      simp [ProcTyContext.extendProcVar] at this
+      exact this.symm
+    apply ProcTyJudgement.xoffer
+    · simp [H_len]
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_exprVars, ← H_br.2.1]
+        exact H_send_expr msend₀ esend₀ p_br (me₀, ty₀) H_orig
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_ty, ← H_br.1]
+        exact H_send_ty msend₀ esend₀ p_br (me₀, ty₀) H_orig
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_ty, ← H_br.2.2]
+        exact H_ind_send msend₀ esend₀ p_br (me₀, ty₀) H_orig p' τ' ctx x H_typing' H_ctx
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro mrecv yrecv p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.recv.injEq] at H_br
+        rw [← H_ty, ← H_br.1]
+        exact H_recv_ty mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig
+    · intro mrecv yrecv p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.recv.injEq] at H_br
+        rw [← H_ty, ← H_br.2.2, ← H_br.2.1]
+        have H_ctx_recv : (ctx.extendExprVar yrecv₀).extendProcVar x = ctx''.extendExprVar yrecv₀ := by
+          rw [← H_ctx]; unfold ProcTyContext.extendProcVar ProcTyContext.extendExprVar; simp
+        apply H_ind_recv mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig p' τ' (ctx.extendExprVar yrecv₀) x
+        · apply larger_context_preserves_typing (ctx := ctx)
+          · unfold ProcTyContext.extendExprVar; grind
+          · unfold ProcTyContext.extendExprVar; grind
+          · exact H_typing'
+        · exact H_ctx_recv
+    · exact H_ind_else p' τ' ctx x H_typing' H_ctx
+  case offer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    have H_exprVars : ctx''.exprVars = ctx.exprVars := by
+      have := congr_arg ProcTyContext.exprVars H_ctx
+      simp [ProcTyContext.extendProcVar] at this
+      exact this.symm
+    apply ProcTyJudgement.offer
+    · simp [H_len]
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_exprVars, ← H_br.2.1]
+        exact H_send_expr msend₀ esend₀ p_br (me₀, ty₀) H_orig
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_ty, ← H_br.1]
+        exact H_send_ty msend₀ esend₀ p_br (me₀, ty₀) H_orig
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro msend esend p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.send.injEq] at H_br
+        rw [← H_ty, ← H_br.2.2]
+        exact H_ind_send msend₀ esend₀ p_br (me₀, ty₀) H_orig p' τ' ctx x H_typing' H_ctx
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+    · intro mrecv yrecv p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.recv.injEq] at H_br
+        rw [← H_ty, ← H_br.1]
+        exact H_recv_ty mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig
+    · intro mrecv yrecv p_rep br_ty' H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      obtain ⟨me₀, ty₀⟩ := br_ty
+      cases br with
+      | send msend₀ esend₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
+      | recv mrecv₀ yrecv₀ p_br =>
+        simp only [Semantics.choiceBranchProcReplace, ChoiceBranch.recv.injEq] at H_br
+        rw [← H_ty, ← H_br.2.2, ← H_br.2.1]
+        have H_ctx_recv : (ctx.extendExprVar yrecv₀).extendProcVar x = ctx''.extendExprVar yrecv₀ := by
+          rw [← H_ctx]; unfold ProcTyContext.extendProcVar ProcTyContext.extendExprVar; simp
+        apply H_ind_recv mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig p' τ' (ctx.extendExprVar yrecv₀) x
+        · apply larger_context_preserves_typing (ctx := ctx)
+          · unfold ProcTyContext.extendExprVar; grind
+          · unfold ProcTyContext.extendExprVar; grind
+          · exact H_typing'
+        · exact H_ctx_recv
+    · exact H_ind_else p' τ' ctx x H_typing' H_ctx
 
 lemma val_replacement_preserves_expr_typing :
       ∀ (ctx : ExprTyContext) (e : Expr) (x : String) (v : Bool),
@@ -1577,7 +1757,7 @@ namespace ProcTyGuarded
         ProcTyNonInstant ∅ (ProcTy.recur x τ) →
         ProcTyGuarded (∅ ∪ {x}) Γₘ Γₒ τ →
         Γₘ ⊆ Γₘ' → Γₒ ⊆ Γₒ' →
-        ProcTyGuarded ∅ Γₘ' Γₒ' τ := by sorry
+        ProcTyGuarded ∅ Γₘ' Γₒ' τ := by sorry -- FIXME: this is problematic
 
   lemma recur_extend_context_preserves_guarded
     (x : String) (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String) :
