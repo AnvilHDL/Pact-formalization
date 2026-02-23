@@ -290,6 +290,57 @@ private lemma foldl_par_guarded' : ∀ (τs : List ProcTy), (∀ τ ∈ τs, Pro
     . apply H_all
       grind
 
+private lemma mem_zip_of_map'
+    {α β γ δ : Type} (f : α → γ) (g : β → δ)
+    {l₁ : List α} {l₂ : List β} {a' : γ} {b' : δ}
+    (h : (a', b') ∈ (l₁.map f).zip (l₂.map g)) :
+    ∃ a b, (a, b) ∈ l₁.zip l₂ ∧ f a = a' ∧ g b = b' := by
+  induction l₁ generalizing l₂ with
+  | nil => simp at h
+  | cons a₀ as ih =>
+    cases l₂ with
+    | nil => simp at h
+    | cons b₀ bs =>
+      simp only [List.map_cons, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h
+      rcases h with ⟨rfl, rfl⟩ | h
+      · exact ⟨a₀, b₀, List.mem_cons.mpr (Or.inl rfl), rfl, rfl⟩
+      · obtain ⟨a, b, hmem, hfa, hgb⟩ := ih h
+        exact ⟨a, b, List.mem_cons.mpr (Or.inr hmem), hfa, hgb⟩
+
+private lemma mem_zip_erase_lift
+    {α β : Type} :
+    ∀ (l₁ : List α) (l₂ : List β) (idx : ℕ) (x : α) {a : α} {b : β},
+      idx < l₁.length + 1 →
+      (l₁.insertIdx idx x).length = l₂.length →
+      (a, b) ∈ l₁.zip (l₂.eraseIdx idx) →
+      (a, b) ∈ (l₁.insertIdx idx x).zip l₂ := by
+  intro l₁; induction l₁ with
+  | nil =>
+    intro l₂ idx x a b hidx hlen hmem
+    simp at hmem
+  | cons h t ih =>
+    intro l₂ idx x a b hidx hlen hmem
+    cases idx with
+    | zero =>
+      cases l₂ with
+      | nil => simp at hlen
+      | cons y ys =>
+        simp at hlen
+        have : (a, b) ∈ (h :: t).zip ys := hmem
+        simpa [List.insertIdx, List.zip_cons_cons, List.mem_cons] using Or.inr this
+    | succ idx' =>
+      cases l₂ with
+      | nil => simp at hlen
+      | cons y ys =>
+        simp at hlen
+        have hsplit : (a = h ∧ b = y) ∨ (a, b) ∈ t.zip (ys.eraseIdx idx') := by
+          simpa [List.eraseIdx, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] using hmem
+        rcases hsplit with hhead | htail
+        · simpa [List.insertIdx, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] using Or.inl hhead
+        · have htail' : (a, b) ∈ (List.insertIdx t idx' x).zip ys :=
+            ih ys idx' x (by simpa using hidx) (by simpa using hlen) htail
+          simpa [List.insertIdx, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] using Or.inr htail'
+
 private lemma ex_cond_of_branches
     {branches : List ChoiceBranch} {branch_tys : List (MessageExch × ProcTy)}
     {ex_msg : Finset (MessageId × MessageDir)}
@@ -314,7 +365,7 @@ private lemma ex_cond_of_branches
     have := @H_ex_cond (msg', MessageDir.recv) (by simp only [List.mem_map]; exact ⟨_, H_br_mem, rfl⟩)
     simpa [MessageExch.messageId, MessageExch.direction, MessageDir.invert] using this
 
-set_option maxHeartbeats 20000000
+set_option maxHeartbeats 2000000
 
 lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
                                 (τ : ProcTyComposition) (lbl : TransLabel),
@@ -620,8 +671,369 @@ lemma type_emulates_proc_label : ∀ (p p' : Semantics.ProcComp)
     case recur ctx' x p'' τ' H_typing H_ind=>
       cases H_reduces
       simp at H_not_ε
-    case offer => sorry
-    case xoffer => sorry -- TODO: to prove
+    case offer =>
+      rename_i ctx' p_else branches τ_else branch_tys H_len
+        H_send_expr H_send_ty H_send_typing
+        H_recv_ty H_recv_typing H_else_typing
+        IH_send IH_recv IH_else
+      cases H_reduces
+      case offer_branch_recv hBranches hP hIdx =>
+        subst p'
+        rename_i var p_branch branches idx msg b branches'
+        subst branches'
+        let insBr := ChoiceBranch.recv msg var p_branch
+        have hle : idx ≤ branches.length := Nat.le_of_lt_succ hP
+        have H_idx_ins : idx < (List.insertIdx branches idx insBr).length := by
+          simpa [List.length_insertIdx, hle] using hP
+        have H_idx_ty : idx < branch_tys.length := by
+          exact H_len ▸ H_idx_ins
+        have H_idx_zip : idx < ((List.insertIdx branches idx insBr).zip branch_tys).length := by
+          have hmin : idx < Nat.min (List.insertIdx branches idx insBr).length branch_tys.length :=
+            (Nat.lt_min).2 ⟨H_idx_ins, H_idx_ty⟩
+          simpa [List.length_zip] using hmin
+        have H_ins_get : (List.insertIdx branches idx insBr)[idx] = insBr :=
+          List.getElem_insertIdx_self (l := branches) (x := insBr) (i := idx) H_idx_ins
+        have H_zip_get :=
+          List.getElem_zip (l := List.insertIdx branches idx insBr) (l' := branch_tys) (i := idx) (h := H_idx_zip)
+        have H_zip_ins : (insBr, branch_tys[idx]) ∈ (List.insertIdx branches idx insBr).zip branch_tys := by
+          have H_mem := List.getElem_mem (l := (List.insertIdx branches idx insBr).zip branch_tys) (n := idx) H_idx_zip
+          rw [H_zip_get, H_ins_get] at H_mem
+          simpa using H_mem
+        have H_head_typ_ext : ProcTyJudgement (ctx'.extendExprVar var) p_branch (branch_tys[idx]).2 := by
+          have Ht := H_recv_typing msg var p_branch (branch_tys[idx]) H_zip_ins
+          simpa using Ht
+        have H_head_typ_empty_ext : ProcTyJudgement (ProcTyContext.empty.extendExprVar var) p_branch (branch_tys[idx]).2 := by
+          simpa [H_ctx] using H_head_typ_ext
+        have H_head_typ : CompositionTyJudgement (Semantics.procExprReplace p_branch var b) (branch_tys[idx]).2 :=
+          val_replacement_preserves_typing (ctx := ProcTyContext.empty)
+            (p := p_branch) (τ := (branch_tys[idx]).2) (x := var) (v := b) H_head_typ_empty_ext
+        have H_tail_forall2 :
+            List.Forall₂ (ProcTyJudgement ProcTyContext.empty)
+              (branches.map ChoiceBranch.toXOffer)
+              ((branch_tys.eraseIdx idx).map branch_to_xoffer_ty) := by
+          rw [List.forall₂_iff_zip]
+          constructor
+          · have H_len_branches : branches.length = branch_tys.length - 1 := by
+              have H_len' : branches.length + 1 = branch_tys.length := by
+                simpa [List.length_insertIdx, hle] using H_len
+              omega
+            have H_len_erase : (branch_tys.eraseIdx idx).length = branch_tys.length - 1 := by
+              simpa [H_idx_ty] using (List.length_eraseIdx (l := branch_tys) (i := idx))
+            simp [List.length_map, H_len_branches, H_len_erase]
+          · intro p_i τ_i H_mem
+            obtain ⟨br, br_ty, H_zip_tail, H_peq, H_teq⟩ :=
+              mem_zip_of_map' ChoiceBranch.toXOffer branch_to_xoffer_ty H_mem
+            have H_zip_lift : (br, br_ty) ∈ (List.insertIdx branches idx insBr).zip branch_tys :=
+              mem_zip_erase_lift branches branch_tys idx insBr hP H_len H_zip_tail
+            have H_br_typ_ctx' : ProcTyJudgement ctx' br.toXOffer (branch_to_xoffer_ty br_ty) :=
+              toXOffer_typing' H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing br br_ty.1 br_ty.2 H_zip_lift
+            have H_br_typ : ProcTyJudgement ProcTyContext.empty br.toXOffer (branch_to_xoffer_ty br_ty) := by
+              rw [← H_ctx] at H_br_typ_ctx'
+              exact H_br_typ_ctx'
+            subst p_i
+            subst τ_i
+            exact H_br_typ
+        have H_base_typ : ProcTyJudgement ProcTyContext.empty (Proc.par Proc.skip (Semantics.procExprReplace p_branch var b))
+            (ProcTy.par ProcTy.skip (branch_tys[idx]).2) :=
+          ProcTyJudgement.par _ _ _ _ _ (ProcTyJudgement.skip _) H_head_typ
+        have H_typ : CompositionTyJudgement
+            (List.foldl (fun acc br => Proc.par acc br) Proc.skip
+              (Semantics.procExprReplace p_branch var b :: branches.map ChoiceBranch.toXOffer))
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          simpa [List.foldl_cons] using
+            (foldl_par_typing' (ctx := ProcTyContext.empty)
+              (ps := branches.map ChoiceBranch.toXOffer)
+              (τs := (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)
+              H_tail_forall2
+              (p₀ := Proc.par Proc.skip (Semantics.procExprReplace p_branch var b))
+              (τ₀ := ProcTy.par ProcTy.skip (branch_tys[idx]).2)
+              H_base_typ)
+        have H_head_guard : ProcTyGuardedClosed (branch_tys[idx]).2 := by
+          have H_mem_head : branch_tys[idx] ∈ branch_tys := List.getElem_mem H_idx_ty
+          cases H_guarded
+          rename_i H_else H_branches
+          exact H_branches (branch_tys[idx]).1 (branch_tys[idx]).2 H_mem_head
+        have H_tail_guarded : ∀ τ ∈ (branch_tys.eraseIdx idx).map branch_to_xoffer_ty, ProcTyGuardedClosed τ := by
+          intro τ H_mem
+          simp only [List.mem_map] at H_mem
+          obtain ⟨br_ty, H_br_ty_mem, rfl⟩ := H_mem
+          have H_mem_full : br_ty ∈ branch_tys := List.mem_of_mem_eraseIdx H_br_ty_mem
+          have H_guard_ty : ProcTyGuardedClosed br_ty.2 := by
+            cases H_guarded
+            rename_i H_else H_branches
+            exact H_branches br_ty.1 br_ty.2 H_mem_full
+          exact branch_to_xoffer_ty_guarded br_ty.1 br_ty.2 H_guard_ty
+        have H_guarded' : ProcTyGuardedClosed
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          have H_base_guard : ProcTyGuardedClosed (ProcTy.par ProcTy.skip (branch_tys[idx]).2) :=
+            ProcTyGuarded.par ∅ ∅ ∅ ProcTy.skip (branch_tys[idx]).2 (ProcTyGuarded.skip ∅ ∅ ∅) H_head_guard
+          simpa [List.foldl_cons] using
+            (foldl_par_guarded'
+              ((branch_tys.eraseIdx idx).map branch_to_xoffer_ty)
+              H_tail_guarded
+              (ProcTy.par ProcTy.skip (branch_tys[idx]).2)
+              H_base_guard)
+        have H_idx_erase : idx < (branch_tys.eraseIdx idx).length + 1 := by
+          have H_len_erase : (branch_tys.eraseIdx idx).length = branch_tys.length - 1 := by
+            simpa [H_idx_ty] using (List.length_eraseIdx (l := branch_tys) (i := idx))
+          rw [H_len_erase]
+          omega
+        have H_eq_branch_tys : (branch_tys.eraseIdx idx).insertIdx idx ((branch_tys[idx]).1, (branch_tys[idx]).2) = branch_tys := by
+          simpa using (List.insertIdx_eraseIdx_getElem (l := branch_tys) (n := idx) H_idx_ty)
+        have H_ty_head : (branch_tys[idx]).1 = MessageExch.recv msg := by
+          exact H_recv_ty msg var p_branch (branch_tys[idx]) H_zip_ins
+        have H_trans' : ProcTyIncompTransition (τ_else.offer branch_tys)
+            (AbstractTransLabel.fromConcrete (TransLabel.message msg MessageDir.recv b))
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          exists (ProcTy.offer τ_else branch_tys)
+          constructor
+          · have H_trans0 : ProcTyTransition
+                (ProcTy.offer τ_else ((branch_tys.eraseIdx idx).insertIdx idx ((branch_tys[idx]).1, (branch_tys[idx]).2)))
+                (AbstractTransLabel.message (branch_tys[idx]).1.messageId (branch_tys[idx]).1.direction)
+                (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+                  ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+              apply ProcTyTransition.offer_branch
+              · rfl
+              · rfl
+              · exact H_idx_erase
+            have H_trans1 : ProcTyTransition
+                (ProcTy.offer τ_else branch_tys)
+                (AbstractTransLabel.message (branch_tys[idx]).1.messageId (branch_tys[idx]).1.direction)
+                (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+                  ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+              simpa [H_eq_branch_tys] using H_trans0
+            simpa [AbstractTransLabel.fromConcrete, H_ty_head, MessageExch.messageId, MessageExch.direction] using H_trans1
+          · exact ProcTyCompElim.refl _
+        refine ⟨List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+          ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty), ?_⟩
+        exact ⟨H_typ, H_guarded', H_trans'⟩
+      case offer_branch_send H_eval hBranches hP hIdx =>
+        subst p'
+        rename_i msg p_branch branches idx branches' e b
+        subst branches'
+        let insBr := ChoiceBranch.send msg e p_branch
+        have hle : idx ≤ branches.length := Nat.le_of_lt_succ hP
+        have H_idx_ins : idx < (List.insertIdx branches idx insBr).length := by
+          simpa [List.length_insertIdx, hle] using hP
+        have H_idx_ty : idx < branch_tys.length := by
+          exact H_len ▸ H_idx_ins
+        have H_idx_zip : idx < ((List.insertIdx branches idx insBr).zip branch_tys).length := by
+          have hmin : idx < Nat.min (List.insertIdx branches idx insBr).length branch_tys.length :=
+            (Nat.lt_min).2 ⟨H_idx_ins, H_idx_ty⟩
+          simpa [List.length_zip] using hmin
+        have H_ins_get : (List.insertIdx branches idx insBr)[idx] = insBr :=
+          List.getElem_insertIdx_self (l := branches) (x := insBr) (i := idx) H_idx_ins
+        have H_zip_get :=
+          List.getElem_zip (l := List.insertIdx branches idx insBr) (l' := branch_tys) (i := idx) (h := H_idx_zip)
+        have H_zip_ins : (insBr, branch_tys[idx]) ∈ (List.insertIdx branches idx insBr).zip branch_tys := by
+          have H_mem := List.getElem_mem (l := (List.insertIdx branches idx insBr).zip branch_tys) (n := idx) H_idx_zip
+          rw [H_zip_get, H_ins_get] at H_mem
+          simpa using H_mem
+        have H_head_typ_ctx' : ProcTyJudgement ctx' p_branch (branch_tys[idx]).2 := by
+          have Ht := H_send_typing msg e p_branch (branch_tys[idx]) H_zip_ins
+          simpa using Ht
+        have H_head_typ : CompositionTyJudgement p_branch (branch_tys[idx]).2 := by
+          rw [← H_ctx] at H_head_typ_ctx'
+          exact H_head_typ_ctx'
+        have H_tail_forall2 :
+            List.Forall₂ (ProcTyJudgement ProcTyContext.empty)
+              (branches.map ChoiceBranch.toXOffer)
+              ((branch_tys.eraseIdx idx).map branch_to_xoffer_ty) := by
+          rw [List.forall₂_iff_zip]
+          constructor
+          · have H_len_branches : branches.length = branch_tys.length - 1 := by
+              have H_len' : branches.length + 1 = branch_tys.length := by
+                simpa [List.length_insertIdx, hle] using H_len
+              omega
+            have H_len_erase : (branch_tys.eraseIdx idx).length = branch_tys.length - 1 := by
+              simpa [H_idx_ty] using (List.length_eraseIdx (l := branch_tys) (i := idx))
+            simp [List.length_map, H_len_branches, H_len_erase]
+          · intro p_i τ_i H_mem
+            obtain ⟨br, br_ty, H_zip_tail, H_peq, H_teq⟩ :=
+              mem_zip_of_map' ChoiceBranch.toXOffer branch_to_xoffer_ty H_mem
+            have H_zip_lift : (br, br_ty) ∈ (List.insertIdx branches idx insBr).zip branch_tys :=
+              mem_zip_erase_lift branches branch_tys idx insBr hP H_len H_zip_tail
+            have H_br_typ_ctx' : ProcTyJudgement ctx' br.toXOffer (branch_to_xoffer_ty br_ty) :=
+              toXOffer_typing' H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing br br_ty.1 br_ty.2 H_zip_lift
+            have H_br_typ : ProcTyJudgement ProcTyContext.empty br.toXOffer (branch_to_xoffer_ty br_ty) := by
+              rw [← H_ctx] at H_br_typ_ctx'
+              exact H_br_typ_ctx'
+            subst p_i
+            subst τ_i
+            exact H_br_typ
+        have H_base_typ : ProcTyJudgement ProcTyContext.empty (Proc.par Proc.skip p_branch)
+            (ProcTy.par ProcTy.skip (branch_tys[idx]).2) :=
+          ProcTyJudgement.par _ _ _ _ _ (ProcTyJudgement.skip _) H_head_typ
+        have H_typ : CompositionTyJudgement
+            (List.foldl (fun acc br => Proc.par acc br) Proc.skip
+              (p_branch :: branches.map ChoiceBranch.toXOffer))
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          simpa [List.foldl_cons] using
+            (foldl_par_typing' (ctx := ProcTyContext.empty)
+              (ps := branches.map ChoiceBranch.toXOffer)
+              (τs := (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)
+              H_tail_forall2
+              (p₀ := Proc.par Proc.skip p_branch)
+              (τ₀ := ProcTy.par ProcTy.skip (branch_tys[idx]).2)
+              H_base_typ)
+        have H_head_guard : ProcTyGuardedClosed (branch_tys[idx]).2 := by
+          have H_mem_head : branch_tys[idx] ∈ branch_tys := List.getElem_mem H_idx_ty
+          cases H_guarded
+          rename_i H_else H_branches
+          exact H_branches (branch_tys[idx]).1 (branch_tys[idx]).2 H_mem_head
+        have H_tail_guarded : ∀ τ ∈ (branch_tys.eraseIdx idx).map branch_to_xoffer_ty, ProcTyGuardedClosed τ := by
+          intro τ H_mem
+          simp only [List.mem_map] at H_mem
+          obtain ⟨br_ty, H_br_ty_mem, rfl⟩ := H_mem
+          have H_mem_full : br_ty ∈ branch_tys := List.mem_of_mem_eraseIdx H_br_ty_mem
+          have H_guard_ty : ProcTyGuardedClosed br_ty.2 := by
+            cases H_guarded
+            rename_i H_else H_branches
+            exact H_branches br_ty.1 br_ty.2 H_mem_full
+          exact branch_to_xoffer_ty_guarded br_ty.1 br_ty.2 H_guard_ty
+        have H_guarded' : ProcTyGuardedClosed
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          have H_base_guard : ProcTyGuardedClosed (ProcTy.par ProcTy.skip (branch_tys[idx]).2) :=
+            ProcTyGuarded.par ∅ ∅ ∅ ProcTy.skip (branch_tys[idx]).2 (ProcTyGuarded.skip ∅ ∅ ∅) H_head_guard
+          simpa [List.foldl_cons] using
+            (foldl_par_guarded'
+              ((branch_tys.eraseIdx idx).map branch_to_xoffer_ty)
+              H_tail_guarded
+              (ProcTy.par ProcTy.skip (branch_tys[idx]).2)
+              H_base_guard)
+        have H_idx_erase : idx < (branch_tys.eraseIdx idx).length + 1 := by
+          have H_len_erase : (branch_tys.eraseIdx idx).length = branch_tys.length - 1 := by
+            simpa [H_idx_ty] using (List.length_eraseIdx (l := branch_tys) (i := idx))
+          rw [H_len_erase]
+          omega
+        have H_eq_branch_tys : (branch_tys.eraseIdx idx).insertIdx idx ((branch_tys[idx]).1, (branch_tys[idx]).2) = branch_tys := by
+          simpa using (List.insertIdx_eraseIdx_getElem (l := branch_tys) (n := idx) H_idx_ty)
+        have H_ty_head : (branch_tys[idx]).1 = MessageExch.send msg := by
+          exact H_send_ty msg e p_branch (branch_tys[idx]) H_zip_ins
+        have H_trans' : ProcTyIncompTransition (τ_else.offer branch_tys)
+            (AbstractTransLabel.fromConcrete (TransLabel.message msg MessageDir.send b))
+            (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+              ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+          exists (ProcTy.offer τ_else branch_tys)
+          constructor
+          · have H_trans0 : ProcTyTransition
+                (ProcTy.offer τ_else ((branch_tys.eraseIdx idx).insertIdx idx ((branch_tys[idx]).1, (branch_tys[idx]).2)))
+                (AbstractTransLabel.message (branch_tys[idx]).1.messageId (branch_tys[idx]).1.direction)
+                (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+                  ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+              apply ProcTyTransition.offer_branch
+              · rfl
+              · rfl
+              · exact H_idx_erase
+            have H_trans1 : ProcTyTransition
+                (ProcTy.offer τ_else branch_tys)
+                (AbstractTransLabel.message (branch_tys[idx]).1.messageId (branch_tys[idx]).1.direction)
+                (List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+                  ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty)) := by
+              simpa [H_eq_branch_tys] using H_trans0
+            simpa [AbstractTransLabel.fromConcrete, H_ty_head, MessageExch.messageId, MessageExch.direction] using H_trans1
+          · exact ProcTyCompElim.refl _
+        refine ⟨List.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip
+          ((branch_tys[idx]).2 :: (branch_tys.eraseIdx idx).map branch_to_xoffer_ty), ?_⟩
+        exact ⟨H_typ, H_guarded', H_trans'⟩
+      case offer_branch_else ex_msg H_ex_cond =>
+        exists τ_else
+        constructor
+        . unfold CompositionTyJudgement
+          simpa [H_ctx] using H_else_typing
+        . constructor
+          . cases H_guarded
+            rename_i H_else H_branches
+            exact H_else
+          . exists (ProcTy.offer τ_else branch_tys)
+            constructor
+            . simpa [AbstractTransLabel.fromConcrete] using
+                (ProcTyTransition.offer_else ex_msg τ_else branch_tys
+                  (ex_cond_of_branches H_send_ty H_recv_ty H_len H_ex_cond))
+            . exact ProcTyCompElim.refl _
+    case xoffer =>
+      rename_i ctx' p_else branches τ_else branch_tys H_len
+        H_send_expr H_send_ty H_send_typing
+        H_recv_ty H_recv_typing H_else_typing
+        IH_send IH_recv IH_else
+      cases H_reduces
+      case xoffer_branch_recv var msg p_branch b H_mem =>
+        have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+        obtain ⟨br_ty, H_zip⟩ :=
+          Trivia.zip_list_exists branches branch_tys (ChoiceBranch.recv msg var p_branch) H_le H_mem
+        have H_br_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+        have H_ty : br_ty.1 = MessageExch.recv msg := H_recv_ty msg var p_branch br_ty H_zip
+        have H_typ_branch : ProcTyJudgement (ctx'.extendExprVar var) p_branch br_ty.2 :=
+          H_recv_typing msg var p_branch br_ty H_zip
+        have H_typ_branch_empty : ProcTyJudgement (ProcTyContext.empty.extendExprVar var) p_branch br_ty.2 := by
+          simpa [H_ctx] using H_typ_branch
+        have H_typ : CompositionTyJudgement (Semantics.procExprReplace p_branch var b) br_ty.2 :=
+          val_replacement_preserves_typing (ctx := ProcTyContext.empty) (p := p_branch) (τ := br_ty.2) (x := var) (v := b)
+            H_typ_branch_empty
+        have H_guard_branch : ProcTyGuardedClosed br_ty.2 := by
+          cases H_guarded
+          rename_i H_else H_branches
+          exact H_branches br_ty.1 br_ty.2 H_br_mem
+        exists br_ty.2
+        constructor
+        . exact H_typ
+        . constructor
+          . exact H_guard_branch
+          . exists (ProcTy.xoffer τ_else branch_tys)
+            constructor
+            . have H_trans :
+                ProcTyTransition (ProcTy.xoffer τ_else branch_tys)
+                  (AbstractTransLabel.message br_ty.1.messageId br_ty.1.direction)
+                  br_ty.2 := ProcTyTransition.xoffer_branch τ_else branch_tys br_ty.1 br_ty.2 H_br_mem
+              simpa [AbstractTransLabel.fromConcrete, H_ty, MessageExch.messageId, MessageExch.direction] using H_trans
+            . exact ProcTyCompElim.refl _
+      case xoffer_branch_send =>
+        rename_i msg e b H_eval H_mem
+        have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+        obtain ⟨br_ty, H_zip⟩ :=
+          Trivia.zip_list_exists branches branch_tys (ChoiceBranch.send msg e p') H_le H_mem
+        have H_br_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+        have H_ty : br_ty.1 = MessageExch.send msg := H_send_ty msg e p' br_ty H_zip
+        have H_typ : CompositionTyJudgement p' br_ty.2 := by
+          have H_typ_branch : ProcTyJudgement ctx' p' br_ty.2 := H_send_typing msg e p' br_ty H_zip
+          rw [← H_ctx] at H_typ_branch
+          exact H_typ_branch
+        have H_guard_branch : ProcTyGuardedClosed br_ty.2 := by
+          cases H_guarded
+          rename_i H_else H_branches
+          exact H_branches br_ty.1 br_ty.2 H_br_mem
+        exists br_ty.2
+        constructor
+        . exact H_typ
+        . constructor
+          . exact H_guard_branch
+          . exists (ProcTy.xoffer τ_else branch_tys)
+            constructor
+            . have H_trans :
+                ProcTyTransition (ProcTy.xoffer τ_else branch_tys)
+                  (AbstractTransLabel.message br_ty.1.messageId br_ty.1.direction)
+                  br_ty.2 := ProcTyTransition.xoffer_branch τ_else branch_tys br_ty.1 br_ty.2 H_br_mem
+              simpa [AbstractTransLabel.fromConcrete, H_ty, MessageExch.messageId, MessageExch.direction] using H_trans
+            . exact ProcTyCompElim.refl _
+      case xoffer_branch_else ex_msg H_ex_cond =>
+        exists τ_else
+        constructor
+        . unfold CompositionTyJudgement
+          simpa [H_ctx] using H_else_typing
+        . constructor
+          . cases H_guarded
+            rename_i H_else H_branches
+            exact H_else
+          . exists (ProcTy.xoffer τ_else branch_tys)
+            constructor
+            . apply ProcTyTransition.xoffer_else
+              exact ex_cond_of_branches H_send_ty H_recv_ty H_len H_ex_cond
+            . exact ProcTyCompElim.refl _
 
 lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : TransLabel),
     CompositionTyJudgement p τ →

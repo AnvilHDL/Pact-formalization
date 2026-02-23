@@ -253,8 +253,236 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
                Proc.iffair b e p₁ p₂,
                Semantics.Reduces.iffair_true b e p₁ p₂ true H_eval rfl,
                Semantics.CompElim.refl _⟩
-  case xoffer => sorry -- FIXME: low priority
-  case offer => sorry -- FIXME: low priority
+  case xoffer ctx' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    have mem_left_of_zip : ∀ {α β : Type} {x : α} {y : β} {l₁ : List α} {l₂ : List β},
+        (x, y) ∈ l₁.zip l₂ → x ∈ l₁ := by
+      intro α β x y l₁
+      induction l₁ with
+      | nil =>
+        intro l₂ h
+        simp at h
+      | cons hd tl ih =>
+        intro l₂ h
+        cases l₂ with
+        | nil => simp at h
+        | cons hd₂ tl₂ =>
+          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h ⊢
+          rcases h with ⟨rfl, rfl⟩ | h
+          · exact Or.inl rfl
+          · exact Or.inr (ih h)
+    have mem_right_of_zip : ∀ {α β : Type} {x : α} {y : β} {l₁ : List α} {l₂ : List β},
+        (x, y) ∈ l₁.zip l₂ → y ∈ l₂ := by
+      intro α β x y l₁
+      induction l₁ with
+      | nil =>
+        intro l₂ h
+        simp at h
+      | cons hd tl ih =>
+        intro l₂ h
+        cases l₂ with
+        | nil => simp at h
+        | cons hd₂ tl₂ =>
+          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h ⊢
+          rcases h with ⟨rfl, rfl⟩ | h
+          · exact Or.inl rfl
+          · exact Or.inr (ih h)
+    cases H_trans
+    case xoffer_else =>
+      rename_i ex_msg H_ex
+      exists p_else, (TransLabel.ex ex_msg)
+      constructor
+      · simp [AbstractTransLabel.Related]
+      · refine ⟨Proc.xoffer p_else branches, ?_, Semantics.CompElim.refl _⟩
+        apply Semantics.Reduces.xoffer_branch_else
+        intro mx H_mx
+        simp only [List.mem_map] at H_mx
+        obtain ⟨br, H_br_mem, H_mx_eq⟩ := H_mx
+        have H_le : branches.length ≤ branch_tys.length := by
+          simp [H_len]
+        obtain ⟨br_ty, H_zip_right⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+        have H_zip : (br, br_ty) ∈ branches.zip branch_tys := H_zip_right
+        have H_brty_mem : br_ty ∈ branch_tys := mem_right_of_zip H_zip
+        cases br with
+        | send msg e p_br =>
+          have H_me : br_ty.1 = MessageExch.send msg :=
+            H_send_ty msg e p_br br_ty H_zip
+          have H_ex' : (br_ty.1.messageId, br_ty.1.direction.invert) ∈ ex_msg :=
+            H_ex br_ty.1 br_ty.2 H_brty_mem
+          subst mx
+          simpa [ChoiceBranch.getMessage, H_me] using H_ex'
+        | recv msg var p_br =>
+          have H_me : br_ty.1 = MessageExch.recv msg :=
+            H_recv_ty msg var p_br br_ty H_zip
+          have H_ex' : (br_ty.1.messageId, br_ty.1.direction.invert) ∈ ex_msg :=
+            H_ex br_ty.1 br_ty.2 H_brty_mem
+          subst mx
+          simpa [ChoiceBranch.getMessage, H_me] using H_ex'
+    case xoffer_branch =>
+      rename_i me H_mem
+      have H_le : branch_tys.length ≤ branches.length := by
+        simp [H_len]
+      obtain ⟨br, H_zip_r⟩ := Trivia.zip_list_exists branch_tys branches (me, τ') H_le H_mem
+      have H_zip : (br, (me, τ')) ∈ branches.zip branch_tys :=
+        Trivia.zip_flip branch_tys branches (me, τ') br H_zip_r
+      cases br with
+      | send msg e p_br =>
+        have H_me : me = MessageExch.send msg := by
+          simpa using H_send_ty msg e p_br (me, τ') H_zip
+        have H_expr : ExprTyJudgement ∅ e := by
+          have H_expr' := H_send_expr msg e p_br (me, τ') H_zip
+          rw [← H_ctx] at H_expr'
+          simpa [ProcTyContext.empty] using H_expr'
+        obtain ⟨b, H_eval⟩ := welltyped_expr_evaluates_to_something e H_expr
+        exists p_br, (TransLabel.message msg MessageDir.send b)
+        constructor
+        · cases H_me
+          exact ⟨rfl, rfl⟩
+        · refine ⟨Proc.xoffer p_else branches, ?_, Semantics.CompElim.refl _⟩
+          apply Semantics.Reduces.xoffer_branch_send
+          · exact mem_left_of_zip H_zip
+          · exact H_eval
+      | recv msg var p_br =>
+        have H_me : me = MessageExch.recv msg := by
+          simpa using H_recv_ty msg var p_br (me, τ') H_zip
+        exists (Semantics.procExprReplace p_br var true), (TransLabel.message msg MessageDir.recv true)
+        constructor
+        · cases H_me
+          exact ⟨rfl, rfl⟩
+        · refine ⟨Proc.xoffer p_else branches, ?_, Semantics.CompElim.refl _⟩
+          apply Semantics.Reduces.xoffer_branch_recv
+          exact mem_left_of_zip H_zip
+  case offer ctx' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    have mem_left_of_zip : ∀ {α β : Type} {x : α} {y : β} {l₁ : List α} {l₂ : List β},
+        (x, y) ∈ l₁.zip l₂ → x ∈ l₁ := by
+      intro α β x y l₁
+      induction l₁ with
+      | nil =>
+        intro l₂ h
+        simp at h
+      | cons hd tl ih =>
+        intro l₂ h
+        cases l₂ with
+        | nil => simp at h
+        | cons hd₂ tl₂ =>
+          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h ⊢
+          rcases h with ⟨rfl, rfl⟩ | h
+          · exact Or.inl rfl
+          · exact Or.inr (ih h)
+    have mem_right_of_zip : ∀ {α β : Type} {x : α} {y : β} {l₁ : List α} {l₂ : List β},
+        (x, y) ∈ l₁.zip l₂ → y ∈ l₂ := by
+      intro α β x y l₁
+      induction l₁ with
+      | nil =>
+        intro l₂ h
+        simp at h
+      | cons hd tl ih =>
+        intro l₂ h
+        cases l₂ with
+        | nil => simp at h
+        | cons hd₂ tl₂ =>
+          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h ⊢
+          rcases h with ⟨rfl, rfl⟩ | h
+          · exact Or.inl rfl
+          · exact Or.inr (ih h)
+    cases H_trans
+    case offer_else =>
+      rename_i ex_msg H_ex
+      exists p_else, (TransLabel.ex ex_msg)
+      constructor
+      · simp [AbstractTransLabel.Related]
+      · refine ⟨Proc.offer p_else branches, ?_, Semantics.CompElim.refl _⟩
+        apply Semantics.Reduces.offer_branch_else
+        intro mx H_mx
+        simp only [List.mem_map] at H_mx
+        obtain ⟨br, H_br_mem, H_mx_eq⟩ := H_mx
+        have H_le : branches.length ≤ branch_tys.length := by
+          simp [H_len]
+        obtain ⟨br_ty, H_zip_right⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+        have H_zip : (br, br_ty) ∈ branches.zip branch_tys := H_zip_right
+        have H_brty_mem : br_ty ∈ branch_tys := mem_right_of_zip H_zip
+        cases br with
+        | send msg e p_br =>
+          have H_me : br_ty.1 = MessageExch.send msg :=
+            H_send_ty msg e p_br br_ty H_zip
+          have H_ex' : (br_ty.1.messageId, br_ty.1.direction.invert) ∈ ex_msg :=
+            H_ex br_ty.1 br_ty.2 H_brty_mem
+          subst mx
+          simpa [ChoiceBranch.getMessage, H_me] using H_ex'
+        | recv msg var p_br =>
+          have H_me : br_ty.1 = MessageExch.recv msg :=
+            H_recv_ty msg var p_br br_ty H_zip
+          have H_ex' : (br_ty.1.messageId, br_ty.1.direction.invert) ∈ ex_msg :=
+            H_ex br_ty.1 br_ty.2 H_brty_mem
+          subst mx
+          simpa [ChoiceBranch.getMessage, H_me] using H_ex'
+    case offer_branch =>
+      rename_i branch_tys idx branch_tys' me ty H_brtys_eq H_idx H_ty'_eq
+      have H_me_mem : (me, ty) ∈ branch_tys.insertIdx idx (me, ty) :=
+        Trivia.list_insert_idx branch_tys idx (me, ty) (Nat.lt_succ_iff.mp H_idx)
+      have H_le : (branch_tys.insertIdx idx (me, ty)).length ≤ branches.length := by
+        simp [H_len]
+      obtain ⟨br, H_zip_r⟩ :=
+        Trivia.zip_list_exists (branch_tys.insertIdx idx (me, ty)) branches (me, ty) H_le H_me_mem
+      have H_zip : (br, (me, ty)) ∈ branches.zip (branch_tys.insertIdx idx (me, ty)) :=
+        Trivia.zip_flip (branch_tys.insertIdx idx (me, ty)) branches (me, ty) br H_zip_r
+      have H_br_mem : br ∈ branches := mem_left_of_zip H_zip
+      obtain ⟨idx', H_idx'_lt, H_idx'_eq⟩ := List.mem_iff_getElem.mp H_br_mem
+      have H_idx'_ins : idx' < (branches.eraseIdx idx').length + 1 := by
+        have H_len_erase : (branches.eraseIdx idx').length = branches.length - 1 := by
+          simpa [H_idx'_lt] using (List.length_eraseIdx (l := branches) (i := idx'))
+        rw [H_len_erase]
+        omega
+      cases br with
+      | send msg e p_br =>
+        have H_me : me = MessageExch.send msg := by
+          simpa using H_send_ty msg e p_br (me, ty) H_zip
+        have H_expr : ExprTyJudgement ∅ e := by
+          have H_expr' := H_send_expr msg e p_br (me, ty) H_zip
+          rw [← H_ctx] at H_expr'
+          simpa [ProcTyContext.empty] using H_expr'
+        obtain ⟨b, H_eval⟩ := welltyped_expr_evaluates_to_something e H_expr
+        let p_out := List.foldl (fun acc br => Proc.par acc br) Proc.skip
+          (p_br :: (branches.eraseIdx idx').map ChoiceBranch.toXOffer)
+        exists p_out, (TransLabel.message msg MessageDir.send b)
+        constructor
+        · cases H_me
+          exact ⟨rfl, rfl⟩
+        · refine ⟨Proc.offer p_else branches, ?_, Semantics.CompElim.refl _⟩
+          have H_red : Semantics.Reduces
+              (Proc.offer p_else ((branches.eraseIdx idx').insertIdx idx' (ChoiceBranch.send msg e p_br)))
+              (TransLabel.message msg MessageDir.send b) p_out := by
+            apply Semantics.Reduces.offer_branch_send
+            · exact H_eval
+            · rfl
+            · rfl
+            · exact H_idx'_ins
+          have H_ins : (branches.eraseIdx idx').insertIdx idx' (ChoiceBranch.send msg e p_br) = branches := by
+            simpa [H_idx'_eq] using (List.insertIdx_eraseIdx_getElem (l := branches) (n := idx') H_idx'_lt)
+          simpa [H_ins] using H_red
+      | recv msg var p_br =>
+        have H_me : me = MessageExch.recv msg := by
+          simpa using H_recv_ty msg var p_br (me, ty) H_zip
+        let p_out := List.foldl (fun acc br => Proc.par acc br) Proc.skip
+          ((Semantics.procExprReplace p_br var true) :: (branches.eraseIdx idx').map ChoiceBranch.toXOffer)
+        exists p_out, (TransLabel.message msg MessageDir.recv true)
+        constructor
+        · cases H_me
+          exact ⟨rfl, rfl⟩
+        · refine ⟨Proc.offer p_else branches, ?_, Semantics.CompElim.refl _⟩
+          have H_red : Semantics.Reduces
+              (Proc.offer p_else ((branches.eraseIdx idx').insertIdx idx' (ChoiceBranch.recv msg var p_br)))
+              (TransLabel.message msg MessageDir.recv true) p_out := by
+            apply Semantics.Reduces.offer_branch_recv
+            · rfl
+            · rfl
+            · exact H_idx'_ins
+          have H_ins : (branches.eraseIdx idx').insertIdx idx' (ChoiceBranch.recv msg var p_br) = branches := by
+            simpa [H_idx'_eq] using (List.insertIdx_eraseIdx_getElem (l := branches) (n := idx') H_idx'_lt)
+          simpa [H_ins] using H_red
   case subtype ctx' p' τ₁ τ₂ H_typing H_sub H_ind =>
     clear p τ ctx
     have H_τ₁'' := ProcTySub.sub_preserves_behaviour τ₁ τ₂ τ' lbl H_not_ε H_sub H_trans
