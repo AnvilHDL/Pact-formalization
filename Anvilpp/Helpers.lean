@@ -12,21 +12,55 @@ namespace Trivia
   -/
 
   lemma zip_list_exists : ∀ {T U : Type} (l₁ : List T) (l₂ : List U) (v₁ : T),
-      l₁.length ≤ l₂.length → v₁ ∈ l₁ → ∃ v₂, (v₁, v₂) ∈ List.zip l₁ l₂ := by sorry -- obvious
-
-  lemma zip_list_split : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (l₂ : List U),
-      (ll₁ ++ e₁ :: rl₁).length = l₂.length →
-      ∃ (ll₂ rl₂ : List U) (e₂ : U),
-        l₂ = ll₂ ++ e₂ :: rl₂ ∧ (ll₁ ++ e₁ :: rl₁).zip l₂ = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂
-          ∧ ll₁.length = ll₂.length ∧ rl₁.length = rl₂.length := by sorry -- obvious
+      l₁.length ≤ l₂.length → v₁ ∈ l₁ → ∃ v₂, (v₁, v₂) ∈ List.zip l₁ l₂ := by
+    intro T U l₁
+    induction l₁ with
+    | nil => simp
+    | cons h t ih =>
+      intro l₂ v₁ H_len H_mem
+      cases l₂ with
+      | nil => simp at H_len
+      | cons h₂ t₂ =>
+        simp only [List.length_cons, Nat.succ_le_succ_iff] at H_len
+        simp only [List.zip_cons_cons, List.mem_cons] at H_mem ⊢
+        rcases H_mem with rfl | hmem
+        · exact ⟨h₂, Or.inl rfl⟩
+        · obtain ⟨v₂, hv₂⟩ := ih t₂ v₁ H_len hmem
+          exact ⟨v₂, Or.inr hv₂⟩
 
   lemma zip_list_split₂ : ∀ {T U : Type} (ll₁ rl₁ : List T) (e₁ : T) (ll₂ rl₂ : List U) (e₂ : U),
       ll₁.length = ll₂.length → rl₁.length = rl₂.length →
-      (ll₁ ++ e₁ :: rl₁).zip (ll₂ ++ e₂ :: rl₂) = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂ := by sorry -- obvious
+      (ll₁ ++ e₁ :: rl₁).zip (ll₂ ++ e₂ :: rl₂) = List.zip ll₁ ll₂ ++ [(e₁, e₂)] ++ List.zip rl₁ rl₂ := by
+    intro T U ll₁
+    induction ll₁ with
+    | nil =>
+      intro rl₁ e₁ ll₂ rl₂ e₂ H_len _
+      cases ll₂ with
+      | nil => simp
+      | cons => simp at H_len
+    | cons h t ih =>
+      intro rl₁ e₁ ll₂ rl₂ e₂ H_len H_rlen
+      cases ll₂ with
+      | nil => simp at H_len
+      | cons h₂ t₂ =>
+        simp only [List.length_cons, Nat.succ_inj] at H_len
+        simp only [List.cons_append, List.zip_cons_cons]
+        rw [ih rl₁ e₁ t₂ rl₂ e₂ H_len H_rlen]
 
   lemma list_insert_idx : ∀ {T : Type} (l : List T) (idx : ℕ) (v : T),
       idx ≤ l.length →
-        v ∈ l.insertIdx idx v := by sorry -- obvious
+        v ∈ l.insertIdx idx v := by
+    intro T l idx v
+    induction idx generalizing l with
+    | zero => simp
+    | succ n ih =>
+      cases l with
+      | nil => simp
+      | cons h t =>
+        intro H
+        simp only [List.length_cons, Nat.succ_le_succ_iff] at H
+        simp only [List.insertIdx_succ_cons, List.mem_cons]
+        exact Or.inr (ih t H)
 
   lemma zip_flip {T U : Type} : ∀ (l1 : List T) (l2 : List U) (a : T) (b : U),
       (a, b) ∈ l1.zip l2 → (b, a) ∈ l2.zip l1 := by
@@ -249,15 +283,15 @@ lemma non_instant_preservation :
   case choice ctx' e p₁ p₂ τ₁ τ₂ H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     apply Iff.intro
     . intro H_noninst
-      cases H_noninst <;> aesop
+      cases H_noninst; aesop
     . intro H_noninst
-      cases H_noninst <;> aesop
+      cases H_noninst; aesop
   case choice_fair ctx' e p₁ p₂ τ₁ τ₂ b H_expr_typing H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
     apply Iff.intro
     . intro H_noninst
-      cases H_noninst <;> aesop
+      cases H_noninst; aesop
     . intro H_noninst
-      cases H_noninst <;> aesop
+      cases H_noninst; aesop
   case recur ctx' x body τ_body H_typing H_ind =>
     apply Iff.intro
     . intro H_noninst
@@ -1188,16 +1222,203 @@ lemma val_replacement_preserves_typing :
     . apply H_ind
       exact H_ctx
     . exact H_sub
-  case xoffer => sorry -- low priority
-  case offer => sorry -- low priority
-
-
-lemma par_list_ty : ∀ (procs : List Proc) (tys : List ProcTy),
-    (H_len : procs.length = tys.length) →
-    (∀ p τ, (p, τ) ∈ List.zip procs tys → ProcTyJudgement ProcTyContext.empty p τ) →
-    ProcTyJudgement ProcTyContext.empty (procs.foldl (fun acc p => Proc.par acc p) Proc.skip) (tys.foldl (fun acc τ => ProcTy.par acc τ) ProcTy.skip) :=
-      by sorry -- obvious
-
+  case xoffer =>
+    rename_i ctx' p_else branches τ_else branch_tys H_len
+      H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      IH_send_typing IH_recv_typing IH_else
+    -- Helper: extract original branch from mapped zip
+    have extract_orig : ∀ (brs : List ChoiceBranch) (bts : List (MessageExch × ProcTy))
+        (br : ChoiceBranch) (br_ty : MessageExch × ProcTy),
+        (br, br_ty) ∈ (brs.map fun b => Semantics.choiceBranchExprReplace b x v).zip bts →
+        ∃ br_orig, (br_orig, br_ty) ∈ brs.zip bts ∧
+          br = Semantics.choiceBranchExprReplace br_orig x v := by
+      intro brs; induction brs with
+      | nil => intros; simp_all
+      | cons hd tl ih =>
+        intro bts br br_ty H_mem
+        cases bts with
+        | nil => simp at H_mem
+        | cons bt_hd bt_tl =>
+          simp only [List.map, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at H_mem
+          rcases H_mem with ⟨rfl, rfl⟩ | H_rest
+          · exact ⟨hd, List.mem_cons.mpr (Or.inl rfl), rfl⟩
+          · obtain ⟨br_orig, H_mem_tl, H_eq⟩ := ih bt_tl br br_ty H_rest
+            exact ⟨br_orig, List.mem_cons.mpr (Or.inr H_mem_tl), H_eq⟩
+    have extend_comm : ∀ (ctx : ProcTyContext) (y z : String),
+        (ctx.extendExprVar y).extendExprVar z = (ctx.extendExprVar z).extendExprVar y := by
+      intro ctx y z; unfold ProcTyContext.extendExprVar; congr 1; rw [Finset.union_right_comm]
+    have extend_idem : ∀ (ctx : ProcTyContext) (y : String),
+        (ctx.extendExprVar y).extendExprVar y = ctx.extendExprVar y := by
+      intro ctx y; unfold ProcTyContext.extendExprVar; congr 1
+      rw [Finset.union_assoc, Finset.union_idempotent]
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.xoffer
+    · simp only [List.length_map]; exact H_len
+    · intro m e p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, rfl, _⟩ := H_eq
+        apply val_replacement_preserves_expr_typing
+        rw [← H_ctx] at H_send_expr
+        simp only [ProcTyContext.extendExprVar] at H_send_expr
+        exact H_send_expr m e_orig p_orig br_ty H_orig
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m e p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, _, _⟩ := H_eq
+        exact H_send_ty m e_orig p_orig br_ty H_orig
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m e_r p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, _, rfl⟩ := H_eq
+        exact IH_send_typing m e_orig p_orig br_ty H_orig ctx''' H_ctx
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m x' p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        dsimp only at H_eq
+        simp only [ChoiceBranch.recv.injEq] at H_eq
+        obtain ⟨rfl, rfl, _⟩ := H_eq
+        exact H_recv_ty m x' p_orig br_ty H_orig
+    · intro m x' p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        dsimp only at H_eq
+        simp only [ChoiceBranch.recv.injEq] at H_eq
+        obtain ⟨rfl, rfl, rfl⟩ := H_eq
+        split_ifs with h
+        · have Hctx_eq : ctx'''.extendExprVar x' = ctx'.extendExprVar x' := by
+            rw [← h, ← H_ctx, extend_idem]
+          rw [Hctx_eq]
+          exact H_recv_typing m x' p_orig br_ty H_orig
+        · apply IH_recv_typing m x' p_orig br_ty H_orig
+          rw [extend_comm, H_ctx]
+    · exact IH_else ctx''' H_ctx
+  case offer =>
+    rename_i ctx' p_else branches τ_else branch_tys H_len
+      H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      IH_send_typing IH_recv_typing IH_else
+    have extract_orig : ∀ (brs : List ChoiceBranch) (bts : List (MessageExch × ProcTy))
+        (br : ChoiceBranch) (br_ty : MessageExch × ProcTy),
+        (br, br_ty) ∈ (brs.map fun b => Semantics.choiceBranchExprReplace b x v).zip bts →
+        ∃ br_orig, (br_orig, br_ty) ∈ brs.zip bts ∧
+          br = Semantics.choiceBranchExprReplace br_orig x v := by
+      intro brs; induction brs with
+      | nil => intros; simp_all
+      | cons hd tl ih =>
+        intro bts br br_ty H_mem
+        cases bts with
+        | nil => simp at H_mem
+        | cons bt_hd bt_tl =>
+          simp only [List.map, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at H_mem
+          rcases H_mem with ⟨rfl, rfl⟩ | H_rest
+          · exact ⟨hd, List.mem_cons.mpr (Or.inl rfl), rfl⟩
+          · obtain ⟨br_orig, H_mem_tl, H_eq⟩ := ih bt_tl br br_ty H_rest
+            exact ⟨br_orig, List.mem_cons.mpr (Or.inr H_mem_tl), H_eq⟩
+    have extend_comm : ∀ (ctx : ProcTyContext) (y z : String),
+        (ctx.extendExprVar y).extendExprVar z = (ctx.extendExprVar z).extendExprVar y := by
+      intro ctx y z; unfold ProcTyContext.extendExprVar; congr 1; rw [Finset.union_right_comm]
+    have extend_idem : ∀ (ctx : ProcTyContext) (y : String),
+        (ctx.extendExprVar y).extendExprVar y = ctx.extendExprVar y := by
+      intro ctx y; unfold ProcTyContext.extendExprVar; congr 1
+      rw [Finset.union_assoc, Finset.union_idempotent]
+    unfold Semantics.procExprReplace
+    apply ProcTyJudgement.offer
+    · simp only [List.length_map]; exact H_len
+    · intro m e p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, rfl, _⟩ := H_eq
+        apply val_replacement_preserves_expr_typing
+        rw [← H_ctx] at H_send_expr
+        simp only [ProcTyContext.extendExprVar] at H_send_expr
+        exact H_send_expr m e_orig p_orig br_ty H_orig
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m e p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, _, _⟩ := H_eq
+        exact H_send_ty m e_orig p_orig br_ty H_orig
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m e_r p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp only [ChoiceBranch.send.injEq] at H_eq
+        obtain ⟨rfl, _, rfl⟩ := H_eq
+        exact IH_send_typing m e_orig p_orig br_ty H_orig ctx''' H_ctx
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+    · intro m x' p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        dsimp only at H_eq
+        simp only [ChoiceBranch.recv.injEq] at H_eq
+        obtain ⟨rfl, rfl, _⟩ := H_eq
+        exact H_recv_ty m x' p_orig br_ty H_orig
+    · intro m x' p_r br_ty H_mem
+      obtain ⟨br_orig, H_orig, H_eq⟩ := extract_orig _ _ _ _ H_mem
+      cases br_orig with
+      | send m_orig e_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        simp at H_eq
+      | recv m_orig var_orig p_orig =>
+        unfold Semantics.choiceBranchExprReplace at H_eq
+        dsimp only at H_eq
+        simp only [ChoiceBranch.recv.injEq] at H_eq
+        obtain ⟨rfl, rfl, rfl⟩ := H_eq
+        split_ifs with h
+        · have Hctx_eq : ctx'''.extendExprVar x' = ctx'.extendExprVar x' := by
+            rw [← h, ← H_ctx, extend_idem]
+          rw [Hctx_eq]
+          exact H_recv_typing m x' p_orig br_ty H_orig
+        · apply IH_recv_typing m x' p_orig br_ty H_orig
+          rw [extend_comm, H_ctx]
+    · exact IH_else ctx''' H_ctx
 
 namespace Semantics.CompElim
   lemma comp_elim_preseves_skip : ∀ {p : Semantics.ProcComp},
@@ -1772,6 +1993,7 @@ namespace ProcTyGuarded
         aesop
       )
 
+  -- FIXME: check this
   lemma replace_preserves_guarded :
         ∀ (x : String) (τ τ' : ProcTy) (Γₘ Γₒ : Finset String),
           Γₒ ⊆ Γₘ →
@@ -1958,10 +2180,65 @@ namespace ProcTyGuarded
         · rename_i H_non_inst H_g
           exact noninst_recur_guarded_body_transport x τ _ _ _ _ H_non_inst H_g (by grind) (by grind)
       . aesop
-    case xoffer_else => sorry -- low priority
-    case offer_else => sorry
-    case xoffer_branch => sorry
-    case offer_branch => sorry
+    case xoffer_else ex_msg τ_else branch_tys _H_cond =>
+      cases H_guarded
+      rename_i H_else _H_branches
+      exact H_else
+    case offer_else ex_msg τ_else branch_tys _H_cond =>
+      cases H_guarded
+      rename_i H_else _H_branches
+      exact H_else
+    case xoffer_branch τ_else branch_tys me ty H_mem =>
+      cases H_guarded
+      rename_i _H_else H_branches
+      exact H_branches me ty H_mem
+    case offer_branch τ_else branch_tys idx branch_tys' me ty ty' H_brtys_eq H_ty'_eq H_idx =>
+      cases H_guarded
+      rename_i _H_else H_branches
+      subst H_brtys_eq; subst H_ty'_eq
+      -- (me, ty) is a member of the inserted list, so ty is guarded
+      have H_ty_g : ProcTyGuardedClosed ty :=
+        H_branches me ty (Trivia.list_insert_idx branch_tys ↑idx (me, ty) (Nat.lt_succ_iff.mp H_idx))
+      -- existing branch_tys elements survive insertIdx
+      have mem_ins : ∀ {α : Type} (l : List α) (n : ℕ) (v x : α),
+          x ∈ l → x ∈ l.insertIdx n v := by
+        intro α l; induction l with
+        | nil => intro n v x H_mem; simp at H_mem
+        | cons h t ih =>
+          intro n v x H_mem
+          cases n with
+          | zero => exact List.mem_cons_of_mem _ H_mem
+          | succ m =>
+            simp only [List.insertIdx]
+            exact List.mem_cons.mpr ((List.mem_cons.mp H_mem).imp_right (ih m v x))
+      -- foldl of par over a list of guarded types starting from a guarded base is guarded
+      suffices h_foldl : ∀ (τs : List ProcTy), (∀ τ ∈ τs, ProcTyGuardedClosed τ) →
+          ∀ τ₀, ProcTyGuardedClosed τ₀ →
+          ProcTyGuardedClosed (List.foldl (fun acc τ => ProcTy.par acc τ) τ₀ τs) by
+        apply h_foldl
+        · intro τ H_mem_τ
+          simp only [List.mem_cons] at H_mem_τ
+          rcases H_mem_τ with (rfl | H_mem_τ)
+          · exact H_ty_g
+          · obtain ⟨⟨m_i, ty_i⟩, H_mem_i, H_eq⟩ := List.mem_map.mp H_mem_τ
+            rw [← H_eq]
+            have H_ti_g : ProcTyGuardedClosed ty_i :=
+              H_branches m_i ty_i (mem_ins branch_tys ↑idx (me, ty) (m_i, ty_i) H_mem_i)
+            simp only [branch_to_xoffer_ty]
+            exact ProcTyGuarded.xoffer ∅ ∅ ∅ ProcTy.skip [(m_i, ty_i)]
+              (ProcTyGuarded.skip ∅ ∅ ∅)
+              (fun m t H_in => by
+                simp only [List.mem_cons, List.mem_nil_iff, or_false] at H_in
+                obtain ⟨rfl, rfl⟩ := H_in
+                exact H_ti_g)
+        · exact ProcTyGuarded.skip ∅ ∅ ∅
+      intro τs; induction τs with
+      | nil => exact fun _ _ h => h
+      | cons τ₁ rest ih =>
+        intro H_all τ₀ H₀
+        simp only [List.foldl_cons]
+        apply ih (fun τ hm => H_all τ (List.mem_cons_of_mem _ hm))
+        exact ProcTyGuarded.par ∅ ∅ ∅ τ₀ τ₁ H₀ (H_all τ₁ (List.mem_cons.mpr (Or.inl rfl)))
 
   lemma elim_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy},
