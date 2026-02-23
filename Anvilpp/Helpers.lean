@@ -842,6 +842,27 @@ lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset Stri
   case H_xoffer => sorry -- low prority
   case H_offer => sorry -- low priority
 
+private lemma mem_replaceBranches_inv
+    {branch_tys : List (MessageExch × ProcTy)} {x : String} {τ' : ProcTy}
+    {m : MessageExch} {ty : ProcTy}
+    (h : (m, ty) ∈ ProcTy.replaceBranches branch_tys x τ') :
+    ∃ ty₀, (m, ty₀) ∈ branch_tys ∧ ty = ty₀.replaceVar x τ' := by
+  induction branch_tys with
+  | nil =>
+      simp [ProcTy.replaceBranches] at h
+  | cons br rest ih =>
+      cases br with
+      | mk me tyh =>
+          simp [ProcTy.replaceBranches] at h
+          rcases h with h | h
+          · have hmty : m = me ∧ ty = tyh.replaceVar x τ' := by
+              simpa [Prod.mk.injEq] using h
+            rcases hmty with ⟨hm, hty⟩
+            subst hm
+            exact ⟨tyh, List.mem_cons.mpr (Or.inl rfl), hty⟩
+          · obtain ⟨ty₀, hmem, hty⟩ := ih h
+            exact ⟨ty₀, List.mem_cons.mpr (Or.inr hmem), hty⟩
+
 lemma replace_preserves_noninst_msg (x : String) (τ τ' : ProcTy) (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
     (x ∈ Γₙ → ProcTyNonInstant ∅ τ') →
     (x ∈ Γₘ → ProcTyNonInstantMsg ∅ ∅ τ' mx) →
@@ -939,34 +960,24 @@ lemma replace_preserves_noninst_msg (x : String) (τ τ' : ProcTy) (Γₙ Γₘ 
       apply ProcTyNonInstantMsg.xoffer
       · exact H_ind_else x' τ'' H_noninst' H_noninstmsg'
       · intro m ty H_mem
-        simp only [List.mem_map] at H_mem
-        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
-        simp only [Prod.mk.injEq] at H_eq
-        obtain ⟨rfl, rfl⟩ := H_eq
-        exact H_ind_branch me₀ ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
+        obtain ⟨ty₀, H_mem₀, H_eq⟩ := mem_replaceBranches_inv (x := x') (τ' := τ'') H_mem
+        rw [H_eq]
+        exact H_ind_branch m ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
       · intro m ty H_mem
-        simp only [List.mem_map] at H_mem
-        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
-        simp only [Prod.mk.injEq] at H_eq
-        obtain ⟨rfl, _⟩ := H_eq
-        exact H_neq me₀ ty₀ H_mem₀
+        obtain ⟨ty₀, H_mem₀, _⟩ := mem_replaceBranches_inv (x := x') (τ' := τ'') H_mem
+        exact H_neq m ty₀ H_mem₀
     case offer Γₙ' Γₘ' τ_else branch_tys mx' H_else H_branch H_neq H_ind_else H_ind_branch =>
       intro x' τ'' H_noninst' H_noninstmsg'
       simp only [ProcTy.replaceVar]
       apply ProcTyNonInstantMsg.offer
       · exact H_ind_else x' τ'' H_noninst' H_noninstmsg'
       · intro m ty H_mem
-        simp only [List.mem_map] at H_mem
-        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
-        simp only [Prod.mk.injEq] at H_eq
-        obtain ⟨rfl, rfl⟩ := H_eq
-        exact H_ind_branch me₀ ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
+        obtain ⟨ty₀, H_mem₀, H_eq⟩ := mem_replaceBranches_inv (x := x') (τ' := τ'') H_mem
+        rw [H_eq]
+        exact H_ind_branch m ty₀ H_mem₀ x' τ'' H_noninst' H_noninstmsg'
       · intro m ty H_mem
-        simp only [List.mem_map] at H_mem
-        obtain ⟨⟨me₀, ty₀⟩, H_mem₀, H_eq⟩ := H_mem
-        simp only [Prod.mk.injEq] at H_eq
-        obtain ⟨rfl, _⟩ := H_eq
-        exact H_neq me₀ ty₀ H_mem₀
+        obtain ⟨ty₀, H_mem₀, _⟩ := mem_replaceBranches_inv (x := x') (τ' := τ'') H_mem
+        exact H_neq m ty₀ H_mem₀
 
 
 lemma subtyping_replace_procty_preserved :
@@ -1008,6 +1019,25 @@ lemma subtyping_replace_procty_preserved :
     apply ProcTySub.trans (τ₂ := τ₂'.replaceVar x τ')
     . exact H_ind₁
     . exact H_ind₂
+
+private lemma replaceBranches_length (branch_tys : List (MessageExch × ProcTy))
+    (x : String) (τ' : ProcTy) :
+    (ProcTy.replaceBranches branch_tys x τ').length = branch_tys.length := by
+  induction branch_tys with
+  | nil => simp [ProcTy.replaceBranches]
+  | cons br rest ih =>
+      cases br
+      simp [ProcTy.replaceBranches, ih]
+
+private lemma replaceBranches_eq_map (branch_tys : List (MessageExch × ProcTy))
+    (x : String) (τ' : ProcTy) :
+    ProcTy.replaceBranches branch_tys x τ' =
+      branch_tys.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') := by
+  induction branch_tys with
+  | nil => simp [ProcTy.replaceBranches]
+  | cons br rest ih =>
+      cases br
+      simp [ProcTy.replaceBranches, ProcTy.replaceBranchVar, ih]
 
 private lemma mem_zip_of_map {α β γ δ : Type} (f : α → γ) (g : β → δ)
     {l₁ : List α} {l₂ : List β} {a' : γ} {b' : δ}
@@ -1111,9 +1141,22 @@ lemma recursion_unfolding_preserved :
       simp [ProcTyContext.extendProcVar] at this
       exact this.symm
     apply ProcTyJudgement.xoffer
-    · simp [H_len]
+    · calc
+        (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).length = branches.length := by
+          simp
+        _ = branch_tys.length := H_len
+        _ = (ProcTy.replaceBranches branch_tys x τ').length := by
+          symm
+          exact replaceBranches_length branch_tys x τ'
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1123,7 +1166,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1133,7 +1183,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1143,7 +1200,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro mrecv yrecv p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.recv mrecv yrecv p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1153,7 +1217,14 @@ lemma recursion_unfolding_preserved :
         rw [← H_ty, ← H_br.1]
         exact H_recv_ty mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig
     · intro mrecv yrecv p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.recv mrecv yrecv p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1178,9 +1249,22 @@ lemma recursion_unfolding_preserved :
       simp [ProcTyContext.extendProcVar] at this
       exact this.symm
     apply ProcTyJudgement.offer
-    · simp [H_len]
+    · calc
+        (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).length = branches.length := by
+          simp
+        _ = branch_tys.length := H_len
+        _ = (ProcTy.replaceBranches branch_tys x τ').length := by
+          symm
+          exact replaceBranches_length branch_tys x τ'
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1190,7 +1274,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1200,7 +1291,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro msend esend p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.send msend esend p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1210,7 +1308,14 @@ lemma recursion_unfolding_preserved :
       | recv mrecv₀ yrecv₀ p_br =>
         simp only [Semantics.choiceBranchProcReplace] at H_br; simp at H_br
     · intro mrecv yrecv p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.recv mrecv yrecv p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>
@@ -1220,7 +1325,14 @@ lemma recursion_unfolding_preserved :
         rw [← H_ty, ← H_br.1]
         exact H_recv_ty mrecv₀ yrecv₀ p_br (me₀, ty₀) H_orig
     · intro mrecv yrecv p_rep br_ty' H_mem'
-      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ := mem_zip_of_map _ _ H_mem'
+      have H_mem_map :
+          (ChoiceBranch.recv mrecv yrecv p_rep, br_ty') ∈
+            (List.map (fun br => Semantics.choiceBranchProcReplace br x p') branches).zip
+              (List.map (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') branch_tys) := by
+        simpa [replaceBranches_eq_map] using H_mem'
+      obtain ⟨br, br_ty, H_orig, H_br, H_ty⟩ :=
+        mem_zip_of_map (fun br => Semantics.choiceBranchProcReplace br x p')
+          (fun br_ty => ProcTy.replaceBranchVar br_ty x τ') H_mem_map
       obtain ⟨me₀, ty₀⟩ := br_ty
       cases br with
       | send msend₀ esend₀ p_br =>

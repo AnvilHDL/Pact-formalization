@@ -36,38 +36,55 @@ inductive ProcTy : Type where
   | recur : String → ProcTy → ProcTy
 
 namespace ProcTy
-  mutual
+    private lemma sizeOf_snd_lt_of_mem {branch_tys : List (MessageExch × ProcTy)}
+            {me : MessageExch} {ty : ProcTy} :
+            (me, ty) ∈ branch_tys → sizeOf ty < sizeOf branch_tys := by
+        intro hmem
+        have hpair : sizeOf (me, ty) < sizeOf branch_tys := List.sizeOf_lt_of_mem hmem
+        have hty : sizeOf ty < sizeOf (me, ty) := by
+            simp
+            omega
+        exact Nat.lt_trans hty hpair
+
+    mutual
+        /-- Replace occurrences of a process type variable with another process type. -/
+        def replaceVar (τ : ProcTy) (x : String) (τ' : ProcTy) : ProcTy :=
+            match τ with
+            | message me => ProcTy.message me
+            | cycle => ProcTy.cycle
+            | skip => ProcTy.skip
+            | dollar pid => ProcTy.dollar pid
+            | choice τ₁ τ₂ => ProcTy.choice (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+            | choice_fair bid τ₁ τ₂ =>
+                    ProcTy.choice_fair bid (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+            | par τ₁ τ₂ => ProcTy.par (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+            | seq τ₁ τ₂ => ProcTy.seq (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
+            | xoffer τ_else branch_tys =>
+                    ProcTy.xoffer (replaceVar τ_else x τ') (replaceBranches branch_tys x τ')
+            | offer τ_else branch_tys =>
+                    ProcTy.offer (replaceVar τ_else x τ') (replaceBranches branch_tys x τ')
+            | var y => if x = y then τ' else ProcTy.var y
+            | recur y body =>
+                    if x = y then ProcTy.recur y body
+                    else ProcTy.recur y (replaceVar body x τ')
+        termination_by sizeOf τ
+
+        def replaceBranches (branch_tys : List (MessageExch × ProcTy)) (x : String) (τ' : ProcTy) :
+                List (MessageExch × ProcTy) :=
+            match branch_tys with
+            | [] => []
+            | (me, ty) :: rest => (me, replaceVar ty x τ') :: replaceBranches rest x τ'
+        termination_by sizeOf branch_tys
+    decreasing_by
+        all_goals
+            simp_wf
+            omega
+    end
+
     def replaceBranchVar (branch_tys : MessageExch × ProcTy) (x : String) (τ' : ProcTy) :
-        MessageExch × ProcTy :=
-      (branch_tys.1, branch_tys.2.replaceVar x τ')
+            MessageExch × ProcTy :=
+        (branch_tys.1, branch_tys.2.replaceVar x τ')
 
-    /-- Replace occurrences of a process type variable with another process type. -/
-    def replaceVar (τ : ProcTy) (x : String) (τ' : ProcTy) : ProcTy :=
-      match τ with
-      | message me => ProcTy.message me
-      | cycle => ProcTy.cycle
-      | skip => ProcTy.skip
-      | dollar pid => ProcTy.dollar pid
-      | choice τ₁ τ₂ => ProcTy.choice (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
-      | choice_fair bid τ₁ τ₂ =>
-          ProcTy.choice_fair bid (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
-      | par τ₁ τ₂ => ProcTy.par (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
-      | seq τ₁ τ₂ => ProcTy.seq (replaceVar τ₁ x τ') (replaceVar τ₂ x τ')
-      | xoffer τ_else branch_tys =>
-          ProcTy.xoffer (replaceVar τ_else x τ')
-            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
-      | offer τ_else branch_tys =>
-          ProcTy.offer (replaceVar τ_else x τ')
-            (List.map (fun (me, ty) => (me, replaceVar ty x τ')) branch_tys)
-      | var y => if x = y then τ' else ProcTy.var y
-      | recur y body =>
-          if x = y then ProcTy.recur y body
-          else ProcTy.recur y (replaceVar body x τ')
-    decreasing_by  -- FIXME: prove termination
-      all_goals sorry
-  end
-
-  -- TODO: see if this is actually useful
   theorem ind {C : ProcTy → Prop}
       (H_message : ∀ me, C (ProcTy.message me))
       (H_cycle : C ProcTy.cycle)
@@ -87,7 +104,34 @@ namespace ProcTy
           C (ProcTy.offer τ_else branch_tys))
       (H_var : ∀ x, C (ProcTy.var x))
       (H_recur : ∀ x body, C body → C (ProcTy.recur x body)) :
-      ∀ τ, C τ := sorry
+            ∀ τ, C τ := by
+        let rec go (τ : ProcTy) : C τ := by
+            match τ with
+            | message me => exact H_message me
+            | cycle => exact H_cycle
+            | skip => exact H_skip
+            | dollar pid => exact H_dollar pid
+            | choice τ₁ τ₂ => exact H_choice τ₁ τ₂ (go τ₁) (go τ₂)
+            | choice_fair bid τ₁ τ₂ => exact H_choice_fair bid τ₁ τ₂ (go τ₁) (go τ₂)
+            | par τ₁ τ₂ => exact H_par τ₁ τ₂ (go τ₁) (go τ₂)
+            | seq τ₁ τ₂ => exact H_seq τ₁ τ₂ (go τ₁) (go τ₂)
+            | xoffer τ_else branch_tys =>
+                exact H_xoffer τ_else branch_tys (go τ_else) (fun _ ty hmem => go ty)
+            | offer τ_else branch_tys =>
+                exact H_offer τ_else branch_tys (go τ_else) (fun _ ty hmem => go ty)
+            | var x => exact H_var x
+            | recur x body => exact H_recur x body (go body)
+        termination_by sizeOf τ
+        decreasing_by
+            all_goals
+                simp_wf
+                first
+                | omega
+                |
+                    have hty : sizeOf ty < sizeOf branch_tys := sizeOf_snd_lt_of_mem (branch_tys := branch_tys) hmem
+                    omega
+        intro τ
+        exact go τ
 
   /-- Well-formedness of process types.
       This says that the type only includes tail recursions. -/
