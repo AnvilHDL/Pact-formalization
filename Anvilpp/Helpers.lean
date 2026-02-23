@@ -326,8 +326,90 @@ lemma non_instant_preservation :
       exact (H_ind Γ).mp (subtype_non_instant_preservation τ₁ τ₂ H_sub Γ H_noninst)
     · intro H_reducible
       exact subtype_non_instant_preservation_rev τ₁ τ₂ H_sub Γ ((H_ind Γ).mpr H_reducible)
-  case xoffer => sorry -- low priority
-  case offer => sorry -- low priority
+  case xoffer ctx' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    apply Iff.intro
+    · intro H_noninst
+      cases H_noninst
+      rename_i H_else H_branch
+      have H_else_proc : Semantics.NonInstantReducible Γ p_else := (H_ind_else Γ).mp H_else
+      have H_branches_proc : ∀ br ∈ branches, Semantics.NonInstantReducible Γ (ChoiceBranch.getProc br) := by
+        intro br H_br_mem
+        have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+        obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+        have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+        cases br with
+        | send m e p =>
+          have H_noninst_ty : ProcTyNonInstant Γ br_ty.2 :=
+            H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+          exact (H_ind_send m e p br_ty H_zip Γ).mp H_noninst_ty
+        | recv m x p =>
+          have H_noninst_ty : ProcTyNonInstant Γ br_ty.2 :=
+            H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+          exact (H_ind_recv m x p br_ty H_zip Γ).mp H_noninst_ty
+      exact Semantics.NonInstantReducible.xoffer Γ p_else branches H_else_proc H_branches_proc H_else_proc
+    · intro H_noninst
+      cases H_noninst with
+      | xoffer _ _ _ H_else H_branches _ =>
+          apply ProcTyNonInstant.xoffer
+          · exact (H_ind_else Γ).mpr H_else
+          · intro m_exch ty H_mem
+            obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+                (H_len.symm ▸ le_refl _) H_mem
+            have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+            have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+            cases br with
+            | send m e p =>
+              have H_noninst_p : Semantics.NonInstantReducible Γ p :=
+                H_branches (ChoiceBranch.send m e p) H_br_mem
+              exact (H_ind_send m e p (m_exch, ty) H_zip Γ).mpr H_noninst_p
+            | recv m x p =>
+              have H_noninst_p : Semantics.NonInstantReducible Γ p :=
+                H_branches (ChoiceBranch.recv m x p) H_br_mem
+              exact (H_ind_recv m x p (m_exch, ty) H_zip Γ).mpr H_noninst_p
+  case offer ctx' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    apply Iff.intro
+    · intro H_noninst
+      cases H_noninst
+      rename_i H_else H_branch
+      have H_else_proc : Semantics.NonInstantReducible Γ p_else := (H_ind_else Γ).mp H_else
+      have H_branches_proc : ∀ br ∈ branches, Semantics.NonInstantReducible Γ (ChoiceBranch.getProc br) := by
+        intro br H_br_mem
+        have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+        obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+        have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+        cases br with
+        | send m e p =>
+          have H_noninst_ty : ProcTyNonInstant Γ br_ty.2 :=
+            H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+          exact (H_ind_send m e p br_ty H_zip Γ).mp H_noninst_ty
+        | recv m x p =>
+          have H_noninst_ty : ProcTyNonInstant Γ br_ty.2 :=
+            H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+          exact (H_ind_recv m x p br_ty H_zip Γ).mp H_noninst_ty
+      exact Semantics.NonInstantReducible.offer Γ p_else branches H_else_proc H_branches_proc H_else_proc
+    · intro H_noninst
+      cases H_noninst with
+      | offer _ _ _ H_else H_branches _ =>
+          apply ProcTyNonInstant.offer
+          · exact (H_ind_else Γ).mpr H_else
+          · intro m_exch ty H_mem
+            obtain ⟨br, H_zip'⟩ := Trivia.zip_list_exists branch_tys branches (m_exch, ty)
+                (H_len.symm ▸ le_refl _) H_mem
+            have H_zip : (br, (m_exch, ty)) ∈ branches.zip branch_tys := Trivia.zip_flip _ _ _ _ H_zip'
+            have H_br_mem : br ∈ branches := (List.of_mem_zip H_zip).1
+            cases br with
+            | send m e p =>
+              have H_noninst_p : Semantics.NonInstantReducible Γ p :=
+                H_branches (ChoiceBranch.send m e p) H_br_mem
+              exact (H_ind_send m e p (m_exch, ty) H_zip Γ).mpr H_noninst_p
+            | recv m x p =>
+              have H_noninst_p : Semantics.NonInstantReducible Γ p :=
+                H_branches (ChoiceBranch.recv m x p) H_br_mem
+              exact (H_ind_recv m x p (m_exch, ty) H_zip Γ).mpr H_noninst_p
 
 lemma congr_non_instant_msg_preservation (τ₁ τ₂ : ProcTy) :
     ProcTyCongr τ₁ τ₂ → ∀ Γₙ Γₘ mx, (ProcTyNonInstantMsg Γₙ Γₘ τ₂ mx ↔ ProcTyNonInstantMsg Γₙ Γₘ τ₁ mx) := by
@@ -493,8 +575,88 @@ lemma non_instant_msg_preservation :
   case subtype ctx p τ₁ τ₂ H_typing H_sub H_ind =>
     apply H_ind
     apply subtype_non_instant_msg_preservation (τ₂ := τ₂) <;> assumption
-  case xoffer => sorry -- low priority
-  case offer => sorry -- low priority
+  case xoffer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    cases H_noninst_msg
+    rename_i H_else H_neq H_branch
+    apply Semantics.NonInstantMessage.xoffer
+    · exact H_ind_else mx Γₙ Γₘ H_else
+    · intro br H_br_mem
+      have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+      obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+      have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+      cases br with
+      | send m e p =>
+        have H_noninst_br : ProcTyNonInstantMsg Γₙ Γₘ br_ty.2 mx :=
+          H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+        exact H_ind_send m e p br_ty H_zip mx Γₙ Γₘ H_noninst_br
+      | recv m x p =>
+        have H_noninst_br : ProcTyNonInstantMsg Γₙ Γₘ br_ty.2 mx :=
+          H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+        exact H_ind_recv m x p br_ty H_zip mx Γₙ Γₘ H_noninst_br
+    · intro br H_br_mem
+      have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+      obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+      have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+      have H_noninst_neq : br_ty.1.toPair ≠ mx :=
+        H_neq br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+      cases br with
+      | send m e p =>
+        have H_ty1 : br_ty.1 = MessageExch.send m := H_send_ty m e p br_ty H_zip
+        intro H_eq
+        apply H_noninst_neq
+        rw [H_ty1]
+        simpa [ChoiceBranch.getMessage, ChoiceBranch.getMessageId, ChoiceBranch.getDir,
+          MessageExch.toPair, MessageExch.messageId, MessageExch.direction] using H_eq
+      | recv m x p =>
+        have H_ty1 : br_ty.1 = MessageExch.recv m := H_recv_ty m x p br_ty H_zip
+        intro H_eq
+        apply H_noninst_neq
+        rw [H_ty1]
+        simpa [ChoiceBranch.getMessage, ChoiceBranch.getMessageId, ChoiceBranch.getDir,
+          MessageExch.toPair, MessageExch.messageId, MessageExch.direction] using H_eq
+  case offer ctx'' p_else branches τ_else branch_tys
+      H_len H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
+      H_ind_send H_ind_recv H_ind_else =>
+    cases H_noninst_msg
+    rename_i H_else H_neq H_branch
+    apply Semantics.NonInstantMessage.offer
+    · exact H_ind_else mx Γₙ Γₘ H_else
+    · intro br H_br_mem
+      have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+      obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+      have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+      cases br with
+      | send m e p =>
+        have H_noninst_br : ProcTyNonInstantMsg Γₙ Γₘ br_ty.2 mx :=
+          H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+        exact H_ind_send m e p br_ty H_zip mx Γₙ Γₘ H_noninst_br
+      | recv m x p =>
+        have H_noninst_br : ProcTyNonInstantMsg Γₙ Γₘ br_ty.2 mx :=
+          H_branch br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+        exact H_ind_recv m x p br_ty H_zip mx Γₙ Γₘ H_noninst_br
+    · intro br H_br_mem
+      have H_le : branches.length ≤ branch_tys.length := by simp [H_len]
+      obtain ⟨br_ty, H_zip⟩ := Trivia.zip_list_exists branches branch_tys br H_le H_br_mem
+      have H_ty_mem : br_ty ∈ branch_tys := (List.of_mem_zip H_zip).2
+      have H_noninst_neq : br_ty.1.toPair ≠ mx :=
+        H_neq br_ty.1 br_ty.2 (by simpa using H_ty_mem)
+      cases br with
+      | send m e p =>
+        have H_ty1 : br_ty.1 = MessageExch.send m := H_send_ty m e p br_ty H_zip
+        intro H_eq
+        apply H_noninst_neq
+        rw [H_ty1]
+        simpa [ChoiceBranch.getMessage, ChoiceBranch.getMessageId, ChoiceBranch.getDir,
+          MessageExch.toPair, MessageExch.messageId, MessageExch.direction] using H_eq
+      | recv m x p =>
+        have H_ty1 : br_ty.1 = MessageExch.recv m := H_recv_ty m x p br_ty H_zip
+        intro H_eq
+        apply H_noninst_neq
+        rw [H_ty1]
+        simpa [ChoiceBranch.getMessage, ChoiceBranch.getMessageId, ChoiceBranch.getDir,
+          MessageExch.toPair, MessageExch.messageId, MessageExch.direction] using H_eq
 
 lemma procty_double_extend_does_nothing : ∀ (ctx : ProcTyContext) (x : String),
     ctx.extendProcVar x = (ctx.extendProcVar x).extendProcVar x := by

@@ -243,11 +243,13 @@ namespace Semantics
       NonInstantReducible Γ (Proc.seq p₁ p₂)
     | xoffer (Γ : Finset String) (p_else : Proc) (branches : List ChoiceBranch) :
       NonInstantReducible Γ p_else →
-      ∀ br ∈ branches, NonInstantReducible Γ (ChoiceBranch.getProc br) →
+      (∀ br ∈ branches, NonInstantReducible Γ (ChoiceBranch.getProc br)) →
+      NonInstantReducible Γ p_else →
       NonInstantReducible Γ (Proc.xoffer p_else branches)
     | offer (Γ : Finset String) (p_else : Proc) (branches : List ChoiceBranch) :
       NonInstantReducible Γ p_else →
-      ∀ br ∈ branches, NonInstantReducible Γ (ChoiceBranch.getProc br) →
+      (∀ br ∈ branches, NonInstantReducible Γ (ChoiceBranch.getProc br)) →
+      NonInstantReducible Γ p_else →
       NonInstantReducible Γ (Proc.offer p_else branches)
     | ifunfair (Γ : Finset String) (e : Expr) (p₁ p₂ : Proc) :
       NonInstantReducible Γ p₁ →
