@@ -742,7 +742,6 @@ lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : P
     (∀ τ', ProcTyCompElim τ τ' → (∃ τ'', ProcTyCompElim τ' τ'' ∧ P τ'')) →
     (∃ p' τ', CompositionTyJudgement p' τ' ∧ ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ P τ') := by
     -- (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
-
     sorry -- FIXME: prove it (low priority)
 
 theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
