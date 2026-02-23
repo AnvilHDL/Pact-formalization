@@ -759,6 +759,27 @@ lemma larger_context_preserves_typing :
       · unfold ProcTyContext.extendExprVar; grind
     · exact H_ind_else ctx' H_proc_subset H_expr_subset
 
+private lemma mem_replaceBranches_inv
+    {branch_tys : List (MessageExch × ProcTy)} {x : String} {τ' : ProcTy}
+    {m : MessageExch} {ty : ProcTy}
+    (h : (m, ty) ∈ ProcTy.replaceBranches branch_tys x τ') :
+    ∃ ty₀, (m, ty₀) ∈ branch_tys ∧ ty = ty₀.replaceVar x τ' := by
+  induction branch_tys with
+  | nil =>
+      simp [ProcTy.replaceBranches] at h
+  | cons br rest ih =>
+      cases br with
+      | mk me tyh =>
+          simp [ProcTy.replaceBranches] at h
+          rcases h with h | h
+          · have hmty : m = me ∧ ty = tyh.replaceVar x τ' := by
+              simpa [Prod.mk.injEq] using h
+            rcases hmty with ⟨hm, hty⟩
+            subst hm
+            exact ⟨tyh, List.mem_cons.mpr (Or.inl rfl), hty⟩
+          · obtain ⟨ty₀, hmem, hty⟩ := ih h
+            exact ⟨ty₀, List.mem_cons.mpr (Or.inr hmem), hty⟩
+
 lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset String) :
     (x ∈ Γ → ProcTyNonInstant ∅ τ') →
     ProcTyNonInstant Γ τ → ProcTyNonInstant Γ (τ.replaceVar x τ') := by
@@ -839,29 +860,28 @@ lemma replace_preserves_noninst (x : String) (τ τ' : ProcTy) (Γ : Finset Stri
     case seq_right H_noninst₂ =>
       have H_ind₂ := H_ind₂ x τ' Γ H_noninst₁ H_noninst₂
       aesop
-  case H_xoffer => sorry -- low prority
-  case H_offer => sorry -- low priority
-
-private lemma mem_replaceBranches_inv
-    {branch_tys : List (MessageExch × ProcTy)} {x : String} {τ' : ProcTy}
-    {m : MessageExch} {ty : ProcTy}
-    (h : (m, ty) ∈ ProcTy.replaceBranches branch_tys x τ') :
-    ∃ ty₀, (m, ty₀) ∈ branch_tys ∧ ty = ty₀.replaceVar x τ' := by
-  induction branch_tys with
-  | nil =>
-      simp [ProcTy.replaceBranches] at h
-  | cons br rest ih =>
-      cases br with
-      | mk me tyh =>
-          simp [ProcTy.replaceBranches] at h
-          rcases h with h | h
-          · have hmty : m = me ∧ ty = tyh.replaceVar x τ' := by
-              simpa [Prod.mk.injEq] using h
-            rcases hmty with ⟨hm, hty⟩
-            subst hm
-            exact ⟨tyh, List.mem_cons.mpr (Or.inl rfl), hty⟩
-          · obtain ⟨ty₀, hmem, hty⟩ := ih h
-            exact ⟨ty₀, List.mem_cons.mpr (Or.inr hmem), hty⟩
+  case H_xoffer τ_else branch_tys H_ind_else H_ind_branch =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    case xoffer H_else H_branch =>
+      apply ProcTyNonInstant.xoffer
+      · exact H_ind_else x τ' Γ H_noninst₁ H_else
+      · intro m ty H_mem
+        obtain ⟨ty₀, H_mem₀, H_eq⟩ := mem_replaceBranches_inv (x := x) (τ' := τ') H_mem
+        rw [H_eq]
+        exact H_ind_branch m ty₀ H_mem₀ x τ' Γ H_noninst₁ (H_branch m ty₀ H_mem₀)
+  case H_offer τ_else branch_tys H_ind_else H_ind_branch =>
+    intro x τ' Γ H_noninst₁ H_noninst₂
+    unfold ProcTy.replaceVar
+    cases H_noninst₂
+    case offer H_else H_branch =>
+      apply ProcTyNonInstant.offer
+      · exact H_ind_else x τ' Γ H_noninst₁ H_else
+      · intro m ty H_mem
+        obtain ⟨ty₀, H_mem₀, H_eq⟩ := mem_replaceBranches_inv (x := x) (τ' := τ') H_mem
+        rw [H_eq]
+        exact H_ind_branch m ty₀ H_mem₀ x τ' Γ H_noninst₁ (H_branch m ty₀ H_mem₀)
 
 lemma replace_preserves_noninst_msg (x : String) (τ τ' : ProcTy) (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
     (x ∈ Γₙ → ProcTyNonInstant ∅ τ') →
@@ -1899,14 +1919,112 @@ namespace Semantics.IncompReduces
         . exact H_pair₁.2
         . exact H_pair₂.2
 
+  private lemma reduces_recv_any_value_aux :
+    ∀ {p p' : Semantics.ProcComp} {lbl : TransLabel},
+      Semantics.Reduces p lbl p' →
+      ∀ {msg : MessageId} {b₀ : Bool},
+        lbl = TransLabel.message msg MessageDir.recv b₀ →
+        ∀ b : Bool,
+          ∃ p'', Semantics.Reduces p (TransLabel.message msg MessageDir.recv b) p'' := by
+    intro p p' lbl H_reduces
+    induction H_reduces with
+    | recv msg var p_body b₀ =>
+        intro msg' b₀' H_lbl b
+        cases H_lbl
+        refine ⟨Proc.seq Proc.skip (Semantics.procExprReplace p_body var b), ?_⟩
+        exact Semantics.Reduces.recv msg var p_body b
+    | seq_step p₁ p₁' p₂ c H_red IH =>
+        intro msg b₀ H_lbl b
+        obtain ⟨p'', H_red'⟩ := IH H_lbl b
+        exact ⟨Proc.seq p'' p₂, Semantics.Reduces.seq_step p₁ p'' p₂ (TransLabel.message msg MessageDir.recv b) H_red'⟩
+    | par_left p₁ p₁' p₂ c H_not_tock H_non_ex H_red IH =>
+        intro msg b₀ H_lbl b
+        obtain ⟨p'', H_red'⟩ := IH H_lbl b
+        refine ⟨Proc.par p'' p₂, ?_⟩
+        apply Semantics.Reduces.par_left (c := TransLabel.message msg MessageDir.recv b)
+        · simp
+        · simp [TransLabel.isEx]
+        · exact H_red'
+    | par_right p₁ p₂ p₂' c H_not_tock H_non_ex H_red IH =>
+        intro msg b₀ H_lbl b
+        obtain ⟨p'', H_red'⟩ := IH H_lbl b
+        refine ⟨Proc.par p₁ p'', ?_⟩
+        apply Semantics.Reduces.par_right (c := TransLabel.message msg MessageDir.recv b)
+        · simp
+        · simp [TransLabel.isEx]
+        · exact H_red'
+    | xoffer_branch_recv var p_else branches msg p_branch b₀ H_mem =>
+        intro msg' b₀' H_lbl b
+        cases H_lbl
+        refine ⟨Semantics.procExprReplace p_branch var b, ?_⟩
+        exact Semantics.Reduces.xoffer_branch_recv var p_else branches msg p_branch b H_mem
+    | offer_branch_recv var p_branch p_else branches idx msg b₀ branches' p_old H_map H_fold H_idx =>
+        intro msg' b₀' H_lbl b
+        cases H_lbl
+        let p_new := List.foldl (fun acc br => Proc.par acc br) Proc.skip ((Semantics.procExprReplace p_branch var b) :: branches')
+        refine ⟨p_new, ?_⟩
+        apply Semantics.Reduces.offer_branch_recv (var := var) (p_branch := p_branch)
+          (p_else := p_else) (branches := branches) (idx := idx) (msg := msg)
+          (b := b) (branches' := branches') (p' := p_new)
+        · exact H_map
+        · rfl
+        · exact H_idx
+    | tock | send | seq_skip | ifunfair_true | ifunfair_false | iffair_true | iffair_false
+      | par_left_ex | par_right_ex | par_tock | par_skip_right | par_skip_left | par_message
+      | xoffer_branch_send | xoffer_branch_else | offer_branch_send | offer_branch_else | recur_unfold =>
+        intro msg b₀ H_lbl b
+        cases H_lbl
+
+  private lemma reduces_recv_any_value :
+    ∀ {p p' : Semantics.ProcComp} {msg : MessageId} {b₀ b : Bool},
+      Semantics.Reduces p (TransLabel.message msg MessageDir.recv b₀) p' →
+      ∃ p'', Semantics.Reduces p (TransLabel.message msg MessageDir.recv b) p'' := by
+    intro p p' msg b₀ b H_reduces
+    exact reduces_recv_any_value_aux H_reduces rfl b
+
+  private lemma incomp_reduces_recv_any_value :
+    ∀ {p p' : Semantics.ProcComp} {msg : MessageId} {b₀ b : Bool},
+      Semantics.IncompReduces p (TransLabel.message msg MessageDir.recv b₀) p' →
+      ∃ p'', Semantics.IncompReduces p (TransLabel.message msg MessageDir.recv b) p'' := by
+    intro p p' msg b₀ b H_incomp
+    unfold IncompReduces at H_incomp
+    obtain ⟨pw, H_red, H_elim⟩ := H_incomp
+    obtain ⟨p'', H_red'⟩ := reduces_recv_any_value (b := b) H_red
+    refine ⟨p'', ?_⟩
+    unfold IncompReduces
+    exact ⟨pw, H_red', H_elim⟩
+
   lemma par_message :
     ∀ {p₁ p₁' p₂ p₂' : Semantics.ProcComp} {msg : MessageId} {d₁ d₂ : MessageDir} {v₁ v₂ : Bool},
       MessageDir.dual d₁ d₂ →
-      -- note that we weaken the condition on the values as if the receiver side can receive at all, it can receive any value
       Semantics.IncompReduces p₁ (TransLabel.message msg d₁ v₁) p₁' →
       Semantics.IncompReduces p₂ (TransLabel.message msg d₂ v₂) p₂' →
-      Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁' p₂') := by
-        sorry -- FIXME: this is problematic. We need to care about the receiving end process
+      ∃ p₁'' p₂'',
+        Semantics.IncompReduces (Proc.par p₁ p₂) (TransLabel.ac $ Action.fullMessage msg) (Proc.par p₁'' p₂'') := by
+      intro p₁ p₁' p₂ p₂' msg d₁ d₂ v₁ v₂ H_dual H_incomp₁ H_incomp₂
+      cases d₁ <;> cases d₂ <;> simp [MessageDir.dual] at H_dual
+      case send.recv =>
+        obtain ⟨p₂'', H_incomp₂'⟩ := incomp_reduces_recv_any_value (b := v₁) H_incomp₂
+        unfold IncompReduces at H_incomp₁ H_incomp₂'
+        obtain ⟨pw₁, H_red₁, H_elim₁⟩ := H_incomp₁
+        obtain ⟨pw₂, H_red₂, H_elim₂⟩ := H_incomp₂'
+        refine ⟨p₁', p₂'', ?_⟩
+        unfold IncompReduces
+        refine ⟨Proc.par pw₁ pw₂, ?_⟩
+        constructor
+        · exact Semantics.Reduces.par_message msg MessageDir.send MessageDir.recv v₁ pw₁ p₁' pw₂ p₂'' (by simp [MessageDir.dual]) H_red₁ H_red₂
+        · exact CompElim.comp_elim_par H_elim₁ H_elim₂
+      case recv.send =>
+        obtain ⟨p₁'', H_incomp₁'⟩ := incomp_reduces_recv_any_value (b := v₂) H_incomp₁
+        unfold IncompReduces at H_incomp₁' H_incomp₂
+        obtain ⟨pw₁, H_red₁, H_elim₁⟩ := H_incomp₁'
+        obtain ⟨pw₂, H_red₂, H_elim₂⟩ := H_incomp₂
+        refine ⟨p₁'', p₂', ?_⟩
+        unfold IncompReduces
+        refine ⟨Proc.par pw₁ pw₂, ?_⟩
+        constructor
+        · exact Semantics.Reduces.par_message msg MessageDir.recv MessageDir.send v₂ pw₁ p₁'' pw₂ p₂' (by simp [MessageDir.dual]) H_red₁ H_red₂
+        · exact CompElim.comp_elim_par H_elim₁ H_elim₂
 
   lemma extend_l :
         ∀ {p₁ p₁' p₂ : Semantics.ProcComp} {lbl : TransLabel},

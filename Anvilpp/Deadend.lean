@@ -151,31 +151,32 @@ lemma type_preserves_deadends_single : ∀ (p : Proc) (τ τ' : ProcTy) (lbl : A
       have ⟨p₁', lbl₁', H_lbl₁', H_reduces₁⟩ := H_p₁'
       have H_p₂' := H_ind₂ H_ctx τ₂' (AbstractTransLabel.message msg d₂) (by simp) H_trans₂
       have ⟨p₂', lbl₂', H_lbl₂', H_reduces₂⟩ := H_p₂'
-      exists (Proc.par p₁' p₂'), (TransLabel.ac $ Action.fullMessage msg)
-      constructor
-      . simp
-      . have H_lbl₁_msg : ∃ v₁, lbl₁' = TransLabel.message msg d₁ v₁ := by
-          cases lbl₁' <;> (simp [AbstractTransLabel.Related] at H_lbl₁'; try contradiction)
-          rename_i v₁
-          exists v₁
-          rewrite [H_lbl₁'.1]
-          rewrite [H_lbl₁'.2]
-          rfl
-        have H_lbl₂_msg : ∃ v₂, lbl₂' = TransLabel.message msg d₂ v₂ := by
-          cases lbl₂' <;> (simp [AbstractTransLabel.Related] at H_lbl₂'; try contradiction)
-          rename_i v₂
-          exists v₂
-          rewrite [H_lbl₂'.1]
-          rewrite [H_lbl₂'.2]
-          rfl
-        have ⟨v₁, H_lbl₁_msg⟩ := H_lbl₁_msg
-        have ⟨v₂, H_lbl₂_msg⟩ := H_lbl₂_msg
-        apply Semantics.IncompReduces.par_message (v₁ := v₁) (v₂ := v₂) (d₁ := d₁) (d₂ := d₂)
-        . exact H_dual
-        . rewrite [← H_lbl₁_msg]
-          exact H_reduces₁
-        . rewrite [← H_lbl₂_msg]
-          exact H_reduces₂
+      have H_lbl₁_msg : ∃ v₁, lbl₁' = TransLabel.message msg d₁ v₁ := by
+        cases lbl₁' <;> (simp [AbstractTransLabel.Related] at H_lbl₁'; try contradiction)
+        rename_i v₁
+        exists v₁
+        rewrite [H_lbl₁'.1]
+        rewrite [H_lbl₁'.2]
+        rfl
+      have H_lbl₂_msg : ∃ v₂, lbl₂' = TransLabel.message msg d₂ v₂ := by
+        cases lbl₂' <;> (simp [AbstractTransLabel.Related] at H_lbl₂'; try contradiction)
+        rename_i v₂
+        exists v₂
+        rewrite [H_lbl₂'.1]
+        rewrite [H_lbl₂'.2]
+        rfl
+      have ⟨v₁, H_lbl₁_msg⟩ := H_lbl₁_msg
+      have ⟨v₂, H_lbl₂_msg⟩ := H_lbl₂_msg
+      have H_par_msg := Semantics.IncompReduces.par_message (v₁ := v₁) (v₂ := v₂) (d₁ := d₁) (d₂ := d₂)
+        H_dual
+        (by
+          rewrite [← H_lbl₁_msg]
+          exact H_reduces₁)
+        (by
+          rewrite [← H_lbl₂_msg]
+          exact H_reduces₂)
+      obtain ⟨p₁'', p₂'', H_par_msg⟩ := H_par_msg
+      exists (Proc.par p₁'' p₂''), (TransLabel.ac $ Action.fullMessage msg)
   case recur =>
     cases H_trans
     simp at H_not_ε
