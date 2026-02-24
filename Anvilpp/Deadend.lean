@@ -736,50 +736,24 @@ lemma type_keeps_elim : ∀ (p : Proc) (τ τ' : ProcTy),
               . exact H_typing₁'
               . exact H_sub₂
 
-lemma type_preserves_deadend_elim : ∀ (P : ProcTy → Prop) (p : Proc) (τ : ProcTy),
-    CompositionTyJudgement p τ →
-    (∃ n, ∀ τ', ¬ ProcTyCompElimStep n τ τ') →
-    (∀ τ', ProcTyCompElim τ τ' → (∃ τ'', ProcTyCompElim τ' τ'' ∧ P τ'')) →
-    (∃ p' τ', CompositionTyJudgement p' τ' ∧ ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ P τ') := by
-    -- (∃ τ', ProcTyCompElim τ τ' ∧ (∀ α τ'', ProcTyCompTransition τ' α τ'' → ∃ p'', Semantics.CompReduces p α p'')) := by
-    sorry -- FIXME: prove it (low priority)
-
 theorem type_preserves_deadends : ∀ (p : Proc) (τ : ProcTy),
     CompositionTyJudgement p τ →
     (¬ ∃ p' α, Semantics.CompReduces p α p') →
     (
       (∀ n, ∃ τ', ProcTyCompElimStep n τ τ') ∨
-      (∃ τ', ProcTyCompElim τ τ' ∧ (¬ ∃ τ'' α, ProcTyCompTransition τ' α τ''))
+      (∃ τ', ProcTyCompElim τ τ' ∧ (¬ ∃ τ'' α, ProcTyTransition τ' (AbstractTransLabel.ac α) τ''))
     )
      := by
   intro p τ H_typing H_deadend
   by_contra H_contra
   push_neg at H_contra
-  have H_contra_final :  ∃ p' τ',
-    CompositionTyJudgement p' τ' ∧
-      ProcTyCompElim τ τ' ∧ Semantics.CompElim p p' ∧ ∃ τ'' α, ProcTyTransition τ' (AbstractTransLabel.ac α) τ'' := by
-    have ⟨H_contra₁, H_contra₂⟩ := H_contra
-    apply type_preserves_deadend_elim
-    . exact H_typing
-    . exact H_contra₁
-    . intro τ' H_contra'
-      have H := H_contra₂ τ' H_contra'
-      unfold ProcTyCompTransition ProcTyIncompTransition at H
-      have ⟨τ'', α, τₘ, H_τ''⟩ := H
-      exists τₘ
-      constructor
-      . exact H_τ''.2
-      . exists τ'', α
-        exact H_τ''.1
-  have ⟨p', τ', H_prop, H_elim, H_comp_elim, τ'', α, H_trans⟩ := H_contra_final
-  have H_p'' := type_preserves_deadends_single p' τ' τ'' (AbstractTransLabel.ac α) H_prop (by simp) H_trans
+  have ⟨_, H_contra₂⟩ := H_contra
+  have H_trans : ∃ τ'' α, ProcTyTransition τ (AbstractTransLabel.ac α) τ'' :=
+    H_contra₂ τ (ProcTyCompElim.refl τ)
+  have ⟨τ'', α, H_trans⟩ := H_trans
+  have H_p'' := type_preserves_deadends_single p τ τ'' (AbstractTransLabel.ac α) H_typing (by simp) H_trans
   have ⟨p'', lbl', H_lbl', H_reduces⟩ := H_p''
   cases lbl' <;> simp [AbstractTransLabel.Related] at H_lbl'; try contradiction
   rename Action => α'
-  have H_contra' : ∃ p' α, Semantics.CompReduces p α p' := by
-    exists p'', α'
-    unfold Semantics.CompReduces
-    apply Semantics.IncompReduces.extend_l (p₁' := p')
-    . exact H_comp_elim
-    . exact H_reduces
-  contradiction
+  have H_bad : ∃ p' α, Semantics.CompReduces p α p' := ⟨p'', α', H_reduces⟩
+  exact H_deadend H_bad
