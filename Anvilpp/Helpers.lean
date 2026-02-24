@@ -2357,7 +2357,11 @@ namespace ProcTyGuarded
       · exact H_ind2 Γₙ' Γₘ' Γₘ' H_n H_m H_m
     case recur Γₙ'' Γₘ'' Γₒ'' x body H_g H_ind =>
       apply ProcTyGuarded.recur
-      exact H_ind Γₙ' (Γₘ' ∪ {x}) (Γₒ' \ {x}) H_n (by grind) (by grind)
+      have H_n' : (Γₙ'' \ {x}) ⊆ (Γₙ' \ {x}) := by
+        intro z hz
+        simp at hz ⊢
+        exact ⟨H_n hz.1, hz.2⟩
+      exact H_ind (Γₙ' \ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x}) H_n' (by grind) (by grind)
     case recur_noninst Γₙ'' Γₘ'' Γₒ'' x body H_noninst H_g H_ind =>
       apply ProcTyGuarded.recur_noninst
       · exact larger_context_preserves_noninst _ _ _ H_n H_noninst
@@ -2409,12 +2413,19 @@ namespace ProcTyGuarded
         have H_o : (Γₒ \ {x'}) ∪ {x} = (Γₒ ∪ {x}) \ {x'} := by grind
         cases H_guarded₁
         case recur H_guarded₁ =>
-          have H_ind' := H_ind x τ' Γₙ (Γₘ ∪ {x'}) (Γₒ \ {x'}) (by grind) (by exact H_noninst_x) (
+          have H_noninst_x' : x ∈ (Γₙ \ {x'}) → ProcTyNonInstant ∅ τ' := by
+            intro Hx
+            have : x ∈ Γₙ := by
+              simp at Hx
+              exact Hx.1
+            exact H_noninst_x this
+          have H_ind' := H_ind x τ' (Γₙ \ {x'}) (Γₘ ∪ {x'}) (Γₒ \ {x'}) (by grind) (by exact H_noninst_x') (
             by
               rewrite [H_m, H_o]
               exact H_guarded₁
           ) H_guarded₂
-          aesop
+          apply ProcTyGuarded.recur
+          simpa [ProcTy.replaceVar, h] using H_ind'
         case recur_noninst H_non_inst H_guarded₁ =>
           have H_non_inst' : ProcTyNonInstant Γₙ ((ProcTy.recur x' body).replaceVar x τ') := by
             apply replace_preserves_noninst (Γ := Γₙ)
@@ -2537,12 +2548,172 @@ namespace ProcTyGuarded
     · exact H_guarded
     · exact H_guarded'
 
-  lemma recur_noninst_body_guarded_transport
-      (x : String) (τ : ProcTy) :
-      ProcTyNonInstant ∅ (ProcTy.recur x τ) →
-      ProcTyGuarded ({x}) ({x}) ∅ τ →
-      ProcTyGuarded ∅ ({x}) ({x}) τ := by
-    sorry -- FIXME: prove this
+
+  lemma noninst_preserved_under_guarded_intersection :
+    ∀ (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String),
+      ProcTyNonInstant Γₙ τ →
+      ProcTyGuarded Γₙ Γₘ Γₒ τ →
+      ProcTyNonInstant (Γₙ ∩ (Γₘ ∪ Γₒ)) τ := by
+    intro τ Γₙ Γₘ Γₒ H_noninst
+    revert Γₘ Γₒ
+    induction H_noninst
+    case cycle => aesop
+    case var Γ' x H_x =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      rename_i H_x'
+      apply ProcTyNonInstant.var
+      grind
+    case recur Γ' x τ H_noninst H_ind =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case recur H_guarded₁ H_guarded₂ =>
+        have H_ind' := H_ind (Γₘ ∪ {x}) (Γₒ \ {x})
+          (
+            by
+              apply larger_context_preserves_guarded (Γₙ := Γ' \ {x}) (Γₘ := Γₘ ∪ {x}) (Γₒ := Γₒ \ {x}) <;> grind
+          )
+        simp at H_ind'
+        have H : ((Γ' ∪ {x}) ∩ (Γₘ ∪ ({x} ∪ Γₒ))) = (Γ' ∩ (Γₘ ∪ Γₒ)) ∪ {x} := by grind
+        rewrite [H] at H_ind'
+        apply ProcTyNonInstant.recur
+        exact H_ind'
+      case recur_noninst H_noninst' H_guard' =>
+        have H_ind' := H_ind (Γₘ ∪ {x}) (Γₒ \ {x})
+          (
+            by
+              apply larger_context_preserves_guarded (Γₙ := Γ' ∪ {x}) (Γₘ := Γₘ ∪ {x}) (Γₒ := Γₒ \ {x}) <;> grind
+          )
+        simp at H_ind'
+        have H : ((Γ' ∪ {x}) ∩ (Γₘ ∪ ({x} ∪ Γₒ))) = (Γ' ∩ (Γₘ ∪ Γₒ)) ∪ {x} := by grind
+        rewrite [H] at H_ind'
+        apply ProcTyNonInstant.recur
+        exact H_ind'
+    case par_left Γ' τ₁ τ₂ H_noninst H_ind =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case par H_guarded₁ H_guarded₂ =>
+        have H_ind' := H_ind Γₘ Γₒ H_guarded₁
+        apply ProcTyNonInstant.par_left
+        exact H_ind'
+    case par_right Γ' τ₁ τ₂ H_noninst H_ind =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case par H_guarded₁ H_guarded₂ =>
+        have H_ind' := H_ind Γₘ Γₒ H_guarded₂
+        apply ProcTyNonInstant.par_right
+        exact H_ind'
+    case choice Γ' τ₁ τ₂ H_noninst₁ H_noninst₂ H_ind₁ H_ind₂ =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case choice H_guarded₁ H_guarded₂ =>
+        apply ProcTyNonInstant.choice
+        · exact H_ind₁ Γₘ Γₒ H_guarded₁
+        · exact H_ind₂ Γₘ Γₒ H_guarded₂
+    case choice_fair bid Γ' τ₁ τ₂ H_noninst₁ H_noninst₂ H_ind₁ H_ind₂ =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case choice_fair H_guarded₁ H_guarded₂ =>
+        apply ProcTyNonInstant.choice_fair
+        · exact H_ind₁ Γₘ Γₒ H_guarded₁
+        · exact H_ind₂ Γₘ Γₒ H_guarded₂
+    case seq_left Γ' τ₁ τ₂ H_noninst H_ind =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case seq_instant H_guarded₁ H_guarded₂ =>
+        apply ProcTyNonInstant.seq_left
+        exact H_ind Γₘ Γₒ H_guarded₁
+      case seq_noninstant H_noninst' H_guarded₁ H_guarded₂ =>
+        apply ProcTyNonInstant.seq_left
+        exact H_ind Γₘ Γₒ H_guarded₁
+    case seq_right Γ' τ₁ τ₂ H_noninst H_ind =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case seq_instant H_guarded₁ H_guarded₂ =>
+        apply ProcTyNonInstant.seq_right
+        exact H_ind Γₘ Γₒ H_guarded₂
+      case seq_noninstant H_noninst' H_guarded₁ H_guarded₂ =>
+        have H_guarded₂' : ProcTyGuarded Γ' Γₘ (Γₘ ∪ Γₒ) τ₂ := by
+          apply larger_context_preserves_guarded (Γₙ := Γ') (Γₘ := Γₘ) (Γₒ := Γₘ)
+          · grind
+          · grind
+          · grind
+          · exact H_guarded₂
+        have H_ind' := H_ind Γₘ (Γₘ ∪ Γₒ) H_guarded₂'
+        apply ProcTyNonInstant.seq_right
+        simpa [Finset.union_assoc, Finset.union_left_comm, Finset.union_idempotent] using H_ind'
+    case xoffer Γ' τ_else branch_tys H_noninst_else H_noninst_branches H_ih_else H_ih_branches =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case xoffer H_guarded_else H_guarded_branches =>
+        apply ProcTyNonInstant.xoffer
+        · exact H_ih_else Γₘ Γₒ H_guarded_else
+        · intro m ty H_mem
+          exact H_ih_branches m ty H_mem Γₘ Γₒ (H_guarded_branches m ty H_mem)
+    case offer Γ' τ_else branch_tys H_noninst_else H_noninst_branches H_ih_else H_ih_branches =>
+      intro Γₘ Γₒ H_guarded
+      cases H_guarded
+      case offer H_guarded_else H_guarded_branches =>
+        apply ProcTyNonInstant.offer
+        · exact H_ih_else Γₘ Γₒ H_guarded_else
+        · intro m ty H_mem
+          exact H_ih_branches m ty H_mem Γₘ Γₒ (H_guarded_branches m ty H_mem)
+
+
+  lemma guarded_intersect_noninst_context :
+    ∀ (τ : ProcTy) (Γₙ Γₘ Γₒ : Finset String),
+      ProcTyGuarded Γₙ Γₘ Γₒ τ →
+      ProcTyGuarded (Γₙ ∩ (Γₘ ∪ Γₒ)) Γₘ Γₒ τ := by
+    intro τ Γₙ Γₘ Γₒ H_guarded
+    induction H_guarded
+    case message_recv | message_send | cycle | skip | dollar
+        | var | seq_instant | par | choice | choice_fair => aesop
+    case seq_noninstant Γₙ' Γₘ' Γₒ' τ₁ τ₂ H_noninst H_guarded₁ H_guarded₂ H_ind₁ H_ind₂ =>
+      apply ProcTyGuarded.seq_noninstant
+      . apply noninst_preserved_under_guarded_intersection
+        . exact H_noninst
+        . exact H_guarded₁
+      . exact H_ind₁
+      . apply larger_context_preserves_guarded (Γₙ := Γₙ' ∩ (Γₘ' ∪ Γₘ')) (Γₘ := Γₘ') (Γₒ := Γₘ') <;> grind
+    case recur Γₙ' Γₘ' Γₒ' x body H_guarded_body H_ind =>
+      apply ProcTyGuarded.recur
+      have H_body :
+          ProcTyGuarded ((Γₙ' ∩ (Γₘ' ∪ Γₒ')) \ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x}) body := by
+        apply larger_context_preserves_guarded body
+          ((Γₙ' \ {x}) ∩ (Γₘ' ∪ {x} ∪ (Γₒ' \ {x}))) ((Γₙ' ∩ (Γₘ' ∪ Γₒ')) \ {x})
+          (Γₘ' ∪ {x}) (Γₒ' \ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x})
+        · intro z hz; grind
+        · intro z hz; exact hz
+        · intro z hz; exact hz
+        · exact H_ind
+      exact H_body
+    case recur_noninst Γₙ' Γₘ' Γₒ' x body H_noninst H_guarded_body H_ind =>
+      apply ProcTyGuarded.recur_noninst
+      · exact noninst_preserved_under_guarded_intersection
+          (τ := ProcTy.recur x body)
+          (Γₙ := Γₙ') (Γₘ := Γₘ') (Γₒ := Γₒ')
+          H_noninst
+          (ProcTyGuarded.recur_noninst Γₙ' Γₘ' Γₒ' x body H_noninst H_guarded_body)
+      · have H_body :
+            ProcTyGuarded ((Γₙ' ∩ (Γₘ' ∪ Γₒ')) ∪ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x}) body := by
+          apply larger_context_preserves_guarded body
+            ((Γₙ' ∪ {x}) ∩ (Γₘ' ∪ {x} ∪ (Γₒ' \ {x}))) ((Γₙ' ∩ (Γₘ' ∪ Γₒ')) ∪ {x})
+            (Γₘ' ∪ {x}) (Γₒ' \ {x}) (Γₘ' ∪ {x}) (Γₒ' \ {x})
+          · intro z hz; grind
+          · intro z hz; exact hz
+          · intro z hz; exact hz
+          · exact H_ind
+        exact H_body
+    case xoffer Γₙ' Γₘ' Γₒ' τ_else branch_tys H_else H_branches H_ind_else H_ind_branches =>
+      apply ProcTyGuarded.xoffer
+      · exact H_ind_else
+      · intro m ty H_mem
+        exact H_ind_branches m ty H_mem
+    case offer Γₙ' Γₘ' Γₒ' τ_else branch_tys H_else H_branches H_ind_else H_ind_branches =>
+      apply ProcTyGuarded.offer
+      · exact H_ind_else
+      · intro m ty H_mem
+        exact H_ind_branches m ty H_mem
 
   lemma trans_preserves_guarded :
         ∀ {τ₁ τ₂ : ProcTy} {lbl : AbstractTransLabel},
@@ -2614,14 +2785,44 @@ namespace ProcTyGuarded
       rename_i H_guarded₁ H_guarded₂
       exact H_guarded₂
     case recur_unfold x τ =>
-      apply replace_preserves_guarded
-      . grind
-      . cases H_guarded
-        · rename_i H_g
-          apply larger_context_preserves_guarded (Γₙ := ∅) (Γₘ := ∅ ∪ {x}) (Γₒ := ∅ \ {x}) <;> grind
-        · rename_i H_non_inst H_g
-          exact recur_noninst_body_guarded_transport x τ H_non_inst H_g
-      . aesop
+      cases H_guarded
+      · rename_i H_g
+        apply replace_preserves_guarded
+        · grind
+        · have H_g' : ProcTyGuarded ∅ (∅ ∪ {x}) (∅ ∪ {x}) τ := by
+            have H_g0 : ProcTyGuarded ∅ (∅ ∪ {x}) (∅ \ {x}) τ := by
+              simpa using H_g
+            exact larger_context_preserves_guarded τ
+              ∅ ∅ (∅ ∪ {x}) (∅ \ {x}) (∅ ∪ {x}) (∅ ∪ {x})
+              (by aesop)
+              (by aesop)
+              (by aesop)
+              H_g0
+          exact H_g'
+        · aesop
+      · rename_i H_non_inst H_g
+        have H_gx : ProcTyGuarded {x} ({x}) ({x}) τ := by
+          exact larger_context_preserves_guarded τ
+            ({x}) ({x}) ({x}) (∅) ({x}) ({x})
+            (by grind)
+            (by grind)
+            (by grind)
+            H_g
+        have H_rep_x : ProcTyGuarded ({x}) ∅ ∅ (τ.replaceVar x (ProcTy.recur x τ)) := by
+          apply replace_preserves_guarded_gen
+            (x := x) (τ := τ) (τ' := ProcTy.recur x τ)
+            (Γₙ := ({x})) (Γₘ := ∅) (Γₒ := ∅)
+          · grind
+          · intro _
+            exact H_non_inst
+          · simpa using H_gx
+          · exact ProcTyGuarded.recur_noninst ∅ ∅ ∅ x τ H_non_inst H_g
+        have H_closed : ProcTyGuarded ∅ ∅ ∅ (τ.replaceVar x (ProcTy.recur x τ)) := by
+          simpa using (guarded_intersect_noninst_context
+            (τ := τ.replaceVar x (ProcTy.recur x τ))
+            (Γₙ := ({x})) (Γₘ := ∅) (Γₒ := ∅)
+            H_rep_x)
+        exact H_closed
     case xoffer_else ex_msg τ_else branch_tys _H_cond =>
       cases H_guarded
       rename_i H_else _H_branches
