@@ -1,13 +1,6 @@
-import Anvilpp.Proc
-import Anvilpp.Types
-import Anvilpp.Typing
-import Anvilpp.Automata
-import Anvilpp.Helpers
 import Anvilpp.Subtyping
 
-
 /-! ## Skip elimination lemmas for typed transitions -/
-
 
 namespace ProcTyIncompTransition
   /-- Any closed process typed as `skip` must be syntactically `Proc.skip`. -/
