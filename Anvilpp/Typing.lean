@@ -2,6 +2,41 @@ import Anvilpp.Base
 import Anvilpp.Proc
 import Anvilpp.Types
 
+/-! ## Typing contexts -/
+
+abbrev ExprTyContext := Finset String
+
+/-- Joint context for process variables and expression variables. -/
+structure ProcTyContext where
+  procVars : Finset String
+  exprVars : ExprTyContext
+
+namespace ProcTyContext
+  def empty : ProcTyContext :=
+    { procVars := ∅, exprVars := ∅ }
+
+  def extendProcVar (ctx : ProcTyContext) (x : String) : ProcTyContext :=
+    { ctx with procVars := ctx.procVars ∪ {x} }
+
+  def extendExprVar (ctx : ProcTyContext) (x : String) : ProcTyContext :=
+    { ctx with exprVars := ctx.exprVars ∪ {x} }
+end ProcTyContext
+
+/-- Expression typing judgement. -/
+inductive ExprTyJudgement : ExprTyContext → Expr → Prop where
+  | var (ctx : ExprTyContext) (x : String) :
+    x ∈ ctx →
+    ExprTyJudgement ctx (Expr.var x)
+  | val (ctx : ExprTyContext) (n : Bool) :
+    ExprTyJudgement ctx (Expr.val n)
+  | add (ctx : ExprTyContext) (e1 e2 : Expr) (bop : BOp) :
+    ExprTyJudgement ctx e1 →
+    ExprTyJudgement ctx e2 →
+    ExprTyJudgement ctx (Expr.bin e1 bop e2)
+
+/-! ## Non-instant type predicates -/
+
+/-- Type-level analogue of `Semantics.NonInstantReducible`. -/
 @[aesop unsafe]
 inductive ProcTyNonInstant : Finset String → ProcTy → Prop where
   | cycle (Γ : Finset String) :
@@ -41,6 +76,7 @@ inductive ProcTyNonInstant : Finset String → ProcTy → Prop where
     ProcTyNonInstant (Γ ∪ {x}) τ →
     ProcTyNonInstant Γ (ProcTy.recur x τ)
 
+/-- Type-level analogue of `Semantics.NonInstantMessage`. -/
 @[aesop unsafe]
 inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (MessageId × MessageDir) → Prop where
   | cycle (Γₙ Γₘ : Finset String) (mx : MessageId × MessageDir) :
@@ -100,40 +136,65 @@ inductive ProcTyNonInstantMsg : Finset String → Finset String → ProcTy → (
   | recv_opposite (Γₙ Γₘ : Finset String) (msg msg' : MessageId) :
     ProcTyNonInstantMsg Γₙ Γₘ (ProcTy.message $ MessageExch.recv msg') (msg, MessageDir.send)
 
+-- Judgement ProcTyGuarded Γₙ Γₘ Γₒ τ means that τ does not unguardedly use free variables in Γₘ
+-- and that symbols in Γₙ are NonInstant.
+@[aesop unsafe]
+inductive ProcTyGuarded : Finset String → Finset String → Finset String → ProcTy → Prop where
+  | message_recv (Γₙ Γₘ Γₒ : Finset String) (msg : MessageId) :
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.message $ MessageExch.recv msg)
+  | message_send (Γₙ Γₘ Γₒ : Finset String) (msg : MessageId) :
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.message $ MessageExch.send msg)
+  | cycle (Γₙ Γₘ Γₒ : Finset String) :
+    ProcTyGuarded Γₙ Γₘ Γₒ ProcTy.cycle
+  | skip (Γₙ Γₘ Γₒ : Finset String) :
+    ProcTyGuarded Γₙ Γₘ Γₒ ProcTy.skip
+  | seq_noninstant (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyNonInstant Γₙ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₘ τ₂ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.seq τ₁ τ₂)
+  | seq_instant (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.seq τ₁ τ₂)
+  | par (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.par τ₁ τ₂)
+  | dollar (Γₙ Γₘ Γₒ : Finset String) (pid : ProcId) :
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.dollar pid)
+  | var (Γₙ Γₘ Γₒ : Finset String) (x : String) :
+    x ∈ Γₒ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.var x)
+  | recur (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
+    ProcTyGuarded (Γₙ \ {x}) (Γₘ ∪ {x}) (Γₒ \ {x}) body →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
+  | recur_noninst (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
+    ProcTyNonInstant Γₙ (ProcTy.recur x body) →
+    ProcTyGuarded (Γₙ ∪ {x}) (Γₘ ∪ {x}) (Γₒ \ {x}) body →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
+  | choice (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.choice τ₁ τ₂)
+  | choice_fair (bid : BranchId) (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
+    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.choice_fair bid τ₁ τ₂)
+  | xoffer (Γₙ Γₘ Γₒ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyGuarded Γₙ Γₘ Γₒ ty) →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.xoffer τ_else branch_tys)
+  | offer (Γₙ Γₘ Γₒ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
+    ProcTyGuarded Γₙ Γₘ Γₒ τ_else →
+    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyGuarded Γₙ Γₘ Γₒ ty) →
+    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.offer τ_else branch_tys)
 
+abbrev ProcTyGuardedClosed (τ : ProcTy) := ProcTyGuarded ∅ ∅ ∅ τ
 
-abbrev ExprTyContext := Finset String
+/-! ## Typing and refinement relations -/
 
-structure ProcTyContext where
-  -- procVars : String → Option ProcTy
-  procVars : Finset String
-  exprVars : ExprTyContext
-
-namespace ProcTyContext
-  def empty : ProcTyContext :=
-    { procVars := ∅, exprVars := ∅ }
-
-  -- def extendProcVar (ctx : ProcTyContext) (x : String) (ty : ProcTy) : ProcTyContext :=
-  --   { ctx with procVars := fun y => if y = x then some ty else ctx.procVars y }
-
-  def extendProcVar (ctx : ProcTyContext) (x : String) : ProcTyContext :=
-    { ctx with procVars := ctx.procVars ∪ {x} }
-
-  def extendExprVar (ctx : ProcTyContext) (x : String) : ProcTyContext :=
-    { ctx with exprVars := ctx.exprVars ∪ {x} }
-end ProcTyContext
-
-inductive ExprTyJudgement : ExprTyContext → Expr → Prop where
-  | var (ctx : ExprTyContext) (x : String) :
-    x ∈ ctx →
-    ExprTyJudgement ctx (Expr.var x)
-  | val (ctx : ExprTyContext) (n : Bool) :
-    ExprTyJudgement ctx (Expr.val n)
-  | add (ctx : ExprTyContext) (e1 e2 : Expr) (bop : BOp) :
-    ExprTyJudgement ctx e1 →
-    ExprTyJudgement ctx e2 →
-    ExprTyJudgement ctx (Expr.bin e1 bop e2)
-
+/-! Structural congruence on process types. -/
 inductive ProcTyCongr : ProcTy → ProcTy → Prop where
   | refl (τ : ProcTy) :
     ProcTyCongr τ τ
@@ -146,13 +207,6 @@ inductive ProcTyCongr : ProcTy → ProcTy → Prop where
     ProcTyCongr τ₁ τ₃
   | par_comm (τ₁ τ₂ : ProcTy) :
     ProcTyCongr (ProcTy.par τ₁ τ₂) (ProcTy.par τ₂ τ₁)
-    -- TODO: these are tricky, consider adding these later
-  -- | seq_skip (τ : ProcTy) :
-  --   ProcTyCongr (ProcTy.seq ProcTy.skip τ) τ
-  -- | choice_lift_right (τ₁ τ₂ τ' : ProcTy) :
-  --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ₁ τ') (ProcTy.seq τ₂ τ')) (ProcTy.seq (ProcTy.choice τ₁ τ₂) τ')
-  -- | choice_lift_left (τ₁ τ₂ τ' : ProcTy) :
-  --   ProcTyCongr (ProcTy.choice (ProcTy.seq τ' τ₁) (ProcTy.seq τ' τ₂)) (ProcTy.seq τ' (ProcTy.choice τ₁ τ₂))
 
 /-- Subtyping -/
 inductive ProcTySub : ProcTy → ProcTy → Prop where
@@ -162,12 +216,13 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
   | choice_relax (τ₁ τ₂ : ProcTy) :
     (ProcTyNonInstant ∅ τ₂) →
     (∀ mx, ProcTyNonInstantMsg ∅ ∅ τ₂ mx) →
-    ProcTySub τ₁ (ProcTy.choice τ₁ τ₂) -- FIXME: this requires that τ₂ does not include potentially instant messages
+    ProcTySub τ₁ (ProcTy.choice τ₁ τ₂)
   | trans (τ₁ τ₂ τ₃ : ProcTy) :
     ProcTySub τ₁ τ₂ →
     ProcTySub τ₂ τ₃ →
     ProcTySub τ₁ τ₃
 
+  /-- Main typing judgement from processes to process types. -/
   @[aesop unsafe]
   inductive ProcTyJudgement : ProcTyContext → Proc → ProcTy → Prop where
     | cycle (ctx : ProcTyContext) :
@@ -231,7 +286,6 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
       ProcTyJudgement ctx p_else τ_else →
       ProcTyJudgement ctx (Proc.offer p_else branches) (ProcTy.offer τ_else branch_tys)
     | var (ctx : ProcTyContext) (x : String) :
-      -- ctx.procVars x = some τ →
       x ∈ ctx.procVars →
       ProcTyJudgement ctx (Proc.var x) (ProcTy.var x)
     | recur (ctx : ProcTyContext) (x : String) (p : Proc) (τ : ProcTy) :
@@ -242,5 +296,6 @@ inductive ProcTySub : ProcTy → ProcTy → Prop where
       ProcTySub τ₁ τ₂ →
       ProcTyJudgement ctx p τ₂
 
+/-- Top-level typing judgement under an empty context. -/
 @[reducible]
 def CompositionTyJudgement := ProcTyJudgement ProcTyContext.empty

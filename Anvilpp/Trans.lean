@@ -6,7 +6,11 @@ import Anvilpp.Helpers
 import Anvilpp.Subtyping
 
 
+/-! ## Skip elimination lemmas for typed transitions -/
+
+
 namespace ProcTyIncompTransition
+  /-- Any closed process typed as `skip` must be syntactically `Proc.skip`. -/
   lemma skip_typing_implies_skip_elim_rev :
         ∀ {p : Semantics.ProcComp},
           ProcTyJudgement ProcTyContext.empty p ProcTy.skip →
@@ -26,6 +30,7 @@ namespace ProcTyIncompTransition
         apply ProcTySub.sub_of_skip_is_skip
         exact H_sub
 
+  /-- If `Proc.skip` has type `τ`, then `τ` epsilon-eliminates to `ProcTy.skip`. -/
   lemma skip_typing_implies_skip_elim :
         ∀ {τ : ProcTy},
           ProcTyJudgement ProcTyContext.empty Proc.skip τ →

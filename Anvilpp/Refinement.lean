@@ -1072,7 +1072,6 @@ lemma process_refines_type_incomp : ∀ (p p' : Proc) (τ : ProcTy) (lbl : Trans
       . exact H_τ''.2.2
       . exact H_τ'.2
 
--- TODO: may need to consider the ex labels
 theorem process_refines_type : ∀ (p p' : Proc) (τ : ProcTy) (α : Action),
     CompositionTyJudgement p τ →
     ProcTyGuardedClosed τ →

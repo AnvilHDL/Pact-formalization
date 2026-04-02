@@ -40,7 +40,6 @@ inductive ProcTyTransition : ProcTy → AbstractTransLabel → ProcTy → Prop w
   | par_skip_right (τ₁ : ProcTy) :
     ProcTyTransition (ProcTy.par τ₁ ProcTy.skip) AbstractTransLabel.ε τ₁
   | par_message (τ₁ τ₂ τ'₁ τ'₂ : ProcTy) (msg : MessageId) (d₁ d₂ : MessageDir) :
-    -- TODO: this can be simplified
     MessageDir.dual d₁ d₂ →
     ProcTyTransition τ₁ (AbstractTransLabel.message msg d₁) τ'₁ →
     ProcTyTransition τ₂ (AbstractTransLabel.message msg d₂) τ'₂ →
@@ -92,8 +91,6 @@ inductive ProcTyCompElim : ProcTyComposition → ProcTyComposition → Prop wher
     ProcTyTransition τs AbstractTransLabel.ε τs' →
     ProcTyCompElim τs' τs'' →
     ProcTyCompElim τs τs''
-
--- same as ProcTyCompElim but with a step count
 inductive ProcTyCompElimStep : ℕ → ProcTyComposition → ProcTyComposition → Prop where
   | zero (τs : ProcTyComposition) :
     ProcTyCompElimStep 0 τs τs
@@ -110,60 +107,3 @@ def ProcTyIncompTransition (τ₁ : ProcTy) (lbl : AbstractTransLabel) (τ₂ : 
 @[reducible]
 def ProcTyCompTransition (τ₁ : ProcTy) (α : Action) (τ₂ : ProcTy) :=
   ProcTyIncompTransition τ₁ (AbstractTransLabel.ac α) τ₂
-
-
--- Judgement ProcTyGuarded Γₙ Γₘ τ means that τ does not unguardedly use free variables in Γₘ
--- and that symbols in Γₙ are NonInstant
-@[aesop unsafe]
-inductive ProcTyGuarded : Finset String → Finset String → Finset String → ProcTy → Prop where
-  | message_recv (Γₙ Γₘ Γₒ : Finset String) (msg : MessageId) :
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.message $ MessageExch.recv msg)
-  | message_send (Γₙ Γₘ Γₒ : Finset String) (msg : MessageId) :
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.message $ MessageExch.send msg)
-  | cycle (Γₙ Γₘ Γₒ : Finset String) :
-    ProcTyGuarded Γₙ Γₘ Γₒ ProcTy.cycle
-  | skip (Γₙ Γₘ Γₒ : Finset String) :
-    ProcTyGuarded Γₙ Γₘ Γₒ ProcTy.skip
-  | seq_noninstant (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
-    ProcTyNonInstant Γₙ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₘ τ₂ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.seq τ₁ τ₂)
-  | seq_instant (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.seq τ₁ τ₂)
-  | par (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.par τ₁ τ₂)
-  | dollar (Γₙ Γₘ Γₒ : Finset String) (pid : ProcId) :
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.dollar pid)
-  | var (Γₙ Γₘ Γₒ : Finset String) (x : String) :
-    x ∈ Γₒ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.var x)
-  | recur (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
-    ProcTyGuarded (Γₙ \ {x}) (Γₘ ∪ {x}) (Γₒ \ {x}) body →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
-  | recur_noninst (Γₙ Γₘ Γₒ : Finset String) (x : String) (body : ProcTy) :
-    ProcTyNonInstant Γₙ (ProcTy.recur x body) →
-    ProcTyGuarded (Γₙ ∪ {x}) (Γₘ ∪ {x}) (Γₒ \ {x}) body →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.recur x body)
-  | choice (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.choice τ₁ τ₂)
-  | choice_fair (bid : BranchId) (Γₙ Γₘ Γₒ : Finset String) (τ₁ τ₂ : ProcTy) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₁ →
-    ProcTyGuarded Γₙ Γₘ Γₒ τ₂ →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.choice_fair bid τ₁ τ₂)
-  | xoffer (Γₙ Γₘ Γₒ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ_else →
-    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyGuarded Γₙ Γₘ Γₒ ty) →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.xoffer τ_else branch_tys)
-  | offer (Γₙ Γₘ Γₒ : Finset String) (τ_else : ProcTy) (branch_tys : List (MessageExch × ProcTy)) :
-    ProcTyGuarded Γₙ Γₘ Γₒ τ_else →
-    (∀ m ty, (m, ty) ∈ branch_tys → ProcTyGuarded Γₙ Γₘ Γₒ ty) →
-    ProcTyGuarded Γₙ Γₘ Γₒ (ProcTy.offer τ_else branch_tys)
-
-abbrev ProcTyGuardedClosed (τ : ProcTy) := ProcTyGuarded ∅ ∅ ∅ τ

@@ -4,58 +4,59 @@ import Anvilpp.Typing
 import Anvilpp.Automata
 import Anvilpp.Helpers
 
-lemma par_symm_trans_congr : ∀ (τ₁ τ₂ τ : ProcTy) (lbl : AbstractTransLabel),
-    ProcTyTransition (ProcTy.par τ₁ τ₂) lbl τ →
-    ∃ τ', ProcTyTransition (ProcTy.par τ₂ τ₁) lbl τ' ∧ ProcTyCongr τ τ' := by
-
-  intro τ₁ τ₂ τ lbl H_trans
-  cases H_trans <;> try trivial
-  case par_left τ₁' H_not_ε H_non_ex H_trans =>
-    exists (ProcTy.par τ₂ τ₁')
-    constructor
-    . aesop
-    . apply ProcTyCongr.par_comm
-  case par_right τ₂' H_not_ε H_non_ex H_trans =>
-    exists (ProcTy.par τ₂' τ₁)
-    constructor
-    . aesop
-    . apply ProcTyCongr.par_comm
-  case par_left_ex ex_msg τ₁' H_trans H_mx =>
-    exists (ProcTy.par τ₂ τ₁')
-    constructor
-    . aesop
-    . apply ProcTyCongr.par_comm
-  case par_right_ex ex_msg τ₂' H_trans H_mx =>
-    exists (ProcTy.par τ₂' τ₁)
-    constructor
-    . aesop
-    . apply ProcTyCongr.par_comm
-  case par_tock τ₁' τ₂' H_trans₁ H_trans₂ =>
-    exists (ProcTy.par τ₂' τ₁')
-    constructor
-    . aesop
-    . apply ProcTyCongr.par_comm
-  case par_skip_left =>
-    exists τ₂
-    constructor
-    . aesop
-    . apply ProcTyCongr.refl
-  case par_skip_right =>
-    exists τ₁
-    constructor
-    . aesop
-    . apply ProcTyCongr.refl
-  case par_message τ₁'' τ₂'' msg' d₁ d₂ H_dir H_trans₁ H_trans₂ =>
-    exists (ProcTy.par τ₂'' τ₁'')
-    constructor
-    . apply ProcTyTransition.par_message (d₁ := d₂) (d₂ := d₁)
-      . rewrite [MessageDir.dual_symm]
-        exact H_dir
-      . exact H_trans₂
-      . exact H_trans₁
-    . apply ProcTyCongr.par_comm
-
 namespace ProcTyCongr
+  /-- Commute a `par` transition while preserving a congruent target. -/
+  private lemma par_symm_trans_congr : ∀ (τ₁ τ₂ τ : ProcTy) (lbl : AbstractTransLabel),
+      ProcTyTransition (ProcTy.par τ₁ τ₂) lbl τ →
+      ∃ τ', ProcTyTransition (ProcTy.par τ₂ τ₁) lbl τ' ∧ ProcTyCongr τ τ' := by
+
+    intro τ₁ τ₂ τ lbl H_trans
+    cases H_trans <;> try trivial
+    case par_left τ₁' H_not_ε H_non_ex H_trans =>
+      exists (ProcTy.par τ₂ τ₁')
+      constructor
+      . aesop
+      . apply ProcTyCongr.par_comm
+    case par_right τ₂' H_not_ε H_non_ex H_trans =>
+      exists (ProcTy.par τ₂' τ₁)
+      constructor
+      . aesop
+      . apply ProcTyCongr.par_comm
+    case par_left_ex ex_msg τ₁' H_trans H_mx =>
+      exists (ProcTy.par τ₂ τ₁')
+      constructor
+      . aesop
+      . apply ProcTyCongr.par_comm
+    case par_right_ex ex_msg τ₂' H_trans H_mx =>
+      exists (ProcTy.par τ₂' τ₁)
+      constructor
+      . aesop
+      . apply ProcTyCongr.par_comm
+    case par_tock τ₁' τ₂' H_trans₁ H_trans₂ =>
+      exists (ProcTy.par τ₂' τ₁')
+      constructor
+      . aesop
+      . apply ProcTyCongr.par_comm
+    case par_skip_left =>
+      exists τ₂
+      constructor
+      . aesop
+      . apply ProcTyCongr.refl
+    case par_skip_right =>
+      exists τ₁
+      constructor
+      . aesop
+      . apply ProcTyCongr.refl
+    case par_message τ₁'' τ₂'' msg' d₁ d₂ H_dir H_trans₁ H_trans₂ =>
+      exists (ProcTy.par τ₂'' τ₁'')
+      constructor
+      . apply ProcTyTransition.par_message (d₁ := d₂) (d₂ := d₁)
+        . rewrite [MessageDir.dual_symm]
+          exact H_dir
+        . exact H_trans₂
+        . exact H_trans₁
+      . apply ProcTyCongr.par_comm
+
   lemma congr_preserves_behaviour (τ₁ τ₂ : ProcTy) :
     ProcTyCongr τ₁ τ₂ →
       ((∀ τ₁' lbl, ProcTyTransition τ₁ lbl τ₁' → ∃ τ₂', ProcTyTransition τ₂ lbl τ₂' ∧ ProcTyCongr τ₁' τ₂')
@@ -215,18 +216,18 @@ namespace ProcTyCongr
 
 end ProcTyCongr
 
--- Being eliminated to another type while keeping being a supertype of a given type
-inductive ProcTyCompElimWithSub : ProcTy → ProcTy → ProcTy → Prop where
-  | base (τ₁ τ₂ : ProcTy) :
-    ProcTySub τ₂ τ₁ →
-    ProcTyCompElimWithSub τ₁ τ₁ τ₂
-  | step (τ₁ τ₁' τₑ τ₂ : ProcTy) :
-    ProcTySub τ₂ τ₁ →
-    ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
-    ProcTyCompElimWithSub τ₁' τₑ τ₂ →
-    ProcTyCompElimWithSub τ₁ τₑ τ₂
-
 namespace ProcTySub
+  -- Being eliminated to another type while keeping being a supertype of a given type.
+  inductive ProcTyCompElimWithSub : ProcTy → ProcTy → ProcTy → Prop where
+    | base (τ₁ τ₂ : ProcTy) :
+      ProcTySub τ₂ τ₁ →
+      ProcTyCompElimWithSub τ₁ τ₁ τ₂
+    | step (τ₁ τ₁' τₑ τ₂ : ProcTy) :
+      ProcTySub τ₂ τ₁ →
+      ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →
+      ProcTyCompElimWithSub τ₁' τₑ τ₂ →
+      ProcTyCompElimWithSub τ₁ τₑ τ₂
+
   lemma subtype_refinement_elim_single (τ₁ τ₁' τ₂ : ProcTy) :
     ProcTySub τ₁ τ₂ →
     ProcTyTransition τ₁ AbstractTransLabel.ε τ₁' →

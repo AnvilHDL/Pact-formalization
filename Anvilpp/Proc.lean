@@ -1,6 +1,8 @@
 import Mathlib.Data.Finset.Basic
 import Anvilpp.Base
 
+/-! ## Expression syntax -/
+
 /-- Binary operators. -/
 inductive BOp : Type where
   | and
@@ -12,10 +14,14 @@ inductive Expr : Type where
   | val : Bool → Expr
   | bin : Expr → BOp → Expr → Expr
 
+/-- Evaluate a binary boolean operator on two concrete boolean values. -/
 def valEval (v₁ v₂ : Bool) (bop : BOp) :=
   match bop with
   | .and => v₁ && v₂
   | .or => v₁ || v₂
+
+
+/-! ## Process syntax and actions -/
 
 
 inductive MessageDir : Type where
@@ -24,6 +30,7 @@ inductive MessageDir : Type where
   deriving DecidableEq
 
 namespace MessageDir
+  /-- `true` when directions are opposite and can synchronize. -/
   def dual : MessageDir → MessageDir → Bool
     | send, recv => true
     | recv, send => true
@@ -33,18 +40,12 @@ namespace MessageDir
     intros d₁ d₂
     cases d₁ <;> cases d₂ <;> rfl
 
+  /-- Flip direction between send and recv. -/
   def invert (dir : MessageDir) : MessageDir :=
     match dir with
     | send => recv
     | recv => send
 end MessageDir
-
-inductive Action : Type where
-  | tock : Action
-  | fullMessage : MessageId → Action
-  | branchTrue : BranchId → Action
-  | branchFalse : BranchId → Action
-  | dollar : ProcId → Action
 
 mutual
   /-- A branch in `offer` or `xoffer`. -/
@@ -61,7 +62,6 @@ mutual
     | cycle : Proc
     | par : Proc → Proc → Proc
     | seq : Proc → Proc → Proc
-    -- | letin : String → Expr → Proc → Proc
     | ifunfair : Expr → Proc → Proc → Proc
     | iffair : BranchId → Expr → Proc → Proc → Proc
     | xoffer : Proc → List ChoiceBranch → Proc
@@ -89,6 +89,16 @@ namespace ChoiceBranch
   def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
 end ChoiceBranch
 
+/-! ## Transition labels -/
+
+/-- Runtime actions emitted by visible process transitions. -/
+inductive Action : Type where
+  | tock : Action
+  | fullMessage : MessageId → Action
+  | branchTrue : BranchId → Action
+  | branchFalse : BranchId → Action
+  | dollar : ProcId → Action
+
 inductive TransLabel : Type where
   | ac : Action → TransLabel
   | ε : TransLabel
@@ -96,6 +106,7 @@ inductive TransLabel : Type where
   | message : MessageId → MessageDir → Bool → TransLabel
 
 namespace TransLabel
+  /-- `true` exactly for exclusion labels. -/
   @[reducible]
   def isEx : TransLabel → Bool
     | TransLabel.ex _ => true
@@ -110,6 +121,7 @@ inductive AbstractTransLabel : Type where
   | message : MessageId → MessageDir → AbstractTransLabel
 
 namespace AbstractTransLabel
+  /-- Forget concrete payload booleans from concrete transition labels. -/
   @[reducible]
   def fromConcrete : TransLabel → AbstractTransLabel
     | TransLabel.ac act => AbstractTransLabel.ac act
@@ -117,6 +129,7 @@ namespace AbstractTransLabel
     | TransLabel.ex ex_msgs => AbstractTransLabel.ex ex_msgs
     | TransLabel.message msg dir _ => AbstractTransLabel.message msg dir
 
+  /-- Compatibility relation between abstract and concrete labels. -/
   @[reducible]
   def Related (α : AbstractTransLabel) (c : TransLabel) : Prop :=
     match α, c with
@@ -131,6 +144,7 @@ namespace AbstractTransLabel
       msg = msg' ∧ dir = dir'
     | _, _ => False
 
+  /-- `true` exactly for exclusion labels. -/
   @[reducible]
   def isEx : AbstractTransLabel → Bool
     | AbstractTransLabel.ex _ => true
@@ -145,7 +159,12 @@ namespace AbstractTransLabel
 end AbstractTransLabel
 
 
+/-! ## Operational semantics -/
+
+
 namespace Semantics
+  /-! ### Expression evaluation and substitution -/
+
   inductive ExprEval : Expr → Bool → Prop where
     | literal (b : Bool) : ExprEval (Expr.val b) b
     | bin (e₁ e₂ : Expr) (b₁ b₂ : Bool) (bop : BOp) :
@@ -163,6 +182,7 @@ namespace Semantics
       Expr.bin (exprReplace e₁ x v) bop (exprReplace e₂ x v)
 
   mutual
+    /-- Capture-avoiding replacement of an expression variable inside a choice branch. -/
     def choiceBranchExprReplace (br : ChoiceBranch) (x : String) (v : Bool) : ChoiceBranch :=
       match br with
       | ChoiceBranch.send msg e p =>
@@ -171,6 +191,7 @@ namespace Semantics
         let p' := if x = var then p else procExprReplace p x v
         ChoiceBranch.recv msg var p'
 
+    /-- Capture-avoiding replacement of an expression variable inside a process. -/
     def procExprReplace (p : Proc) (x : String) (v : Bool) : Proc :=
       match p with
       | Proc.send msg e => Proc.send msg (exprReplace e x v)
@@ -197,6 +218,7 @@ namespace Semantics
   end
 
   mutual
+    /-- Replace recursive process variable occurrences inside a choice branch. -/
     def choiceBranchProcReplace (br : ChoiceBranch) (f : String) (p_body : Proc) : ChoiceBranch :=
       match br with
       | ChoiceBranch.send msg e p =>
@@ -204,6 +226,7 @@ namespace Semantics
       | ChoiceBranch.recv msg var p =>
         ChoiceBranch.recv msg var (procReplace p f p_body)
 
+    /-- Unfold-style replacement for recursion variables. -/
     def procReplace (p : Proc) (f : String) (p_body : Proc) : Proc :=
       match p with
       | Proc.var x => if x = f then p_body else p
@@ -226,6 +249,9 @@ namespace Semantics
         if g = f then Proc.recur g p' else Proc.recur g (procReplace p' f p_body)
   end
 
+  /-! ### Non-instant relations -/
+
+  /-- Processes that cannot make an immediate (instant) computational reduction. -/
   @[aesop unsafe]
   inductive NonInstantReducible : Finset String → Proc → Prop where
     | cycle (Γ : Finset String) : NonInstantReducible Γ Proc.cycle
@@ -269,6 +295,7 @@ namespace Semantics
       NonInstantReducible Γ p →
       NonInstantReducible Γ (Proc.recv msg var p)
 
+  /-- Message actions that cannot be produced instantly by a process. -/
   @[aesop unsafe]
   inductive NonInstantMessage : Finset String → Finset String → Proc → (MessageId × MessageDir) → Prop where
     | recv (Γ₁ Γ₂ : Finset String) (msg m : MessageId) (var : String) (p : Proc) :
@@ -330,6 +357,9 @@ namespace Semantics
     | dollar (Γ₁ Γ₂ : Finset String) (pid : ProcId) (mx : MessageId × MessageDir) :
       NonInstantMessage Γ₁ Γ₂ (Proc.endp pid) mx
 
+  /-! ### Small-step semantics and closure -/
+
+  /-- One-step operational semantics for processes. -/
   @[aesop unsafe]
   inductive Reduces : Proc → TransLabel → Proc → Prop where
     | tock :
@@ -364,8 +394,6 @@ namespace Semantics
     | par_left (p₁ p₁' p₂ : Proc) (c : TransLabel) :
       c ≠ (TransLabel.ac Action.tock) →
       ¬ c.isEx →
-      -- ex_msg' ⊆ ex_msg →
-      -- (∀ mx ∈ ex_msg', NonInstantMessage ∅ ∅ p₂ mx) →
       Reduces p₁ c p₁' →
       Reduces (Proc.par p₁ p₂) c (Proc.par p₁' p₂)
     | par_right (p₁ p₂ p₂' : Proc) (c : TransLabel) :
@@ -427,8 +455,7 @@ namespace Semantics
       Reduces (Proc.recur f p_body) TransLabel.ε (procReplace p_body f $ Proc.recur f p_body)
 
   abbrev ProcComp := Proc
-  -- def CompReduces (c₁ : ProcComp) (α : Action) (c₂ : ProcComp) : Prop :=
-  --   ∃ ex_msg : Finset (MessageId × MessageDir), Reduces ex_msg c₁ (TransLabel.ac α) c₂
+  /-- Reflexive-transitive closure of epsilon reductions used before visible steps. -/
   @[aesop unsafe]
   inductive CompElim : Proc → Proc → Prop where
     | refl (p : Proc) :
@@ -438,10 +465,12 @@ namespace Semantics
       CompElim p' p'' →
       CompElim p p''
 
+  /-- Compatible reduction: visible step after zero or more epsilon eliminations. -/
   @[reducible]
   def IncompReduces (p₁ : Proc) (lbl : TransLabel) (p₂ : Proc) : Prop :=
     ∃ p₁' : Proc, Reduces p₁' lbl p₂ ∧ CompElim p₁ p₁'
 
+  /-- Action-labeled compatible reduction. -/
   @[reducible]
   def CompReduces (p₁ : Proc) (α : Action) (p₂ : Proc) : Prop :=
     IncompReduces p₁ (TransLabel.ac α) p₂

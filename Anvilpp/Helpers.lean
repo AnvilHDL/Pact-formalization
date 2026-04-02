@@ -1447,7 +1447,6 @@ lemma val_replacement_preserves_typing :
     rename_i ctx' p_else branches τ_else branch_tys H_len
       H_send_expr H_send_ty H_send_typing H_recv_ty H_recv_typing H_else_typing
       IH_send_typing IH_recv_typing IH_else
-    -- Helper: extract original branch from mapped zip
     have extract_orig : ∀ (brs : List ChoiceBranch) (bts : List (MessageExch × ProcTy))
         (br : ChoiceBranch) (br_ty : MessageExch × ProcTy),
         (br, br_ty) ∈ (brs.map fun b => Semantics.choiceBranchExprReplace b x v).zip bts →
@@ -1675,8 +1674,6 @@ namespace Semantics.CompElim
       apply CompElim.eps_elim (p' := Proc.par p₁ p')
       . aesop
       . exact H_ind
-
-  -- comp_elim_par will be placed after `comp_elim_par_step` to avoid forward-reference issues
 
   lemma comp_elim_preserves_recv : ∀ {msg : MessageId}
       {x : String} {p p' : Semantics.ProcComp},
@@ -2766,10 +2763,8 @@ namespace ProcTyGuarded
       cases H_guarded
       rename_i _H_else H_branches
       subst H_brtys_eq; subst H_ty'_eq
-      -- (me, ty) is a member of the inserted list, so ty is guarded
       have H_ty_g : ProcTyGuardedClosed ty :=
         H_branches me ty (Trivia.list_insert_idx branch_tys ↑idx (me, ty) (Nat.lt_succ_iff.mp H_idx))
-      -- existing branch_tys elements survive insertIdx
       have mem_ins : ∀ {α : Type} (l : List α) (n : ℕ) (v x : α),
           x ∈ l → x ∈ l.insertIdx n v := by
         intro α l; induction l with
@@ -2781,7 +2776,6 @@ namespace ProcTyGuarded
           | succ m =>
             simp only [List.insertIdx]
             exact List.mem_cons.mpr ((List.mem_cons.mp H_mem).imp_right (ih m v x))
-      -- foldl of par over a list of guarded types starting from a guarded base is guarded
       suffices h_foldl : ∀ (τs : List ProcTy), (∀ τ ∈ τs, ProcTyGuardedClosed τ) →
           ∀ τ₀, ProcTyGuardedClosed τ₀ →
           ProcTyGuardedClosed (List.foldl (fun acc τ => ProcTy.par acc τ) τ₀ τs) by
@@ -2842,7 +2836,6 @@ namespace ProcTyGuarded
     ∀ (ctx : ProcTyContext) (p : Semantics.ProcComp) (τ : ProcTyComposition)
       (mx : MessageId × MessageDir) (Γₙ Γₘ : Finset String),
       ProcTyJudgement ctx p τ →
-      -- ProcTyGuardedClosed τ →
       Semantics.NonInstantMessage Γₙ Γₘ p mx →
       ProcTyNonInstantMsg Γₙ Γₘ τ mx := by
     intro ctx p τ mx Γₙ Γₘ H_judgement
@@ -2851,37 +2844,30 @@ namespace ProcTyGuarded
     case cycle | skip | dollar => aesop
     case choice ctx' p₁ p₂ τ₁ τ₂ H_typing_e H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
       intro mx Γₙ Γₘ H_noninst
-      -- rename_i H_guarded₁ H_guarded₂
       cases H_noninst
       apply ProcTyNonInstantMsg.choice
       . apply H_ind₁; assumption
       . apply H_ind₂; assumption
     case choice_fair ctx' p₁ p₂ τ₁ τ₂ b H_typing_e H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
       intro mx Γₙ Γₘ H_noninst
-      -- cases H_guarded
-      -- rename_i H_guarded₁ H_guarded₂
       cases H_noninst
       apply ProcTyNonInstantMsg.choice_fair
       . apply H_ind₁; assumption
       . apply H_ind₂; assumption
     case par ctx' p₁ p₂ τ₁ τ₂ H_typing₁ H_typing₂ H_ind₁ H_ind₂ =>
       intro mx Γₙ Γₘ H_noninst
-      -- cases H_guarded
-      -- rename_i H_guarded₁ H_guarded₂
       cases H_noninst
       apply ProcTyNonInstantMsg.par
       . apply H_ind₁; assumption
       . apply H_ind₂; assumption
     case message_send ctx msg e H_typing_e =>
       intro mx Γₙ Γₘ H_noninst
-      -- cases H_guarded
       cases H_noninst
       . apply ProcTyNonInstantMsg.send
         grind
       . apply ProcTyNonInstantMsg.send_opposite
     case message_recv ctx msg x p' τ' H_typing H_ind =>
       intro mx Γₙ Γₘ H_noninst
-      -- cases H_guarded
       cases H_noninst
       . apply ProcTyNonInstantMsg.seq_right
         apply ProcTyNonInstantMsg.recv
