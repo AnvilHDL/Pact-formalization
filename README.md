@@ -1,5 +1,20 @@
 # Anvil++ Theory
 
+## New Extensions Task
+
+- [x] Match the syntax to the paper
+- [ ] Define the operational semantics same as the paper
+- [ ] Types
+- [ ] Type Semantics
+- [ ] Operational Semantics for types
+- [ ] Definition of Automata for types
+- [ ] Bisimulation between types and automata
+- [ ] Process Compatiblity Definition
+- [ ] Type Compatiblity Definition
+- [ ] Type Compat => Process Compat
+- [ ] Type Satisfaction Definition
+- [ ] Soundness of Type Satisfaction
+
 ## Structure
 
 - [Anvilpp/Base.lean](Anvilpp/Base.lean): Some basic common definitions.
@@ -39,5 +54,4 @@ lake build Anvilpp.Refinement
 ```
 
 - In VS Code, open a `.lean` file and use `Restart File` if diagnostics become stale after large refactors.
-
 
