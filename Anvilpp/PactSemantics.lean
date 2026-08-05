@@ -237,150 +237,189 @@ def LocalEnvironment
 /-- The updated local small-step judgment `E ⊢ P -α→ P'`. -/
 @[aesop unsafe]
 inductive ProcessTransition : Environment → Proc → Label → Proc → Prop where
-  | send (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc)
-      (value : Bool) :
-      env.WellFormed →
-      env.hasRecv msg →
+  | send (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed ∧
+      env.hasRecv msg ∧
       Semantics.ExprEval expr value →
-      ProcessTransition env (Proc.send msg expr process)
-        (Label.message msg .send value) process
+      --
+      ProcessTransition env (Proc.send msg expr process) (Label.message msg .send value) process
   | send_wait (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc) :
-      env.WellFormed →
-      ¬ env.hasRecv msg →
+      env.WellFormed ∧
+      ¬ env.hasRecv msg ∧
       env.clock = false →
-      ProcessTransition env (Proc.send msg expr process) Label.silent
-        (Proc.send msg expr process)
+      --
+      ProcessTransition env (Proc.send msg expr process)
+      Label.silent
+      (Proc.send msg expr process)
   | recv (env : Environment) (msg : MessageId) (var : String) (process : Proc)
       (value : Bool) :
-      env.WellFormed →
+      env.WellFormed ∧
       env.hasSend msg value →
+      --
       ProcessTransition env (Proc.recv msg var process)
-        (Label.message msg .recv value)
-        (Semantics.procExprReplace process var value)
+      (Label.message msg .recv value)
+      (Semantics.procExprReplace process var value)
   | recv_wait (env : Environment) (msg : MessageId) (var : String) (process : Proc) :
-      env.WellFormed →
-      (∀ value, ¬ env.hasSend msg value) →
+      env.WellFormed ∧
+      (∀ value, ¬ env.hasSend msg value) ∧
       env.clock = false →
-      ProcessTransition env (Proc.recv msg var process) Label.silent
-        (Proc.recv msg var process)
+      --
+      ProcessTransition env (Proc.recv msg var process)
+      Label.silent
+      (Proc.recv msg var process)
   | cycle (env : Environment) :
-      env.WellFormed →
-      env.clock = true →
-      ProcessTransition env Proc.cycle Label.tock Proc.skip
+      env.WellFormed ∧ env.clock = true →
+      --
+      ProcessTransition env Proc.cycle
+      Label.tock
+      Proc.skip
   | cycle_wait (env : Environment) :
-      env.WellFormed →
-      env.clock = false →
-      ProcessTransition env Proc.cycle Label.silent Proc.cycle
+      env.WellFormed ∧ env.clock = false →
+      --
+      ProcessTransition env Proc.cycle
+      Label.silent
+      Proc.cycle
   | skip_seq (env : Environment) (process : Proc) :
       env.WellFormed →
-      ProcessTransition env (Proc.seq Proc.skip process) Label.silent process
+      --
+      ProcessTransition env (Proc.seq Proc.skip process)
+      Label.silent
+      process
   | skip (env : Environment) :
-      env.WellFormed →
-      env.clock = false →
+      env.WellFormed ∧
+      env.clock = false ∧
       env.immediate = ∅ →
-      ProcessTransition env Proc.skip Label.silent Proc.skip
+      --
+      ProcessTransition env Proc.skip
+      Label.silent
+      Proc.skip
   | seq (env : Environment) (left left' right : Proc) (label : Label) :
-      ProcessTransition env left label left' →
-      ProcessTransition env (Proc.seq left right) label (Proc.seq left' right)
-  | letp (env : Environment) (var : String) (expr : Expr) (process : Proc)
-      (value : Bool) :
-      env.WellFormed →
+      ProcessTransition env left
+      label
+      left' →
+      --
+      ProcessTransition env (Proc.seq left right)
+      label
+      (Proc.seq left' right)
+  | letp (env : Environment) (var : String) (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed ∧
       Semantics.ExprEval expr value →
-      ProcessTransition env (Proc.letp var expr process) Label.silent
-        (Semantics.procExprReplace process var value)
+      --
+      ProcessTransition env (Proc.letp var expr process)
+      Label.silent
+      (Semantics.procExprReplace process var value)
   | if_true (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed →
+      env.WellFormed ∧
       Semantics.ExprEval expr true →
-      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse) Label.silent ifTrue
+      --
+      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse)
+      Label.silent
+      ifTrue
   | if_false (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed →
+      env.WellFormed ∧
       Semantics.ExprEval expr false →
-      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse) Label.silent ifFalse
-  | fair_true (env : Environment) (bid : BranchId) (expr : Expr)
-      (ifTrue ifFalse : Proc) :
-      env.WellFormed →
+      --
+      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse)
+      Label.silent
+      ifFalse
+  | fair_true (env : Environment) (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
+      env.WellFormed ∧
       Semantics.ExprEval expr true →
+      --
       ProcessTransition env (Proc.iffair bid expr ifTrue ifFalse)
-        (Label.fair bid true) ifTrue
-  | fair_false (env : Environment) (bid : BranchId) (expr : Expr)
-      (ifTrue ifFalse : Proc) :
-      env.WellFormed →
+      (Label.fair bid true)
+      ifTrue
+  | fair_false (env : Environment) (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
+      env.WellFormed ∧
       Semantics.ExprEval expr false →
+      --
       ProcessTransition env (Proc.iffair bid expr ifTrue ifFalse)
-        (Label.fair bid false) ifFalse
+      (Label.fair bid false)
+      ifFalse
   | progress (env : Environment) (pid : ProcId) :
       env.WellFormed →
-      ProcessTransition env (Proc.endp pid) (Label.progress pid) Proc.skip
+      --
+      ProcessTransition env (Proc.endp pid)
+      (Label.progress pid)
+      Proc.skip
   | recur (env : Environment) (var : String) (body : Proc) :
       env.WellFormed →
-      ProcessTransition env (Proc.recur var body) Label.silent
-        (Semantics.procReplace body var (Proc.recur var body))
-  | xoffer_send (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) (msg : MessageId) (expr : Expr)
-      (process : Proc) (value : Bool) :
-      env.WellFormed →
-      ChoiceBranch.send msg expr process ∈ branches →
-      env.hasRecv msg →
-      Semantics.ExprEval expr value →
+      --
+      ProcessTransition env (Proc.recur var body)
+      Label.silent
+      (Semantics.procReplace body var (Proc.recur var body))
+  | xoffer_send (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed ∧
+      ChoiceBranch.send msg expr process ∈ branches ∧
+      env.hasRecv msg ∧
+      Semantics.ExprEval expr value ∧
       Resolved env branches →
+      --
       ProcessTransition env (Proc.xoffer elseProcess branches)
-        (Label.message msg .send value) process
-  | xoffer_recv (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) (msg : MessageId) (var : String)
-      (process : Proc) (value : Bool) :
-      env.WellFormed →
-      ChoiceBranch.recv msg var process ∈ branches →
-      env.hasSend msg value →
+      (Label.message msg .send value)
+      process
+  | xoffer_recv (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId) (var : String) (process : Proc) (value : Bool) :
+      env.WellFormed ∧
+      ChoiceBranch.recv msg var process ∈ branches ∧
+      env.hasSend msg value ∧
       Resolved env branches →
+      --
       ProcessTransition env (Proc.xoffer elseProcess branches)
-        (Label.message msg .recv value)
-        (Semantics.procExprReplace process var value)
-  | xoffer_else (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) :
-      env.WellFormed →
-      NoImmediateBranch env branches →
+      (Label.message msg .recv value)
+      (Semantics.procExprReplace process var value)
+  | xoffer_else (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed ∧
+      NoImmediateBranch env branches ∧
       Resolved env branches →
-      ProcessTransition env (Proc.xoffer elseProcess branches) Label.silent elseProcess
-  | xoffer_wait (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) :
-      env.WellFormed →
-      ¬ Resolved env branches →
+      --
+      ProcessTransition env (Proc.xoffer elseProcess branches)
+      Label.silent
+      elseProcess
+  | xoffer_wait (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed ∧
+      ¬ Resolved env branches ∧
       env.clock = false →
-      ProcessTransition env (Proc.xoffer elseProcess branches) Label.silent
-        (Proc.xoffer elseProcess branches)
-  | offer_some (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) (enabled : ChoiceBranch) :
-      env.WellFormed →
-      enabled ∈ branches →
+      --
+      ProcessTransition env (Proc.xoffer elseProcess branches)
+      Label.silent
+      (Proc.xoffer elseProcess branches)
+    -- To Do double check the offer case
+  | offer_some (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (enabled : ChoiceBranch) :
+      env.WellFormed ∧
+      enabled ∈ branches ∧
       BranchEnabled env enabled →
-      ProcessTransition env (Proc.offer elseProcess branches) Label.silent
-        (parallelBranches branches)
-  | offer_else (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) :
-      env.WellFormed →
-      NoImmediateBranch env branches →
+      --
+      ProcessTransition env (Proc.offer elseProcess branches)
+      Label.silent
+      (parallelBranches branches)
+  | offer_else (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed ∧
+      NoImmediateBranch env branches ∧
       Resolved env branches →
-      ProcessTransition env (Proc.offer elseProcess branches) Label.silent elseProcess
-  | offer_wait (env : Environment) (elseProcess : Proc)
-      (branches : List ChoiceBranch) :
-      env.WellFormed →
-      NoImmediateBranch env branches →
-      ¬ Resolved env branches →
+      --
+      ProcessTransition env (Proc.offer elseProcess branches)
+      Label.silent
+      elseProcess
+  | offer_wait (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed ∧
+      NoImmediateBranch env branches ∧
+      ¬ Resolved env branches ∧
       env.clock = false →
-      ProcessTransition env (Proc.offer elseProcess branches) Label.silent
-        (Proc.offer elseProcess branches)
-  | par (outer leftEnv rightEnv : Environment) (interface : MsgIdSet)
-      (left left' right right' : Proc) (leftLabel rightLabel : Label) :
-      outer.WellFormed →
+      --
+      ProcessTransition env (Proc.offer elseProcess branches)
+      Label.silent
+      (Proc.offer elseProcess branches)
+  | par (outer leftEnv rightEnv : Environment) (interface : MsgIdSet) (left left' right right' : Proc) (leftLabel rightLabel : Label) :
       ProcessTransition leftEnv left leftLabel left' →
       ProcessTransition rightEnv right rightLabel right' →
-      LocalEnvironment outer interface right rightLabel leftEnv →
-      LocalEnvironment outer interface left leftLabel rightEnv →
-      Label.Sync interface leftLabel rightLabel →
+      (outer.WellFormed ∧
+        LocalEnvironment outer interface right rightLabel leftEnv ∧
+        LocalEnvironment outer interface left leftLabel rightEnv ∧
+        Label.Sync interface leftLabel rightLabel) →
+      --
       ProcessTransition outer (Proc.par left right interface)
-        (Label.combine interface leftLabel rightLabel)
-        (Proc.par left' right' interface)
-
+      (Label.combine interface leftLabel rightLabel)
+      (Proc.par left' right' interface)
 end
 
 end Pact
