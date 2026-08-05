@@ -54,14 +54,15 @@ mutual
     | recv : MessageId → String → Proc → ChoiceBranch
 
   inductive Proc : Type where
-    | send : MessageId → Expr → Proc
+    | send : MessageId → Expr → Proc → Proc
     | recv : MessageId → String → Proc → Proc
     | var : String → Proc
     | skip : Proc
     | endp : ProcId → Proc
     | cycle : Proc
-    | par : Proc → Proc → MsgIdSet -> Proc
+    | par : Proc → Proc → MsgIdSet → Proc
     | seq : Proc → Proc → Proc
+    | letp : String → Expr → Proc → Proc
     | ifunfair : Expr → Proc → Proc → Proc
     | iffair : BranchId → Expr → Proc → Proc → Proc
     | xoffer : Proc → List ChoiceBranch → Proc
