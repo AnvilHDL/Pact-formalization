@@ -1,42 +1,33 @@
-# Anvil++ Theory
+# Pact Theory
 
 ## New Extensions Task
 
 - [x] Match the syntax to the paper
-- [ ] Define the operational semantics same as the paper
-- [ ] Types
-- [ ] Type Semantics
-- [ ] Operational Semantics for types
-- [ ] Definition of Automata for types
-- [ ] Bisimulation between types and automata
-- [ ] Process Compatiblity Definition
-- [ ] Type Compatiblity Definition
-- [ ] Type Compat => Process Compat
-- [ ] Type Satisfaction Definition
-- [ ] Soundness of Type Satisfaction
+- [x] Scaffold the updated environment-indexed process semantics from the paper
+- [x] Scaffold the updated type grammar and value erasure
+- [x] Scaffold the environment-indexed type semantics
+- [x] Scaffold finite semantic automata and correspondence witnesses
+- [x] Define process communication safety and type compatibility
+- [x] State type compatibility implies process compatibility
+- [x] Define process-type conformance and type refinement
+- [x] State the paper's inference, checking, game, soundness, and optimality results
+- [ ] Discharge the new `sorry` proof and construction obligations
 
 ## Structure
 
-- [Anvilpp/Base.lean](Anvilpp/Base.lean): Some basic common definitions.
-- [Anvilpp/Proc.lean](Anvilpp/Proc.lean): Process syntax and operational semantics.
-- [Anvilpp/Types.lean](Anvilpp/Types.lean): Type syntax and well-formedness definition.
-- [Anvilpp/Typing.lean](Anvilpp/Typing.lean): Type satisfiability judgements.
-- [Anvilpp/Automata.lean](Anvilpp/Automata.lean): Type-level labelled transition system.
-- [Anvilpp/Subtyping.lean](Anvilpp/Subtyping.lean): Congruence/subtyping meta-theory and refinement lemmas for type transitions.
-- [Anvilpp/Helpers.lean](Anvilpp/Helpers.lean): Common helper lemmas.
-- [Anvilpp/Trans.lean](Anvilpp/Trans.lean): Some helper lemmas related to type transitions.
-- [Anvilpp/Refinement.lean](Anvilpp/Refinement.lean): Main process-to-type simulation/refinement development.
-- [Anvilpp/Deadend.lean](Anvilpp/Deadend.lean): Dead-end preservation definitions and theorems.
-- [Anvilpp/Reachable.lean](Anvilpp/Reachable.lean): Reachability-related definitions and theorems.
+- [Anvilpp/Base.lean](Anvilpp/Base.lean): Some basic definitions/abbreviations
+- [Anvilpp/Proc.lean](Anvilpp/Proc.lean): Pact process syntax
+- [Anvilpp/PactSemantics.lean](Anvilpp/PactSemantics.lean): Pact Semantics
+- [Anvilpp/PactTypes.lean](Anvilpp/PactTypes.lean): Type Syntax and Semantics
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean): Safety and Compatibility Theorems
 
 ## Main Theorems
 
-- [Anvilpp/Refinement.lean](Anvilpp/Refinement.lean#L1075): `process_refines_type`.
-	If a process takes an action-level step, a well-typed type process can match that same action step, preserving the process/type correspondence.
-- [Anvilpp/Deadend.lean](Anvilpp/Deadend.lean#L739): `type_preserves_deadends`.
-	Well-typed processes cannot get stuck in ways their types disallow; dead-end freedom is preserved by the typing discipline.
-- [Anvilpp/Reachable.lean](Anvilpp/Reachable.lean#L444): `reachable_finite_of_tailrec`.
-	From any well-formed (tail-recursive) type, the reachable type-state space is finite, enabling finite-state reasoning.
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L232): `strategy_transfer`
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L247): `inferred_type_soundness`
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L333): `compatibility_game_correct`
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L344): `type_compatibility_soundness`
+- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L383): `inferred_types_optimal`
 
 ## Checking Proofs
 
@@ -50,8 +41,7 @@ lake build
 - To check a single module while iterating:
 
 ```bash
-lake build Anvilpp.Refinement
+lake build Anvilpp.PactSafety
 ```
 
 - In VS Code, open a `.lean` file and use `Restart File` if diagnostics become stale after large refactors.
-

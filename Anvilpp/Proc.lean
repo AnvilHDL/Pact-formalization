@@ -1,4 +1,3 @@
-import Mathlib.Data.Finset.Basic
 import Anvilpp.Base
 
 /-! ## Expression syntax -/
@@ -21,7 +20,7 @@ def valEval (v₁ v₂ : Bool) (bop : BOp) :=
   | .or => v₁ || v₂
 
 
-/-! ## Process syntax and actions -/
+/-! ## Process syntax -/
 
 
 inductive MessageDir : Type where
@@ -30,16 +29,6 @@ inductive MessageDir : Type where
   deriving DecidableEq
 
 namespace MessageDir
-  /-- `true` when directions are opposite and can synchronize. -/
-  def dual : MessageDir → MessageDir → Bool
-    | send, recv => true
-    | recv, send => true
-    | _, _ => false
-
-  lemma dual_symm : ∀ (d₁ d₂ : MessageDir), dual d₁ d₂ = dual d₂ d₁ := by
-    intros d₁ d₂
-    cases d₁ <;> cases d₂ <;> rfl
-
   /-- Flip direction between send and recv. -/
   def invert (dir : MessageDir) : MessageDir :=
     match dir with
@@ -76,88 +65,12 @@ namespace ChoiceBranch
     | send msg _ _ => msg
     | recv msg _ _ => msg
 
-  def getProc : ChoiceBranch → Proc
-    | send _ _ p => p
-    | recv _ _ p => p
-
   def getDir : ChoiceBranch → MessageDir
     | send _ _ _ => MessageDir.send
     | recv _ _ _ => MessageDir.recv
 
-  def getMessage (br : ChoiceBranch) : MessageId × MessageDir :=
-    (br.getMessageId, br.getDir)
-
   def toXOffer (br : ChoiceBranch) := Proc.xoffer Proc.skip [br]
 end ChoiceBranch
-
-/-! ## Transition labels -/
-
-/-- Runtime actions emitted by visible process transitions. -/
-inductive Action : Type where
-  | tock : Action
-  | fullMessage : MessageId → Action
-  | branchTrue : BranchId → Action
-  | branchFalse : BranchId → Action
-  | dollar : ProcId → Action
-
-inductive TransLabel : Type where
-  | ac : Action → TransLabel
-  | ε : TransLabel
-  | ex : Finset (MessageId × MessageDir) → TransLabel
-  | message : MessageId → MessageDir → Bool → TransLabel
-
-namespace TransLabel
-  /-- `true` exactly for exclusion labels. -/
-  @[reducible]
-  def isEx : TransLabel → Bool
-    | TransLabel.ex _ => true
-    | _ => false
-end TransLabel
-
-/-- Abstract versions of transition labels for automata. -/
-inductive AbstractTransLabel : Type where
-  | ac : Action → AbstractTransLabel
-  | ε : AbstractTransLabel
-  | ex : Finset (MessageId × MessageDir) → AbstractTransLabel
-  | message : MessageId → MessageDir → AbstractTransLabel
-
-namespace AbstractTransLabel
-  /-- Forget concrete payload booleans from concrete transition labels. -/
-  @[reducible]
-  def fromConcrete : TransLabel → AbstractTransLabel
-    | TransLabel.ac act => AbstractTransLabel.ac act
-    | TransLabel.ε => AbstractTransLabel.ε
-    | TransLabel.ex ex_msgs => AbstractTransLabel.ex ex_msgs
-    | TransLabel.message msg dir _ => AbstractTransLabel.message msg dir
-
-  /-- Compatibility relation between abstract and concrete labels. -/
-  @[reducible]
-  def Related (α : AbstractTransLabel) (c : TransLabel) : Prop :=
-    match α, c with
-    | AbstractTransLabel.ac act, TransLabel.ac act' =>
-      match act, act' with
-      | Action.branchTrue bid, Action.branchFalse bid' => bid = bid'
-      | Action.branchFalse bid, Action.branchTrue bid' => bid = bid'
-      | _, _ => act = act'
-    | AbstractTransLabel.ε, TransLabel.ε => True
-    | AbstractTransLabel.ex ex_msgs, TransLabel.ex ex_msgs' => ex_msgs = ex_msgs'
-    | AbstractTransLabel.message msg dir, TransLabel.message msg' dir' _ =>
-      msg = msg' ∧ dir = dir'
-    | _, _ => False
-
-  /-- `true` exactly for exclusion labels. -/
-  @[reducible]
-  def isEx : AbstractTransLabel → Bool
-    | AbstractTransLabel.ex _ => true
-    | _ => false
-
-  namespace Related
-    lemma is_ex_preserved (α : AbstractTransLabel) (c : TransLabel) :
-        AbstractTransLabel.Related α c → (α.isEx ↔ c.isEx) := by
-      intro H_related
-      cases α <;> cases c <;> simp [AbstractTransLabel.Related, AbstractTransLabel.isEx, TransLabel.isEx] at H_related ⊢
-  end Related
-end AbstractTransLabel
 
 
 /-! ## Operational semantics -/
@@ -210,6 +123,4 @@ namespace Semantics
     def procReplace (p : Proc) (f : String) (p_body : Proc) : Proc :=
     sorry
   end
-
-  abbrev ProcComp := Proc
 end Semantics
