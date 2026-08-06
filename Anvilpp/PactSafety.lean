@@ -307,6 +307,15 @@ def ClosedGuardedRegular (processType : PactType) : Prop := by
 def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
   signature.Supports processType ∧ ClosedGuardedRegular processType
 
+/-- `skip` cannot take its silent operational step in a clock environment. -/
+theorem skip_has_no_clock_transition :
+    ¬ ∃ target,
+      TypeTransition TypeEnvironment.tock .skip TypeLabel.silent target := by
+  rintro ⟨target, transition⟩
+  cases transition with
+  | skip _ conditions =>
+      simp [TypeEnvironment.tock] at conditions
+
 /-- Lemma 4.5: operational types and their finite semantic automata correspond. -/
 theorem type_automaton_correspondence
     {signature : TypeAlphabet} {processType : PactType}
@@ -314,6 +323,13 @@ theorem type_automaton_correspondence
     Nonempty
       (TypeAutomatonCorrespondence processType
         (compileType signature processType)) := by
+  refine ⟨
+    { relation := fun residual state =>
+        TypeCompilationRelation processType state residual
+      initial := compileType_initial_relation signature processType
+      initial_mem := compileType_initial_mem signature processType
+      stepIff := ?_ }⟩
+  intro residual residual' state env label offers hRelated hSymbol
   sorry
 
 /-- Lemma 4.6: conforming processes simulate into the type automaton. -/

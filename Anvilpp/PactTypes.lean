@@ -272,29 +272,222 @@ def parallelTypeBranches : List (BareMessage × PactType) → PactType
   | branch :: rest =>
       .par (singletonTypeXOffer branch) (parallelTypeBranches rest) ∅
 
-/-- Current and future offers exposed by a selected type transition. -/
-def TypeOffers
-    (source : PactType) (label : TypeLabel) (target : PactType)
-    (current future : Finset BareMessage) : Prop := by
-  sorry
+/-- Actions appearing at the heads of an offer's branches. -/
+def typeBranchActions
+    (branches : List (BareMessage × PactType)) : Finset BareMessage :=
+  (branches.map Prod.fst).toFinset
 
+/-- Keep only offers whose message identifier belongs to `interface`. -/
 def restrictTypeOffers (interface : Interface) (offers : Finset BareMessage) :
     Finset BareMessage :=
   offers.filter fun offer => offer.1 ∈ interface
 
-/-- The erased `LocalEnv(E,I,sibling,α)` relation. -/
-def LocalTypeEnvironment
-    (outer : TypeEnvironment) (interface : Interface)
-    (sibling : PactType) (label : TypeLabel)
-    (localEnv : TypeEnvironment) : Prop :=
-  (outer.clock = true ∧ localEnv = TypeEnvironment.tock) ∨
-  (outer.clock = false ∧
-    ∃ siblingTarget current future,
-      TypeOffers sibling label siblingTarget current future ∧
-      localEnv.clock = false ∧
-      localEnv.immediate = outer.immediate ∪ restrictTypeOffers interface current ∧
-      localEnv.future =
-        (outer.future ∪ restrictTypeOffers interface future) \ localEnv.immediate)
+/-- Remove offers hidden by a parallel interface. -/
+def hideTypeOffers (interface : Interface) (offers : Finset BareMessage) :
+    Finset BareMessage :=
+  offers.filter fun offer => offer.1 ∉ interface
+
+/--
+Whether a type may complete before the next clock.  Fuel bounds recursive
+unfolding; a variable stops the search, which is exact for guarded recursion
+when computing the offers visible before the next guard.
+-/
+private def typeCanCompleteThisCycleFuel : Nat → PactType → Bool
+  | 0, _ => false
+  | fuel + 1, processType =>
+      match processType with
+      | .message _ _ | .progress _ | .skip => true
+      | .tock | .var _ => false
+      | .recur _ body => typeCanCompleteThisCycleFuel fuel body
+      | .choice left right | .fairChoice _ left right =>
+          typeCanCompleteThisCycleFuel fuel left ||
+            typeCanCompleteThisCycleFuel fuel right
+      | .seq left right =>
+          typeCanCompleteThisCycleFuel fuel left &&
+            typeCanCompleteThisCycleFuel fuel right
+      | .par left right _ =>
+          typeCanCompleteThisCycleFuel fuel left &&
+            typeCanCompleteThisCycleFuel fuel right
+      | .xoffer elseType branches | .offer elseType branches =>
+          typeCanCompleteThisCycleFuel fuel elseType ||
+            branches.any fun branch =>
+              typeCanCompleteThisCycleFuel fuel branch.2
+
+/-- Syntactic future-offer menu, bounded by the depth of the finite type term. -/
+private def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
+  | 0, _ => ∅
+  | fuel + 1, processType =>
+      match processType with
+      | .message msg dir => {(msg, dir)}
+      | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => typeFutureOffersFuel fuel body
+      | .choice left right | .fairChoice _ left right =>
+          typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right
+      | .seq left right =>
+          let leftOffers := typeFutureOffersFuel fuel left
+          if typeCanCompleteThisCycleFuel fuel left then
+            leftOffers ∪ typeFutureOffersFuel fuel right
+          else leftOffers
+      | .par left right interface =>
+          hideTypeOffers interface
+            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
+      | .xoffer elseType branches | .offer elseType branches =>
+          branches.foldl (fun offers branch =>
+            offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+            (typeFutureOffersFuel fuel elseType)
+
+/-- All message actions that may still be offered before the next clock. -/
+def typeFutureOffers (processType : PactType) : Finset BareMessage :=
+  typeFutureOffersFuel (sizeOf processType + 1) processType
+
+/-- Branch offers selected by the future part of this environment. -/
+def typeWaitingOffers (env : TypeEnvironment)
+    (branches : List (BareMessage × PactType)) : Finset BareMessage :=
+  (env.future.image typeNeed) ∩ typeBranchActions branches
+
+/-
+Environment-indexed current/future offers and the sibling-local environment
+relation are mutually defined: parallel offers depend on the two local steps,
+while each local environment depends on the sibling step's offers.
+-/
+mutual
+  @[aesop unsafe]
+  inductive TypeOffers :
+      TypeEnvironment → PactType → TypeLabel → PactType →
+        Finset BareMessage → Finset BareMessage → Prop where
+    | action (env : TypeEnvironment) (msg : MessageId) (dir : MessageDir) :
+        env.WellFormed ∧ env.hasNeed (msg, dir) →
+        TypeOffers env (.message msg dir) (TypeLabel.message msg dir) .skip
+          {(msg, dir)} (typeFutureOffers .skip)
+    | action_wait (env : TypeEnvironment) (msg : MessageId) (dir : MessageDir) :
+        env.WellFormed ∧ ¬ env.hasNeed (msg, dir) ∧ env.clock = false →
+        TypeOffers env (.message msg dir) TypeLabel.silent (.message msg dir)
+          {(msg, dir)} (typeFutureOffers (.message msg dir) \ {(msg, dir)})
+    | choice_left (env : TypeEnvironment) (left right : PactType) :
+        env.WellFormed →
+        TypeOffers env (.choice left right) TypeLabel.silent left
+          ∅ (typeFutureOffers left)
+    | choice_right (env : TypeEnvironment) (left right : PactType) :
+        env.WellFormed →
+        TypeOffers env (.choice left right) TypeLabel.silent right
+          ∅ (typeFutureOffers right)
+    | fair_left (env : TypeEnvironment) (bid : BranchId)
+        (left right : PactType) :
+        env.WellFormed →
+        TypeOffers env (.fairChoice bid left right) (TypeLabel.fair bid true) left
+          ∅ (typeFutureOffers left)
+    | fair_right (env : TypeEnvironment) (bid : BranchId)
+        (left right : PactType) :
+        env.WellFormed →
+        TypeOffers env (.fairChoice bid left right) (TypeLabel.fair bid false) right
+          ∅ (typeFutureOffers right)
+    | cycle (env : TypeEnvironment) :
+        env.WellFormed ∧ env.clock = true →
+        TypeOffers env .tock .tock .skip ∅ ∅
+    | cycle_wait (env : TypeEnvironment) :
+        env.WellFormed ∧ env.clock = false →
+        TypeOffers env .tock TypeLabel.silent .tock ∅ ∅
+    | skip (env : TypeEnvironment) :
+        env.WellFormed ∧ env.clock = false ∧ env.immediate = ∅ →
+        TypeOffers env .skip TypeLabel.silent .skip ∅ ∅
+    | skip_seq (env : TypeEnvironment) (processType : PactType) :
+        env.WellFormed →
+        TypeOffers env (.seq .skip processType) TypeLabel.silent processType
+          ∅ (typeFutureOffers processType)
+    | progress (env : TypeEnvironment) (pid : ProcId) :
+        env.WellFormed →
+        TypeOffers env (.progress pid) (TypeLabel.progress pid) .skip ∅ ∅
+    | recur (env : TypeEnvironment) (name : String) (body : PactType) :
+        env.WellFormed →
+        TypeOffers env (.recur name body) TypeLabel.silent
+          (body.replaceVar name (.recur name body)) ∅
+          (typeFutureOffers (body.replaceVar name (.recur name body)))
+    | seq (env : TypeEnvironment) (left left' right : PactType)
+        (label : TypeLabel) (current childFuture : Finset BareMessage) :
+        TypeOffers env left label left' current childFuture →
+        TypeOffers env (.seq left right) label (.seq left' right) current
+          (if left' = .skip then typeFutureOffers right else childFuture)
+    | xoffer_branch (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType))
+        (action : BareMessage) (processType : PactType) :
+        env.WellFormed ∧
+          (action, processType) ∈ branches ∧
+          TypeBranchEnabled env (action, processType) ∧
+          TypeResolved env branches →
+        TypeOffers env (.xoffer elseType branches)
+          (TypeLabel.message action.1 action.2) processType
+          {action} (typeFutureOffers processType)
+    | xoffer_else (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType)) :
+        env.WellFormed ∧
+          TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
+        TypeOffers env (.xoffer elseType branches) TypeLabel.silent elseType
+          ∅ (typeFutureOffers elseType)
+    | xoffer_wait (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType)) :
+        env.WellFormed ∧ ¬ TypeResolved env branches ∧ env.clock = false →
+        TypeOffers env (.xoffer elseType branches) TypeLabel.silent
+          (.xoffer elseType branches) (typeWaitingOffers env branches)
+          (typeFutureOffers (.xoffer elseType branches) \
+            typeWaitingOffers env branches)
+    | offer_some (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType))
+        (enabled : BareMessage × PactType) :
+        env.WellFormed ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
+        TypeOffers env (.offer elseType branches) TypeLabel.silent
+          (parallelTypeBranches branches) ∅
+          (typeFutureOffers (parallelTypeBranches branches))
+    | offer_else (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType)) :
+        env.WellFormed ∧
+          TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
+        TypeOffers env (.offer elseType branches) TypeLabel.silent elseType
+          (typeBranchActions branches) (typeFutureOffers elseType)
+    | offer_wait (env : TypeEnvironment) (elseType : PactType)
+        (branches : List (BareMessage × PactType)) :
+        env.WellFormed ∧ TypeNoImmediateBranch env branches ∧
+          ¬ TypeResolved env branches ∧ env.clock = false →
+        TypeOffers env (.offer elseType branches) TypeLabel.silent
+          (.offer elseType branches) (typeWaitingOffers env branches)
+          (typeFutureOffers (.offer elseType branches) \
+            typeWaitingOffers env branches)
+    | par (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
+        (left left' right right' : PactType) (leftLabel rightLabel : TypeLabel)
+        (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+        TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
+        TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
+        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv →
+        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv →
+        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        TypeOffers outer (.par left right interface)
+          (TypeLabel.combine interface leftLabel rightLabel)
+          (.par left' right' interface)
+          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+          (hideTypeOffers interface (leftFuture ∪ rightFuture))
+
+  /-- The erased sibling-aware local-environment relation. -/
+  @[aesop unsafe]
+  inductive LocalTypeEnvironment :
+      TypeEnvironment → Interface → TypeEnvironment → PactType →
+        TypeLabel → TypeEnvironment → Prop where
+    | clock (outer : TypeEnvironment) (interface : Interface)
+        (sibling : PactType) (label : TypeLabel) :
+        outer.clock = true →
+        LocalTypeEnvironment outer interface TypeEnvironment.tock
+          sibling label TypeEnvironment.tock
+    | ordinary (outer siblingEnv localEnv : TypeEnvironment)
+        (interface : Interface) (sibling siblingTarget : PactType)
+        (label : TypeLabel) (current future : Finset BareMessage) :
+        outer.clock = false →
+        siblingEnv.clock = false →
+        TypeOffers siblingEnv sibling label siblingTarget current future →
+        localEnv.clock = false →
+        localEnv.immediate =
+          outer.immediate ∪ restrictTypeOffers interface current →
+        localEnv.future =
+          (outer.future ∪ restrictTypeOffers interface future) \ localEnv.immediate →
+        LocalTypeEnvironment outer interface siblingEnv sibling label localEnv
+end
 
 /-! ## Type transition system -/
 
@@ -449,8 +642,8 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition leftEnv left leftLabel left' →
       TypeTransition rightEnv right rightLabel right' →
       (outer.WellFormed ∧
-        LocalTypeEnvironment outer interface right rightLabel leftEnv ∧
-        LocalTypeEnvironment outer interface left leftLabel rightEnv ∧
+        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv ∧
+        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv ∧
         TypeLabel.Sync interface leftLabel rightLabel) →
       --
       TypeTransition outer (.par left right interface)
@@ -471,7 +664,26 @@ def DecoratedTypeTransition
     (env : TypeEnvironment) (source : PactType) (label : TypeLabel)
     (offers : TypeOfferSummary) (target : PactType) : Prop :=
   TypeTransition env source label target ∧
-  TypeOffers source label target offers.current offers.future
+  TypeOffers env source label target offers.current offers.future
+
+/-- Every semantic type step carries at least one environment-specific offer pair. -/
+theorem TypeTransition.exists_typeOffers
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    (transition : TypeTransition env source label target) :
+    ∃ current future, TypeOffers env source label target current future := by
+  induction transition with
+  | xoffer_branch env elseType branches action processType conditions =>
+      exact ⟨{action}, typeFutureOffers processType,
+        TypeOffers.xoffer_branch env elseType branches action processType conditions⟩
+  | _ => aesop
+
+/-- Package a semantic step together with one of its offer pairs. -/
+theorem TypeTransition.exists_decorated
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    (transition : TypeTransition env source label target) :
+    ∃ offers, DecoratedTypeTransition env source label offers target := by
+  obtain ⟨current, future, hOffers⟩ := transition.exists_typeOffers
+  exact ⟨{ current := current, future := future }, transition, hOffers⟩
 
 /-- A weak alternating simulation witnessing `P |= τ`. -/
 structure ConformanceWitness (process : Proc) (processType : PactType) : Type where
@@ -534,6 +746,12 @@ namespace TypeAlphabet
   def localEnvironmentActions (alphabet : TypeAlphabet) : Finset BareMessage :=
     alphabet.localActions.image typeNeed
 
+  theorem environmentActions_subset_localEnvironmentActions
+      (alphabet : TypeAlphabet) :
+      alphabet.environmentActions ⊆ alphabet.localEnvironmentActions := by
+    apply Finset.image_mono
+    exact Finset.subset_union_left
+
   /-- The finite set `E_τ` of well-formed erased boundary environments. -/
   def environments (alphabet : TypeAlphabet) : Finset TypeEnvironment :=
     {TypeEnvironment.tock} ∪
@@ -547,6 +765,45 @@ namespace TypeAlphabet
       alphabet.localEnvironmentActions.powerset.biUnion fun immediate =>
         (alphabet.localEnvironmentActions \ immediate).powerset.image fun future =>
           { immediate := immediate, future := future, clock := false }
+
+  theorem environments_subset_localEnvironments (alphabet : TypeAlphabet) :
+      alphabet.environments ⊆ alphabet.localEnvironments := by
+    intro environment hEnvironment
+    simp only [environments, localEnvironments, Finset.mem_union,
+      Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+      Finset.mem_image] at hEnvironment ⊢
+    rcases hEnvironment with hTock | ⟨immediate, hImmediate, future,
+      hFuture, rfl⟩
+    · exact Or.inl hTock
+    · right
+      refine ⟨immediate, ?_, future, ?_, rfl⟩
+      · exact hImmediate.trans
+          (environmentActions_subset_localEnvironmentActions alphabet)
+      · intro action hAction
+        have hInEnvironment := hFuture hAction
+        simp only [Finset.mem_sdiff] at hInEnvironment ⊢
+        exact ⟨(environmentActions_subset_localEnvironmentActions alphabet)
+          hInEnvironment.1, hInEnvironment.2⟩
+
+  theorem environment_wellFormed {alphabet : TypeAlphabet}
+      {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.environments) :
+      environment.WellFormed := by
+    simp only [environments, Finset.mem_union, Finset.mem_singleton,
+      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+      at hEnvironment
+    rcases hEnvironment with rfl | ⟨immediate, _, future, hFuture, rfl⟩
+    · simp [TypeEnvironment.WellFormed, TypeEnvironment.tock]
+    · constructor
+      · simp
+      · intro _
+        change immediate ∩ future = ∅
+        rw [← Finset.disjoint_iff_inter_eq_empty]
+        apply Finset.disjoint_left.mpr
+        intro action hImmediate hFutureMember
+        have hAvailable := hFuture hFutureMember
+        simp only [Finset.mem_sdiff] at hAvailable
+        exact hAvailable.2 hImmediate
 
   /-- The fixed observations from which non-clock labels are formed. -/
   def observations (alphabet : TypeAlphabet) : Finset TypeObservation :=
@@ -663,23 +920,6 @@ inductive AutomatonConstructionLabel : Type where
   | variable : String → AutomatonConstructionLabel
   deriving DecidableEq
 
-/-- A constructor edge after its future-offer field has been computed. -/
-structure AutomatonFragmentEdge : Type where
-  source : TypeAutomatonState
-  environment : TypeEnvironment
-  label : AutomatonConstructionLabel
-  current : Finset BareMessage
-  future : Finset BareMessage
-  target : TypeAutomatonState
-  deriving DecidableEq
-
-/-- A completed constructor fragment, possibly containing free-variable edges. -/
-structure AutomatonFragment : Type where
-  states : Finset TypeAutomatonState
-  initial : TypeAutomatonState
-  accepting : Finset TypeAutomatonState
-  edges : Finset AutomatonFragmentEdge
-
 /--
 How to fill an edge's future-offer field.
 
@@ -700,6 +940,32 @@ structure PendingAutomatonEdge : Type where
   label : AutomatonConstructionLabel
   current : Finset BareMessage
   future : FutureSpec
+  target : TypeAutomatonState
+  deriving DecidableEq
+
+/--
+A constructor fragment whose future references remain symbolic.
+
+Keeping `FutureSpec.at` references unresolved is essential for recursion:
+an enclosing binder can add a back-edge, changing the future offers reachable
+from a child state.  Resolution therefore happens only when an operation
+actually needs decorated edges, and once more for the final automaton.
+-/
+structure AutomatonFragment : Type where
+  states : Finset TypeAutomatonState
+  initial : TypeAutomatonState
+  accepting : Finset TypeAutomatonState
+  /-- States whose represented semantic residual is literally `skip`. -/
+  skipping : Finset TypeAutomatonState
+  edges : Finset PendingAutomatonEdge
+
+/-- A constructor edge after its future-offer field has been computed. -/
+structure AutomatonFragmentEdge : Type where
+  source : TypeAutomatonState
+  environment : TypeEnvironment
+  label : AutomatonConstructionLabel
+  current : Finset BareMessage
+  future : Finset BareMessage
   target : TypeAutomatonState
   deriving DecidableEq
 
@@ -772,16 +1038,23 @@ def computeFuture (automaton : PendingAutomaton)
     (state : TypeAutomatonState) : Finset BareMessage :=
   (automaton.futureReachable state).biUnion automaton.offersAt
 
-/-- Resolve all pending future fields and produce a reusable child fragment. -/
+/-- Package a constructor graph without resolving its future references. -/
 private def finishAutomatonFragment
     (states : Finset TypeAutomatonState) (initial : TypeAutomatonState)
-    (accepting : Finset TypeAutomatonState)
+    (accepting skipping : Finset TypeAutomatonState)
     (edges : Finset PendingAutomatonEdge) : AutomatonFragment :=
-  let pending : PendingAutomaton := { states := states, edges := edges }
   { states := states
     initial := initial
     accepting := accepting
-    edges := edges.image fun edge =>
+    skipping := skipping
+    edges := edges }
+
+/-- Resolve future fields against all states and edges currently in a fragment. -/
+private def resolvedAutomatonEdges
+    (automaton : AutomatonFragment) : Finset AutomatonFragmentEdge :=
+  let pending : PendingAutomaton :=
+    { states := automaton.states, edges := automaton.edges }
+  automaton.edges.image fun edge =>
       let resolvedFuture :=
         match edge.future with
         | .explicit offers => offers
@@ -791,7 +1064,7 @@ private def finishAutomatonFragment
         label := edge.label
         current := edge.current
         future := resolvedFuture
-        target := edge.target } }
+        target := edge.target }
 
 private def childState (index : Nat) (state : TypeAutomatonState) :
     TypeAutomatonState := .child index state
@@ -804,6 +1077,14 @@ private def childAccepting (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=
   automaton.accepting.image (childState index)
 
+private def childSkipping (index : Nat) (automaton : AutomatonFragment) :
+    Finset TypeAutomatonState :=
+  automaton.skipping.image (childState index)
+
+private def childFutureSpec (index : Nat) : FutureSpec → FutureSpec
+  | .explicit offers => .explicit offers
+  | .at state removed => .at (childState index state) removed
+
 private def childPendingEdges (index : Nat) (automaton : AutomatonFragment) :
     Finset PendingAutomatonEdge :=
   automaton.edges.image fun edge =>
@@ -811,7 +1092,7 @@ private def childPendingEdges (index : Nat) (automaton : AutomatonFragment) :
       environment := edge.environment
       label := edge.label
       current := edge.current
-      future := .explicit edge.future
+      future := childFutureSpec index edge.future
       target := childState index edge.target }
 
 /-! ### Interface operations for parallel products -/
@@ -825,10 +1106,6 @@ private def hideOffers (interface : Interface)
 private def interfaceOffers (interface : Interface)
     (offers : Finset BareMessage) : Finset BareMessage :=
   offers.filter fun offer => offer.1 ∈ interface
-
-/-- Complement every action so a type offer can be compared with an environment offer. -/
-private def neededOffers (offers : Finset BareMessage) : Finset BareMessage :=
-  offers.image typeNeed
 
 /--
 Two component edges synchronize when:
@@ -847,10 +1124,10 @@ private def syncAutomatonEdges (interface : Interface)
   let rightImmediateEnv := interfaceOffers interface right.environment.immediate
   let leftFutureEnv := interfaceOffers interface left.environment.future
   let rightFutureEnv := interfaceOffers interface right.environment.future
-  neededOffers leftCurrent = rightImmediateEnv ∧
-    neededOffers rightCurrent = leftImmediateEnv ∧
-    neededOffers leftFuture = rightFutureEnv ∧
-    neededOffers rightFuture = leftFutureEnv ∧
+  leftCurrent = rightImmediateEnv ∧
+    rightCurrent = leftImmediateEnv ∧
+    leftFuture = rightFutureEnv ∧
+    rightFuture = leftFutureEnv ∧
     TypeLabel.Sync interface left.label.semantic right.label.semantic
 
 /-- Hide the interface from the union of two component environments. -/
@@ -865,6 +1142,43 @@ private def combineAutomatonEnvironment (interface : Interface)
 /-! ### Reusable constructor combinators -/
 
 /--
+Build a recursion binder with an explicit silent header step.
+
+The fresh root represents the binder itself. Matching variable edges inside
+the tagged body are replaced by silent back-edges to the body entry, which is
+the graph representation of substituting the binder at those occurrences.
+-/
+private def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
+    (body : AutomatonFragment) : AutomatonFragment :=
+  let states := {TypeAutomatonState.root} ∪ childStates 0 body
+  let accepting := childAccepting 0 body
+  let skipping := childSkipping 0 body
+  let headerEdges : Finset PendingAutomatonEdge :=
+    signature.localEnvironments.image fun environment =>
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible TypeLabel.silent
+        current := ∅
+        future := .at (childState 0 body.initial) ∅
+        target := childState 0 body.initial }
+  let bodyEdges : Finset PendingAutomatonEdge := body.edges.image fun edge =>
+    if edge.label = .variable name then
+      { source := childState 0 edge.source
+        environment := edge.environment
+        label := AutomatonConstructionLabel.visible TypeLabel.silent
+        current := ∅
+        future := .at (childState 0 body.initial) ∅
+        target := childState 0 body.initial }
+    else
+      { source := childState 0 edge.source
+        environment := edge.environment
+        label := edge.label
+        current := edge.current
+        future := childFutureSpec 0 edge.future
+        target := childState 0 edge.target }
+  finishAutomatonFragment states .root accepting skipping (headerEdges ∪ bodyEdges)
+
+/--
 Build a binary choice.
 
 `Q` contains a fresh root and tagged copies of both child state sets. Selection
@@ -876,6 +1190,7 @@ private def buildChoiceAutomaton (signature : TypeAlphabet)
     AutomatonFragment :=
   let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 0 left ∪ childAccepting 1 right
+  let skipping := childSkipping 0 left ∪ childSkipping 1 right
   let selections := signature.localEnvironments.biUnion fun environment =>
     { { source := TypeAutomatonState.root
         environment := environment
@@ -889,45 +1204,46 @@ private def buildChoiceAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 1 right.initial) ∅
         target := childState 1 right.initial } }
-  finishAutomatonFragment states .root accepting
+  finishAutomatonFragment states .root accepting skipping
     (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
 
 /--
-Build sequential composition.
+Build sequential composition without collapsing its administrative step.
 
-Completed left states are removed (except when the left initial state is itself
-accepting). Every edge that would enter a completed left state is redirected to
-the initial state of the right automaton. Only right accepting states remain
-accepting.
+Left transitions remain inside the tagged left graph. Every completed left
+state has a separate silent bridge into the right entry, representing
+`skip ; τ → τ`. Only right accepting states are accepting for the sequence.
 -/
-private def buildSequenceAutomaton (left right : AutomatonFragment) :
-    AutomatonFragment :=
-  let retainedLeft := left.states \ (left.accepting.erase left.initial)
-  let states := retainedLeft.image (childState 0) ∪ childStates 1 right
+private def buildSequenceAutomaton (signature : TypeAlphabet)
+    (left right : AutomatonFragment) : AutomatonFragment :=
+  let states := childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 1 right
-  let leftEdges :=
-    (left.edges.filter fun edge => edge.source ∈ retainedLeft).image fun edge =>
-      if edge.target ∈ left.accepting then
-        { source := childState 0 edge.source
-          environment := edge.environment
-          label := edge.label
-          current := edge.current
+  let skipping := childSkipping 1 right
+  let leftEdges : Finset PendingAutomatonEdge := left.edges.image fun edge =>
+    { source := childState 0 edge.source
+      environment := edge.environment
+      label := edge.label
+      current := edge.current
+      future := if edge.target ∈ left.skipping then
+        .at (childState 1 right.initial) ∅
+      else childFutureSpec 0 edge.future
+      target := childState 0 edge.target }
+  let bridgeEdges : Finset PendingAutomatonEdge :=
+    left.skipping.biUnion fun state =>
+      signature.localEnvironments.image fun environment =>
+        { source := childState 0 state
+          environment := environment
+          label := .visible TypeLabel.silent
+          current := ∅
           future := .at (childState 1 right.initial) ∅
           target := childState 1 right.initial }
-      else
-        { source := childState 0 edge.source
-          environment := edge.environment
-          label := edge.label
-          current := edge.current
-          future := .explicit edge.future
-          target := childState 0 edge.target }
-  finishAutomatonFragment states (childState 0 left.initial) accepting
-    (leftEdges ∪ childPendingEdges 1 right)
+  finishAutomatonFragment states (childState 0 left.initial) accepting skipping
+    (leftEdges ∪ childPendingEdges 1 right ∪ bridgeEdges)
 
 private def fragmentSuccessors (automaton : AutomatonFragment)
     (state : TypeAutomatonState) : Finset TypeAutomatonState :=
   (automaton.edges.filter fun edge => edge.source = state).image
-    AutomatonFragmentEdge.target
+    PendingAutomatonEdge.target
 
 private def fragmentReachableAux (automaton : AutomatonFragment) :
     Nat → Finset TypeAutomatonState → Finset TypeAutomatonState
@@ -936,12 +1252,25 @@ private def fragmentReachableAux (automaton : AutomatonFragment) :
       fragmentReachableAux automaton fuel
         (reached ∪ reached.biUnion (fragmentSuccessors automaton))
 
+private theorem mem_fragmentReachableAux
+    (automaton : AutomatonFragment) (state : TypeAutomatonState) :
+    ∀ fuel reached,
+      state ∈ reached → state ∈ fragmentReachableAux automaton fuel reached := by
+  intro fuel
+  induction fuel with
+  | zero => simp [fragmentReachableAux]
+  | succ fuel ih =>
+      intro reached hState
+      apply ih
+      exact Finset.mem_union_left _ hState
+
 private def restrictReachableFragment (automaton : AutomatonFragment) :
     AutomatonFragment :=
   let reachable := fragmentReachableAux automaton automaton.states.card {automaton.initial}
   { states := automaton.states.filter fun state => state ∈ reachable
     initial := automaton.initial
     accepting := automaton.accepting.filter fun state => state ∈ reachable
+    skipping := automaton.skipping.filter fun state => state ∈ reachable
     edges := automaton.edges.filter fun edge =>
       edge.source ∈ reachable ∧ edge.target ∈ reachable }
 
@@ -955,6 +1284,8 @@ their interface actions are hidden before the resulting edge is exposed.
 private def buildParallelAutomaton (interface : Interface)
     (left right : AutomatonFragment) : AutomatonFragment := by
   classical
+  let leftEdges := resolvedAutomatonEdges left
+  let rightEdges := resolvedAutomatonEdges right
   let states : Finset TypeAutomatonState :=
     left.states.biUnion fun leftState =>
       right.states.image fun rightState =>
@@ -963,8 +1294,8 @@ private def buildParallelAutomaton (interface : Interface)
     left.accepting.biUnion fun leftState =>
       right.accepting.image fun rightState =>
         TypeAutomatonState.pair leftState rightState
-  let edges : Finset PendingAutomatonEdge := left.edges.biUnion fun leftEdge =>
-    (right.edges.filter fun rightEdge =>
+  let edges : Finset PendingAutomatonEdge := leftEdges.biUnion fun leftEdge =>
+    (rightEdges.filter fun rightEdge =>
       syncAutomatonEdges interface leftEdge rightEdge).image fun rightEdge =>
         { source := .pair leftEdge.source rightEdge.source
           environment := combineAutomatonEnvironment interface
@@ -976,7 +1307,7 @@ private def buildParallelAutomaton (interface : Interface)
             (hideOffers interface (leftEdge.future ∪ rightEdge.future))
           target := .pair leftEdge.target rightEdge.target }
   let product := finishAutomatonFragment
-    states (.pair left.initial right.initial) accepting edges
+    states (.pair left.initial right.initial) accepting ∅ edges
   exact restrictReachableFragment product
 
 private def indexedFragmentStates
@@ -991,15 +1322,17 @@ private def indexedFragmentAccepting
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childAccepting (indexed.2 + 1) indexed.1.2) ∅
 
+private def indexedFragmentSkipping
+    (automata : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState :=
+  automata.zipIdx.foldl (fun states indexed =>
+    states ∪ childSkipping (indexed.2 + 1) indexed.1.2) ∅
+
 private def indexedFragmentEdges
     (automata : List (BareMessage × AutomatonFragment)) :
     Finset PendingAutomatonEdge :=
   automata.zipIdx.foldl (fun edges indexed =>
     edges ∪ childPendingEdges (indexed.2 + 1) indexed.1.2) ∅
-
-private def branchActions
-    (branches : List (BareMessage × PactType)) : Finset BareMessage :=
-  (branches.map Prod.fst).toFinset
 
 /--
 Build an exclusive offer with one fresh root.
@@ -1020,8 +1353,10 @@ private def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
     indexedFragmentStates branchAutomata
   let accepting := childAccepting 0 elseAutomaton ∪
     indexedFragmentAccepting branchAutomata
+  let skipping := childSkipping 0 elseAutomaton ∪
+    indexedFragmentSkipping branchAutomata
   let needs := typeBranchNeeds branches
-  let actions := branchActions branches
+  let actions := typeBranchActions branches
   let branchEdges : Finset PendingAutomatonEdge := branchAutomata.zipIdx.foldl
     (fun edges indexed =>
       let index := indexed.2
@@ -1062,7 +1397,7 @@ private def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 0 elseAutomaton.initial) ∅
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting
+  exact finishAutomatonFragment states .root accepting skipping
     (childPendingEdges 0 elseAutomaton ∪ indexedFragmentEdges branchAutomata ∪
       branchEdges ∪ waitEdges ∪ elseEdges)
 
@@ -1081,8 +1416,9 @@ private def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
   let states := {TypeAutomatonState.root} ∪ childStates 0 conjunction ∪
     childStates 1 elseAutomaton
   let accepting := childAccepting 0 conjunction ∪ childAccepting 1 elseAutomaton
+  let skipping := childSkipping 0 conjunction ∪ childSkipping 1 elseAutomaton
   let needs := typeBranchNeeds branches
-  let actions := branchActions branches
+  let actions := typeBranchActions branches
   let enabledEdges : Finset PendingAutomatonEdge :=
     let enablingEnvironments := signature.localEnvironments.filter fun environment =>
       needs ∩ environment.immediate ≠ ∅
@@ -1093,6 +1429,19 @@ private def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 0 conjunction.initial) ∅
         target := childState 0 conjunction.initial }
+  let waitEdges : Finset PendingAutomatonEdge :=
+    let waitingEnvironments := signature.localEnvironments.filter fun environment =>
+      environment.clock = false ∧
+      needs ∩ environment.immediate = ∅ ∧
+      needs ∩ environment.future ≠ ∅
+    waitingEnvironments.image fun environment =>
+      let waiting := (environment.future.image typeNeed) ∩ actions
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible TypeLabel.silent
+        current := waiting
+        future := .at TypeAutomatonState.root waiting
+        target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
     let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
       needs ∩ environment.immediate = ∅ ∧
@@ -1104,13 +1453,121 @@ private def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
         current := actions
         future := .at (childState 1 elseAutomaton.initial) ∅
         target := childState 1 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting
+  exact finishAutomatonFragment states .root accepting skipping
     (childPendingEdges 0 conjunction ∪ childPendingEdges 1 elseAutomaton ∪
-      enabledEdges ∪ elseEdges)
+      enabledEdges ∪ waitEdges ∪ elseEdges)
 
 /-!
 ### Constructor compiler
 -/
+
+/-
+`compileTypeFuel` also compiles the type generated for a conjunctive offer.
+Consequently, a plain recursion-depth calculation on `PactType` is not quite
+enough: the generated parallel tree must be accounted for as well.
+
+These three mutually recursive functions calculate exactly the structural
+budget needed by the calls below.  Atomic constructors need one unit.  A
+compound constructor needs one unit plus the largest budget of any recursive
+call that it makes.
+-/
+mutual
+  def typeCompilationFuel : PactType → Nat
+    | .message _ _ => 1
+    | .progress _ => 1
+    | .tock => 1
+    | .skip => 1
+    | .var _ => 1
+    | .recur _ body => 1 + typeCompilationFuel body
+    | .choice left right =>
+        1 + max (typeCompilationFuel left) (typeCompilationFuel right)
+    | .fairChoice _ left right =>
+        1 + max (typeCompilationFuel left) (typeCompilationFuel right)
+    | .seq left right =>
+        1 + max (typeCompilationFuel left) (typeCompilationFuel right)
+    | .par left right _ =>
+        1 + max (typeCompilationFuel left) (typeCompilationFuel right)
+    | .xoffer elseType branches =>
+        1 + max (typeCompilationFuel elseType)
+          (typeBranchCompilationFuel branches)
+    | .offer elseType branches =>
+        1 + max (typeCompilationFuel elseType)
+          (conjunctiveCompilationFuel branches)
+  termination_by processType => sizeOf processType
+
+  /-- Largest compilation budget among all branch continuations. -/
+  def typeBranchCompilationFuel :
+      List (BareMessage × PactType) → Nat
+    | [] => 0
+    | (_, processType) :: rest =>
+        max (typeCompilationFuel processType)
+          (typeBranchCompilationFuel rest)
+  termination_by branches => sizeOf branches
+
+  /-- Budget for the parallel singleton offers generated by an `offer`. -/
+  def conjunctiveCompilationFuel :
+      List (BareMessage × PactType) → Nat
+    | [] => 1
+    | [(_, processType)] =>
+        1 + max 1 (typeCompilationFuel processType)
+    | (_, processType) :: next :: rest =>
+        1 + max
+          (1 + max 1 (typeCompilationFuel processType))
+          (conjunctiveCompilationFuel (next :: rest))
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/--
+The auxiliary budget is exactly the budget of the parallel type generated for
+a conjunctive offer.  This is the non-structural recursive call that motivates
+the custom fuel calculation.
+-/
+theorem typeCompilationFuel_parallelTypeBranches
+    (branches : List (BareMessage × PactType)) :
+    typeCompilationFuel (parallelTypeBranches branches) =
+      conjunctiveCompilationFuel branches := by
+  induction branches with
+  | nil =>
+      simp [parallelTypeBranches, typeCompilationFuel,
+        conjunctiveCompilationFuel]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            typeCompilationFuel, typeBranchCompilationFuel,
+            conjunctiveCompilationFuel]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            typeCompilationFuel, typeBranchCompilationFuel,
+            conjunctiveCompilationFuel, ih]
+
+/-- `fuel` covers every recursive call made while compiling `processType`. -/
+def TypeCompilationFuelSufficient
+    (processType : PactType) (fuel : Nat) : Prop :=
+  typeCompilationFuel processType ≤ fuel
+
+/-- The calculated compilation budget is sufficient by construction. -/
+theorem typeCompilationFuel_sufficient (processType : PactType) :
+    TypeCompilationFuelSufficient processType
+      (typeCompilationFuel processType) := by
+  exact le_rfl
+
+/-- Every type receives at least the one unit needed to enter its constructor. -/
+theorem typeCompilationFuel_positive (processType : PactType) :
+    0 < typeCompilationFuel processType := by
+  cases processType <;> simp [typeCompilationFuel] <;> omega
+
+/-- Sufficient fuel can never select the defensive zero-fuel case at the root. -/
+theorem TypeCompilationFuelSufficient.positive
+    {processType : PactType} {fuel : Nat}
+    (hFuel : TypeCompilationFuelSufficient processType fuel) :
+    0 < fuel :=
+  lt_of_lt_of_le (typeCompilationFuel_positive processType) hFuel
 
 private def compileTypeFuel (signature : TypeAlphabet) :
     Nat → PactType → AutomatonFragment
@@ -1119,14 +1576,17 @@ private def compileTypeFuel (signature : TypeAlphabet) :
       { states := {.root}
         initial := .root
         accepting := ∅
+        skipping := ∅
         edges := ∅ }
   | fuel + 1, processType => by
       classical
       match processType with
       -- skip: Q = {root}, i = root, F = {root}; epsilon self-loops.
       | .skip =>
-          exact finishAutomatonFragment {.root} .root {.root} <|
-            signature.localEnvironments.image fun environment =>
+          let idleEnvironments := signature.localEnvironments.filter fun environment =>
+            environment.clock = false ∧ environment.immediate = ∅
+          exact finishAutomatonFragment {.root} .root {.root} {.root} <|
+            idleEnvironments.image fun environment =>
               { source := .root
                 environment := environment
                 label := .visible TypeLabel.silent
@@ -1137,16 +1597,19 @@ private def compileTypeFuel (signature : TypeAlphabet) :
       -- message: fire to final when its complement is immediate; otherwise wait.
       | .message msg dir =>
           let action : BareMessage := (msg, dir)
-          let actionEdges : Finset PendingAutomatonEdge :=
-            signature.localEnvironments.image fun environment =>
-              if environment.hasNeed action then
+          let firingEdges : Finset PendingAutomatonEdge :=
+            (signature.localEnvironments.filter fun environment =>
+              environment.hasNeed action).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible (TypeLabel.message msg dir)
                   current := {action}
                   future := .at .final ∅
                   target := .final }
-              else
+          let waitingEdges : Finset PendingAutomatonEdge :=
+            (signature.localEnvironments.filter fun environment =>
+              environment.clock = false ∧
+              ¬ environment.hasNeed action).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible TypeLabel.silent
@@ -1164,8 +1627,8 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .at .final ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final}
-            (actionEdges ∪ finalEdges)
+          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+            (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
       | .tock =>
@@ -1196,7 +1659,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .at .final ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final}
+          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
@@ -1220,12 +1683,12 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .explicit ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final}
+          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
       | .var name =>
-          exact finishAutomatonFragment {.root, .final} .root ∅ <|
+          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ <|
             signature.localEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -1236,25 +1699,8 @@ private def compileTypeFuel (signature : TypeAlphabet) :
 
       -- recursion: replace matching variable edges by silent back-edges.
       | .recur name body =>
-          let bodyAutomaton := compileTypeFuel signature fuel body
-          let edges : Finset PendingAutomatonEdge :=
-            bodyAutomaton.edges.image fun edge =>
-              if edge.label = .variable name then
-                { source := edge.source
-                  environment := edge.environment
-                  label := AutomatonConstructionLabel.visible TypeLabel.silent
-                  current := ∅
-                  future := FutureSpec.at bodyAutomaton.initial ∅
-                  target := bodyAutomaton.initial }
-              else
-                { source := edge.source
-                  environment := edge.environment
-                  label := edge.label
-                  current := edge.current
-                  future := FutureSpec.explicit edge.future
-                  target := edge.target }
-          exact finishAutomatonFragment bodyAutomaton.states bodyAutomaton.initial
-            bodyAutomaton.accepting edges
+          exact buildRecursionAutomaton signature name
+            (compileTypeFuel signature fuel body)
       -- ordinary choice: add a fresh root with two silent selection edges.
       | .choice left right =>
           exact buildChoiceAutomaton signature
@@ -1271,7 +1717,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
 
       -- sequence: redirect transitions entering a left final state into right.
       | .seq left right =>
-          exact buildSequenceAutomaton
+          exact buildSequenceAutomaton signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
 
@@ -1332,10 +1778,11 @@ then remove unresolved variable edges and transitions outside the fixed external
 def compileType
     (signature : TypeAlphabet)
     (processType : PactType) : TypeAutomaton :=
-  let fuel := 4 * sizeOf processType + 1
+  let fuel := typeCompilationFuel processType
   let constructed := compileTypeFuel signature fuel processType
+  let constructedEdges := resolvedAutomatonEdges constructed
   let transitionAlphabet := signature.transitionAlphabet
-  let edges : Finset TypeAutomatonEdge := constructed.edges.biUnion fun edge =>
+  let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
     | .variable _ => ∅
     | .visible label =>
@@ -1353,6 +1800,242 @@ def compileType
     alphabet := transitionAlphabet
     edges := edges }
 
+/-- Regression theorem: compiled `skip` has no edge in a clock environment. -/
+theorem compileType_skip_has_no_clock_edge
+    (signature : TypeAlphabet) (offers : TypeOfferSummary)
+    (target : TypeAutomatonState) :
+    ¬ (compileType signature .skip).HasEdge
+      (compileType signature .skip).initial
+      TypeEnvironment.tock TypeLabel.silent offers target := by
+  simp [TypeAutomaton.HasEdge, compileType, typeCompilationFuel,
+    compileTypeFuel, finishAutomatonFragment, resolvedAutomatonEdges,
+    TypeEnvironment.tock]
+  intro environment _ hClock _
+  split_ifs
+  · simp only [Finset.mem_singleton]
+    intro edgeEquality
+    have clockEquality := congrArg
+      (fun edge : TypeAutomatonEdge => edge.symbol.environment.clock)
+      edgeEquality
+    simp [hClock] at clockEquality
+  · simp
+
+/-!
+### Semantic residuals represented by constructor states
+
+This relation is the invariant used by the correspondence proof.  The first
+type is the fragment originally compiled; the final type is the operational
+residual represented by the tagged state in the middle.
+-/
+
+inductive TypeCompilationRelation :
+    PactType → TypeAutomatonState → PactType → Prop where
+  | skip : TypeCompilationRelation .skip .root .skip
+  | message_source (msg : MessageId) (dir : MessageDir) :
+      TypeCompilationRelation (.message msg dir) .root (.message msg dir)
+  | message_final (msg : MessageId) (dir : MessageDir) :
+      TypeCompilationRelation (.message msg dir) .final .skip
+  | cycle_source : TypeCompilationRelation .tock .root .tock
+  | cycle_final : TypeCompilationRelation .tock .final .skip
+  | progress_source (pid : ProcId) :
+      TypeCompilationRelation (.progress pid) .root (.progress pid)
+  | progress_final (pid : ProcId) :
+      TypeCompilationRelation (.progress pid) .final .skip
+  | variable (name : String) :
+      TypeCompilationRelation (.var name) .root (.var name)
+  | recur_source (name : String) (body : PactType) :
+      TypeCompilationRelation (.recur name body) .root (.recur name body)
+  | recur_body (name : String) (body residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation body state residual →
+      TypeCompilationRelation (.recur name body) (.child 0 state)
+        (residual.replaceVar name (.recur name body))
+  | choice_source (left right : PactType) :
+      TypeCompilationRelation (.choice left right) .root (.choice left right)
+  | choice_left (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation left state residual →
+      TypeCompilationRelation (.choice left right) (.child 0 state) residual
+  | choice_right (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation right state residual →
+      TypeCompilationRelation (.choice left right) (.child 1 state) residual
+  | fair_source (bid : BranchId) (left right : PactType) :
+      TypeCompilationRelation (.fairChoice bid left right) .root
+        (.fairChoice bid left right)
+  | fair_left (bid : BranchId) (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation left state residual →
+      TypeCompilationRelation (.fairChoice bid left right) (.child 0 state) residual
+  | fair_right (bid : BranchId) (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation right state residual →
+      TypeCompilationRelation (.fairChoice bid left right) (.child 1 state) residual
+  | sequence_left (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation left state residual →
+      TypeCompilationRelation (.seq left right) (.child 0 state)
+        (.seq residual right)
+  | sequence_right (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation right state residual →
+      TypeCompilationRelation (.seq left right) (.child 1 state) residual
+  | parallel (left right leftResidual rightResidual : PactType)
+      (interface : Interface) (leftState rightState : TypeAutomatonState) :
+      TypeCompilationRelation left leftState leftResidual →
+      TypeCompilationRelation right rightState rightResidual →
+      TypeCompilationRelation (.par left right interface)
+        (.pair leftState rightState)
+        (.par leftResidual rightResidual interface)
+  | xoffer_source (elseType : PactType)
+      (branches : List (BareMessage × PactType)) :
+      TypeCompilationRelation (.xoffer elseType branches) .root
+        (.xoffer elseType branches)
+  | xoffer_else (elseType residual : PactType)
+      (branches : List (BareMessage × PactType))
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation elseType state residual →
+      TypeCompilationRelation (.xoffer elseType branches) (.child 0 state) residual
+  | xoffer_branch (elseType branchType residual : PactType)
+      (branches : List (BareMessage × PactType)) (action : BareMessage)
+      (index : Nat) (state : TypeAutomatonState) :
+      branches[index]? = some (action, branchType) →
+      TypeCompilationRelation branchType state residual →
+      TypeCompilationRelation (.xoffer elseType branches)
+        (.child (index + 1) state) residual
+  | offer_source (elseType : PactType)
+      (branches : List (BareMessage × PactType)) :
+      TypeCompilationRelation (.offer elseType branches) .root
+        (.offer elseType branches)
+  | offer_branches (elseType residual : PactType)
+      (branches : List (BareMessage × PactType))
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation (parallelTypeBranches branches) state residual →
+      TypeCompilationRelation (.offer elseType branches) (.child 0 state) residual
+  | offer_else (elseType residual : PactType)
+      (branches : List (BareMessage × PactType))
+      (state : TypeAutomatonState) :
+      TypeCompilationRelation elseType state residual →
+      TypeCompilationRelation (.offer elseType branches) (.child 1 state) residual
+
+/-- Sufficiently fuelled compilation starts in the state representing its input. -/
+private theorem compileTypeFuel_initial_relation (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      TypeCompilationRelation processType
+        (compileTypeFuel signature fuel processType).initial processType := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir => exact TypeCompilationRelation.message_source msg dir
+      | progress pid => exact TypeCompilationRelation.progress_source pid
+      | tock => exact TypeCompilationRelation.cycle_source
+      | skip => exact TypeCompilationRelation.skip
+      | var name => exact TypeCompilationRelation.variable name
+      | recur name body => exact TypeCompilationRelation.recur_source name body
+      | choice left right => exact TypeCompilationRelation.choice_source left right
+      | fairChoice bid left right =>
+          exact TypeCompilationRelation.fair_source bid left right
+      | seq left right =>
+          apply TypeCompilationRelation.sequence_left
+          apply ih left
+          simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+          omega
+      | par left right interface =>
+          apply TypeCompilationRelation.parallel
+          · apply ih left
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          · apply ih right
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+      | xoffer elseType branches =>
+          exact TypeCompilationRelation.xoffer_source elseType branches
+      | offer elseType branches =>
+          exact TypeCompilationRelation.offer_source elseType branches
+
+/-- The public compiler's initial state represents the original type. -/
+theorem compileType_initial_relation
+    (signature : TypeAlphabet) (processType : PactType) :
+    TypeCompilationRelation processType
+      (compileType signature processType).initial processType := by
+  apply compileTypeFuel_initial_relation signature
+  exact typeCompilationFuel_sufficient processType
+
+/-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
+private theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      (compileTypeFuel signature fuel processType).initial ∈
+        (compileTypeFuel signature fuel processType).states := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir => simp [compileTypeFuel, finishAutomatonFragment]
+      | progress pid => simp [compileTypeFuel, finishAutomatonFragment]
+      | tock => simp [compileTypeFuel, finishAutomatonFragment]
+      | skip => simp [compileTypeFuel, finishAutomatonFragment]
+      | var name => simp [compileTypeFuel, finishAutomatonFragment]
+      | recur name body =>
+          simp [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment]
+      | choice left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | fairChoice bid left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | seq left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          simpa [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childStates, childState] using ih left hLeft
+      | par left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hLeftMem := ih left hLeft
+          have hRightMem := ih right hRight
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            restrictReachableFragment]
+          simp only [Finset.mem_filter]
+          constructor
+          · apply Finset.mem_biUnion.mpr
+            refine ⟨_, hLeftMem, ?_⟩
+            exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
+          · apply mem_fragmentReachableAux
+            simp
+      | xoffer elseType branches =>
+          simp [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+      | offer elseType branches =>
+          simp [compileTypeFuel, buildConjunctiveOfferAutomaton,
+            finishAutomatonFragment]
+
+/-- The initial state exposed by the public compiler belongs to its state set. -/
+theorem compileType_initial_mem
+    (signature : TypeAlphabet) (processType : PactType) :
+    (compileType signature processType).initial ∈
+      (compileType signature processType).states := by
+  apply compileTypeFuel_initial_mem signature
+  exact typeCompilationFuel_sufficient processType
+
 /-- The step-for-step relation of Lemma 4.5. -/
 structure TypeAutomatonCorrespondence
     (processType : PactType) (automaton : TypeAutomaton) : Type where
@@ -1363,10 +2046,63 @@ structure TypeAutomatonCorrespondence
     ∀ {residual residual' : PactType} {state : TypeAutomatonState}
       {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
       relation residual state →
+      ({ environment := env, label := label, offers := offers } :
+          TypeAutomatonSymbol) ∈ automaton.alphabet →
       (DecoratedTypeTransition env residual label offers residual' ↔
         ∃ state',
           automaton.HasEdge state env label offers state' ∧
           relation residual' state')
+
+/-- The atomic `skip` constructor already satisfies the full step correspondence. -/
+theorem compileType_skip_correspondence (signature : TypeAlphabet) :
+    Nonempty (TypeAutomatonCorrespondence .skip (compileType signature .skip)) := by
+  let related : PactType → TypeAutomatonState → Prop :=
+    fun residual state => residual = .skip ∧ state = .root
+  refine ⟨
+    { relation := related
+      initial := by simp [related, compileType, typeCompilationFuel,
+        compileTypeFuel, finishAutomatonFragment]
+      initial_mem := by simp [compileType, typeCompilationFuel,
+        compileTypeFuel, finishAutomatonFragment]
+      stepIff := ?_ }⟩
+  intro residual residual' state env label offers hRelated hAlphabet
+  rcases hRelated with ⟨rfl, rfl⟩
+  rcases offers with ⟨current, future⟩
+  have hEnvironment : env ∈ signature.environments := by
+    have hAlphabetParts :
+        env ∈ signature.environments ∧
+          label ∈ signature.labels ∧
+          { current := current, future := future } ∈
+            signature.offerSummaries := by
+      simpa [compileType, TypeAlphabet.transitionAlphabet] using hAlphabet
+    exact hAlphabetParts.1
+  have hLocalEnvironment : env ∈ signature.localEnvironments :=
+    signature.environments_subset_localEnvironments hEnvironment
+  constructor
+  · rintro ⟨hTransition, hOffers⟩
+    cases hTransition with
+    | skip _ conditions =>
+        cases hOffers with
+        | skip _ _ =>
+            refine ⟨.root, ?_, by simp [related]⟩
+            simp only [TypeAutomaton.HasEdge]
+            have hSymbol :
+                { environment := env, label := TypeLabel.silent,
+                  offers := { current := ∅, future := ∅ } } ∈
+                    signature.transitionAlphabet := by
+              simpa [compileType] using hAlphabet
+            simp [compileType, typeCompilationFuel, compileTypeFuel,
+              finishAutomatonFragment, resolvedAutomatonEdges]
+            exact ⟨env, ⟨hLocalEnvironment, conditions.2.1,
+              conditions.2.2⟩, by simp [hSymbol]⟩
+  · rintro ⟨state', hEdge, hTarget⟩
+    rcases hTarget with ⟨rfl, rfl⟩
+    have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
+    simp only [TypeAutomaton.HasEdge] at hEdge
+    simp [compileType, typeCompilationFuel, compileTypeFuel,
+      finishAutomatonFragment, resolvedAutomatonEdges] at hEdge
+    simp only [DecoratedTypeTransition]
+    aesop
 
 /-- The process-to-automaton simulation of Lemma 4.6. -/
 structure ProcessAutomatonCorrespondence
