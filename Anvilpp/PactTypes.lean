@@ -81,14 +81,39 @@ namespace PactType
 
 end PactType
 
-/-- Structural, data-oblivious abstraction `abs(P)` from Section 4.2. -/
-def inferProcess (process : Proc) : PactType := by
-  sorry
+mutual
+/-- Structural, data-oblivious abstraction `abs(P)`-/
+  def inferProcess (process : Proc) : PactType :=
+    match process with
+    | Proc.send msg _ p =>
+        .seq (.message msg .send) (inferProcess p)
+    | Proc.recv msg _ p =>
+        .seq (.message msg .recv) (inferProcess p)
+    | Proc.var name => .var name
+    | Proc.skip => .skip
+    | Proc.endp pid => .progress pid
+    | Proc.cycle => .tock
+    | Proc.par left right interface =>
+        .par (inferProcess left) (inferProcess right) interface
+    | Proc.seq left right =>
+        .seq (inferProcess left) (inferProcess right)
+    | Proc.letp _ _ p => inferProcess p
+    | Proc.ifunfair _ left right =>
+        .choice (inferProcess left) (inferProcess right)
+    | Proc.iffair bid _ left right =>
+        .fairChoice bid (inferProcess left) (inferProcess right)
+    | Proc.xoffer elseType branches =>
+        .xoffer (inferProcess elseType) (branches.map inferBranch)
+    | Proc.offer elseType branches =>
+        .offer (inferProcess elseType) (branches.map inferBranch)
+    | Proc.recur name body => .recur name (inferProcess body)
 
-/-- Erase a branch head and recursively abstract its continuation. -/
-def inferBranch : ChoiceBranch → BareMessage × PactType
-  | .send msg _ process => ((msg, .send), inferProcess process)
-  | .recv msg _ process => ((msg, .recv), inferProcess process)
+  /-- Erase a branch head and recursively abstract its continuation. -/
+  def inferBranch : ChoiceBranch → BareMessage × PactType
+    | .send msg _ process => ((msg, .send), inferProcess process)
+    | .recv msg _ process => ((msg, .recv), inferProcess process)
+
+end
 
 inductive TypeObservation : Type where
   | message : MessageId → MessageDir → TypeObservation
