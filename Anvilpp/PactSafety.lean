@@ -299,25 +299,31 @@ theorem inference_runs_in_linear_time : RunsInLinearTime inferProcess := by
 theorem checking_runs_in_product_time : RunsInProductTime refinementChecker := by
   sorry
 
-/-- Closed, guarded, regular types admitted by the canonical automaton construction. -/
-def AdmissibleType (processType : PactType) : Prop := by
+/-- The paper's closedness, guardedness, and regularity side conditions. -/
+def ClosedGuardedRegular (processType : PactType) : Prop := by
   sorry
+
+/-- Types admitted by the canonical construction relative to a fixed alphabet. -/
+def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  signature.Supports processType ∧ ClosedGuardedRegular processType
 
 /-- Lemma 4.5: operational types and their finite semantic automata correspond. -/
 theorem type_automaton_correspondence
-    {processType : PactType} (hAdmissible : AdmissibleType processType) :
+    {signature : TypeAlphabet} {processType : PactType}
+    (hAdmissible : AdmissibleType signature processType) :
     Nonempty
-      (TypeAutomatonCorrespondence processType (compileType processType)) := by
+      (TypeAutomatonCorrespondence processType
+        (compileType signature processType)) := by
   sorry
 
 /-- Lemma 4.6: conforming processes simulate into the type automaton. -/
 theorem process_automaton_correspondence
-    {process : Proc} {processType : PactType}
-    (hAdmissible : AdmissibleType processType)
+    {signature : TypeAlphabet} {process : Proc} {processType : PactType}
+    (hAdmissible : AdmissibleType signature processType)
     (hConforms : Conforms process processType) :
     Nonempty
       (ProcessAutomatonCorrespondence
-        process processType (compileType processType)) := by
+        process processType (compileType signature processType)) := by
   sorry
 
 /-- Proposition 4.1: `Ω_T` is omega-regular. -/

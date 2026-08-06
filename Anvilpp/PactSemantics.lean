@@ -1,5 +1,7 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Image
+import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.Finset.Union
 import Anvilpp.Proc
 
 namespace Pact
@@ -11,6 +13,19 @@ abbrev Interface := Finset MessageId
 
 /-- A message identifier paired with its polarity. -/
 abbrev BareMessage := MessageId × MessageDir
+
+/--
+The message part of a process/type signature.
+
+This is fixed by the surrounding system before either syntax tree is compiled;
+in particular, it is deliberately not inferred by traversing a `Proc` or a
+`PactType`.  `boundary` is polarized, while an interface contains message
+identifiers because synchronization pairs the two polarities.
+-/
+structure MessageAlphabet : Type where
+  boundary : Finset BareMessage
+  interface : Interface
+  deriving DecidableEq
 
 /-- Atomic observations that may occur together in a non-clock step. -/
 inductive Observation : Type where
@@ -168,6 +183,33 @@ namespace Environment
     env.bareImmediate ∪ env.future
 
 end Environment
+
+namespace MessageAlphabet
+
+  /-- Concrete environment offers complementary to the fixed process boundary. -/
+  def processEnvironmentOffers (alphabet : MessageAlphabet) : Finset Offer :=
+    alphabet.boundary.biUnion fun action =>
+      match action.2 with
+      | .send => {Offer.recv action.1}
+      | .recv => {Offer.send action.1 false, Offer.send action.1 true}
+
+  /-- Bare future offers admitted by the fixed process boundary. -/
+  def processFutureOffers (alphabet : MessageAlphabet) : Finset BareMessage :=
+    alphabet.processEnvironmentOffers.image Offer.bare
+
+  /--
+  The finite process-environment space generated from a fixed alphabet.
+  Immediate and future offers are disjoint after value erasure; the clock
+  environment is the distinguished additional possibility.
+  -/
+  def processEnvironments (alphabet : MessageAlphabet) : Finset Environment :=
+    {Environment.tock} ∪
+      alphabet.processEnvironmentOffers.powerset.biUnion fun immediate =>
+        (alphabet.processFutureOffers \ immediate.image Offer.bare).powerset.image
+          fun future =>
+            { immediate := immediate, future := future, clock := false }
+
+end MessageAlphabet
 
 namespace ChoiceBranch
 
