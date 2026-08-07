@@ -26,8 +26,8 @@
   a boundary action's message identifier cannot also occur in the interface.
 - [x] Prove that compiled parallel edges hide immediate interface actions.
 - [x] Define `ClosedGuardedRegular`: all variables are bound, every recursive
-  backedge crosses a clock, and a message identifier is exchanged at most once
-  per clock cycle.
+  backedge crosses a clock, recursive calls are tail terminating, and a message
+  identifier is exchanged at most once per clock cycle.
 - [x] Prove that a mandatory clock prevents same-cycle completion, semantic
   completion/future-offer fuel stabilizes, and unfolding a clock-guarded
   recursion preserves the public `typeFutureOffers` menu.
@@ -40,11 +40,12 @@
 - [ ] Prove future-offer correctness: resolving `FutureSpec.at q removed` with
   `computeFuture` gives the semantic `typeFutureOffers` set for the residual
   represented by `q`, minus `removed`.
-  Clock guarding rules out the previously considered immediate recursive
-  re-offer. The remaining obligation is to connect graph-based `computeFuture`
-  to `typeFutureOffers` for every related admissible residual.
-- [ ] Prove the remaining atomic cases: clock action/wait, progress, and an
-  unresolved variable.
+  Clock guarding and tail termination rule out premature recursion-dependent
+  resolution inside retained products. The remaining obligation is to connect
+  graph-based `computeFuture` to `typeFutureOffers` for every related
+  admissible residual.
+- [x] Prove the remaining closed atomic cases: clock action/wait and progress.
+  Unresolved variables remain an internal fragment case consumed by recursion.
 - [ ] Prove ordinary and fair choice preservation, including selection edges
   and child-state tagging.
 - [ ] Prove sequence preservation, including left steps, literal-`skip`

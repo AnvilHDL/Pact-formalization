@@ -300,16 +300,18 @@ theorem checking_runs_in_product_time : RunsInProductTime refinementChecker := b
   sorry
 
 /--
-The paper's admissible recursive types: variables are closed and every
-recursive backedge is preceded by at least one synchronized clock step.
+The paper's admissible recursive types: variables are closed, every recursive
+backedge is preceded by at least one synchronized clock step, recursive calls
+are tail terminating, and a message is exchanged at most once per cycle.
 
-Regularity is represented by the finite `PactType` syntax together with named
-backedges; unfolding is shared by `TypeCompilationRelation.recur_body` rather
-than copied into the syntax tree.
+Tail termination is the finite-control part of regularity.  It ensures that a
+shared backedge never has to retain a newly generated sequence, parallel, or
+conjunctive-offer context.
 -/
 def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
     PactType.ClockGuarded processType ∧
+    PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType
 
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/
@@ -339,6 +341,17 @@ theorem type_automaton_correspondence
   by_cases hSkip : processType = .skip
   · subst processType
     exact compileType_skip_correspondence signature
+  by_cases hTock : processType = .tock
+  · subst processType
+    exact compileType_tock_correspondence signature
+  by_cases hProgress : ∃ pid, processType = .progress pid
+  · rcases hProgress with ⟨pid, rfl⟩
+    exact compileType_progress_correspondence signature pid
+  by_cases hVariable : ∃ name, processType = .var name
+  · rcases hVariable with ⟨name, rfl⟩
+    have hClosed : PactType.AllVariablesBound [] (.var name) :=
+      hAdmissible.2.2.1
+    simp [PactType.AllVariablesBound] at hClosed
   refine ⟨
     { relation := fun residual state =>
         TypeCompilationRelation processType state residual
