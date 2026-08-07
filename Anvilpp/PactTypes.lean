@@ -83,6 +83,384 @@ namespace PactType
       omega
   end
 
+  mutual
+    /-- Replacing a variable by its recursion binder never shrinks the type. -/
+    theorem sizeOf_le_replaceVar_recur (processType : PactType)
+        (name : String) (body : PactType) :
+        sizeOf processType ≤
+          sizeOf (processType.replaceVar name (.recur name body)) := by
+      cases processType with
+      | message msg dir => simp [replaceVar]
+      | progress pid => simp [replaceVar]
+      | tock => simp [replaceVar]
+      | skip => simp [replaceVar]
+      | var other =>
+          by_cases hName : name = other
+          · subst other
+            simp [replaceVar]
+          · simp [replaceVar, hName]
+      | recur other nestedBody =>
+          by_cases hName : name = other
+          · simp [replaceVar, hName]
+          · simp only [replaceVar, hName]
+            have hBody := sizeOf_le_replaceVar_recur nestedBody name body
+            simpa using Nat.add_le_add_left hBody (1 + sizeOf other)
+      | choice left right =>
+          have hLeft := sizeOf_le_replaceVar_recur left name body
+          have hRight := sizeOf_le_replaceVar_recur right name body
+          simp only [replaceVar]
+          change 1 + sizeOf left + sizeOf right ≤
+            1 + sizeOf (left.replaceVar name (.recur name body)) +
+              sizeOf (right.replaceVar name (.recur name body))
+          omega
+      | fairChoice bid left right =>
+          have hLeft := sizeOf_le_replaceVar_recur left name body
+          have hRight := sizeOf_le_replaceVar_recur right name body
+          simp only [replaceVar]
+          change 1 + bid + sizeOf left + sizeOf right ≤
+            1 + bid + sizeOf (left.replaceVar name (.recur name body)) +
+              sizeOf (right.replaceVar name (.recur name body))
+          simpa only [Nat.add_assoc] using
+            Nat.add_le_add_left (Nat.add_le_add hLeft hRight) (1 + bid)
+      | seq left right =>
+          have hLeft := sizeOf_le_replaceVar_recur left name body
+          have hRight := sizeOf_le_replaceVar_recur right name body
+          simp only [replaceVar]
+          change 1 + sizeOf left + sizeOf right ≤
+            1 + sizeOf (left.replaceVar name (.recur name body)) +
+              sizeOf (right.replaceVar name (.recur name body))
+          omega
+      | par left right interface =>
+          have hLeft := sizeOf_le_replaceVar_recur left name body
+          have hRight := sizeOf_le_replaceVar_recur right name body
+          simp only [replaceVar]
+          change 1 + sizeOf left + sizeOf right + sizeOf interface ≤
+            1 + sizeOf (left.replaceVar name (.recur name body)) +
+              sizeOf (right.replaceVar name (.recur name body)) +
+                sizeOf interface
+          omega
+      | xoffer elseType branches =>
+          have hElse := sizeOf_le_replaceVar_recur elseType name body
+          have hBranches := sizeOf_le_replaceBranches_recur branches name body
+          simp [replaceVar]
+          simpa only [Nat.add_assoc] using
+            Nat.add_le_add_left (Nat.add_le_add hElse hBranches) 1
+      | offer elseType branches =>
+          have hElse := sizeOf_le_replaceVar_recur elseType name body
+          have hBranches := sizeOf_le_replaceBranches_recur branches name body
+          simp [replaceVar]
+          simpa only [Nat.add_assoc] using
+            Nat.add_le_add_left (Nat.add_le_add hElse hBranches) 1
+    termination_by sizeOf processType
+
+    theorem sizeOf_le_replaceBranches_recur
+        (branches : List (BareMessage × PactType))
+        (name : String) (body : PactType) :
+        sizeOf branches ≤
+          sizeOf (replaceBranches branches name (.recur name body)) := by
+      cases branches with
+      | nil => simp [replaceBranches]
+      | cons branch rest =>
+          rcases branch with ⟨action, branchType⟩
+          have hBranch := sizeOf_le_replaceVar_recur branchType name body
+          have hRest := sizeOf_le_replaceBranches_recur rest name body
+          simp only [replaceBranches]
+          change 1 + (1 + sizeOf action + sizeOf branchType) + sizeOf rest ≤
+            1 + (1 + sizeOf action +
+              sizeOf (branchType.replaceVar name (.recur name body))) +
+                sizeOf (replaceBranches rest name (.recur name body))
+          omega
+    termination_by sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-!
+  ### Closed, clock-guarded recursive types
+
+  `MustTockBeforeCompletion` is a conservative structural guarantee: every
+  completing branch of the term crosses a clock.  It is used only to propagate
+  a clock guard from the left of a sequence into its right continuation.
+  Parallel requires both children to carry that guarantee, matching the fact
+  that a clock step must synchronize.
+  -/
+  mutual
+    def MustTockBeforeCompletion : PactType → Prop
+      | .tock => True
+      | .seq left right =>
+          MustTockBeforeCompletion left ∨ MustTockBeforeCompletion right
+      | .choice left right | .fairChoice _ left right |
+          .par left right _ =>
+          MustTockBeforeCompletion left ∧ MustTockBeforeCompletion right
+      | .recur _ body => MustTockBeforeCompletion body
+      | .xoffer elseType branches | .offer elseType branches =>
+          MustTockBeforeCompletion elseType ∧
+            BranchesMustTockBeforeCompletion branches
+      | .message _ _ | .progress _ | .skip | .var _ => False
+    termination_by processType => sizeOf processType
+
+    def BranchesMustTockBeforeCompletion :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          MustTockBeforeCompletion processType ∧
+            BranchesMustTockBeforeCompletion rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-! Every free occurrence of `name` is reached only after a clock step. -/
+  mutual
+    def GuardedOccurrences (name : String) (guarded : Prop) :
+        PactType → Prop
+      | .var other => other = name → guarded
+      | .seq left right =>
+          GuardedOccurrences name guarded left ∧
+            GuardedOccurrences name
+              (guarded ∨ MustTockBeforeCompletion left) right
+      | .choice left right | .fairChoice _ left right |
+          .par left right _ =>
+          GuardedOccurrences name guarded left ∧
+            GuardedOccurrences name guarded right
+      | .recur other body =>
+          if other = name then True else GuardedOccurrences name guarded body
+      | .xoffer elseType branches | .offer elseType branches =>
+          GuardedOccurrences name guarded elseType ∧
+            GuardedBranchOccurrences name guarded branches
+      | .message _ _ | .progress _ | .tock | .skip => True
+    termination_by processType => sizeOf processType
+
+    def GuardedBranchOccurrences (name : String) (guarded : Prop) :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          GuardedOccurrences name guarded processType ∧
+            GuardedBranchOccurrences name guarded rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-! All recursion variables are bound by an enclosing `recur`. -/
+  mutual
+    def AllVariablesBound (bound : List String) : PactType → Prop
+      | .var name => name ∈ bound
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          AllVariablesBound bound left ∧ AllVariablesBound bound right
+      | .recur name body => AllVariablesBound (name :: bound) body
+      | .xoffer elseType branches | .offer elseType branches =>
+          AllVariablesBound bound elseType ∧
+            AllBranchVariablesBound bound branches
+      | .message _ _ | .progress _ | .tock | .skip => True
+    termination_by processType => sizeOf processType
+
+    def AllBranchVariablesBound (bound : List String) :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          AllVariablesBound bound processType ∧
+            AllBranchVariablesBound bound rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-! Every recursive backedge in a type is protected by a prior clock. -/
+  mutual
+    def ClockGuarded : PactType → Prop
+      | .recur name body =>
+          GuardedOccurrences name False body ∧ ClockGuarded body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          ClockGuarded left ∧ ClockGuarded right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ClockGuarded elseType ∧ ClockGuardedBranches branches
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+    termination_by processType => sizeOf processType
+
+    def ClockGuardedBranches : List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          ClockGuarded processType ∧ ClockGuardedBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-!
+  ### Per-cycle message linearity
+
+  `PrefixMessageIds` collects messages that may occur before the first clock;
+  `SuffixMessageIds` collects messages that may occur after the last clock on
+  a completing path.  Their disjointness at sequence and recursion boundaries
+  rules out two exchanges of the same message identifier in one clock cycle.
+  -/
+  mutual
+    def CanCompleteBeforeTock : PactType → Bool
+      | .message _ _ | .progress _ | .skip => true
+      | .tock | .var _ => false
+      | .recur _ body => CanCompleteBeforeTock body
+      | .choice left right | .fairChoice _ left right =>
+          CanCompleteBeforeTock left || CanCompleteBeforeTock right
+      | .seq left right | .par left right _ =>
+          CanCompleteBeforeTock left && CanCompleteBeforeTock right
+      | .xoffer elseType branches | .offer elseType branches =>
+          CanCompleteBeforeTock elseType ||
+            BranchCanCompleteBeforeTock branches
+    termination_by processType => sizeOf processType
+
+    def BranchCanCompleteBeforeTock :
+        List (BareMessage × PactType) → Bool
+      | [] => false
+      | (_, processType) :: rest =>
+          CanCompleteBeforeTock processType ||
+            BranchCanCompleteBeforeTock rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def PrefixMessageIds : PactType → Finset MessageId
+      | .message msg _ => {msg}
+      | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => PrefixMessageIds body
+      | .choice left right | .fairChoice _ left right |
+          .par left right _ =>
+          PrefixMessageIds left ∪ PrefixMessageIds right
+      | .seq left right =>
+          PrefixMessageIds left ∪
+            if CanCompleteBeforeTock left then PrefixMessageIds right else ∅
+      | .xoffer elseType branches | .offer elseType branches =>
+          PrefixMessageIds elseType ∪ BranchPrefixMessageIds branches
+    termination_by processType => sizeOf processType
+
+    def BranchPrefixMessageIds :
+        List (BareMessage × PactType) → Finset MessageId
+      | [] => ∅
+      | (action, processType) :: rest =>
+          {action.1} ∪ PrefixMessageIds processType ∪
+            BranchPrefixMessageIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def SuffixMessageIds : PactType → Finset MessageId
+      | .message msg _ => {msg}
+      | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => SuffixMessageIds body
+      | .choice left right | .fairChoice _ left right |
+          .par left right _ =>
+          SuffixMessageIds left ∪ SuffixMessageIds right
+      | .seq left right =>
+          SuffixMessageIds right ∪
+            if CanCompleteBeforeTock right then SuffixMessageIds left else ∅
+      | .xoffer elseType branches | .offer elseType branches =>
+          SuffixMessageIds elseType ∪ BranchSuffixMessageIds branches
+    termination_by processType => sizeOf processType
+
+    def BranchSuffixMessageIds :
+        List (BareMessage × PactType) → Finset MessageId
+      | [] => ∅
+      | (action, processType) :: rest =>
+          SuffixMessageIds processType ∪
+            (if CanCompleteBeforeTock processType then {action.1} else ∅) ∪
+            BranchSuffixMessageIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def SameCycleMessageLinear : PactType → Prop
+      | .seq left right =>
+          SameCycleMessageLinear left ∧ SameCycleMessageLinear right ∧
+            Disjoint (SuffixMessageIds left) (PrefixMessageIds right)
+      | .recur _ body =>
+          SameCycleMessageLinear body ∧
+            Disjoint (SuffixMessageIds body) (PrefixMessageIds body)
+      | .choice left right | .fairChoice _ left right |
+          .par left right _ =>
+          SameCycleMessageLinear left ∧ SameCycleMessageLinear right
+      | .xoffer elseType branches | .offer elseType branches =>
+          SameCycleMessageLinear elseType ∧
+            SameCycleMessageLinearBranches branches
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+    termination_by processType => sizeOf processType
+
+    def SameCycleMessageLinearBranches :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (action, processType) :: rest =>
+          SameCycleMessageLinear processType ∧
+            action.1 ∉ PrefixMessageIds processType ∧
+            SameCycleMessageLinearBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  theorem sameCycleMessageLinear_rejects_repeat
+      (msg : MessageId) (first second : MessageDir) :
+      ¬ SameCycleMessageLinear
+        (.seq (.message msg first) (.message msg second)) := by
+    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds]
+
+  theorem sameCycleMessageLinear_allows_distinct
+      (first second : MessageId) (firstDir secondDir : MessageDir)
+      (hDistinct : first ≠ second) :
+      SameCycleMessageLinear
+        (.seq (.message first firstDir) (.message second secondDir)) := by
+    have hReverse : second ≠ first := Ne.symm hDistinct
+    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds,
+      hReverse]
+
+  theorem sameCycleMessageLinear_clock_resets
+      (msg : MessageId) (first second : MessageDir) :
+      SameCycleMessageLinear
+        (.seq (.message msg first) (.seq .tock (.message msg second))) := by
+    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds,
+      CanCompleteBeforeTock]
+
+  theorem sameCycleMessageLinear_rejects_repeated_offer_head
+      (msg : MessageId) (dir : MessageDir) :
+      ¬ SameCycleMessageLinear
+        (.xoffer .skip [((msg, dir), .message msg dir)]) := by
+    simp [SameCycleMessageLinear, SameCycleMessageLinearBranches,
+      PrefixMessageIds]
+
+  theorem clockGuarded_accepts_cycle_delay (name : String) :
+      ClockGuarded (.recur name (.seq .tock (.var name))) := by
+    simp [ClockGuarded, GuardedOccurrences, MustTockBeforeCompletion]
+
+  theorem clockGuarded_rejects_message_only_delay
+      (name : String) (msg : MessageId) (dir : MessageDir) :
+      ¬ ClockGuarded
+        (.recur name (.seq (.message msg dir) (.var name))) := by
+    simp [ClockGuarded, GuardedOccurrences, MustTockBeforeCompletion]
+
 end PactType
 
 mutual
@@ -313,6 +691,406 @@ private def typeCanCompleteThisCycleFuel : Nat → PactType → Bool
             branches.any fun branch =>
               typeCanCompleteThisCycleFuel fuel branch.2
 
+/-- Once the fuel covers the finite syntax tree, one more unit cannot change
+same-cycle completion. -/
+private theorem typeCanCompleteThisCycleFuel_succ_stable :
+    ∀ fuel processType, sizeOf processType ≤ fuel →
+      typeCanCompleteThisCycleFuel (fuel + 1) processType =
+        typeCanCompleteThisCycleFuel fuel processType := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hSize
+      cases processType <;> simp at hSize
+  | succ fuel ih =>
+      intro processType hSize
+      cases processType with
+      | message msg dir => rfl
+      | progress pid => rfl
+      | tock => rfl
+      | skip => rfl
+      | var name => rfl
+      | recur name body =>
+          change typeCanCompleteThisCycleFuel (fuel + 1) body =
+            typeCanCompleteThisCycleFuel fuel body
+          apply ih
+          have hBody : sizeOf body < sizeOf (PactType.recur name body) := by
+            simp_wf
+            omega
+          omega
+      | choice left right =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left ||
+              typeCanCompleteThisCycleFuel (fuel + 1) right) =
+            (typeCanCompleteThisCycleFuel fuel left ||
+              typeCanCompleteThisCycleFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left < sizeOf (PactType.choice left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right < sizeOf (PactType.choice left right) := by
+                simp_wf
+                omega
+              omega)]
+      | fairChoice bid left right =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left ||
+              typeCanCompleteThisCycleFuel (fuel + 1) right) =
+            (typeCanCompleteThisCycleFuel fuel left ||
+              typeCanCompleteThisCycleFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf
+                omega
+              omega)]
+      | seq left right =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left &&
+              typeCanCompleteThisCycleFuel (fuel + 1) right) =
+            (typeCanCompleteThisCycleFuel fuel left &&
+              typeCanCompleteThisCycleFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left < sizeOf (PactType.seq left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right < sizeOf (PactType.seq left right) := by
+                simp_wf
+                omega
+              omega)]
+      | par left right interface =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left &&
+              typeCanCompleteThisCycleFuel (fuel + 1) right) =
+            (typeCanCompleteThisCycleFuel fuel left &&
+              typeCanCompleteThisCycleFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf
+                omega
+              omega)]
+      | xoffer elseType branches =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
+            (typeCanCompleteThisCycleFuel fuel elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel fuel branch.2))
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.xoffer elseType branches) := by
+              simp_wf
+              omega
+            omega)]
+          congr 1
+          have hEvery : ∀ branch ∈ branches, sizeOf branch.2 ≤ fuel := by
+            intro branch hBranch
+            have hPair := List.sizeOf_lt_of_mem hBranch
+            have hComponent : sizeOf branch.2 < sizeOf branch := by
+              rcases branch
+              simp_wf
+              omega
+            have hList : sizeOf branches <
+                sizeOf (PactType.xoffer elseType branches) := by
+              simp_wf
+              omega
+            omega
+          induction branches with
+          | nil => rfl
+          | cons branch rest restIH =>
+              simp only [List.any_cons]
+              rw [ih branch.2 (hEvery branch (by simp))]
+              rw [restIH (by
+                have : sizeOf (PactType.xoffer elseType rest) <
+                    sizeOf (PactType.xoffer elseType (branch :: rest)) := by
+                  simp_wf
+                  omega
+                omega) (by
+                intro other hOther
+                exact hEvery other (by simp [hOther]))]
+      | offer elseType branches =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
+            (typeCanCompleteThisCycleFuel fuel elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel fuel branch.2))
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.offer elseType branches) := by
+              simp_wf
+              omega
+            omega)]
+          congr 1
+          have hEvery : ∀ branch ∈ branches, sizeOf branch.2 ≤ fuel := by
+            intro branch hBranch
+            have hPair := List.sizeOf_lt_of_mem hBranch
+            have hComponent : sizeOf branch.2 < sizeOf branch := by
+              rcases branch
+              simp_wf
+              omega
+            have hList : sizeOf branches <
+                sizeOf (PactType.offer elseType branches) := by
+              simp_wf
+              omega
+            omega
+          induction branches with
+          | nil => rfl
+          | cons branch rest restIH =>
+              simp only [List.any_cons]
+              rw [ih branch.2 (hEvery branch (by simp))]
+              rw [restIH (by
+                have : sizeOf (PactType.offer elseType rest) <
+                    sizeOf (PactType.offer elseType (branch :: rest)) := by
+                  simp_wf
+                  omega
+                omega) (by
+                intro other hOther
+                exact hEvery other (by simp [hOther]))]
+
+/- A structurally mandatory clock prevents same-cycle completion. -/
+private theorem mustTock_cannotCompleteThisCycleFuel
+      (processType : PactType)
+      (hTock : processType.MustTockBeforeCompletion) (fuel : Nat) :
+      typeCanCompleteThisCycleFuel fuel processType = false := by
+    cases fuel with
+    | zero => rfl
+    | succ fuel =>
+        cases processType with
+        | message msg dir => simp [PactType.MustTockBeforeCompletion] at hTock
+        | progress pid => simp [PactType.MustTockBeforeCompletion] at hTock
+        | tock => rfl
+        | skip => simp [PactType.MustTockBeforeCompletion] at hTock
+        | var name => simp [PactType.MustTockBeforeCompletion] at hTock
+        | recur name body =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            exact mustTock_cannotCompleteThisCycleFuel body hTock fuel
+        | choice left right =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with ⟨hLeft, hRight⟩
+            change (typeCanCompleteThisCycleFuel fuel left ||
+              typeCanCompleteThisCycleFuel fuel right) = false
+            rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel,
+              mustTock_cannotCompleteThisCycleFuel right hRight fuel]
+            simp
+        | fairChoice bid left right =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with ⟨hLeft, hRight⟩
+            change (typeCanCompleteThisCycleFuel fuel left ||
+              typeCanCompleteThisCycleFuel fuel right) = false
+            rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel,
+              mustTock_cannotCompleteThisCycleFuel right hRight fuel]
+            simp
+        | seq left right =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with hLeft | hRight
+            · change (typeCanCompleteThisCycleFuel fuel left &&
+                typeCanCompleteThisCycleFuel fuel right) = false
+              rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel]
+              simp
+            · change (typeCanCompleteThisCycleFuel fuel left &&
+                typeCanCompleteThisCycleFuel fuel right) = false
+              rw [mustTock_cannotCompleteThisCycleFuel right hRight fuel]
+              simp
+        | par left right interface =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with ⟨hLeft, _⟩
+            change (typeCanCompleteThisCycleFuel fuel left &&
+              typeCanCompleteThisCycleFuel fuel right) = false
+            rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel]
+            simp
+        | xoffer elseType branches =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with ⟨hElse, hBranches⟩
+            have hNoBranches :
+                branches.any (fun branch =>
+                  typeCanCompleteThisCycleFuel fuel branch.2) = false := by
+              induction branches with
+              | nil => rfl
+              | cons branch rest ih =>
+                  rcases branch with ⟨action, branchType⟩
+                  simp only [PactType.BranchesMustTockBeforeCompletion]
+                    at hBranches
+                  rcases hBranches with ⟨hBranch, hRest⟩
+                  change (typeCanCompleteThisCycleFuel fuel branchType ||
+                    rest.any (fun branch =>
+                      typeCanCompleteThisCycleFuel fuel branch.2)) = false
+                  rw [mustTock_cannotCompleteThisCycleFuel branchType
+                    hBranch fuel, ih hRest]
+                  simp
+            change (typeCanCompleteThisCycleFuel fuel elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel fuel branch.2)) = false
+            rw [mustTock_cannotCompleteThisCycleFuel elseType hElse fuel,
+              hNoBranches]
+            simp
+        | offer elseType branches =>
+            simp only [PactType.MustTockBeforeCompletion] at hTock
+            rcases hTock with ⟨hElse, hBranches⟩
+            have hNoBranches :
+                branches.any (fun branch =>
+                  typeCanCompleteThisCycleFuel fuel branch.2) = false := by
+              induction branches with
+              | nil => rfl
+              | cons branch rest ih =>
+                  rcases branch with ⟨action, branchType⟩
+                  simp only [PactType.BranchesMustTockBeforeCompletion]
+                    at hBranches
+                  rcases hBranches with ⟨hBranch, hRest⟩
+                  change (typeCanCompleteThisCycleFuel fuel branchType ||
+                    rest.any (fun branch =>
+                      typeCanCompleteThisCycleFuel fuel branch.2)) = false
+                  rw [mustTock_cannotCompleteThisCycleFuel branchType
+                    hBranch fuel, ih hRest]
+                  simp
+            change (typeCanCompleteThisCycleFuel fuel elseType ||
+              branches.any (fun branch =>
+                typeCanCompleteThisCycleFuel fuel branch.2)) = false
+            rw [mustTock_cannotCompleteThisCycleFuel elseType hElse fuel,
+              hNoBranches]
+            simp
+termination_by fuel
+decreasing_by
+  all_goals
+    omega
+
+/-- Replacing a variable hidden behind a clock does not change completion
+within the current cycle. -/
+private theorem guardedOccurrences_replace_canCompleteThisCycleFuel
+    (name : String) (replacement processType : PactType)
+    (hGuarded : processType.GuardedOccurrences name False) (fuel : Nat) :
+    typeCanCompleteThisCycleFuel fuel
+        (processType.replaceVar name replacement) =
+      typeCanCompleteThisCycleFuel fuel processType := by
+  cases fuel with
+  | zero => rfl
+  | succ fuel =>
+      cases processType with
+      | message msg dir =>
+          simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | progress pid =>
+          simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | tock => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | skip => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | var other =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          have hNe : name ≠ other := by
+            intro h
+            exact hGuarded h.symm
+          simp [PactType.replaceVar, hNe]
+      | recur other body =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          by_cases hName : other = name
+          · have hTarget : name = other := hName.symm
+            simp [PactType.replaceVar, hTarget]
+          · simp only [hName, ↓reduceIte] at hGuarded
+            have hTarget : name ≠ other := by
+              intro h
+              exact hName h.symm
+            simp only [PactType.replaceVar, hTarget,
+              typeCanCompleteThisCycleFuel]
+            exact guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement body hGuarded fuel
+      | choice left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement right hRight fuel]
+      | fairChoice bid left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement right hRight fuel]
+      | par left right interface =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement right hRight fuel]
+      | seq left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+            name replacement left hLeft fuel]
+          by_cases hTock : left.MustTockBeforeCompletion
+          · rw [mustTock_cannotCompleteThisCycleFuel left hTock fuel]
+            simp
+          · simp only [hTock, or_false] at hRight
+            rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement right hRight fuel]
+      | xoffer elseType branches =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hElse, hBranches⟩
+          have hBranchesEq :
+              (PactType.replaceBranches branches name replacement).any
+                  (fun branch =>
+                    typeCanCompleteThisCycleFuel fuel branch.2) =
+                branches.any (fun branch =>
+                  typeCanCompleteThisCycleFuel fuel branch.2) := by
+            induction branches with
+            | nil => simp [PactType.replaceBranches]
+            | cons branch rest ih =>
+                rcases branch with ⟨action, branchType⟩
+                simp only [PactType.GuardedBranchOccurrences] at hBranches
+                rcases hBranches with ⟨hBranch, hRest⟩
+                simp only [PactType.replaceBranches, List.any_cons]
+                rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+                    name replacement branchType hBranch fuel,
+                  ih hRest]
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement elseType hElse fuel,
+            hBranchesEq]
+      | offer elseType branches =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hElse, hBranches⟩
+          have hBranchesEq :
+              (PactType.replaceBranches branches name replacement).any
+                  (fun branch =>
+                    typeCanCompleteThisCycleFuel fuel branch.2) =
+                branches.any (fun branch =>
+                  typeCanCompleteThisCycleFuel fuel branch.2) := by
+            induction branches with
+            | nil => simp [PactType.replaceBranches]
+            | cons branch rest ih =>
+                rcases branch with ⟨action, branchType⟩
+                simp only [PactType.GuardedBranchOccurrences] at hBranches
+                rcases hBranches with ⟨hBranch, hRest⟩
+                simp only [PactType.replaceBranches, List.any_cons]
+                rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+                    name replacement branchType hBranch fuel,
+                  ih hRest]
+          simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+          rw [guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement elseType hElse fuel,
+            hBranchesEq]
+termination_by fuel
+decreasing_by
+  all_goals
+    omega
+
 /-- Syntactic future-offer menu, bounded by the depth of the finite type term. -/
 private def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
   | 0, _ => ∅
@@ -336,9 +1114,352 @@ private def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
             offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
             (typeFutureOffersFuel fuel elseType)
 
+/-- Once fuel covers the finite syntax tree, one more unit cannot expose a new
+same-cycle future offer. -/
+private theorem typeFutureOffersFuel_succ_stable :
+    ∀ fuel processType, sizeOf processType ≤ fuel →
+      typeFutureOffersFuel (fuel + 1) processType =
+        typeFutureOffersFuel fuel processType := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hSize
+      cases processType <;> simp at hSize
+  | succ fuel ih =>
+      intro processType hSize
+      cases processType with
+      | message msg dir => rfl
+      | progress pid => rfl
+      | tock => rfl
+      | skip => rfl
+      | var name => rfl
+      | recur name body =>
+          change typeFutureOffersFuel (fuel + 1) body =
+            typeFutureOffersFuel fuel body
+          apply ih
+          have : sizeOf body < sizeOf (PactType.recur name body) := by
+            simp_wf
+            omega
+          omega
+      | choice left right =>
+          change (typeFutureOffersFuel (fuel + 1) left ∪
+              typeFutureOffersFuel (fuel + 1) right) =
+            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left < sizeOf (PactType.choice left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right < sizeOf (PactType.choice left right) := by
+                simp_wf
+                omega
+              omega)]
+      | fairChoice bid left right =>
+          change (typeFutureOffersFuel (fuel + 1) left ∪
+              typeFutureOffersFuel (fuel + 1) right) =
+            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf
+                omega
+              omega)]
+      | seq left right =>
+          have hLeft : sizeOf left ≤ fuel := by
+            have : sizeOf left < sizeOf (PactType.seq left right) := by
+              simp_wf
+              omega
+            omega
+          have hRight : sizeOf right ≤ fuel := by
+            have : sizeOf right < sizeOf (PactType.seq left right) := by
+              simp_wf
+              omega
+            omega
+          change (if typeCanCompleteThisCycleFuel (fuel + 1) left then
+              typeFutureOffersFuel (fuel + 1) left ∪
+                typeFutureOffersFuel (fuel + 1) right
+            else typeFutureOffersFuel (fuel + 1) left) =
+            (if typeCanCompleteThisCycleFuel fuel left then
+              typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right
+            else typeFutureOffersFuel fuel left)
+          rw [typeCanCompleteThisCycleFuel_succ_stable fuel left hLeft,
+            ih left hLeft, ih right hRight]
+      | par left right interface =>
+          change hideTypeOffers interface
+              (typeFutureOffersFuel (fuel + 1) left ∪
+                typeFutureOffersFuel (fuel + 1) right) =
+            hideTypeOffers interface
+              (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf
+                omega
+              omega)]
+      | xoffer elseType branches =>
+          change branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪
+                typeFutureOffersFuel (fuel + 1) branch.2)
+              (typeFutureOffersFuel (fuel + 1) elseType) =
+            branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+              (typeFutureOffersFuel fuel elseType)
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.xoffer elseType branches) := by
+              simp_wf
+              omega
+            omega)]
+          have hEvery : ∀ branch ∈ branches, sizeOf branch.2 ≤ fuel := by
+            intro branch hBranch
+            have hPair := List.sizeOf_lt_of_mem hBranch
+            have hComponent : sizeOf branch.2 < sizeOf branch := by
+              rcases branch
+              simp_wf
+              omega
+            have hList : sizeOf branches <
+                sizeOf (PactType.xoffer elseType branches) := by
+              simp_wf
+              omega
+            omega
+          have hFold : ∀ (rest : List (BareMessage × PactType)) initial,
+              (∀ branch ∈ rest, branch ∈ branches) →
+              rest.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel (fuel + 1) branch.2) initial =
+              rest.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel fuel branch.2) initial := by
+            intro rest
+            induction rest with
+            | nil => simp
+            | cons branch tail tailIH =>
+                intro initial hSubset
+                simp only [List.foldl_cons]
+                rw [ih branch.2 (hEvery branch (hSubset branch (by simp)))]
+                apply tailIH
+                intro other hOther
+                exact hSubset other (by simp [hOther])
+          exact hFold branches _ (by simp)
+      | offer elseType branches =>
+          change branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪
+                typeFutureOffersFuel (fuel + 1) branch.2)
+              (typeFutureOffersFuel (fuel + 1) elseType) =
+            branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+              (typeFutureOffersFuel fuel elseType)
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.offer elseType branches) := by
+              simp_wf
+              omega
+            omega)]
+          have hEvery : ∀ branch ∈ branches, sizeOf branch.2 ≤ fuel := by
+            intro branch hBranch
+            have hPair := List.sizeOf_lt_of_mem hBranch
+            have hComponent : sizeOf branch.2 < sizeOf branch := by
+              rcases branch
+              simp_wf
+              omega
+            have hList : sizeOf branches <
+                sizeOf (PactType.offer elseType branches) := by
+              simp_wf
+              omega
+            omega
+          have hFold : ∀ (rest : List (BareMessage × PactType)) initial,
+              (∀ branch ∈ rest, branch ∈ branches) →
+              rest.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel (fuel + 1) branch.2) initial =
+              rest.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel fuel branch.2) initial := by
+            intro rest
+            induction rest with
+            | nil => simp
+            | cons branch tail tailIH =>
+                intro initial hSubset
+                simp only [List.foldl_cons]
+                rw [ih branch.2 (hEvery branch (hSubset branch (by simp)))]
+                apply tailIH
+                intro other hOther
+                exact hSubset other (by simp [hOther])
+          exact hFold branches _ (by simp)
+
+private theorem typeFutureOffersFuel_add_stable
+    (processType : PactType) (fuel extra : Nat)
+    (hFuel : sizeOf processType ≤ fuel) :
+    typeFutureOffersFuel (fuel + extra) processType =
+      typeFutureOffersFuel fuel processType := by
+  induction extra with
+  | zero => simp
+  | succ extra ih =>
+      rw [Nat.add_succ,
+        typeFutureOffersFuel_succ_stable (fuel + extra) processType (by omega),
+        ih]
+
+/-- A clock-guarded substitution cannot expose a new offer before the next
+clock. -/
+private theorem guardedOccurrences_replace_typeFutureOffersFuel
+    (name : String) (replacement processType : PactType)
+    (hGuarded : processType.GuardedOccurrences name False) (fuel : Nat) :
+    typeFutureOffersFuel fuel (processType.replaceVar name replacement) =
+      typeFutureOffersFuel fuel processType := by
+  cases fuel with
+  | zero => rfl
+  | succ fuel =>
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | progress pid => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | tock => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | skip => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | var other =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          have hNe : name ≠ other := by
+            intro h
+            exact hGuarded h.symm
+          simp [PactType.replaceVar, typeFutureOffersFuel, hNe]
+      | recur other body =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          by_cases hName : other = name
+          · have hTarget : name = other := hName.symm
+            simp [PactType.replaceVar, typeFutureOffersFuel, hTarget]
+          · simp only [hName, ↓reduceIte] at hGuarded
+            have hTarget : name ≠ other := by
+              intro h
+              exact hName h.symm
+            simp only [PactType.replaceVar, typeFutureOffersFuel, hTarget]
+            exact guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement body hGuarded fuel
+      | choice left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement right hRight fuel]
+      | fairChoice bid left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement right hRight fuel]
+      | par left right interface =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement right hRight fuel]
+      | seq left right =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hLeft, hRight⟩
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement left hLeft fuel,
+            guardedOccurrences_replace_canCompleteThisCycleFuel
+              name replacement left hLeft fuel]
+          by_cases hTock : left.MustTockBeforeCompletion
+          · rw [mustTock_cannotCompleteThisCycleFuel left hTock fuel]
+            simp
+          · simp only [hTock, or_false] at hRight
+            rw [guardedOccurrences_replace_typeFutureOffersFuel
+              name replacement right hRight fuel]
+      | xoffer elseType branches =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hElse, hBranches⟩
+          have hFold : ∀ initial,
+              (PactType.replaceBranches branches name replacement).foldl
+                  (fun offers branch => offers ∪ {branch.1} ∪
+                    typeFutureOffersFuel fuel branch.2) initial =
+                branches.foldl
+                  (fun offers branch => offers ∪ {branch.1} ∪
+                    typeFutureOffersFuel fuel branch.2) initial := by
+            intro initial
+            induction branches generalizing initial with
+            | nil => simp [PactType.replaceBranches]
+            | cons branch rest ih =>
+                rcases branch with ⟨action, branchType⟩
+                simp only [PactType.GuardedBranchOccurrences] at hBranches
+                rcases hBranches with ⟨hBranch, hRest⟩
+                simp only [PactType.replaceBranches, List.foldl_cons]
+                rw [guardedOccurrences_replace_typeFutureOffersFuel
+                  name replacement branchType hBranch fuel]
+                exact ih hRest _
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+            name replacement elseType hElse fuel]
+          exact hFold _
+      | offer elseType branches =>
+          simp only [PactType.GuardedOccurrences] at hGuarded
+          rcases hGuarded with ⟨hElse, hBranches⟩
+          have hFold : ∀ initial,
+              (PactType.replaceBranches branches name replacement).foldl
+                  (fun offers branch => offers ∪ {branch.1} ∪
+                    typeFutureOffersFuel fuel branch.2) initial =
+                branches.foldl
+                  (fun offers branch => offers ∪ {branch.1} ∪
+                    typeFutureOffersFuel fuel branch.2) initial := by
+            intro initial
+            induction branches generalizing initial with
+            | nil => simp [PactType.replaceBranches]
+            | cons branch rest ih =>
+                rcases branch with ⟨action, branchType⟩
+                simp only [PactType.GuardedBranchOccurrences] at hBranches
+                rcases hBranches with ⟨hBranch, hRest⟩
+                simp only [PactType.replaceBranches, List.foldl_cons]
+                rw [guardedOccurrences_replace_typeFutureOffersFuel
+                  name replacement branchType hBranch fuel]
+                exact ih hRest _
+          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          rw [guardedOccurrences_replace_typeFutureOffersFuel
+            name replacement elseType hElse fuel]
+          exact hFold _
+termination_by fuel
+decreasing_by
+  all_goals
+    omega
+
 /-- All message actions that may still be offered before the next clock. -/
 def typeFutureOffers (processType : PactType) : Finset BareMessage :=
   typeFutureOffersFuel (sizeOf processType + 1) processType
+
+/-- Unfolding a clock-guarded recursive variable preserves the public
+same-cycle future-offer menu. -/
+theorem guardedOccurrences_replace_typeFutureOffers_recur
+    (name : String) (body processType : PactType)
+    (hGuarded : processType.GuardedOccurrences name False) :
+    typeFutureOffers (processType.replaceVar name (.recur name body)) =
+      typeFutureOffers processType := by
+  unfold typeFutureOffers
+  let unfolded := processType.replaceVar name (.recur name body)
+  have hSize : sizeOf processType ≤ sizeOf unfolded := by
+    exact PactType.sizeOf_le_replaceVar_recur processType name body
+  have hFuel : sizeOf processType + 1 ≤ sizeOf unfolded + 1 := by omega
+  obtain ⟨extra, hExtra⟩ := Nat.exists_eq_add_of_le hFuel
+  rw [guardedOccurrences_replace_typeFutureOffersFuel
+    name (.recur name body) processType hGuarded (sizeOf unfolded + 1)]
+  rw [hExtra]
+  exact typeFutureOffersFuel_add_stable processType
+    (sizeOf processType + 1) extra (by omega)
 
 /-- Branch offers selected by the future part of this environment. -/
 def typeWaitingOffers (env : TypeEnvironment)
@@ -731,6 +1852,10 @@ structure TypeAlphabet : Type extends MessageAlphabet where
 
 namespace TypeAlphabet
 
+  /-- Boundary actions cannot use an internal message identifier (Section 2.1). -/
+  def WellFormed (alphabet : TypeAlphabet) : Prop :=
+    ∀ action ∈ alphabet.boundary, action.1 ∉ alphabet.interface
+
   /-- Both polarities of every fixed internal/interface message. -/
   def interfaceActions (alphabet : TypeAlphabet) : Finset BareMessage :=
     alphabet.interface.biUnion fun msg => {(msg, .send), (msg, .recv)}
@@ -758,6 +1883,27 @@ namespace TypeAlphabet
       alphabet.environmentActions.powerset.biUnion fun immediate =>
         (alphabet.environmentActions \ immediate).powerset.image fun future =>
           { immediate := immediate, future := future, clock := false }
+
+  theorem environment_immediate_avoids_interface
+      {alphabet : TypeAlphabet} {environment : TypeEnvironment}
+      (hAlphabet : alphabet.WellFormed)
+      (hEnvironment : environment ∈ alphabet.environments) :
+      ∀ action ∈ environment.immediate,
+        action.1 ∉ alphabet.interface := by
+    simp only [environments, Finset.mem_union, Finset.mem_singleton,
+      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+      at hEnvironment
+    rcases hEnvironment with rfl | ⟨immediate, hImmediate, future, _, rfl⟩
+    · simp [TypeEnvironment.tock]
+    · intro action hAction hInterface
+      have hEnvironmentAction := hImmediate hAction
+      simp only [environmentActions, Finset.mem_image] at hEnvironmentAction
+      rcases hEnvironmentAction with ⟨boundaryAction, hBoundary, hNeed⟩
+      apply hAlphabet boundaryAction hBoundary
+      have hMessage := congrArg Prod.fst hNeed
+      simp only [typeNeed] at hMessage
+      rw [hMessage]
+      exact hInterface
 
   /-- Environments used internally before a parallel constructor hides `I`. -/
   def localEnvironments (alphabet : TypeAlphabet) : Finset TypeEnvironment :=
@@ -1604,7 +2750,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                   environment := environment
                   label := .visible (TypeLabel.message msg dir)
                   current := {action}
-                  future := .at .final ∅
+                  future := .explicit ∅
                   target := .final }
           let waitingEdges : Finset PendingAutomatonEdge :=
             (signature.localEnvironments.filter fun environment =>
@@ -1614,7 +2760,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                   environment := environment
                   label := .visible TypeLabel.silent
                   current := {action}
-                  future := .at .final ∅
+                  future := .explicit ∅
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
@@ -1625,7 +2771,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .at .final ∅
+                future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
@@ -1657,7 +2803,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .at .final ∅
+                future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
             (actionEdges ∪ finalEdges)
@@ -1670,7 +2816,7 @@ private def compileTypeFuel (signature : TypeAlphabet) :
                 environment := environment
                 label := .visible (TypeLabel.progress pid)
                 current := ∅
-                future := .at .final ∅
+                future := .explicit ∅
                 target := .final }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
@@ -1742,6 +2888,177 @@ private def compileTypeFuel (signature : TypeAlphabet) :
             (parallelTypeBranches branches)
           exact buildConjunctiveOfferAutomaton
             signature branches elseAutomaton conjunction
+
+/-- Once fuel covers the custom compilation budget, one more unit leaves the
+constructor fragment unchanged. -/
+private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
+    ∀ fuel processType, typeCompilationFuel processType ≤ fuel →
+      compileTypeFuel signature (fuel + 1) processType =
+        compileTypeFuel signature fuel processType := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      have hPositive := typeCompilationFuel_positive processType
+      omega
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir => rfl
+      | progress pid => rfl
+      | tock => rfl
+      | skip => rfl
+      | var name => rfl
+      | recur name body =>
+          change buildRecursionAutomaton signature name
+              (compileTypeFuel signature (fuel + 1) body) =
+            buildRecursionAutomaton signature name
+              (compileTypeFuel signature fuel body)
+          rw [ih body (by
+            simp [typeCompilationFuel] at hFuel
+            omega)]
+      | choice left right =>
+          change buildChoiceAutomaton signature
+              (compileTypeFuel signature (fuel + 1) left)
+              (compileTypeFuel signature (fuel + 1) right)
+              TypeLabel.silent TypeLabel.silent =
+            buildChoiceAutomaton signature
+              (compileTypeFuel signature fuel left)
+              (compileTypeFuel signature fuel right)
+              TypeLabel.silent TypeLabel.silent
+          rw [ih left (by
+              simp [typeCompilationFuel] at hFuel
+              omega),
+            ih right (by
+              simp [typeCompilationFuel] at hFuel
+              omega)]
+      | fairChoice bid left right =>
+          change buildChoiceAutomaton signature
+              (compileTypeFuel signature (fuel + 1) left)
+              (compileTypeFuel signature (fuel + 1) right)
+              (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
+            buildChoiceAutomaton signature
+              (compileTypeFuel signature fuel left)
+              (compileTypeFuel signature fuel right)
+              (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+          rw [ih left (by
+              simp [typeCompilationFuel] at hFuel
+              omega),
+            ih right (by
+              simp [typeCompilationFuel] at hFuel
+              omega)]
+      | seq left right =>
+          change buildSequenceAutomaton signature
+              (compileTypeFuel signature (fuel + 1) left)
+              (compileTypeFuel signature (fuel + 1) right) =
+            buildSequenceAutomaton signature
+              (compileTypeFuel signature fuel left)
+              (compileTypeFuel signature fuel right)
+          rw [ih left (by
+              simp [typeCompilationFuel] at hFuel
+              omega),
+            ih right (by
+              simp [typeCompilationFuel] at hFuel
+              omega)]
+      | par left right interface =>
+          change buildParallelAutomaton interface
+              (compileTypeFuel signature (fuel + 1) left)
+              (compileTypeFuel signature (fuel + 1) right) =
+            buildParallelAutomaton interface
+              (compileTypeFuel signature fuel left)
+              (compileTypeFuel signature fuel right)
+          rw [ih left (by
+              simp [typeCompilationFuel] at hFuel
+              omega),
+            ih right (by
+              simp [typeCompilationFuel] at hFuel
+              omega)]
+      | xoffer elseType branches =>
+          change buildExclusiveOfferAutomaton signature branches
+              (compileTypeFuel signature (fuel + 1) elseType)
+              (branches.map fun branch =>
+                (branch.1, compileTypeFuel signature (fuel + 1) branch.2)) =
+            buildExclusiveOfferAutomaton signature branches
+              (compileTypeFuel signature fuel elseType)
+              (branches.map fun branch =>
+                (branch.1, compileTypeFuel signature fuel branch.2))
+          have hElse : typeCompilationFuel elseType ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          rw [ih elseType hElse]
+          congr 1
+          have hBranches : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          have hMap : ∀ rest,
+              typeBranchCompilationFuel rest ≤ fuel →
+              (rest.map fun branch =>
+                (branch.1, compileTypeFuel signature (fuel + 1) branch.2)) =
+              (rest.map fun branch =>
+                (branch.1, compileTypeFuel signature fuel branch.2)) := by
+            intro rest
+            induction rest with
+            | nil => simp
+            | cons branch tail tailIH =>
+                intro hRest
+                rcases branch with ⟨action, branchType⟩
+                simp only [List.map_cons]
+                have hBranch : typeCompilationFuel branchType ≤ fuel := by
+                  simp [typeBranchCompilationFuel] at hRest
+                  omega
+                rw [ih branchType hBranch]
+                congr 1
+                apply tailIH
+                simp [typeBranchCompilationFuel] at hRest ⊢
+                omega
+          exact hMap branches hBranches
+      | offer elseType branches =>
+          change buildConjunctiveOfferAutomaton signature branches
+              (compileTypeFuel signature (fuel + 1) elseType)
+              (compileTypeFuel signature (fuel + 1)
+                (parallelTypeBranches branches)) =
+            buildConjunctiveOfferAutomaton signature branches
+              (compileTypeFuel signature fuel elseType)
+              (compileTypeFuel signature fuel (parallelTypeBranches branches))
+          have hElse : typeCompilationFuel elseType ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          have hConjunction :
+              typeCompilationFuel (parallelTypeBranches branches) ≤ fuel := by
+            rw [typeCompilationFuel_parallelTypeBranches]
+            simp [typeCompilationFuel] at hFuel
+            omega
+          rw [ih elseType hElse,
+            ih (parallelTypeBranches branches) hConjunction]
+
+/-- Any two sufficient parent budgets produce the same constructor fragment. -/
+private theorem compileTypeFuel_add_stable
+    (signature : TypeAlphabet) (processType : PactType)
+    (fuel extra : Nat) (hFuel : typeCompilationFuel processType ≤ fuel) :
+    compileTypeFuel signature (fuel + extra) processType =
+      compileTypeFuel signature fuel processType := by
+  induction extra with
+  | zero => simp
+  | succ extra ih =>
+      rw [Nat.add_succ,
+        compileTypeFuel_succ_stable signature (fuel + extra) processType
+          (by omega),
+        ih]
+
+private theorem compileTypeFuel_eq_of_sufficient
+    (signature : TypeAlphabet) (processType : PactType)
+    {leftFuel rightFuel : Nat}
+    (hLeft : TypeCompilationFuelSufficient processType leftFuel)
+    (hRight : TypeCompilationFuelSufficient processType rightFuel) :
+    compileTypeFuel signature leftFuel processType =
+      compileTypeFuel signature rightFuel processType := by
+  by_cases hOrder : leftFuel ≤ rightFuel
+  · obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hOrder
+    exact (compileTypeFuel_add_stable signature processType leftFuel extra
+      hLeft).symm
+  · have hReverse : rightFuel ≤ leftFuel := by omega
+    obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
+    exact compileTypeFuel_add_stable signature processType rightFuel extra hRight
 
 /-- A decorated automaton edge represented as the tuple `(q, σ, q')`. -/
 structure TypeAutomatonEdge : Type where
@@ -2103,6 +3420,336 @@ theorem compileType_skip_correspondence (signature : TypeAlphabet) :
       finishAutomatonFragment, resolvedAutomatonEdges] at hEdge
     simp only [DecoratedTypeTransition]
     aesop
+
+/-- The firing edge of an atomic message is present with its exact decoration. -/
+theorem compileType_message_action_edge
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {env : TypeEnvironment}
+    (hEnvironment : env ∈ signature.environments)
+    (hNeed : env.hasNeed (msg, dir))
+    (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.message msg dir)
+      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
+    (compileType signature (.message msg dir)).HasEdge .root env
+      (TypeLabel.message msg dir) (TypeOfferSummary.mk {(msg, dir)} ∅)
+      .final := by
+  have hLocalEnvironment : env ∈ signature.localEnvironments :=
+    signature.environments_subset_localEnvironments hEnvironment
+  simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion]
+  refine ⟨
+    { source := .root
+      environment := env
+      label := .visible (TypeLabel.message msg dir)
+      current := {(msg, dir)}
+      future := ∅
+      target := .final }, ?_, ?_⟩
+  · simp only [resolvedAutomatonEdges, Finset.mem_image]
+    refine ⟨
+      { source := .root
+        environment := env
+        label := .visible (TypeLabel.message msg dir)
+        current := {(msg, dir)}
+        future := .explicit ∅
+        target := .final }, ?_, by simp⟩
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      hLocalEnvironment, hNeed]
+  · simp [hSymbol]
+
+/-- The waiting edge of an atomic message is present with its exact decoration. -/
+theorem compileType_message_wait_edge
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {env : TypeEnvironment}
+    (hEnvironment : env ∈ signature.environments)
+    (hNoNeed : ¬ env.hasNeed (msg, dir)) (hClock : env.clock = false)
+    (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
+      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
+    (compileType signature (.message msg dir)).HasEdge .root env
+      TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅) .root := by
+  have hLocalEnvironment : env ∈ signature.localEnvironments :=
+    signature.environments_subset_localEnvironments hEnvironment
+  simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion]
+  refine ⟨
+    { source := .root
+      environment := env
+      label := .visible TypeLabel.silent
+      current := {(msg, dir)}
+      future := ∅
+      target := .root }, ?_, ?_⟩
+  · simp only [resolvedAutomatonEdges, Finset.mem_image]
+    refine ⟨
+      { source := .root
+        environment := env
+        label := .visible TypeLabel.silent
+        current := {(msg, dir)}
+        future := .explicit ∅
+        target := .root }, ?_, by simp⟩
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      hLocalEnvironment, hNoNeed, hClock]
+  · simp [hSymbol]
+
+/-- The completed atomic message idles exactly like semantic `skip`. -/
+theorem compileType_message_final_edge
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {env : TypeEnvironment}
+    (hEnvironment : env ∈ signature.environments)
+    (hClock : env.clock = false) (hImmediate : env.immediate = ∅)
+    (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
+      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+    (compileType signature (.message msg dir)).HasEdge .final env
+      TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) .final := by
+  have hLocalEnvironment : env ∈ signature.localEnvironments :=
+    signature.environments_subset_localEnvironments hEnvironment
+  simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion]
+  refine ⟨
+    { source := .final
+      environment := env
+      label := .visible TypeLabel.silent
+      current := ∅
+      future := ∅
+      target := .final }, ?_, ?_⟩
+  · simp only [resolvedAutomatonEdges, Finset.mem_image]
+    refine ⟨
+      { source := .final
+        environment := env
+        label := .visible TypeLabel.silent
+        current := ∅
+        future := .explicit ∅
+        target := .final }, ?_, by simp⟩
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      hLocalEnvironment, hClock, hImmediate]
+  · simp [hSymbol]
+
+private theorem TypeOffers.message_action_fields
+    {env : TypeEnvironment} {msg : MessageId} {dir : MessageDir}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env (.message msg dir) (TypeLabel.message msg dir)
+      .skip current future) :
+    current = {(msg, dir)} ∧ future = ∅ := by
+  generalize hLabel : TypeLabel.message msg dir = actualLabel at hOffers
+  cases hOffers <;>
+    simp_all [TypeLabel.message, typeFutureOffers, typeFutureOffersFuel]
+
+private theorem TypeOffers.message_wait_fields
+    {env : TypeEnvironment} {msg : MessageId} {dir : MessageDir}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env (.message msg dir) TypeLabel.silent
+      (.message msg dir) current future) :
+    current = {(msg, dir)} ∧ future = ∅ := by
+  generalize hLabel : TypeLabel.silent = actualLabel at hOffers
+  cases hOffers <;>
+    simp_all [TypeLabel.silent, typeFutureOffers, typeFutureOffersFuel]
+
+private theorem TypeOffers.skip_fields
+    {env : TypeEnvironment} {current future : Finset BareMessage}
+    (hOffers : TypeOffers env .skip TypeLabel.silent .skip current future) :
+    current = ∅ ∧ future = ∅ := by
+  cases hOffers <;>
+    simp_all
+
+/-- Semantic steps of an atomic message have matching compiled edges. -/
+theorem compileType_message_step_to_edge
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {residual residual' : PactType} {state : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hRelated : TypeCompilationRelation (.message msg dir) state residual)
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      (compileType signature (.message msg dir)).alphabet)
+    (hStep : DecoratedTypeTransition env residual label offers residual') :
+    ∃ state',
+      (compileType signature (.message msg dir)).HasEdge state env label offers
+          state' ∧
+        TypeCompilationRelation (.message msg dir) state' residual' := by
+  rcases offers with ⟨current, future⟩
+  have hEnvironment : env ∈ signature.environments := by
+    have hParts : env ∈ signature.environments ∧
+        label ∈ signature.labels ∧
+          TypeOfferSummary.mk current future ∈ signature.offerSummaries := by
+      simpa [compileType, TypeAlphabet.transitionAlphabet] using hSymbol
+    exact hParts.1
+  have hTransition := hStep.1
+  have hOffers := hStep.2
+  cases hRelated with
+  | message_source =>
+      cases hTransition with
+      | action _ _ _ conditions =>
+          obtain ⟨rfl, rfl⟩ := TypeOffers.message_action_fields hOffers
+          refine ⟨.final, ?_, TypeCompilationRelation.message_final msg dir⟩
+          apply compileType_message_action_edge signature msg dir
+          · exact hEnvironment
+          · exact conditions.2
+          · simpa [compileType] using hSymbol
+      | action_wait _ _ _ conditions =>
+          obtain ⟨rfl, rfl⟩ := TypeOffers.message_wait_fields hOffers
+          refine ⟨.root, ?_, TypeCompilationRelation.message_source msg dir⟩
+          apply compileType_message_wait_edge signature msg dir
+          · exact hEnvironment
+          · exact conditions.2.1
+          · exact conditions.2.2
+          · simpa [compileType] using hSymbol
+
+  | message_final =>
+      cases hTransition with
+      | skip _ conditions =>
+          obtain ⟨rfl, rfl⟩ := TypeOffers.skip_fields hOffers
+          refine ⟨.final, ?_, TypeCompilationRelation.message_final msg dir⟩
+          apply compileType_message_final_edge signature msg dir
+          · exact hEnvironment
+          · exact conditions.2.1
+          · exact conditions.2.2
+          · simpa [compileType] using hSymbol
+
+private theorem compileType_message_edge_cases
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {source target : TypeAutomatonState} {env : TypeEnvironment}
+    {label : TypeLabel} {current future : Finset BareMessage}
+    (hEdge : (compileType signature (.message msg dir)).HasEdge source env label
+      (TypeOfferSummary.mk current future) target) :
+    (source = .root ∧ target = .final ∧
+        label = TypeLabel.message msg dir ∧ current = {(msg, dir)} ∧
+        future = ∅ ∧ env.hasNeed (msg, dir)) ∨
+      (source = .root ∧ target = .root ∧ label = TypeLabel.silent ∧
+        current = {(msg, dir)} ∧ future = ∅ ∧ env.clock = false ∧
+        ¬ env.hasNeed (msg, dir)) ∨
+      (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
+        current = ∅ ∧ future = ∅ ∧ env.clock = false ∧
+        env.immediate = ∅) := by
+  simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion] at hEdge
+  rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
+  cases hLabel : resolvedEdge.label with
+  | «variable» name => simp [hLabel] at hOutput
+  | visible visibleLabel =>
+      simp only [hLabel] at hOutput
+      split at hOutput
+      · simp only [Finset.mem_singleton] at hOutput
+        simp only [resolvedAutomatonEdges, Finset.mem_image] at hResolvedEdge
+        rcases hResolvedEdge with ⟨pendingEdge, hPendingEdge, rfl⟩
+        simp [typeCompilationFuel, compileTypeFuel,
+          finishAutomatonFragment] at hPendingEdge
+        rcases hPendingEdge with hFiring | hWaiting | hFinal
+        · rcases hFiring with ⟨edgeEnv, ⟨_, hNeed⟩, rfl⟩
+          simp_all
+        · rcases hWaiting with ⟨edgeEnv, ⟨_, hClock, hNoNeed⟩, rfl⟩
+          simp_all
+        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩
+          simp_all
+      · simp at hOutput
+
+/-- Every compiled edge of an atomic message is justified by its semantic step. -/
+theorem compileType_message_edge_to_step
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    {residual residual' : PactType} {state state' : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hEnvironment : env ∈ signature.environments)
+    (hRelated : TypeCompilationRelation (.message msg dir) state residual)
+    (hEdge : (compileType signature (.message msg dir)).HasEdge state env label
+      offers state')
+    (hTarget : TypeCompilationRelation (.message msg dir) state' residual') :
+    DecoratedTypeTransition env residual label offers residual' := by
+  have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
+  rcases offers with ⟨current, future⟩
+  have hCases := compileType_message_edge_cases signature msg dir hEdge
+  rcases hCases with hFiring | hWaiting | hFinal
+  · rcases hFiring with ⟨rfl, rfl, rfl, rfl, rfl, hNeed⟩
+    cases hRelated with
+    | message_source =>
+        cases hTarget with
+        | message_final =>
+            refine ⟨TypeTransition.action env msg dir
+              ⟨hWellFormed, hNeed⟩, ?_⟩
+            simpa [typeFutureOffers, typeFutureOffersFuel] using
+              TypeOffers.action env msg dir ⟨hWellFormed, hNeed⟩
+  · rcases hWaiting with ⟨rfl, rfl, rfl, rfl, rfl, hClock, hNoNeed⟩
+    cases hRelated with
+    | message_source =>
+        cases hTarget with
+        | message_source =>
+            refine ⟨TypeTransition.action_wait env msg dir
+              ⟨hWellFormed, hNoNeed, hClock⟩, ?_⟩
+            simpa [typeFutureOffers, typeFutureOffersFuel] using
+              TypeOffers.action_wait env msg dir
+                ⟨hWellFormed, hNoNeed, hClock⟩
+  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock, hImmediate⟩
+    cases hRelated with
+    | message_final =>
+        cases hTarget with
+        | message_final =>
+            exact ⟨TypeTransition.skip env
+                ⟨hWellFormed, hClock, hImmediate⟩,
+              TypeOffers.skip env ⟨hWellFormed, hClock, hImmediate⟩⟩
+
+/-- The atomic message constructor satisfies the complete step correspondence. -/
+theorem compileType_message_correspondence
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
+    Nonempty (TypeAutomatonCorrespondence (.message msg dir)
+      (compileType signature (.message msg dir))) := by
+  refine ⟨
+    { relation := fun residual state =>
+        TypeCompilationRelation (.message msg dir) state residual
+      initial := compileType_initial_relation signature (.message msg dir)
+      initial_mem := compileType_initial_mem signature (.message msg dir)
+      stepIff := ?_ }⟩
+  intro residual residual' state env label offers hRelated hSymbol
+  have hEnvironment : env ∈ signature.environments := by
+    have hParts : env ∈ signature.environments ∧
+        label ∈ signature.labels ∧ offers ∈ signature.offerSummaries := by
+      simpa [compileType, TypeAlphabet.transitionAlphabet] using hSymbol
+    exact hParts.1
+  constructor
+  · exact compileType_message_step_to_edge signature msg dir
+      hRelated hSymbol
+  · rintro ⟨state', hEdge, hTarget⟩
+    exact compileType_message_edge_to_step signature msg dir
+      hEnvironment hRelated hEdge hTarget
+
+/-- Every compiled parallel edge hides immediate interface actions. -/
+theorem compileType_parallel_edge_hides_immediate_interface
+    (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
+    {source target : TypeAutomatonState} {env : TypeEnvironment}
+    {label : TypeLabel} {offers : TypeOfferSummary}
+    (hEdge : (compileType signature (.par left right interface)).HasEdge
+      source env label offers target) :
+    ∀ action ∈ env.immediate, action.1 ∉ interface := by
+  simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion] at hEdge
+  rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
+  cases hLabel : resolvedEdge.label with
+  | «variable» name => simp [hLabel] at hOutput
+  | visible visibleLabel =>
+      simp only [hLabel] at hOutput
+      split at hOutput
+      · simp only [Finset.mem_singleton] at hOutput
+        have hEnvironment := congrArg
+          (fun edge : TypeAutomatonEdge => edge.symbol.environment) hOutput
+        simp only at hEnvironment
+        simp only [resolvedAutomatonEdges, Finset.mem_image] at hResolvedEdge
+        rcases hResolvedEdge with ⟨pendingEdge, hPendingEdge, rfl⟩
+        change env = pendingEdge.environment at hEnvironment
+        have hFuel :
+            typeCompilationFuel (.par left right interface) =
+              Nat.succ (max (typeCompilationFuel left)
+                (typeCompilationFuel right)) := by
+          rw [typeCompilationFuel]
+          omega
+        rw [hFuel] at hPendingEdge
+        simp only [compileTypeFuel] at hPendingEdge
+        change pendingEdge ∈
+            (buildParallelAutomaton interface
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)).edges
+          at hPendingEdge
+        simp only [buildParallelAutomaton, restrictReachableFragment,
+          finishAutomatonFragment, Finset.mem_filter] at hPendingEdge
+        rcases hPendingEdge with ⟨hProductEdge, _⟩
+        simp only [Finset.mem_biUnion, Finset.mem_image,
+          Finset.mem_filter] at hProductEdge
+        rcases hProductEdge with ⟨leftEdge, _, rightEdge, ⟨_, _⟩, rfl⟩
+        intro action hAction hInterface
+        rw [hEnvironment] at hAction
+        unfold combineAutomatonEnvironment at hAction
+        split at hAction
+        · simp [TypeEnvironment.tock] at hAction
+        · exact (Finset.mem_filter.mp hAction).2 hInterface
+      · simp at hOutput
 
 /-- The process-to-automaton simulation of Lemma 4.6. -/
 structure ProcessAutomatonCorrespondence

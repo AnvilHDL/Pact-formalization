@@ -22,17 +22,29 @@
 - [x] Prove that the initial state belongs to the compiled state set, including
   after parallel reachability restriction.
 - [x] Prove the complete `skip` correspondence case.
-- [ ] Give a usable, non-`sorry` definition of `ClosedGuardedRegular`, including
-  closed variables, clock-guarded recursion, and the regularity assumptions
-  needed for finite shared recursion states.
-- [ ] Prove fuel irrelevance: two sufficient fuel values produce the same
-  constructor fragment. Parent constructors currently give children surplus
-  fuel, while standalone compilation uses the child's calculated fuel.
+- [x] Enforce the paper's boundary/internal separation in `AdmissibleType`:
+  a boundary action's message identifier cannot also occur in the interface.
+- [x] Prove that compiled parallel edges hide immediate interface actions.
+- [x] Define `ClosedGuardedRegular`: all variables are bound, every recursive
+  backedge crosses a clock, and a message identifier is exchanged at most once
+  per clock cycle.
+- [x] Prove that a mandatory clock prevents same-cycle completion, semantic
+  completion/future-offer fuel stabilizes, and unfolding a clock-guarded
+  recursion preserves the public `typeFutureOffers` menu.
+- [x] Prove the complete atomic-message correspondence in both directions,
+  including an inversion theorem classifying every compiled message edge as
+  fire, wait, or completed-idle.
+- [x] Prove compiler fuel irrelevance: two sufficient fuel values produce the
+  same constructor fragment, so parent-compiled children can be rewritten to
+  their standalone compilations.
 - [ ] Prove future-offer correctness: resolving `FutureSpec.at q removed` with
   `computeFuture` gives the semantic `typeFutureOffers` set for the residual
   represented by `q`, minus `removed`.
-- [ ] Prove the remaining atomic cases: message action/wait, clock action/wait,
-  progress, and an unresolved variable.
+  Clock guarding rules out the previously considered immediate recursive
+  re-offer. The remaining obligation is to connect graph-based `computeFuture`
+  to `typeFutureOffers` for every related admissible residual.
+- [ ] Prove the remaining atomic cases: clock action/wait, progress, and an
+  unresolved variable.
 - [ ] Prove ordinary and fair choice preservation, including selection edges
   and child-state tagging.
 - [ ] Prove sequence preservation, including left steps, literal-`skip`

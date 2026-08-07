@@ -299,13 +299,23 @@ theorem inference_runs_in_linear_time : RunsInLinearTime inferProcess := by
 theorem checking_runs_in_product_time : RunsInProductTime refinementChecker := by
   sorry
 
-/-- The paper's closedness, guardedness, and regularity side conditions. -/
-def ClosedGuardedRegular (processType : PactType) : Prop := by
-  sorry
+/--
+The paper's admissible recursive types: variables are closed and every
+recursive backedge is preceded by at least one synchronized clock step.
+
+Regularity is represented by the finite `PactType` syntax together with named
+backedges; unfolding is shared by `TypeCompilationRelation.recur_body` rather
+than copied into the syntax tree.
+-/
+def ClosedGuardedRegular (processType : PactType) : Prop :=
+  PactType.AllVariablesBound [] processType ∧
+    PactType.ClockGuarded processType ∧
+    PactType.SameCycleMessageLinear processType
 
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/
 def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
-  signature.Supports processType ∧ ClosedGuardedRegular processType
+  signature.WellFormed ∧ signature.Supports processType ∧
+    ClosedGuardedRegular processType
 
 /-- `skip` cannot take its silent operational step in a clock environment. -/
 theorem skip_has_no_clock_transition :
@@ -323,6 +333,12 @@ theorem type_automaton_correspondence
     Nonempty
       (TypeAutomatonCorrespondence processType
         (compileType signature processType)) := by
+  by_cases hMessage : ∃ msg dir, processType = .message msg dir
+  · rcases hMessage with ⟨msg, dir, rfl⟩
+    exact compileType_message_correspondence signature msg dir
+  by_cases hSkip : processType = .skip
+  · subst processType
+    exact compileType_skip_correspondence signature
   refine ⟨
     { relation := fun residual state =>
         TypeCompilationRelation processType state residual
@@ -330,6 +346,14 @@ theorem type_automaton_correspondence
       initial_mem := compileType_initial_mem signature processType
       stepIff := ?_ }⟩
   intro residual residual' state env label offers hRelated hSymbol
+  rcases hAdmissible with ⟨hSignature, hSupports, hRegular⟩
+  have hAlphabetParts :
+      env ∈ signature.environments ∧ label ∈ signature.labels ∧
+        offers ∈ signature.offerSummaries := by
+    simpa [compileType, TypeAlphabet.transitionAlphabet] using hSymbol
+  have hEnvironment := hAlphabetParts.1
+  have hEnvironmentWellFormed :=
+    TypeAlphabet.environment_wellFormed hEnvironment
   sorry
 
 /-- Lemma 4.6: conforming processes simulate into the type automaton. -/
