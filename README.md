@@ -48,8 +48,10 @@
   Unresolved variables remain an internal fragment case consumed by recursion.
 - [x] Prove ordinary and fair choice preservation, including selection edges
   and child-state tagging.
-- [ ] Prove sequence preservation, including left steps, literal-`skip`
-  bridge edges, switching to the right child, and the associated future offers.
+- [x] Prove sequence step preservation, including exact left/right edge
+  classifiers, literal-`skip` bridge edges, switching to the right child, and
+  re-decoration from the syntax future of the residual.  The constructor
+  theorem consumes the global future-correctness invariant listed above.
 - [ ] Prove recursion preservation: the unfolding epsilon edge, substitution
   in `TypeCompilationRelation.recur_body`, matching-variable back-edges, and
   preservation of future references after the back-edge is installed.
