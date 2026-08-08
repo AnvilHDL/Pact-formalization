@@ -584,6 +584,123 @@ namespace PendingAutomaton
           simp [hReferences, ih]
     exact hAux automaton.states.card
 
+  private theorem futureStep_mono (automaton : PendingAutomaton)
+      {smaller larger : Finset TypeAutomatonState}
+      (hSubset : smaller ⊆ larger) :
+      automaton.futureStep smaller ⊆ automaton.futureStep larger := by
+    intro state hState
+    simp only [futureStep, Finset.mem_union, Finset.mem_biUnion] at hState ⊢
+    rcases hState with hDirect | ⟨source, hSource, hReference⟩
+    · exact Or.inl (hSubset hDirect)
+    · exact Or.inr ⟨source, hSubset hSource, hReference⟩
+
+  private theorem futureReachableAux_mono (automaton : PendingAutomaton)
+      (fuel : Nat) {smaller larger : Finset TypeAutomatonState}
+      (hSubset : smaller ⊆ larger) :
+      automaton.futureReachableAux fuel smaller ⊆
+        automaton.futureReachableAux fuel larger := by
+    induction fuel generalizing smaller larger with
+    | zero => exact hSubset
+    | succ fuel ih =>
+        exact ih (futureStep_mono automaton hSubset)
+
+  private theorem subset_futureReachableAux (automaton : PendingAutomaton)
+      (fuel : Nat) (reached : Finset TypeAutomatonState) :
+      reached ⊆ automaton.futureReachableAux fuel reached := by
+    induction fuel generalizing reached with
+    | zero => exact fun _ h => h
+    | succ fuel ih =>
+        exact (subset_futureStep automaton reached).trans
+          (ih (automaton.futureStep reached))
+
+  /-- Saturated same-cycle reachability unfolds by one symbolic-reference
+  step.  This is the finite-graph fixed-point equation behind constructor
+  roots: a state reaches itself and everything reachable from each of its
+  immediate same-cycle references. -/
+  theorem futureReachable_unfold (automaton : PendingAutomaton)
+      (state : TypeAutomatonState) (hClosed : automaton.ReferencesClosed)
+      (hState : state ∈ automaton.states) :
+      automaton.futureReachable state =
+        {state} ∪ (automaton.referencedStates state).biUnion
+          automaton.futureReachable := by
+    let closure := automaton.futureReachable state
+    let unfolded := ({state} : Finset TypeAutomatonState) ∪
+      (automaton.referencedStates state).biUnion automaton.futureReachable
+    have hClosureFixed : automaton.futureStep closure = closure := by
+      apply futureReachableAux_fixed_after_missing automaton hClosed
+      · simpa [closure, futureReachable] using hState
+      · omega
+    have hStateClosure : state ∈ closure := by
+      apply subset_futureReachableAux automaton automaton.states.card {state}
+      simp [closure, futureReachable]
+    have hReferenceClosure : ∀ reference,
+        reference ∈ automaton.referencedStates state →
+          automaton.futureReachable reference ⊆ closure := by
+      intro reference hReference target hTarget
+      have hReferenceState : reference ∈ automaton.states :=
+        hClosed state hState hReference
+      have hReferenceInClosure : reference ∈ closure := by
+        rw [← hClosureFixed]
+        exact Finset.mem_union_right _
+          (Finset.mem_biUnion.mpr ⟨state, hStateClosure, hReference⟩)
+      have hSingletonSubset : ({reference} : Finset TypeAutomatonState) ⊆
+          closure := by
+        simpa using hReferenceInClosure
+      have hMonotone := futureReachableAux_mono automaton
+        automaton.states.card hSingletonSubset
+      have hClosureStable : automaton.futureReachableAux
+          automaton.states.card closure = closure := by
+        exact futureReachableAux_fixed_of_futureStep_eq automaton closure
+          hClosureFixed automaton.states.card
+      rw [hClosureStable] at hMonotone
+      exact hMonotone hTarget
+    have hUnfoldedSubset : unfolded ⊆ closure := by
+      intro target hTarget
+      simp only [unfolded, Finset.mem_union, Finset.mem_singleton,
+        Finset.mem_biUnion] at hTarget
+      rcases hTarget with rfl | ⟨reference, hReference, hReachable⟩
+      · exact hStateClosure
+      · exact hReferenceClosure reference hReference hReachable
+    have hUnfoldedFixed : automaton.futureStep unfolded = unfolded := by
+      apply Finset.Subset.antisymm
+      · intro target hTarget
+        simp only [futureStep, Finset.mem_union, Finset.mem_biUnion] at hTarget
+        rcases hTarget with hDirect | ⟨source, hSource, hReference⟩
+        · exact hDirect
+        · simp only [unfolded, Finset.mem_union, Finset.mem_singleton,
+            Finset.mem_biUnion] at hSource ⊢
+          rcases hSource with rfl | ⟨first, hFirst, hSourceReachable⟩
+          · exact Or.inr ⟨target, hReference,
+              subset_futureReachableAux automaton automaton.states.card
+                {target} (by simpa)⟩
+          · have hFirstState : first ∈ automaton.states :=
+              hClosed state hState hFirst
+            have hFirstFixed : automaton.futureStep
+                (automaton.futureReachable first) =
+                automaton.futureReachable first := by
+              apply futureReachableAux_fixed_after_missing automaton hClosed
+              · simpa [futureReachable] using hFirstState
+              · omega
+            have hTargetReachable : target ∈
+                automaton.futureReachable first := by
+              rw [← hFirstFixed]
+              exact Finset.mem_union_right _
+                (Finset.mem_biUnion.mpr
+                  ⟨source, hSourceReachable, hReference⟩)
+            exact Or.inr ⟨first, hFirst, hTargetReachable⟩
+      · exact subset_futureStep automaton unfolded
+    apply Finset.Subset.antisymm
+    · have hStart : ({state} : Finset TypeAutomatonState) ⊆ unfolded := by
+        exact Finset.subset_union_left
+      have hMonotone := futureReachableAux_mono automaton
+        automaton.states.card hStart
+      have hUnfoldedStable : automaton.futureReachableAux
+          automaton.states.card unfolded = unfolded :=
+        futureReachableAux_fixed_of_futureStep_eq automaton unfolded
+          hUnfoldedFixed automaton.states.card
+      simpa [closure, futureReachable, hUnfoldedStable] using hMonotone
+    · exact hUnfoldedSubset
+
 end PendingAutomaton
 
 /--
@@ -596,6 +713,38 @@ revisiting a finite state cannot expose a new state.
 def computeFuture (automaton : PendingAutomaton)
     (state : TypeAutomatonState) : Finset BareMessage :=
   (automaton.futureReachable state).biUnion automaton.offersAt
+
+/-- `computeFuture` is the least closed future menu: collect the offers stored
+at the current state, then union the complete menus of every immediate
+same-cycle symbolic reference. -/
+theorem computeFuture_unfold
+    (automaton : PendingAutomaton) (state : TypeAutomatonState)
+    (hClosed : automaton.ReferencesClosed)
+    (hState : state ∈ automaton.states) :
+    computeFuture automaton state =
+      automaton.offersAt state ∪
+        (automaton.referencedStates state).biUnion
+          (computeFuture automaton) := by
+  rw [computeFuture, automaton.futureReachable_unfold state hClosed hState]
+  ext action
+  simp only [Finset.mem_biUnion, Finset.mem_union, Finset.mem_singleton]
+  constructor
+  · rintro ⟨reached, hReached, hOffer⟩
+    rcases hReached with rfl | ⟨reference, hReference, hReachable⟩
+    · exact Or.inl hOffer
+    · apply Or.inr
+      refine ⟨reference, hReference, ?_⟩
+      change action ∈
+        (automaton.futureReachable reference).biUnion automaton.offersAt
+      exact Finset.mem_biUnion.mpr ⟨reached, hReachable, hOffer⟩
+  · rintro (hOffer | ⟨reference, hReference, hFuture⟩)
+    · exact ⟨state, Or.inl rfl, hOffer⟩
+    · change action ∈
+          (automaton.futureReachable reference).biUnion automaton.offersAt
+        at hFuture
+      rcases Finset.mem_biUnion.mp hFuture with
+        ⟨reached, hReachable, hOffer⟩
+      exact ⟨reached, Or.inr ⟨reference, hReference, hReachable⟩, hOffer⟩
 
 /-- A constructor embedding preserves `computeFuture` once it preserves the
 local reference and offer observations.  A larger parent state set merely
@@ -1481,7 +1630,7 @@ private theorem childPendingEdges_futureTargetsInStates
         removed hSpec
       simp [childStates, childState, hChildTarget]
 
-private def indexedFragmentStates
+def indexedFragmentStates
     (automata : List (BareMessage × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
@@ -2387,4 +2536,3 @@ theorem compileType_skip_has_no_clock_edge
 end
 
 end Pact
-

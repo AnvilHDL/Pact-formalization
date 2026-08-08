@@ -43,7 +43,8 @@
   Clock guarding and tail termination rule out premature recursion-dependent
   resolution inside retained products. The remaining obligation is to connect
   graph-based `computeFuture` to `typeFutureOffers` for every related
-  admissible residual.
+  admissible residual. Atomic types, ordinary choice, and fair choice are now
+  complete; recursion reduces to the explicit closed-body future package.
 - [x] Prove the remaining closed atomic cases: clock action/wait and progress.
   Unresolved variables remain an internal fragment case consumed by recursion.
 - [x] Prove ordinary and fair choice preservation, including selection edges
@@ -54,7 +55,10 @@
   theorem consumes the global future-correctness invariant listed above.
 - [ ] Prove recursion preservation: the unfolding epsilon edge, substitution
   in `TypeCompilationRelation.recur_body`, matching-variable back-edges, and
-  preservation of future references after the back-edge is installed.
+  preservation of future references after the back-edge is installed. Header,
+  back-edge/non-matching-edge classification, raw/public composition, and the
+  whole-binder future theorem are complete; deriving the two closed-body
+  packages from guarded and tail-regular syntax remains.
 - [ ] Prove parallel preservation in both directions: reconstruct the two
   local environments, match sibling current/future interface offers, combine
   labels, hide interface offers, and show reachable-product restriction does

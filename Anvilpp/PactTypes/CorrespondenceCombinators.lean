@@ -364,6 +364,409 @@ theorem choiceFutureCorrect_of_compilation
   · apply compileTypeFuel_referencesClosed
     simp [TypeCompilationFuelSufficient]
 
+/-- At a fresh choice root, future resolution is exactly the union of the
+two child-entry futures.  The theorem applies to ordinary and fair selection
+labels because neither selection crosses a clock boundary. -/
+private theorem buildChoiceAutomaton_computeFuture_root
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hSelectionLeft : selectionLeft ≠ TypeLabel.tock)
+    (hSelectionRight : selectionRight ≠ TypeLabel.tock)
+    (hLeftTargets : left.FutureTargetsInStates)
+    (hRightTargets : right.FutureTargetsInStates)
+    (hLeftInitial : left.initial ∈ left.states)
+    (hRightInitial : right.initial ∈ right.states) :
+    let fragment := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let pending : PendingAutomaton :=
+      { states := fragment.states, edges := fragment.edges }
+    computeFuture pending .root =
+      computeFuture { states := left.states, edges := left.edges }
+          left.initial ∪
+        computeFuture { states := right.states, edges := right.edges }
+          right.initial := by
+  classical
+  let fragment := buildChoiceAutomaton signature left right
+    selectionLeft selectionRight
+  let pending : PendingAutomaton :=
+    { states := fragment.states, edges := fragment.edges }
+  have hClosed : pending.ReferencesClosed := by
+    apply PendingAutomaton.referencesClosed_of_futureTargetsInStates fragment
+    exact buildChoiceAutomaton_futureTargetsInStates signature left right
+      selectionLeft selectionRight hLeftTargets hRightTargets hLeftInitial
+      hRightInitial
+  have hRoot : (.root : TypeAutomatonState) ∈ pending.states := by
+    simp [pending, fragment, buildChoiceAutomaton, finishAutomatonFragment]
+  have hOffers : pending.offersAt .root = ∅ := by
+    rw [Finset.eq_empty_iff_forall_notMem]
+    intro action hAction
+    simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+      Finset.mem_filter] at hAction
+    rcases hAction with ⟨edge, ⟨hEdge, hSource⟩, hOffer⟩
+    simp only [pending, fragment, buildChoiceAutomaton,
+      finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+      Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+      Finset.mem_singleton] at hEdge
+    rcases hEdge with (hLeft | hRight) | hSelection
+    · rcases hLeft with ⟨childEdge, _, rfl⟩
+      simp [childPendingEdge, childState] at hSource
+    · rcases hRight with ⟨childEdge, _, rfl⟩
+      simp [childPendingEdge, childState] at hSource
+    · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
+      · rw [hEdge] at hOffer
+        simp [AutomatonConstructionLabel.semantic] at hOffer
+      · rw [hEdge] at hOffer
+        simp [AutomatonConstructionLabel.semantic] at hOffer
+  have hReferences : pending.referencedStates .root =
+      {.child 0 left.initial, .child 1 right.initial} := by
+    ext state
+    constructor
+    · intro hState
+      simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+        Finset.mem_filter] at hState
+      rcases hState with ⟨edge, ⟨hEdge, hSource⟩, hReference⟩
+      simp only [pending, fragment, buildChoiceAutomaton,
+        finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+        Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+        Finset.mem_singleton] at hEdge
+      rcases hEdge with (hLeft | hRight) | hSelection
+      · rcases hLeft with ⟨childEdge, _, rfl⟩
+        simp [childPendingEdge, childState] at hSource
+      · rcases hRight with ⟨childEdge, _, rfl⟩
+        simp [childPendingEdge, childState] at hSource
+      · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
+        · rw [hEdge] at hReference
+          simp [AutomatonConstructionLabel.semantic, hSelectionLeft]
+            at hReference
+          simp [childState, hReference]
+        · rw [hEdge] at hReference
+          simp [AutomatonConstructionLabel.semantic, hSelectionRight]
+            at hReference
+          simp [childState, hReference]
+    · intro hState
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hState
+      rcases hState with rfl | rfl
+      · let edge : PendingAutomatonEdge :=
+          { source := .root
+            environment := TypeEnvironment.tock
+            label := .visible selectionLeft
+            current := ∅
+            future := .at (.child 0 left.initial) ∅
+            target := .child 0 left.initial }
+        simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+          Finset.mem_filter]
+        refine ⟨edge, ⟨?_, rfl⟩, ?_⟩
+        · simp only [pending, fragment, buildChoiceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton]
+          right
+          exact ⟨TypeEnvironment.tock,
+            by simp [TypeAlphabet.localEnvironments], Or.inl rfl⟩
+        · simp [edge, AutomatonConstructionLabel.semantic,
+            hSelectionLeft]
+      · let edge : PendingAutomatonEdge :=
+          { source := .root
+            environment := TypeEnvironment.tock
+            label := .visible selectionRight
+            current := ∅
+            future := .at (.child 1 right.initial) ∅
+            target := .child 1 right.initial }
+        simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+          Finset.mem_filter]
+        refine ⟨edge, ⟨?_, rfl⟩, ?_⟩
+        · simp only [pending, fragment, buildChoiceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton]
+          right
+          exact ⟨TypeEnvironment.tock,
+            by simp [TypeAlphabet.localEnvironments], Or.inr rfl⟩
+        · simp [edge, AutomatonConstructionLabel.semantic,
+            hSelectionRight]
+  have hLeftClosed :
+      ({ states := left.states, edges := left.edges } :
+        PendingAutomaton).ReferencesClosed :=
+    PendingAutomaton.referencesClosed_of_futureTargetsInStates left
+      hLeftTargets
+  have hRightClosed :
+      ({ states := right.states, edges := right.edges } :
+        PendingAutomaton).ReferencesClosed :=
+    PendingAutomaton.referencesClosed_of_futureTargetsInStates right
+      hRightTargets
+  have hLeftCard : left.states.card ≤ fragment.states.card := by
+    have hSubset : childStates 0 left ⊆ fragment.states := by
+      intro state hState
+      simp [fragment, buildChoiceAutomaton, finishAutomatonFragment, hState]
+    calc
+      left.states.card = (childStates 0 left).card := by
+        simp only [childStates]
+        symm
+        apply Finset.card_image_of_injective
+        intro first second hEqual
+        injection hEqual
+      _ ≤ fragment.states.card := Finset.card_le_card hSubset
+  have hRightCard : right.states.card ≤ fragment.states.card := by
+    have hSubset : childStates 1 right ⊆ fragment.states := by
+      intro state hState
+      simp [fragment, buildChoiceAutomaton, finishAutomatonFragment, hState]
+    calc
+      right.states.card = (childStates 1 right).card := by
+        simp only [childStates]
+        symm
+        apply Finset.card_image_of_injective
+        intro first second hEqual
+        injection hEqual
+      _ ≤ fragment.states.card := Finset.card_le_card hSubset
+  change computeFuture pending .root = _
+  rw [computeFuture_unfold pending .root hClosed hRoot, hOffers, hReferences]
+  simp only [Finset.empty_union, Finset.biUnion_insert,
+    Finset.biUnion_singleton]
+  have hLeftEmbedding := buildChoiceAutomaton_computeFuture_left signature
+    left right selectionLeft selectionRight left.initial hLeftClosed
+    hLeftInitial hLeftCard
+  have hRightEmbedding := buildChoiceAutomaton_computeFuture_right signature
+    left right selectionLeft selectionRight right.initial hRightClosed
+    hRightInitial hRightCard
+  refine congrArg₂ (fun first second => first ∪ second)
+    hLeftEmbedding ?_
+  simpa using hRightEmbedding
+
+private theorem compiledChoiceRootFuture_eq_union
+    (signature : TypeAlphabet) (left right : PactType)
+    (selectionLeft selectionRight : TypeLabel)
+    (hSelectionLeft : selectionLeft ≠ TypeLabel.tock)
+    (hSelectionRight : selectionRight ≠ TypeLabel.tock)
+    (hLeftCorrect : CompilationFutureCorrect signature left)
+    (hRightCorrect : CompilationFutureCorrect signature right) :
+    let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+    let leftFragment := compileTypeFuel signature fuel left
+    let rightFragment := compileTypeFuel signature fuel right
+    let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+      selectionLeft selectionRight
+    let pending : PendingAutomaton :=
+      { states := fragment.states, edges := fragment.edges }
+    computeFuture pending .root =
+      typeFutureOffers left ∪ typeFutureOffers right := by
+  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+  let leftFragment := compileTypeFuel signature fuel left
+  let rightFragment := compileTypeFuel signature fuel right
+  let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+    selectionLeft selectionRight
+  let pending : PendingAutomaton :=
+    { states := fragment.states, edges := fragment.edges }
+  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+    simp [TypeCompilationFuelSufficient, fuel]
+  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+    simp [TypeCompilationFuelSufficient, fuel]
+  have hLeftInitial : leftFragment.initial ∈ leftFragment.states :=
+    compileTypeFuel_initial_mem signature fuel left hLeftFuel
+  have hRightInitial : rightFragment.initial ∈ rightFragment.states :=
+    compileTypeFuel_initial_mem signature fuel right hRightFuel
+  have hRoot := buildChoiceAutomaton_computeFuture_root signature leftFragment
+    rightFragment selectionLeft selectionRight hSelectionLeft hSelectionRight
+    (compileTypeFuel_futureTargetsInStates signature fuel left hLeftFuel)
+    (compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel)
+    hLeftInitial hRightInitial
+  have hLeftRelation : TypeCompilationRelation left leftFragment.initial left :=
+    compileTypeFuel_initial_relation signature fuel left hLeftFuel
+  have hRightRelation :
+      TypeCompilationRelation right rightFragment.initial right :=
+    compileTypeFuel_initial_relation signature fuel right hRightFuel
+  have hLeftSemantic : computeFuture
+      { states := leftFragment.states, edges := leftFragment.edges }
+      leftFragment.initial = typeFutureOffers left := by
+    have hResult := hLeftCorrect leftFragment.initial left hLeftRelation
+    have hStable := compileTypeFuel_eq_of_sufficient signature left hLeftFuel
+      (typeCompilationFuel_sufficient left)
+    simpa [leftFragment, hStable] using hResult
+  have hRightSemantic : computeFuture
+      { states := rightFragment.states, edges := rightFragment.edges }
+      rightFragment.initial = typeFutureOffers right := by
+    have hResult := hRightCorrect rightFragment.initial right hRightRelation
+    have hStable := compileTypeFuel_eq_of_sufficient signature right hRightFuel
+      (typeCompilationFuel_sufficient right)
+    simpa [rightFragment, hStable] using hResult
+  exact hRoot.trans (congrArg₂ (fun first second => first ∪ second)
+    hLeftSemantic hRightSemantic)
+
+private theorem compiledChoiceLeftFuture_eq
+    (signature : TypeAlphabet) (left right residual : PactType)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState)
+    (hRelated : TypeCompilationRelation left state residual)
+    (hFuture : CompilationFutureCorrect signature left)
+    (hStateCorrect : CompilationStateCorrect signature left) :
+    let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+    let leftFragment := compileTypeFuel signature fuel left
+    let rightFragment := compileTypeFuel signature fuel right
+    let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+      selectionLeft selectionRight
+    let pending : PendingAutomaton :=
+      { states := fragment.states, edges := fragment.edges }
+    computeFuture pending (.child 0 state) = typeFutureOffers residual := by
+  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+  let leftFragment := compileTypeFuel signature fuel left
+  let rightFragment := compileTypeFuel signature fuel right
+  let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+    selectionLeft selectionRight
+  have hFuel : TypeCompilationFuelSufficient left fuel := by
+    simp [TypeCompilationFuelSufficient, fuel]
+  have hStable := compileTypeFuel_eq_of_sufficient signature left hFuel
+    (typeCompilationFuel_sufficient left)
+  have hState : state ∈ leftFragment.states := by
+    have hExact := hStateCorrect state residual hRelated
+    simpa [leftFragment, hStable] using hExact
+  have hClosed :
+      ({ states := leftFragment.states, edges := leftFragment.edges } :
+        PendingAutomaton).ReferencesClosed := by
+    apply compileTypeFuel_referencesClosed
+    exact hFuel
+  have hCard : leftFragment.states.card ≤ fragment.states.card := by
+    have hSubset : childStates 0 leftFragment ⊆ fragment.states := by
+      intro child hChild
+      simp [fragment, buildChoiceAutomaton, finishAutomatonFragment, hChild]
+    calc
+      leftFragment.states.card = (childStates 0 leftFragment).card := by
+        simp only [childStates]
+        symm
+        apply Finset.card_image_of_injective
+        intro first second hEqual
+        injection hEqual
+      _ ≤ fragment.states.card := Finset.card_le_card hSubset
+  have hEmbedding := buildChoiceAutomaton_computeFuture_left signature
+    leftFragment rightFragment selectionLeft selectionRight state hClosed
+    hState hCard
+  have hSemantic := hFuture state residual hRelated
+  have hSemanticShared : computeFuture
+      { states := leftFragment.states, edges := leftFragment.edges }
+      state = typeFutureOffers residual := by
+    simpa [leftFragment, hStable] using hSemantic
+  change computeFuture
+      { states := fragment.states, edges := fragment.edges }
+      (.child 0 state) = typeFutureOffers residual
+  exact hEmbedding.trans hSemanticShared
+
+private theorem compiledChoiceRightFuture_eq
+    (signature : TypeAlphabet) (left right residual : PactType)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState)
+    (hRelated : TypeCompilationRelation right state residual)
+    (hFuture : CompilationFutureCorrect signature right)
+    (hStateCorrect : CompilationStateCorrect signature right) :
+    let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+    let leftFragment := compileTypeFuel signature fuel left
+    let rightFragment := compileTypeFuel signature fuel right
+    let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+      selectionLeft selectionRight
+    let pending : PendingAutomaton :=
+      { states := fragment.states, edges := fragment.edges }
+    computeFuture pending (.child 1 state) = typeFutureOffers residual := by
+  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+  let leftFragment := compileTypeFuel signature fuel left
+  let rightFragment := compileTypeFuel signature fuel right
+  let fragment := buildChoiceAutomaton signature leftFragment rightFragment
+    selectionLeft selectionRight
+  have hFuel : TypeCompilationFuelSufficient right fuel := by
+    simp [TypeCompilationFuelSufficient, fuel]
+  have hStable := compileTypeFuel_eq_of_sufficient signature right hFuel
+    (typeCompilationFuel_sufficient right)
+  have hState : state ∈ rightFragment.states := by
+    have hExact := hStateCorrect state residual hRelated
+    simpa [rightFragment, hStable] using hExact
+  have hClosed :
+      ({ states := rightFragment.states, edges := rightFragment.edges } :
+        PendingAutomaton).ReferencesClosed := by
+    apply compileTypeFuel_referencesClosed
+    exact hFuel
+  have hCard : rightFragment.states.card ≤ fragment.states.card := by
+    have hSubset : childStates 1 rightFragment ⊆ fragment.states := by
+      intro child hChild
+      simp [fragment, buildChoiceAutomaton, finishAutomatonFragment, hChild]
+    calc
+      rightFragment.states.card = (childStates 1 rightFragment).card := by
+        simp only [childStates]
+        symm
+        apply Finset.card_image_of_injective
+        intro first second hEqual
+        injection hEqual
+      _ ≤ fragment.states.card := Finset.card_le_card hSubset
+  have hEmbedding := buildChoiceAutomaton_computeFuture_right signature
+    leftFragment rightFragment selectionLeft selectionRight state hClosed
+    hState hCard
+  have hSemantic := hFuture state residual hRelated
+  have hSemanticShared : computeFuture
+      { states := rightFragment.states, edges := rightFragment.edges }
+      state = typeFutureOffers residual := by
+    simpa [rightFragment, hStable] using hSemantic
+  change computeFuture
+      { states := fragment.states, edges := fragment.edges }
+      (.child 1 state) = typeFutureOffers residual
+  exact hEmbedding.trans hSemanticShared
+
+/-- Whole-fragment future correctness composes through ordinary choice while
+the semantic future menu remains the syntax-derived union of its branches. -/
+theorem compilationFutureCorrect_choice
+    (signature : TypeAlphabet) (left right : PactType)
+    (hLeftFuture : CompilationFutureCorrect signature left)
+    (hRightFuture : CompilationFutureCorrect signature right) :
+    CompilationFutureCorrect signature (.choice left right) := by
+  intro state residual hRelated
+  cases hRelated with
+  | choice_source =>
+      have hRoot := compiledChoiceRootFuture_eq_union signature left right
+        TypeLabel.silent TypeLabel.silent (by simp [TypeLabel.silent])
+        (by simp [TypeLabel.silent]) hLeftFuture hRightFuture
+      have hSyntax := typeFutureOffers_choice left right
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hRoot.trans hSyntax.symm
+  | choice_left _ _ childResidual childState hChildRelated =>
+      have hChild := compiledChoiceLeftFuture_eq signature left right
+        residual TypeLabel.silent TypeLabel.silent childState
+        hChildRelated hLeftFuture
+        (compilationStateCorrect_of_compilation signature left)
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hChild
+  | choice_right _ _ childResidual childState hChildRelated =>
+      have hChild := compiledChoiceRightFuture_eq signature left right
+        residual TypeLabel.silent TypeLabel.silent childState
+        hChildRelated hRightFuture
+        (compilationStateCorrect_of_compilation signature right)
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hChild
+
+/-- Whole-fragment future correctness composes through fair choice; its
+selection labels do not alter the syntax-derived branch union. -/
+theorem compilationFutureCorrect_fairChoice
+    (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
+    (hLeftFuture : CompilationFutureCorrect signature left)
+    (hRightFuture : CompilationFutureCorrect signature right) :
+    CompilationFutureCorrect signature (.fairChoice bid left right) := by
+  intro state residual hRelated
+  cases hRelated with
+  | fair_source =>
+      have hRoot := compiledChoiceRootFuture_eq_union signature left right
+        (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+        (by simp [TypeLabel.fair]) (by simp [TypeLabel.fair])
+        hLeftFuture hRightFuture
+      have hSyntax := typeFutureOffers_fairChoice bid left right
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hRoot.trans hSyntax.symm
+  | fair_left _ _ _ childResidual childState hChildRelated =>
+      have hChild := compiledChoiceLeftFuture_eq signature left right
+        residual (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+        childState hChildRelated hLeftFuture
+        (compilationStateCorrect_of_compilation signature left)
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hChild
+  | fair_right _ _ _ childResidual childState hChildRelated =>
+      have hChild := compiledChoiceRightFuture_eq signature left right
+        residual (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+        childState hChildRelated hRightFuture
+        (compilationStateCorrect_of_compilation signature right)
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hChild
+
 /-- Visible edges inside the left tagged child of a compiled choice are
 exactly the standalone child's visible edges. -/
 theorem compileType_choice_left_child_edge_iff
@@ -2568,6 +2971,517 @@ theorem compileType_recursion_header_step_iff
     exact ⟨TypeTransition.recur env name body hWellFormed,
       TypeOffers.recur env name body hWellFormed⟩
 
+/-! ### Closed recursion-fragment correspondence -/
+
+/-- Exact classifier for resolved edges leaving the fresh recursion header,
+before the public alphabet filter. -/
+private theorem buildRecursionAutomaton_root_hasResolvedEdge_iff
+    (signature : TypeAlphabet) (name : String)
+    (body : AutomatonFragment) (env : TypeEnvironment)
+    (label : TypeLabel) (offers : TypeOfferSummary)
+    (target : TypeAutomatonState) :
+    let recursion := buildRecursionAutomaton signature name body
+    let pending : PendingAutomaton :=
+      { states := recursion.states, edges := recursion.edges }
+    recursion.HasResolvedEdge .root env label offers target ↔
+      env ∈ signature.localEnvironments ∧
+        label = TypeLabel.silent ∧ offers.current = ∅ ∧
+        computeFuture pending (.child 0 body.initial) = offers.future ∧
+        target = .child 0 body.initial := by
+  classical
+  simp only [AutomatonFragment.HasResolvedEdge, buildRecursionAutomaton,
+    finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+  constructor
+  · rintro ⟨edge, hEdge, hSource, hEnvironment, hLabel, hCurrent,
+      hFuture, hTarget⟩
+    rcases hEdge with hHeader | hBody
+    · rcases hHeader with ⟨edgeEnvironment, hLocal, rfl⟩
+      simp only [Finset.sdiff_empty] at hFuture
+      simp only at hSource hEnvironment hLabel hCurrent hFuture hTarget
+      aesop
+    · rcases hBody with ⟨bodyEdge, hBodyEdge, rfl⟩
+      by_cases hVariable : bodyEdge.label = .variable name
+      · simp [hVariable, childState] at hSource
+      · simp [hVariable, childState] at hSource
+  · rintro ⟨hLocal, rfl, hCurrent, hFuture, rfl⟩
+    refine ⟨
+      { source := .root
+        environment := env
+        label := .visible TypeLabel.silent
+        current := ∅
+        future := .at (.child 0 body.initial) ∅
+        target := .child 0 body.initial }, ?_, rfl, rfl, rfl, ?_, ?_, rfl⟩
+    · left
+      exact ⟨env, hLocal, rfl⟩
+    · exact hCurrent.symm
+    · simpa using hFuture
+
+/-- A matching variable marker in the body is installed as a silent backedge
+to the tagged body entry, and is resolved only in the closed recursion graph. -/
+private theorem buildRecursionAutomaton_variable_marker_hasResolvedEdge
+    (signature : TypeAlphabet) (name : String)
+    (body : AutomatonFragment) (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ body.edges)
+    (hVariable : edge.label = .variable name) :
+    let recursion := buildRecursionAutomaton signature name body
+    let pending : PendingAutomaton :=
+      { states := recursion.states, edges := recursion.edges }
+    recursion.HasResolvedEdge (.child 0 edge.source) edge.environment
+      TypeLabel.silent
+      { current := ∅,
+        future := computeFuture pending (.child 0 body.initial) }
+      (.child 0 body.initial) := by
+  classical
+  simp only [AutomatonFragment.HasResolvedEdge]
+  refine ⟨
+    { source := .child 0 edge.source
+      environment := edge.environment
+      label := .visible TypeLabel.silent
+      current := ∅
+      future := .at (.child 0 body.initial) ∅
+      target := .child 0 body.initial }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
+  · simp only [buildRecursionAutomaton, finishAutomatonFragment,
+      Finset.mem_union, Finset.mem_image]
+    right
+    refine ⟨edge, hEdge, ?_⟩
+    simp [hVariable, childState]
+  · simp
+
+/-- Every resolved edge from a tagged recursion-body state is either the
+installed matching-variable backedge or an unchanged non-matching body edge.
+The latter's symbolic future is resolved in the enclosing recursion graph. -/
+private theorem buildRecursionAutomaton_body_hasResolvedEdge_iff
+    (signature : TypeAlphabet) (name : String)
+    (body : AutomatonFragment) (source : TypeAutomatonState)
+    (env : TypeEnvironment) (label : TypeLabel)
+    (offers : TypeOfferSummary) (target : TypeAutomatonState) :
+    let recursion := buildRecursionAutomaton signature name body
+    let pending : PendingAutomaton :=
+      { states := recursion.states, edges := recursion.edges }
+    recursion.HasResolvedEdge (.child 0 source) env label offers target ↔
+      (∃ edge ∈ body.edges,
+        edge.source = source ∧ edge.label = .variable name ∧
+          edge.environment = env ∧ label = TypeLabel.silent ∧
+          offers.current = ∅ ∧
+          computeFuture pending (.child 0 body.initial) = offers.future ∧
+          target = .child 0 body.initial) ∨
+      (∃ edge ∈ body.edges,
+        edge.source = source ∧ edge.label ≠ .variable name ∧
+          edge.environment = env ∧ edge.label = .visible label ∧
+          edge.current = offers.current ∧
+          (match edge.future with
+            | .explicit future => future
+            | .at state removed =>
+                computeFuture pending (.child 0 state) \ removed) =
+              offers.future ∧
+          target = .child 0 edge.target) := by
+  classical
+  simp only [AutomatonFragment.HasResolvedEdge, buildRecursionAutomaton,
+    finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+  constructor
+  · rintro ⟨lifted, hLifted, hSource, hEnvironment, hLabel, hCurrent,
+      hFuture, hTarget⟩
+    rcases hLifted with hHeader | hBody
+    · rcases hHeader with ⟨headerEnvironment, hLocal, rfl⟩
+      simp at hSource
+    · rcases hBody with ⟨edge, hEdge, rfl⟩
+      by_cases hVariable : edge.label = .variable name
+      · simp only [hVariable, if_true, Finset.sdiff_empty, childState]
+          at hSource hEnvironment hLabel hCurrent hFuture hTarget
+        have hEdgeSource : edge.source = source := by
+          injection hSource
+        have hVisibleLabel : label = TypeLabel.silent := by
+          injection hLabel with hEquality
+          exact hEquality.symm
+        left
+        exact ⟨edge, hEdge, hEdgeSource, hVariable, hEnvironment,
+          hVisibleLabel, hCurrent.symm, hFuture, hTarget.symm⟩
+      · simp only [hVariable, if_false, childState]
+          at hSource hEnvironment hLabel hCurrent hTarget
+        have hEdgeSource : edge.source = source := by
+          injection hSource
+        have hEdgeTarget : target = .child 0 edge.target := hTarget.symm
+        right
+        refine ⟨edge, hEdge, hEdgeSource, hVariable, hEnvironment,
+          hLabel, hCurrent, ?_, hEdgeTarget⟩
+        cases hSpec : edge.future with
+        | explicit future =>
+            simpa [hVariable, hSpec, childFutureSpec] using hFuture
+        | «at» state removed =>
+            simpa [hVariable, hSpec, childFutureSpec, childState]
+              using hFuture
+  · rintro (hMarker | hBody)
+    · rcases hMarker with ⟨edge, hEdge, hSource, hVariable,
+        hEnvironment, hLabel, hCurrent, hFuture, hTarget⟩
+      refine ⟨
+        { source := .child 0 edge.source
+          environment := edge.environment
+          label := .visible TypeLabel.silent
+          current := ∅
+          future := .at (.child 0 body.initial) ∅
+          target := .child 0 body.initial }, ?_, ?_, hEnvironment, ?_,
+            hCurrent.symm, ?_, hTarget.symm⟩
+      · right
+        refine ⟨edge, hEdge, ?_⟩
+        simp [hVariable, childState]
+      · simpa [hSource]
+      · simpa [hLabel]
+      · simpa using hFuture
+    · rcases hBody with ⟨edge, hEdge, hSource, hVariable,
+        hEnvironment, hLabel, hCurrent, hFuture, hTarget⟩
+      refine ⟨
+        { source := .child 0 edge.source
+          environment := edge.environment
+          label := edge.label
+          current := edge.current
+          future := childFutureSpec 0 edge.future
+          target := .child 0 edge.target }, ?_, ?_, hEnvironment,
+            hLabel, hCurrent, ?_, ?_⟩
+      · right
+        exact ⟨edge, hEdge, by simp [hVariable, childState]⟩
+      · simpa [hSource, childState]
+      · cases hSpec : edge.future with
+        | explicit future =>
+            simpa [hSpec, childFutureSpec] using hFuture
+        | «at» state removed =>
+            simpa [hSpec, childFutureSpec, childState] using hFuture
+      · simpa [hTarget, childState]
+
+/-- Ambient syntax-future invariant required by recursion.  The left side is
+computed in the closed binder graph, while the right side remains the
+syntax-derived future menu of the unfolded residual. -/
+def RecursionBodyFutureCorrect
+    (signature : TypeAlphabet) (name : String) (body : PactType) : Prop :=
+  let bodyFragment := compileTypeFuel signature (typeCompilationFuel body) body
+  let recursion := buildRecursionAutomaton signature name bodyFragment
+  let pending : PendingAutomaton :=
+    { states := recursion.states, edges := recursion.edges }
+  ∀ state residual,
+    TypeCompilationRelation body state residual →
+      computeFuture pending (.child 0 state) =
+        typeFutureOffers (residual.replaceVar name (.recur name body))
+
+/-- The fresh recursion header contributes no offers of its own and has one
+same-cycle reference, to the tagged body entry. -/
+private theorem buildRecursionAutomaton_computeFuture_root
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (hBodyTargets : body.FutureTargetsInStates)
+    (hBodyInitial : body.initial ∈ body.states) :
+    let recursion := buildRecursionAutomaton signature name body
+    let pending : PendingAutomaton :=
+      { states := recursion.states, edges := recursion.edges }
+    computeFuture pending .root =
+      computeFuture pending (.child 0 body.initial) := by
+  classical
+  let recursion := buildRecursionAutomaton signature name body
+  let pending : PendingAutomaton :=
+    { states := recursion.states, edges := recursion.edges }
+  have hClosed : pending.ReferencesClosed := by
+    apply PendingAutomaton.referencesClosed_of_futureTargetsInStates recursion
+    exact buildRecursionAutomaton_futureTargetsInStates signature name body
+      hBodyTargets hBodyInitial
+  have hRoot : (.root : TypeAutomatonState) ∈ pending.states := by
+    simp [pending, recursion, buildRecursionAutomaton,
+      finishAutomatonFragment]
+  have hOffers : pending.offersAt .root = ∅ := by
+    rw [Finset.eq_empty_iff_forall_notMem]
+    intro action hAction
+    simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+      Finset.mem_filter] at hAction
+    rcases hAction with ⟨edge, ⟨hEdge, hSource⟩, hOffer⟩
+    simp only [pending, recursion, buildRecursionAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_image] at hEdge
+    rcases hEdge with hHeader | hBody
+    · rcases hHeader with ⟨environment, _, rfl⟩
+      simp [AutomatonConstructionLabel.semantic] at hOffer
+    · rcases hBody with ⟨bodyEdge, _, rfl⟩
+      by_cases hVariable : bodyEdge.label = .variable name
+      · simp [hVariable, childState] at hSource
+      · simp [hVariable, childState] at hSource
+  have hReferences : pending.referencedStates .root =
+      {.child 0 body.initial} := by
+    ext state
+    constructor
+    · intro hState
+      simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+        Finset.mem_filter] at hState
+      rcases hState with ⟨edge, ⟨hEdge, hSource⟩, hReference⟩
+      simp only [pending, recursion, buildRecursionAutomaton,
+        finishAutomatonFragment, Finset.mem_union, Finset.mem_image] at hEdge
+      rcases hEdge with hHeader | hBody
+      · rcases hHeader with ⟨environment, _, rfl⟩
+        simp [AutomatonConstructionLabel.semantic] at hReference
+        simpa [TypeLabel.silent] using hReference
+      · rcases hBody with ⟨bodyEdge, _, rfl⟩
+        by_cases hVariable : bodyEdge.label = .variable name
+        · simp [hVariable, childState] at hSource
+        · simp [hVariable, childState] at hSource
+    · intro hState
+      simp only [Finset.mem_singleton] at hState
+      subst state
+      let edge : PendingAutomatonEdge :=
+        { source := .root
+          environment := TypeEnvironment.tock
+          label := .visible TypeLabel.silent
+          current := ∅
+          future := .at (.child 0 body.initial) ∅
+          target := .child 0 body.initial }
+      simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+        Finset.mem_filter]
+      refine ⟨edge, ⟨?_, rfl⟩, ?_⟩
+      · simp only [pending, recursion, buildRecursionAutomaton,
+          finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+        left
+        exact ⟨TypeEnvironment.tock,
+          by simp [TypeAlphabet.localEnvironments], rfl⟩
+      · simp [edge, AutomatonConstructionLabel.semantic, TypeLabel.silent]
+  change computeFuture pending .root =
+    computeFuture pending (.child 0 body.initial)
+  rw [computeFuture_unfold pending .root hClosed hRoot, hOffers, hReferences]
+  simp
+
+/-- Whole-fragment future correctness supplies the ambient tagged-body
+invariant required by the recursion constructor. -/
+theorem recursionBodyFutureCorrect_of_compilationFutureCorrect
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hFuture : CompilationFutureCorrect signature (.recur name body)) :
+    RecursionBodyFutureCorrect signature name body := by
+  intro state residual hRelated
+  simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+    hFuture (.child 0 state)
+      (residual.replaceVar name (.recur name body))
+      (TypeCompilationRelation.recur_body name body residual state hRelated)
+
+/-- A clock-guarded binder's whole-fragment future correctness follows from
+the closed tagged-body invariant.  The semantic menu on the right remains
+the syntax-derived `typeFutureOffers`; the graph is used only to verify the
+compiled constructor implements that menu. -/
+theorem compilationFutureCorrect_recursion
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hGuarded : body.GuardedOccurrences name False)
+    (hBodyFuture : RecursionBodyFutureCorrect signature name body) :
+    CompilationFutureCorrect signature (.recur name body) := by
+  intro state residual hRelated
+  cases hRelated with
+  | recur_source =>
+      let bodyFragment := compileTypeFuel signature
+        (typeCompilationFuel body) body
+      let recursion := buildRecursionAutomaton signature name bodyFragment
+      let pending : PendingAutomaton :=
+        { states := recursion.states, edges := recursion.edges }
+      have hFuel := typeCompilationFuel_sufficient body
+      have hInitial : bodyFragment.initial ∈ bodyFragment.states :=
+        compileTypeFuel_initial_mem signature (typeCompilationFuel body) body
+          hFuel
+      have hTargets : bodyFragment.FutureTargetsInStates :=
+        compileTypeFuel_futureTargetsInStates signature
+          (typeCompilationFuel body) body hFuel
+      have hRoot : computeFuture pending .root =
+          computeFuture pending (.child 0 bodyFragment.initial) := by
+        simpa [pending, recursion] using
+          buildRecursionAutomaton_computeFuture_root signature name
+            bodyFragment hTargets hInitial
+      have hInitialRelation : TypeCompilationRelation body
+          bodyFragment.initial body :=
+        compileTypeFuel_initial_relation signature
+          (typeCompilationFuel body) body hFuel
+      have hEntry : computeFuture pending (.child 0 bodyFragment.initial) =
+          typeFutureOffers (body.replaceVar name (.recur name body)) := by
+        simpa [RecursionBodyFutureCorrect, bodyFragment, recursion, pending]
+          using hBodyFuture bodyFragment.initial body hInitialRelation
+      have hUnfold := guardedOccurrences_replace_typeFutureOffers_recur
+        name body body hGuarded
+      have hSyntax := typeFutureOffers_recur name body
+      have hResult : computeFuture pending .root =
+          typeFutureOffers (.recur name body) :=
+        hRoot.trans (hEntry.trans (hUnfold.trans hSyntax.symm))
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+        bodyFragment, recursion, pending] using hResult
+  | recur_body _ _ childResidual childState hChildRelated =>
+      have hBody := hBodyFuture childState childResidual hChildRelated
+      simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
+        hBody
+
+/-- The recursion-specific tagged-body obligation.  It interprets matching
+variable markers as calls of the surrounding binder and resolves symbolic
+futures after the binder installs its backedges. -/
+def RecursionBodyStepCorrect
+    (signature : TypeAlphabet) (name : String) (body : PactType) : Prop :=
+  let fragment := compileTypeFuel signature
+    (typeCompilationFuel (.recur name body)) (.recur name body)
+  ∀ {state : TypeAutomatonState} {residual residual' : PactType}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
+    TypeCompilationRelation body state residual →
+    env ∈ signature.localEnvironments →
+    (DecoratedTypeTransition env
+        (residual.replaceVar name (.recur name body)) label offers residual' ↔
+      ∃ target,
+        fragment.HasResolvedEdge (.child 0 state) env label offers target ∧
+        TypeCompilationRelation (.recur name body) target residual')
+
+/-- Inversion of a decorated recursion-header transition. -/
+private theorem TypeTransition.recur_fields
+    {env : TypeEnvironment} {name : String} {body target : PactType}
+    {label : TypeLabel}
+    (hTransition : TypeTransition env (.recur name body) label target) :
+    env.WellFormed ∧ label = TypeLabel.silent ∧
+      target = body.replaceVar name (.recur name body) := by
+  cases hTransition <;> simp_all
+
+private theorem TypeOffers.recur_fields
+    {env : TypeEnvironment} {name : String} {body target : PactType}
+    {label : TypeLabel} {current future : Finset BareMessage}
+    (hOffers : TypeOffers env (.recur name body) label target current future) :
+    label = TypeLabel.silent ∧
+      target = body.replaceVar name (.recur name body) ∧
+      current = ∅ ∧
+      future = typeFutureOffers
+        (body.replaceVar name (.recur name body)) := by
+  cases hOffers <;> simp_all
+
+private theorem decoratedTypeTransition_recur_iff
+    (env : TypeEnvironment) (name : String) (body target : PactType)
+    (label : TypeLabel) (offers : TypeOfferSummary) :
+    DecoratedTypeTransition env (.recur name body) label offers target ↔
+      env.WellFormed ∧ label = TypeLabel.silent ∧
+        target = body.replaceVar name (.recur name body) ∧
+        offers.current = ∅ ∧
+        offers.future =
+          typeFutureOffers (body.replaceVar name (.recur name body)) := by
+  constructor
+  · rintro ⟨hTransition, hOffers⟩
+    have hTransitionFields := TypeTransition.recur_fields hTransition
+    have hOfferFields := TypeOffers.recur_fields hOffers
+    exact ⟨hTransitionFields.1, hTransitionFields.2.1,
+      hTransitionFields.2.2, hOfferFields.2.2.1,
+      hOfferFields.2.2.2⟩
+  · rintro ⟨hWellFormed, rfl, rfl, hCurrent, hFuture⟩
+    cases offers
+    simp only at hCurrent hFuture
+    subst_vars
+    exact ⟨TypeTransition.recur env name body hWellFormed,
+      TypeOffers.recur env name body hWellFormed⟩
+
+/-- The root-state branch of raw recursion correspondence.  Guardedness and
+tail-recursiveness enter later, when the two body invariants are established. -/
+theorem compilationFragmentStepCorrect_recursion_root
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hFuture : RecursionBodyFutureCorrect signature name body)
+    {residual' : PactType} {env : TypeEnvironment} {label : TypeLabel}
+    {offers : TypeOfferSummary}
+    (hLocalEnvironment : env ∈ signature.localEnvironments) :
+    DecoratedTypeTransition env (.recur name body) label offers residual' ↔
+      ∃ state',
+        (compileTypeFuel signature
+          (typeCompilationFuel (.recur name body))
+          (.recur name body)).HasResolvedEdge .root env label offers state' ∧
+        TypeCompilationRelation (.recur name body) state' residual' := by
+  let bodyFragment := compileTypeFuel signature (typeCompilationFuel body) body
+  let recursion := buildRecursionAutomaton signature name bodyFragment
+  let pending : PendingAutomaton :=
+    { states := recursion.states, edges := recursion.edges }
+  have hBodyInitial : TypeCompilationRelation body bodyFragment.initial body := by
+    exact compileTypeFuel_initial_relation signature
+      (typeCompilationFuel body) body
+      (typeCompilationFuel_sufficient body)
+  have hComputed : computeFuture pending (.child 0 bodyFragment.initial) =
+      typeFutureOffers (body.replaceVar name (.recur name body)) := by
+    have hAmbient := hFuture bodyFragment.initial body hBodyInitial
+    simpa [RecursionBodyFutureCorrect, bodyFragment, recursion, pending]
+      using hAmbient
+  have hFragment : compileTypeFuel signature
+      (typeCompilationFuel (.recur name body)) (.recur name body) =
+        recursion := by
+    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+    rfl
+  have hTargetRelation : TypeCompilationRelation (.recur name body)
+      (.child 0 bodyFragment.initial)
+      (body.replaceVar name (.recur name body)) :=
+    TypeCompilationRelation.recur_body name body body _ hBodyInitial
+  constructor
+  · intro hStep
+    rcases (decoratedTypeTransition_recur_iff env name body residual'
+      label offers).mp hStep with
+      ⟨hWellFormed, hLabel, hResidual, hCurrent, hOfferFuture⟩
+    subst residual'
+    refine ⟨.child 0 bodyFragment.initial, ?_, hTargetRelation⟩
+    rw [hFragment]
+    apply (buildRecursionAutomaton_root_hasResolvedEdge_iff signature name
+      bodyFragment env label offers (.child 0 bodyFragment.initial)).mpr
+    exact ⟨hLocalEnvironment, hLabel, hCurrent, hComputed.trans
+      hOfferFuture.symm, rfl⟩
+  · rintro ⟨target, hEdge, hTarget⟩
+    rw [hFragment] at hEdge
+    rcases (buildRecursionAutomaton_root_hasResolvedEdge_iff signature name
+      bodyFragment env label offers target).mp hEdge with
+      ⟨_, hLabel, hCurrent, hEdgeFuture, hTargetState⟩
+    subst target
+    have hResidual : residual' =
+        body.replaceVar name (.recur name body) :=
+      TypeCompilationRelation.residual_unique hTarget hTargetRelation
+    apply (decoratedTypeTransition_recur_iff env name body residual'
+      label offers).mpr
+    exact ⟨TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment,
+      hLabel, hResidual, hCurrent,
+      (hComputed.symm.trans hEdgeFuture).symm⟩
+
+/-- The header and tagged-body branches compose into raw recursion step
+correspondence once their two closed-graph invariants are available. -/
+theorem compilationFragmentStepCorrect_recursion
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hFuture : RecursionBodyFutureCorrect signature name body)
+    (hBodyStep : RecursionBodyStepCorrect signature name body) :
+    CompilationFragmentStepCorrect signature (.recur name body) := by
+  intro residual residual' state env label offers hRelated hLocalEnvironment
+  cases hRelated with
+  | recur_source =>
+      exact compilationFragmentStepCorrect_recursion_root signature name body
+        hFuture hLocalEnvironment
+  | recur_body _ _ childResidual childState hChildRelated =>
+      exact hBodyStep hChildRelated hLocalEnvironment
+
+/-- Raw fragment correspondence exports uniformly through the fixed public
+alphabet filter. -/
+theorem compilationStepCorrect_of_fragmentStepCorrect
+    (signature : TypeAlphabet) (processType : PactType)
+    (hRaw : CompilationFragmentStepCorrect signature processType) :
+    CompilationStepCorrect signature processType := by
+  intro residual residual' state env label offers hRelated hSymbol
+  have hSignatureSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hLocalEnvironment : env ∈ signature.localEnvironments := by
+    have hFields : env ∈ signature.environments ∧
+        label ∈ signature.labels ∧ offers ∈ signature.offerSummaries := by
+      simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
+    exact signature.environments_subset_localEnvironments hFields.1
+  have hFragment := hRaw (residual' := residual') (label := label)
+    (offers := offers) hRelated hLocalEnvironment
+  constructor
+  · intro hStep
+    rcases hFragment.mp hStep with ⟨target, hEdge, hTarget⟩
+    exact ⟨target,
+      (compileType_hasEdge_iff_hasResolvedEdge signature processType
+        state target env label offers hSignatureSymbol).mpr hEdge,
+      hTarget⟩
+  · rintro ⟨target, hEdge, hTarget⟩
+    apply hFragment.mpr
+    exact ⟨target,
+      (compileType_hasEdge_iff_hasResolvedEdge signature processType
+        state target env label offers hSignatureSymbol).mp hEdge,
+      hTarget⟩
+
+/-- Public recursion correspondence follows from the two closed-graph
+recursion invariants. -/
+theorem compilationStepCorrect_recursion
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hFuture : RecursionBodyFutureCorrect signature name body)
+    (hBodyStep : RecursionBodyStepCorrect signature name body) :
+    CompilationStepCorrect signature (.recur name body) :=
+  compilationStepCorrect_of_fragmentStepCorrect signature (.recur name body)
+    (compilationFragmentStepCorrect_recursion signature name body
+      hFuture hBodyStep)
+
 /-- Every compiled parallel edge hides immediate interface actions. -/
 theorem compileType_parallel_edge_hides_immediate_interface
     (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
@@ -2637,4 +3551,3 @@ structure ProcessAutomatonCorrespondence
 end
 
 end Pact
-

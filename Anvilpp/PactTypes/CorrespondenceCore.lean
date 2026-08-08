@@ -430,6 +430,259 @@ theorem compileType_initial_mem
   apply compileTypeFuel_initial_mem signature
   exact typeCompilationFuel_sufficient processType
 
+/-- State-carrier side of the compiler relation.  Future embeddings need this
+independently of the semantic equality: saturation stability is stated for a
+declared child state. -/
+def CompilationStateCorrect
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  ∀ state residual,
+    TypeCompilationRelation processType state residual →
+      state ∈ (compileTypeFuel signature
+        (typeCompilationFuel processType) processType).states
+
+private theorem childState_mem_indexedFragmentStates
+    (automata : List (BareMessage × AutomatonFragment))
+    (index : Nat) (entry : BareMessage × AutomatonFragment)
+    (hEntry : automata[index]? = some entry)
+    (state : TypeAutomatonState) (hState : state ∈ entry.2.states) :
+    childState (index + 1) state ∈ indexedFragmentStates automata := by
+  classical
+  rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
+  have hZipBound : index < automata.zipIdx.length := by
+    simpa using hBound
+  have hIndexed : (entry, index) ∈ automata.zipIdx := by
+    have hMember := List.getElem_mem hZipBound
+    have hAt := List.getElem_zipIdx (l := automata) (i := index)
+      (j := 0) hZipBound
+    simp only [zero_add] at hAt
+    rw [hAt, hValue] at hMember
+    exact hMember
+  rw [indexedFragmentStates, mem_foldl_union_iff]
+  right
+  refine ⟨(entry, index), hIndexed, ?_⟩
+  simp [childStates, childState, hState]
+
+/-- Every state named by `TypeCompilationRelation` belongs to the matching
+sufficiently fuelled compiler fragment.  This carrier invariant is independent
+of future semantics and is shared by every constructor embedding. -/
+private theorem compileTypeFuel_relation_state_mem
+    (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      ∀ state residual,
+        TypeCompilationRelation processType state residual →
+          state ∈ (compileTypeFuel signature fuel processType).states := by
+  classical
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel state residual hRelated
+      cases hRelated with
+      | skip =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | message_source msg dir =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | message_final msg dir =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | cycle_source =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | cycle_final =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | progress_source pid =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | progress_final pid =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | «variable» name =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | recur_source name body =>
+          simp [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment]
+      | recur_body name body childResidual childQ hChildRelated =>
+          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih body hBodyFuel childQ childResidual
+            hChildRelated
+          simpa [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | choice_source left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | choice_left left right _ childQ hChildRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | choice_right left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | fair_source bid left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | fair_left bid left right _ childQ hChildRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | fair_right bid left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | sequence_left left right childResidual childQ hChildRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel childQ childResidual
+            hChildRelated
+          have hTagged : childState 0 childQ ∈
+              childStates 0 (compileTypeFuel signature fuel left) := by
+            exact Finset.mem_image.mpr ⟨childQ, hChild, rfl⟩
+          rw [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment]
+          change childState 0 childQ ∈
+            (childStates 0 (compileTypeFuel signature fuel left) ∪
+              (compileTypeFuel signature fuel left).edges.image
+                (fun edge => childState 0 edge.target)) ∪
+              childStates 1 (compileTypeFuel signature fuel right)
+          simp only [Finset.mem_union]
+          exact Or.inl (Or.inl hTagged)
+      | sequence_right left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | parallel left right leftResidual rightResidual interface leftState
+          rightState hLeftRelated hRightRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeft := ih left hLeftFuel leftState leftResidual hLeftRelated
+          have hRight := ih right hRightFuel rightState rightResidual
+            hRightRelated
+          simp [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, hLeft, hRight]
+      | xoffer_source elseType branches =>
+          simp [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+      | xoffer_else elseType _ branches childQ hChildRelated =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih elseType hElseFuel childQ residual
+            hChildRelated
+          have hTagged : childState 0 childQ ∈
+              childStates 0 (compileTypeFuel signature fuel elseType) := by
+            exact Finset.mem_image.mpr ⟨childQ, hChild, rfl⟩
+          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+          change childState 0 childQ ∈
+            ({TypeAutomatonState.root} ∪
+              childStates 0 (compileTypeFuel signature fuel elseType)) ∪
+                indexedFragmentStates
+                  (branches.map fun branch =>
+                    (branch.1, compileTypeFuel signature fuel branch.2))
+          simp only [Finset.mem_union]
+          exact Or.inl (Or.inr hTagged)
+      | xoffer_branch elseType branchType _ branches action index
+          childQ hEntry hChildRelated =>
+          have hBranchesFuel : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hBranchMem : (action, branchType) ∈ branches := by
+            rcases List.getElem?_eq_some_iff.mp hEntry with
+              ⟨hBound, hValue⟩
+            have hMember := List.getElem_mem hBound
+            simpa [hValue] using hMember
+          have hBranchFuel : TypeCompilationFuelSufficient branchType fuel :=
+            le_trans
+              (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                (action, branchType) hBranchMem)
+              hBranchesFuel
+          have hChild := ih branchType hBranchFuel childQ residual
+            hChildRelated
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          have hAutomatonEntry : branchAutomata[index]? =
+              some (action, compileTypeFuel signature fuel branchType) := by
+            simp [branchAutomata, hEntry]
+          have hIndexed := childState_mem_indexedFragmentStates branchAutomata
+            index (action, compileTypeFuel signature fuel branchType)
+            hAutomatonEntry childQ hChild
+          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+          change childState (index + 1) childQ ∈
+            ({TypeAutomatonState.root} ∪
+              childStates 0 (compileTypeFuel signature fuel elseType)) ∪
+                indexedFragmentStates branchAutomata
+          simp only [Finset.mem_union]
+          exact Or.inr hIndexed
+      | offer_source elseType branches =>
+          simp [compileTypeFuel, buildConjunctiveOfferAutomaton,
+            finishAutomatonFragment]
+      | offer_branches elseType _ branches childQ
+          hChildRelated =>
+          have hConjunctionFuel : TypeCompilationFuelSufficient
+              (parallelTypeBranches branches) fuel := by
+            rw [TypeCompilationFuelSufficient,
+              typeCompilationFuel_parallelTypeBranches]
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hChild := ih (parallelTypeBranches branches) hConjunctionFuel
+            childQ residual hChildRelated
+          simpa [compileTypeFuel, buildConjunctiveOfferAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+      | offer_else elseType _ branches childQ hChildRelated =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih elseType hElseFuel childQ residual
+            hChildRelated
+          simpa [compileTypeFuel, buildConjunctiveOfferAutomaton,
+            finishAutomatonFragment, childStates, childState] using hChild
+
+theorem compilationStateCorrect_of_compilation
+    (signature : TypeAlphabet) (processType : PactType) :
+    CompilationStateCorrect signature processType := by
+  exact compileTypeFuel_relation_state_mem signature
+    (typeCompilationFuel processType) processType
+    (typeCompilationFuel_sufficient processType)
+
 /-- Graph future resolution agrees with syntactic same-cycle future offers at
 every state/residual represented by the final pending compilation fragment. -/
 def CompilationFutureCorrect
@@ -2262,4 +2515,3 @@ theorem compileType_progress_correspondence
 end
 
 end Pact
-

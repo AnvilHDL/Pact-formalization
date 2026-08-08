@@ -1542,6 +1542,67 @@ decreasing_by
 def typeFutureOffers (processType : PactType) : Finset BareMessage :=
   typeFutureOffersFuel (sizeOf processType + 1) processType
 
+/-- Any fuel budget covering the syntax computes the same public future menu. -/
+theorem typeFutureOffersFuel_eq_typeFutureOffers
+    (processType : PactType) (fuel : Nat)
+    (hFuel : sizeOf processType + 1 ≤ fuel) :
+    typeFutureOffersFuel fuel processType = typeFutureOffers processType := by
+  obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hFuel
+  unfold typeFutureOffers
+  exact typeFutureOffersFuel_add_stable processType
+    (sizeOf processType + 1) extra (by omega)
+
+/-- Syntax-derived futures distribute over ordinary choice. -/
+theorem typeFutureOffers_choice (left right : PactType) :
+    typeFutureOffers (.choice left right) =
+      typeFutureOffers left ∪ typeFutureOffers right := by
+  have hLeftFuel : sizeOf left + 1 ≤
+      sizeOf (PactType.choice left right) := by
+    change sizeOf left + 1 ≤ 1 + sizeOf left + sizeOf right
+    omega
+  have hRightFuel : sizeOf right + 1 ≤
+      sizeOf (PactType.choice left right) := by
+    change sizeOf right + 1 ≤ 1 + sizeOf left + sizeOf right
+    omega
+  change typeFutureOffersFuel
+      (sizeOf (PactType.choice left right) + 1)
+      (PactType.choice left right) = _
+  simp only [typeFutureOffersFuel]
+  rw [typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
+    typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
+
+/-- Syntax-derived futures distribute over fair choice. -/
+theorem typeFutureOffers_fairChoice
+    (bid : BranchId) (left right : PactType) :
+    typeFutureOffers (.fairChoice bid left right) =
+      typeFutureOffers left ∪ typeFutureOffers right := by
+  have hLeftFuel : sizeOf left + 1 ≤
+      sizeOf (PactType.fairChoice bid left right) := by
+    change sizeOf left + 1 ≤ 1 + bid + sizeOf left + sizeOf right
+    omega
+  have hRightFuel : sizeOf right + 1 ≤
+      sizeOf (PactType.fairChoice bid left right) := by
+    change sizeOf right + 1 ≤ 1 + bid + sizeOf left + sizeOf right
+    omega
+  change typeFutureOffersFuel
+      (sizeOf (PactType.fairChoice bid left right) + 1)
+      (PactType.fairChoice bid left right) = _
+  simp only [typeFutureOffersFuel]
+  rw [typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
+    typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
+
+/-- A recursion binder exposes the same syntactic same-cycle future menu as
+its body; guardedness is used separately when replacing recursive calls. -/
+theorem typeFutureOffers_recur (name : String) (body : PactType) :
+    typeFutureOffers (.recur name body) = typeFutureOffers body := by
+  have hBodyFuel : sizeOf body + 1 ≤ sizeOf (PactType.recur name body) := by
+    simp_wf
+    omega
+  change typeFutureOffersFuel (sizeOf (PactType.recur name body) + 1)
+      (PactType.recur name body) = _
+  simp only [typeFutureOffersFuel]
+  rw [typeFutureOffersFuel_eq_typeFutureOffers body _ hBodyFuel]
+
 /-- Unfolding a clock-guarded recursive variable preserves the public
 same-cycle future-offer menu. -/
 theorem guardedOccurrences_replace_typeFutureOffers_recur
