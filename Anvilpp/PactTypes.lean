@@ -10,7 +10,7 @@ split by dependency layer:
 * `Anvilpp.PactTypes.Automata`: finite constructor automata and compilation;
 * `Anvilpp.PactTypes.CorrespondenceCore`: relation invariants and atomic cases;
 * `Anvilpp.PactTypes.CorrespondenceCombinators`: choice, fair choice,
-  sequencing, recursion, and closing correspondence lemmas.
+  sequencing, parallel futures, recursion, and closing correspondence lemmas.
 
 Importing `Anvilpp.PactTypes` preserves the original public API.
 -/

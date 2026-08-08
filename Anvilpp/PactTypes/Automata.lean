@@ -231,10 +231,13 @@ inductive TypeAutomatonState : Type where
 /--
 Visible labels become part of the final automaton. Variable labels are
 temporary back-edge markers consumed when compiling the matching binder.
+Future-observation labels are internal edges used only by `computeFuture`;
+they retain optimistic component offers without becoming semantic steps.
 -/
 inductive AutomatonConstructionLabel : Type where
   | visible : TypeLabel → AutomatonConstructionLabel
   | variable : String → AutomatonConstructionLabel
+  | future : AutomatonConstructionLabel
   deriving DecidableEq
 
 /--
@@ -274,6 +277,10 @@ structure AutomatonFragment : Type where
   accepting : Finset TypeAutomatonState
   /-- States whose represented semantic residual is literally `skip`. -/
   skipping : Finset TypeAutomatonState
+  /-- States whose represented residual may optimistically finish before the
+  next clock.  Unlike `skipping`, this is analysis metadata rather than a
+  source of semantic administrative transitions. -/
+  completing : Finset TypeAutomatonState
   edges : Finset PendingAutomatonEdge
 
 /-- Every symbolic future reference in a fragment points to a declared state. -/
@@ -303,15 +310,62 @@ namespace AutomatonConstructionLabel
   def semantic : AutomatonConstructionLabel → TypeLabel
     | .visible label => label
     | .variable _ => TypeLabel.silent
+    | .future => TypeLabel.silent
 
   /-- Combine product labels while preserving an unresolved recursion marker. -/
   def combine (interface : Interface)
       (left right : AutomatonConstructionLabel) : AutomatonConstructionLabel :=
     match left, right with
+    | .future, _ => .future
+    | _, .future => .future
     | .variable name, _ => .variable name
     | _, .variable name => .variable name
     | .visible leftLabel, .visible rightLabel =>
         .visible (TypeLabel.combine interface leftLabel rightLabel)
+
+  /-- A synchronized non-clock product edge cannot hide a clock edge in
+  either component. -/
+  theorem component_nonclock_of_sync
+      (interface : Interface) (left right : AutomatonConstructionLabel)
+      (hSync : TypeLabel.Sync interface left.semantic right.semantic)
+      (hCombined : (combine interface left right).semantic ≠ TypeLabel.tock) :
+      left.semantic ≠ TypeLabel.tock ∧ right.semantic ≠ TypeLabel.tock := by
+    have hClockIff : left.semantic = TypeLabel.tock ↔
+        right.semantic = TypeLabel.tock := by
+      have hIsTock := hSync.2.2
+      cases hLeft : left.semantic <;> cases hRight : right.semantic <;>
+        simp [TypeLabel.isTock, hLeft, hRight] at hIsTock ⊢
+    constructor
+    · intro hLeft
+      have hRight := hClockIff.mp hLeft
+      cases left with
+      | visible leftLabel =>
+          simp only [semantic] at hLeft
+          subst leftLabel
+          cases right with
+          | visible rightLabel =>
+              simp only [semantic] at hRight
+              subst rightLabel
+              exact hCombined rfl
+          | «variable» name => simp [semantic, TypeLabel.silent] at hRight
+          | future => simp [semantic, TypeLabel.silent] at hRight
+      | «variable» name => simp [semantic, TypeLabel.silent] at hLeft
+      | future => simp [semantic, TypeLabel.silent] at hLeft
+    · intro hRight
+      have hLeft := hClockIff.mpr hRight
+      cases left with
+      | visible leftLabel =>
+          simp only [semantic] at hLeft
+          subst leftLabel
+          cases right with
+          | visible rightLabel =>
+              simp only [semantic] at hRight
+              subst rightLabel
+              exact hCombined rfl
+          | «variable» name => simp [semantic, TypeLabel.silent] at hRight
+          | future => simp [semantic, TypeLabel.silent] at hRight
+      | «variable» name => simp [semantic, TypeLabel.silent] at hLeft
+      | future => simp [semantic, TypeLabel.silent] at hLeft
 
 end AutomatonConstructionLabel
 
@@ -876,12 +930,13 @@ theorem computeFuture_changes_when_recursion_backedge_is_installed :
 /-- Package a constructor graph without resolving its future references. -/
 def finishAutomatonFragment
     (states : Finset TypeAutomatonState) (initial : TypeAutomatonState)
-    (accepting skipping : Finset TypeAutomatonState)
+    (accepting skipping completing : Finset TypeAutomatonState)
     (edges : Finset PendingAutomatonEdge) : AutomatonFragment :=
   { states := states
     initial := initial
     accepting := accepting
     skipping := skipping
+    completing := completing
     edges := edges }
 
 /-- Resolve future fields against all states and edges currently in a fragment. -/
@@ -901,6 +956,52 @@ def resolvedAutomatonEdges
         future := resolvedFuture
         target := edge.target }
 
+/-- The current and resolved future fields of a non-clock edge are already
+contained in the same-cycle menu at its source.  Removing offers from an
+`at` decoration can only make the resolved edge smaller than the graph
+fixed point. -/
+theorem resolvedAutomatonEdge_offers_subset_computeFuture
+    (fragment : AutomatonFragment) (edge : AutomatonFragmentEdge)
+    (hEdge : edge ∈ resolvedAutomatonEdges fragment)
+    (hClosed : ({ states := fragment.states, edges := fragment.edges } :
+      PendingAutomaton).ReferencesClosed)
+    (hSource : edge.source ∈ fragment.states)
+    (hNonClock : edge.label.semantic ≠ TypeLabel.tock) :
+    edge.current ∪ edge.future ⊆
+      computeFuture { states := fragment.states, edges := fragment.edges }
+        edge.source := by
+  classical
+  let pending : PendingAutomaton :=
+    { states := fragment.states, edges := fragment.edges }
+  rw [computeFuture_unfold pending edge.source hClosed hSource]
+  simp only [resolvedAutomatonEdges, Finset.mem_image] at hEdge
+  rcases hEdge with ⟨raw, hRaw, rfl⟩
+  intro action hAction
+  simp only [Finset.mem_union, Finset.mem_biUnion]
+  cases hSpec : raw.future with
+  | explicit future =>
+      simp only [hSpec] at hAction hNonClock ⊢
+      left
+      simp only [pending, PendingAutomaton.offersAt,
+        Finset.mem_biUnion, Finset.mem_filter]
+      refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
+      simpa [hSpec, hNonClock] using hAction
+  | «at» target removed =>
+      simp only [hSpec] at hAction hNonClock ⊢
+      rcases Finset.mem_union.mp hAction with hCurrent | hFuture
+      · left
+        simp only [pending, PendingAutomaton.offersAt,
+          Finset.mem_biUnion, Finset.mem_filter]
+        refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
+        simp [hSpec, hNonClock, hCurrent]
+      · right
+        refine ⟨target, ?_, ?_⟩
+        · simp only [pending, PendingAutomaton.referencedStates,
+            Finset.mem_biUnion, Finset.mem_filter]
+          refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
+          simp [hSpec, hNonClock]
+        · exact (Finset.mem_sdiff.mp hFuture).1
+
 def childState (index : Nat) (state : TypeAutomatonState) :
     TypeAutomatonState := .child index state
 
@@ -915,6 +1016,10 @@ private def childAccepting (index : Nat) (automaton : AutomatonFragment) :
 def childSkipping (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=
   automaton.skipping.image (childState index)
+
+def childCompleting (index : Nat) (automaton : AutomatonFragment) :
+    Finset TypeAutomatonState :=
+  automaton.completing.image (childState index)
 
 def childFutureSpec (index : Nat) : FutureSpec → FutureSpec
   | .explicit offers => .explicit offers
@@ -1083,6 +1188,14 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
   let states := {TypeAutomatonState.root} ∪ childStates 0 body
   let accepting := childAccepting 0 body
   let skipping := childSkipping 0 body
+  let recursiveCallSources :=
+    (body.edges.filter fun edge => edge.label = .variable name).image
+      fun edge => childState 0 edge.source
+  let completing :=
+    (if body.initial ∈ body.completing then
+      {TypeAutomatonState.root} ∪ recursiveCallSources
+    else ∅) ∪
+      childCompleting 0 body
   let headerEdges : Finset PendingAutomatonEdge :=
     signature.localEnvironments.image fun environment =>
       { source := TypeAutomatonState.root
@@ -1106,7 +1219,8 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
         current := edge.current
         future := childFutureSpec 0 edge.future
         target := childState 0 edge.target }
-  finishAutomatonFragment states .root accepting skipping (headerEdges ∪ bodyEdges)
+  finishAutomatonFragment states .root accepting skipping completing
+    (headerEdges ∪ bodyEdges)
 
 theorem buildRecursionAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
@@ -1154,6 +1268,10 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
   let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 0 left ∪ childAccepting 1 right
   let skipping := childSkipping 0 left ∪ childSkipping 1 right
+  let completing :=
+    (if left.initial ∈ left.completing ∨ right.initial ∈ right.completing then
+      {TypeAutomatonState.root}
+    else ∅) ∪ childCompleting 0 left ∪ childCompleting 1 right
   let selections := signature.localEnvironments.biUnion fun environment =>
     { { source := TypeAutomatonState.root
         environment := environment
@@ -1167,7 +1285,7 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 1 right.initial) ∅
         target := childState 1 right.initial } }
-  finishAutomatonFragment states .root accepting skipping
+  finishAutomatonFragment states .root accepting skipping completing
     (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
 
 theorem buildChoiceAutomaton_outgoing_left
@@ -1457,12 +1575,17 @@ def buildSequenceAutomaton (signature : TypeAlphabet)
     childStates 1 right
   let accepting := childAccepting 1 right
   let skipping := childSkipping 1 right
+  let completing :=
+    (if right.initial ∈ right.completing then childCompleting 0 left else ∅) ∪
+      childCompleting 1 right
   let leftEdges : Finset PendingAutomatonEdge := left.edges.image fun edge =>
     { source := childState 0 edge.source
       environment := edge.environment
       label := edge.label
       current := edge.current
-      future := .at (childState 0 edge.target) edge.current
+      future := match edge.label with
+        | .future => childFutureSpec 0 edge.future
+        | _ => .at (childState 0 edge.target) edge.current
       target := childState 0 edge.target }
   let bridgeEdges : Finset PendingAutomatonEdge :=
     left.skipping.biUnion fun state =>
@@ -1473,8 +1596,17 @@ def buildSequenceAutomaton (signature : TypeAlphabet)
           current := ∅
           future := .at (childState 1 right.initial) ∅
           target := childState 1 right.initial }
+  let futureBridgeEdges : Finset PendingAutomatonEdge :=
+    left.completing.image fun state =>
+      { source := childState 0 state
+        environment := .empty
+        label := .future
+        current := ∅
+        future := .at (childState 1 right.initial) ∅
+        target := childState 0 state }
   finishAutomatonFragment states (childState 0 left.initial) accepting skipping
-    (leftEdges ∪ childPendingEdges 1 right ∪ bridgeEdges)
+    completing
+    (leftEdges ∪ childPendingEdges 1 right ∪ bridgeEdges ∪ futureBridgeEdges)
 
 theorem buildSequenceAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (left right : AutomatonFragment)
@@ -1487,14 +1619,36 @@ theorem buildSequenceAutomaton_futureTargetsInStates
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     childPendingEdges, Finset.mem_union, Finset.mem_image,
     Finset.mem_biUnion] at hEdge
-  rcases hEdge with (hLeft | hRight) | hBridge
+  rcases hEdge with ((hLeft | hRight) | hBridge) | hFutureBridge
   · rcases hLeft with ⟨leftEdge, hLeftEdge, rfl⟩
-    cases hFuture
-    simp only [buildSequenceAutomaton, finishAutomatonFragment,
-      Finset.mem_union, Finset.mem_image]
-    left
-    right
-    exact ⟨leftEdge, hLeftEdge, rfl⟩
+    cases hLabel : leftEdge.label with
+    | future =>
+        cases hSpec : leftEdge.future with
+        | explicit offers =>
+            simp [hLabel, childFutureSpec, hSpec] at hFuture
+        | «at» childTarget childRemoved =>
+            simp only [hLabel, childFutureSpec, hSpec] at hFuture
+            cases hFuture
+            have hChildTarget := _hLeftTargets leftEdge hLeftEdge
+              childTarget removed hSpec
+            simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
+              childState, hChildTarget]
+    | visible label =>
+        simp only [hLabel] at hFuture
+        cases hFuture
+        simp only [buildSequenceAutomaton, finishAutomatonFragment,
+          Finset.mem_union, Finset.mem_image]
+        left
+        right
+        exact ⟨leftEdge, hLeftEdge, rfl⟩
+    | «variable» name =>
+        simp only [hLabel] at hFuture
+        cases hFuture
+        simp only [buildSequenceAutomaton, finishAutomatonFragment,
+          Finset.mem_union, Finset.mem_image]
+        left
+        right
+        exact ⟨leftEdge, hLeftEdge, rfl⟩
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with
     | explicit offers =>
@@ -1507,6 +1661,11 @@ theorem buildSequenceAutomaton_futureTargetsInStates
         simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
           childState, hRightTarget]
   · rcases hBridge with ⟨leftState, hLeftSkipping, environment, _, rfl⟩
+    simp only at hFuture
+    cases hFuture
+    simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
+      childState, hRightInitial]
+  · rcases hFutureBridge with ⟨leftState, hLeftCompleting, rfl⟩
     simp only at hFuture
     cases hFuture
     simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
@@ -1543,6 +1702,7 @@ private def restrictReachableFragment (automaton : AutomatonFragment) :
     initial := automaton.initial
     accepting := automaton.accepting.filter fun state => state ∈ reachable
     skipping := automaton.skipping.filter fun state => state ∈ reachable
+    completing := automaton.completing.filter fun state => state ∈ reachable
     edges := automaton.edges.filter fun edge =>
       edge.source ∈ reachable ∧ edge.target ∈ reachable }
 
@@ -1550,17 +1710,28 @@ private def restrictReachableFragment (automaton : AutomatonFragment) :
 Build a synchronized parallel product.
 
 `Q = Q₁ × Q₂`, the initial state is `(i₁,i₂)`, and accepting states are pairs
-of accepting component states. Only pairs of synchronizing edges are retained;
-their interface actions are hidden before the resulting edge is exposed.  The
-full finite Cartesian carrier is retained: `TypeCompilationRelation` also
-relates syntactic product pairs that are unreachable from the initial pair,
-and its step correspondence is intentionally valid at those states as well.
+of accepting component states. Pairs of synchronizing transition edges are
+retained as semantic edges, with their interface actions hidden. In addition,
+each product state receives non-exported observation self-loops containing the
+two component `computeFuture` menus. These internal edges preserve optimistic
+same-cycle offers such as
+the `{b!}` continuation of `skip |[{a}]| (a! ; b!)` without inventing a
+semantic parallel step. The full finite Cartesian carrier is retained:
+`TypeCompilationRelation` also relates syntactic product pairs that are
+unreachable from the initial pair, and its step correspondence is intentionally
+valid at those states as well.
 -/
 def buildParallelAutomaton (interface : Interface)
     (left right : AutomatonFragment) : AutomatonFragment := by
   classical
-  let leftEdges := resolvedAutomatonEdges left
-  let rightEdges := resolvedAutomatonEdges right
+  let allLeftEdges := resolvedAutomatonEdges left
+  let allRightEdges := resolvedAutomatonEdges right
+  let leftEdges := allLeftEdges.filter fun edge => edge.label ≠ .future
+  let rightEdges := allRightEdges.filter fun edge => edge.label ≠ .future
+  let leftPending : PendingAutomaton :=
+    { states := left.states, edges := left.edges }
+  let rightPending : PendingAutomaton :=
+    { states := right.states, edges := right.edges }
   let states : Finset TypeAutomatonState :=
     left.states.biUnion fun leftState =>
       right.states.image fun rightState =>
@@ -1569,7 +1740,12 @@ def buildParallelAutomaton (interface : Interface)
     left.accepting.biUnion fun leftState =>
       right.accepting.image fun rightState =>
         TypeAutomatonState.pair leftState rightState
-  let edges : Finset PendingAutomatonEdge := leftEdges.biUnion fun leftEdge =>
+  let completing : Finset TypeAutomatonState :=
+    left.completing.biUnion fun leftState =>
+      right.completing.image fun rightState =>
+        TypeAutomatonState.pair leftState rightState
+  let transitionEdges : Finset PendingAutomatonEdge :=
+    leftEdges.biUnion fun leftEdge =>
     (rightEdges.filter fun rightEdge =>
       syncAutomatonEdges interface leftEdges rightEdges
         leftEdge rightEdge).image fun rightEdge =>
@@ -1582,8 +1758,27 @@ def buildParallelAutomaton (interface : Interface)
           future := .explicit
             (hideOffers interface (leftEdge.future ∪ rightEdge.future))
           target := .pair leftEdge.target rightEdge.target }
+  let leftFutureEdges : Finset PendingAutomatonEdge :=
+    left.states.biUnion fun leftState =>
+      right.states.image fun rightState =>
+        { source := .pair leftState rightState
+          environment := .empty
+          label := .future
+          current := hideOffers interface (computeFuture leftPending leftState)
+          future := .explicit ∅
+          target := .pair leftState rightState }
+  let rightFutureEdges : Finset PendingAutomatonEdge :=
+    left.states.biUnion fun leftState =>
+      right.states.image fun rightState =>
+        { source := .pair leftState rightState
+          environment := .empty
+          label := .future
+          current := hideOffers interface (computeFuture rightPending rightState)
+          future := .explicit ∅
+          target := .pair leftState rightState }
   let product := finishAutomatonFragment
-    states (.pair left.initial right.initial) accepting ∅ edges
+    states (.pair left.initial right.initial) accepting ∅ completing
+      (transitionEdges ∪ (leftFutureEdges ∪ rightFutureEdges))
   exact product
 
 theorem buildParallelAutomaton_futureTargetsInStates
@@ -1592,9 +1787,252 @@ theorem buildParallelAutomaton_futureTargetsInStates
   classical
   intro edge hEdge target removed hFuture
   simp only [buildParallelAutomaton, finishAutomatonFragment,
-    Finset.mem_biUnion, Finset.mem_image, Finset.mem_filter] at hEdge
-  rcases hEdge with ⟨leftEdge, _, rightEdge, _, rfl⟩
-  simp at hFuture
+    Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
+    Finset.mem_filter] at hEdge
+  rcases hEdge with hTransition | hObservation
+  · rcases hTransition with ⟨leftEdge, _, rightEdge, _, rfl⟩
+    simp at hFuture
+  · rcases hObservation with hLeft | hRight
+    · rcases hLeft with ⟨leftEdge, _, rightState, _, rfl⟩
+      simp at hFuture
+    · rcases hRight with ⟨leftState, _, rightEdge, _, rfl⟩
+      simp at hFuture
+
+/-- Every offer reachable in the left component during the current cycle is
+retained at the corresponding product state, independently of whether that
+component currently has a synchronizable transition. -/
+theorem buildParallelAutomaton_leftFuture_subset
+    (interface : Interface) (left right : AutomatonFragment)
+    (leftState rightState : TypeAutomatonState)
+    (hLeftState : leftState ∈ left.states)
+    (hRightState : rightState ∈ right.states) :
+    hideOffers interface
+        (computeFuture { states := left.states, edges := left.edges } leftState) ⊆
+      computeFuture
+        { states := (buildParallelAutomaton interface left right).states
+          edges := (buildParallelAutomaton interface left right).edges }
+        (.pair leftState rightState) := by
+  classical
+  let product := buildParallelAutomaton interface left right
+  let productPending : PendingAutomaton :=
+    { states := product.states, edges := product.edges }
+  have hExplicit : ∀ edge ∈ productPending.edges,
+      ∃ offers, edge.future = .explicit offers := by
+    intro edge hEdge
+    simp only [productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+      Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with hTransition | hObservation
+    · rcases hTransition with ⟨leftEdge, _, rightEdge, _, rfl⟩
+      exact ⟨_, rfl⟩
+    · rcases hObservation with hLeft | hRight
+      · rcases hLeft with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+      · rcases hRight with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+  rw [show computeFuture
+      { states := (buildParallelAutomaton interface left right).states
+        edges := (buildParallelAutomaton interface left right).edges }
+      (.pair leftState rightState) = productPending.offersAt
+        (.pair leftState rightState) by
+      exact computeFuture_eq_offersAt_of_all_explicit productPending hExplicit _]
+  intro action hAction
+  simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+    Finset.mem_filter]
+  let observation : PendingAutomatonEdge :=
+    { source := .pair leftState rightState
+      environment := .empty
+      label := .future
+      current := hideOffers interface
+        (computeFuture { states := left.states, edges := left.edges } leftState)
+      future := .explicit ∅
+      target := .pair leftState rightState }
+  refine ⟨observation, ⟨?_, rfl⟩, ?_⟩
+  · simp [observation, productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, hLeftState, hRightState]
+  · simpa [observation, AutomatonConstructionLabel.semantic] using hAction
+
+/-- Symmetric optimistic-future preservation for the right component. -/
+theorem buildParallelAutomaton_rightFuture_subset
+    (interface : Interface) (left right : AutomatonFragment)
+    (leftState rightState : TypeAutomatonState)
+    (hLeftState : leftState ∈ left.states)
+    (hRightState : rightState ∈ right.states) :
+    hideOffers interface
+        (computeFuture { states := right.states, edges := right.edges } rightState) ⊆
+      computeFuture
+        { states := (buildParallelAutomaton interface left right).states
+          edges := (buildParallelAutomaton interface left right).edges }
+        (.pair leftState rightState) := by
+  classical
+  let product := buildParallelAutomaton interface left right
+  let productPending : PendingAutomaton :=
+    { states := product.states, edges := product.edges }
+  have hExplicit : ∀ edge ∈ productPending.edges,
+      ∃ offers, edge.future = .explicit offers := by
+    intro edge hEdge
+    simp only [productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+      Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with hTransition | hObservation
+    · rcases hTransition with ⟨leftEdge, _, rightEdge, _, rfl⟩
+      exact ⟨_, rfl⟩
+    · rcases hObservation with hLeft | hRight
+      · rcases hLeft with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+      · rcases hRight with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+  rw [show computeFuture
+      { states := (buildParallelAutomaton interface left right).states
+        edges := (buildParallelAutomaton interface left right).edges }
+      (.pair leftState rightState) = productPending.offersAt
+        (.pair leftState rightState) by
+      exact computeFuture_eq_offersAt_of_all_explicit productPending hExplicit _]
+  intro action hAction
+  simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+    Finset.mem_filter]
+  let observation : PendingAutomatonEdge :=
+    { source := .pair leftState rightState
+      environment := .empty
+      label := .future
+      current := hideOffers interface
+        (computeFuture { states := right.states, edges := right.edges } rightState)
+      future := .explicit ∅
+      target := .pair leftState rightState }
+  refine ⟨observation, ⟨?_, rfl⟩, ?_⟩
+  · simp [observation, productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, hLeftState, hRightState]
+  · simpa [observation, AutomatonConstructionLabel.semantic] using hAction
+
+/-- The future menu of a product state is exactly the hidden union of the two
+component menus.  Synchronization controls semantic transitions, but does not
+discard optimistic same-cycle continuations from either component. -/
+theorem buildParallelAutomaton_computeFuture
+    (interface : Interface) (left right : AutomatonFragment)
+    (leftState rightState : TypeAutomatonState)
+    (hLeftState : leftState ∈ left.states)
+    (hRightState : rightState ∈ right.states)
+    (hLeftTargets : left.FutureTargetsInStates)
+    (hRightTargets : right.FutureTargetsInStates) :
+    computeFuture
+        { states := (buildParallelAutomaton interface left right).states
+          edges := (buildParallelAutomaton interface left right).edges }
+        (.pair leftState rightState) =
+      hideOffers interface
+        (computeFuture { states := left.states, edges := left.edges } leftState ∪
+          computeFuture { states := right.states, edges := right.edges }
+            rightState) := by
+  classical
+  let leftPending : PendingAutomaton :=
+    { states := left.states, edges := left.edges }
+  let rightPending : PendingAutomaton :=
+    { states := right.states, edges := right.edges }
+  let product := buildParallelAutomaton interface left right
+  let productPending : PendingAutomaton :=
+    { states := product.states, edges := product.edges }
+  have hLeftClosed : leftPending.ReferencesClosed :=
+    PendingAutomaton.referencesClosed_of_futureTargetsInStates left hLeftTargets
+  have hRightClosed : rightPending.ReferencesClosed :=
+    PendingAutomaton.referencesClosed_of_futureTargetsInStates right hRightTargets
+  have hExplicit : ∀ edge ∈ productPending.edges,
+      ∃ offers, edge.future = .explicit offers := by
+    intro edge hEdge
+    simp only [productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+      Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with hTransition | hObservation
+    · rcases hTransition with ⟨leftEdge, _, rightEdge, _, rfl⟩
+      exact ⟨_, rfl⟩
+    · rcases hObservation with hLeft | hRight
+      · rcases hLeft with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+      · rcases hRight with ⟨leftSource, _, rightSource, _, rfl⟩
+        exact ⟨_, rfl⟩
+  change computeFuture productPending (.pair leftState rightState) = _
+  rw [computeFuture_eq_offersAt_of_all_explicit productPending hExplicit]
+  apply Finset.Subset.antisymm
+  · intro action hAction
+    simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+      Finset.mem_filter] at hAction
+    rcases hAction with ⟨edge, ⟨hEdge, hSource⟩, hOffer⟩
+    simp only [productPending, product, buildParallelAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+      Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with hTransition | hObservation
+    · rcases hTransition with
+        ⟨leftEdge, ⟨hLeftEdge, _⟩, rightEdge,
+          ⟨⟨hRightEdge, _⟩, hSync⟩, rfl⟩
+      injection hSource with hLeftSource hRightSource
+      subst leftState
+      subst rightState
+      by_cases hClock :
+          (AutomatonConstructionLabel.combine interface leftEdge.label
+            rightEdge.label).semantic = TypeLabel.tock
+      · simp [hClock] at hOffer
+      · simp only [hClock, if_false, FutureSpec.explicit,
+          Finset.mem_union] at hOffer
+        rcases hSync with
+          ⟨leftWitness, _, rightWitness, _, hWitnesses⟩
+        have hLabelSync : TypeLabel.Sync interface leftEdge.label.semantic
+            rightEdge.label.semantic := by
+          exact hWitnesses.2.2.2
+        have hNonClock :=
+          AutomatonConstructionLabel.component_nonclock_of_sync interface
+            leftEdge.label rightEdge.label hLabelSync hClock
+        have hLeftSubset :=
+          resolvedAutomatonEdge_offers_subset_computeFuture left leftEdge
+            hLeftEdge hLeftClosed hLeftState hNonClock.1
+        have hRightSubset :=
+          resolvedAutomatonEdge_offers_subset_computeFuture right rightEdge
+            hRightEdge hRightClosed hRightState hNonClock.2
+        simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hOffer ⊢
+        rcases hOffer with hCurrent | hFuture
+        · rcases hCurrent with ⟨hLeft | hRight, hOutside⟩
+          · exact ⟨Or.inl (hLeftSubset (Finset.mem_union_left _ hLeft)), hOutside⟩
+          · exact ⟨Or.inr (hRightSubset (Finset.mem_union_left _ hRight)), hOutside⟩
+        · rcases hFuture with ⟨hLeft | hRight, hOutside⟩
+          · exact ⟨Or.inl (hLeftSubset (Finset.mem_union_right _ hLeft)), hOutside⟩
+          · exact ⟨Or.inr (hRightSubset (Finset.mem_union_right _ hRight)), hOutside⟩
+    · rcases hObservation with hLeft | hRight
+      · rcases hLeft with ⟨leftSource, hLeftSource, rightSource,
+          hRightSource, rfl⟩
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent,
+          hideOffers] at hOffer ⊢
+        injection hSource with hLeftEq hRightEq
+        subst leftSource
+        subst rightSource
+        exact ⟨Or.inl hOffer.1, hOffer.2⟩
+      · rcases hRight with ⟨leftSource, hLeftSource, rightSource,
+          hRightSource, rfl⟩
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent,
+          hideOffers] at hOffer ⊢
+        injection hSource with hLeftEq hRightEq
+        subst leftSource
+        subst rightSource
+        exact ⟨Or.inr hOffer.1, hOffer.2⟩
+  · intro action hAction
+    simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hAction
+    rcases hAction with ⟨hLeft | hRight, hOutside⟩
+    · have hHidden : action ∈ hideOffers interface
+          (computeFuture { states := left.states, edges := left.edges }
+            leftState) := Finset.mem_filter.mpr ⟨hLeft, hOutside⟩
+      have hIncluded :=
+        buildParallelAutomaton_leftFuture_subset interface left right
+          leftState rightState hLeftState hRightState
+          hHidden
+      rw [computeFuture_eq_offersAt_of_all_explicit productPending hExplicit]
+        at hIncluded
+      simpa [productPending, product] using hIncluded
+    · have hHidden : action ∈ hideOffers interface
+          (computeFuture { states := right.states, edges := right.edges }
+            rightState) := Finset.mem_filter.mpr ⟨hRight, hOutside⟩
+      have hIncluded :=
+        buildParallelAutomaton_rightFuture_subset interface left right
+          leftState rightState hLeftState hRightState
+          hHidden
+      rw [computeFuture_eq_offersAt_of_all_explicit productPending hExplicit]
+        at hIncluded
+      simpa [productPending, product] using hIncluded
 
 theorem mem_foldl_union_iff
     {Element Item : Type} [DecidableEq Element]
@@ -1647,6 +2085,12 @@ def indexedFragmentSkipping
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childSkipping (indexed.2 + 1) indexed.1.2) ∅
+
+def indexedFragmentCompleting
+    (automata : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState :=
+  automata.zipIdx.foldl (fun states indexed =>
+    states ∪ childCompleting (indexed.2 + 1) indexed.1.2) ∅
 
 private def indexedFragmentEdges
     (automata : List (BareMessage × AutomatonFragment)) :
@@ -1705,6 +2149,12 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
     indexedFragmentAccepting branchAutomata
   let skipping := childSkipping 0 elseAutomaton ∪
     indexedFragmentSkipping branchAutomata
+  let completing :=
+    (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
+        branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
+      {TypeAutomatonState.root}
+    else ∅) ∪ childCompleting 0 elseAutomaton ∪
+      indexedFragmentCompleting branchAutomata
   let needs := typeBranchNeeds branches
   let actions := typeBranchActions branches
   let branchEdges : Finset PendingAutomatonEdge := branchAutomata.zipIdx.foldl
@@ -1747,7 +2197,7 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 0 elseAutomaton.initial) ∅
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting skipping
+  exact finishAutomatonFragment states .root accepting skipping completing
     (childPendingEdges 0 elseAutomaton ∪ indexedFragmentEdges branchAutomata ∪
       branchEdges ∪ waitEdges ∪ elseEdges)
 
@@ -1824,6 +2274,12 @@ def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
     childStates 1 elseAutomaton
   let accepting := childAccepting 0 conjunction ∪ childAccepting 1 elseAutomaton
   let skipping := childSkipping 0 conjunction ∪ childSkipping 1 elseAutomaton
+  let completing :=
+    (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
+        branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
+      {TypeAutomatonState.root}
+    else ∅) ∪ childCompleting 0 conjunction ∪
+      childCompleting 1 elseAutomaton
   let needs := typeBranchNeeds branches
   let actions := typeBranchActions branches
   let enabledEdges : Finset PendingAutomatonEdge :=
@@ -1860,7 +2316,7 @@ def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
         current := actions
         future := .at (childState 1 elseAutomaton.initial) ∅
         target := childState 1 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting skipping
+  exact finishAutomatonFragment states .root accepting skipping completing
     (childPendingEdges 0 conjunction ∪ childPendingEdges 1 elseAutomaton ∪
       enabledEdges ∪ waitEdges ∪ elseEdges)
 
@@ -2037,6 +2493,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
         initial := .root
         accepting := ∅
         skipping := ∅
+        completing := ∅
         edges := ∅ }
   | fuel + 1, processType => by
       classical
@@ -2045,7 +2502,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       | .skip =>
           let idleEnvironments := signature.localEnvironments.filter fun environment =>
             environment.clock = false ∧ environment.immediate = ∅
-          exact finishAutomatonFragment {.root} .root {.root} {.root} <|
+          exact finishAutomatonFragment {.root} .root {.root} {.root} {.root} <|
             idleEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -2088,6 +2545,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+            {.root, .final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
@@ -2120,6 +2578,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+            {.final}
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
@@ -2144,11 +2603,12 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+            {.root, .final}
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
       | .var name =>
-          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ <|
+          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ ∅ <|
             signature.localEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -2421,6 +2881,7 @@ def compileType
   let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
     | .variable _ => ∅
+    | .future => ∅
     | .visible label =>
         let symbol : TypeAutomatonSymbol :=
           { environment := edge.environment

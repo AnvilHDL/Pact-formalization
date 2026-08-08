@@ -491,6 +491,65 @@ namespace PactType
       omega
   end
 
+  /- All synchronization interfaces occurring below a type.  This is used by
+  the compositional proof only; it does not alter operational future offers. -/
+  mutual
+    def ParallelInterfaces : PactType → Finset MessageId
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => ParallelInterfaces body
+      | .choice left right | .seq left right | .fairChoice _ left right =>
+          ParallelInterfaces left ∪ ParallelInterfaces right
+      | .par left right interface =>
+          interface ∪ ParallelInterfaces left ∪ ParallelInterfaces right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ParallelInterfaces elseType ∪ ParallelBranchInterfaces branches
+    termination_by processType => sizeOf processType
+
+    def ParallelBranchInterfaces :
+        List (BareMessage × PactType) → Finset MessageId
+      | [] => ∅
+      | (_, processType) :: rest =>
+          ParallelInterfaces processType ∪ ParallelBranchInterfaces rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /- A parallel binder may not reuse an interface owned by an ancestor or a
+  descendant binder.  Sibling products may still use the same identifier. -/
+  mutual
+    def InterfaceScoped : PactType → Prop
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .recur _ body => InterfaceScoped body
+      | .choice left right | .seq left right | .fairChoice _ left right =>
+          InterfaceScoped left ∧ InterfaceScoped right
+      | .par left right interface =>
+          Disjoint interface
+              (ParallelInterfaces left ∪ ParallelInterfaces right) ∧
+            InterfaceScoped left ∧ InterfaceScoped right
+      | .xoffer elseType branches | .offer elseType branches =>
+          InterfaceScoped elseType ∧ InterfaceScopedBranches branches
+    termination_by processType => sizeOf processType
+
+    def InterfaceScopedBranches :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          InterfaceScoped processType ∧ InterfaceScopedBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  theorem parallel_interface_subset_parallelInterfaces
+      (left right : PactType) (interface : Interface) :
+      interface ⊆ ParallelInterfaces (.par left right interface) := by
+    simp [ParallelInterfaces]
+
   theorem sameCycleMessageLinear_rejects_repeat
       (msg : MessageId) (first second : MessageDir) :
       ¬ SameCycleMessageLinear
@@ -960,6 +1019,136 @@ private theorem typeCanCompleteThisCycleFuel_succ_stable :
                 omega) (by
                 intro other hOther
                 exact hEvery other (by simp [hOther]))]
+
+/-- Once fuel covers the finite syntax tree, the bounded completion analysis
+agrees with the public structural predicate. -/
+private theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
+    ∀ fuel processType, sizeOf processType < fuel →
+      typeCanCompleteThisCycleFuel fuel processType =
+        processType.CanCompleteBeforeTock := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hSize
+      omega
+  | succ fuel ih =>
+      intro processType hSize
+      cases processType with
+      | message msg dir =>
+          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+      | tock =>
+          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+      | skip =>
+          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+      | var name =>
+          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+      | recur name body =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          apply ih
+          have hProper : sizeOf body <
+              sizeOf (PactType.recur name body) := by
+            simp_wf
+            omega
+          omega
+      | choice left right =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left < sizeOf (PactType.choice left right) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right < sizeOf (PactType.choice left right) := by
+                simp_wf; omega
+              omega)]
+      | fairChoice bid left right =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.fairChoice bid left right) := by
+                simp_wf; omega
+              omega)]
+      | seq left right =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left < sizeOf (PactType.seq left right) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right < sizeOf (PactType.seq left right) := by
+                simp_wf; omega
+              omega)]
+      | par left right interface =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.par left right interface) := by
+                simp_wf; omega
+              omega)]
+      | xoffer elseType branches =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.xoffer elseType branches) := by
+              simp_wf; omega
+            omega)]
+          congr 1
+          induction branches with
+          | nil => simp [PactType.BranchCanCompleteBeforeTock]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
+              rw [ih branchType (by
+                have : sizeOf branchType < sizeOf
+                    (PactType.xoffer elseType ((action, branchType) :: rest)) := by
+                  simp_wf; omega
+                omega)]
+              rw [restIH (by
+                have : sizeOf (PactType.xoffer elseType rest) < sizeOf
+                    (PactType.xoffer elseType ((action, branchType) :: rest)) := by
+                  simp_wf; omega
+                omega)]
+      | offer elseType branches =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih elseType (by
+            have : sizeOf elseType <
+                sizeOf (PactType.offer elseType branches) := by
+              simp_wf; omega
+            omega)]
+          congr 1
+          induction branches with
+          | nil => simp [PactType.BranchCanCompleteBeforeTock]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
+              rw [ih branchType (by
+                have : sizeOf branchType < sizeOf
+                    (PactType.offer elseType ((action, branchType) :: rest)) := by
+                  simp_wf; omega
+                omega)]
+              rw [restIH (by
+                have : sizeOf (PactType.offer elseType rest) < sizeOf
+                    (PactType.offer elseType ((action, branchType) :: rest)) := by
+                  simp_wf; omega
+                omega)]
 
 /- A structurally mandatory clock prevents same-cycle completion. -/
 private theorem mustTock_cannotCompleteThisCycleFuel
@@ -1552,6 +1741,61 @@ theorem typeFutureOffersFuel_eq_typeFutureOffers
   exact typeFutureOffersFuel_add_stable processType
     (sizeOf processType + 1) extra (by omega)
 
+/-- Replacing an occurrence protected by a clock does not change whether the
+surrounding syntax can finish in the current cycle. -/
+theorem PactType.guardedOccurrences_replace_canCompleteBeforeTock
+    (name : String) (replacement processType : PactType)
+    (hGuarded : processType.GuardedOccurrences name False) :
+    (processType.replaceVar name replacement).CanCompleteBeforeTock =
+      processType.CanCompleteBeforeTock := by
+  let replaced := processType.replaceVar name replacement
+  let fuel := max (sizeOf replaced + 1) (sizeOf processType + 1)
+  have hReplacedFuel : sizeOf replaced < fuel := by
+    exact lt_of_lt_of_le (Nat.lt_succ_self _)
+      (Nat.le_max_left (sizeOf replaced + 1) (sizeOf processType + 1))
+  have hProcessFuel : sizeOf processType < fuel := by
+    exact lt_of_lt_of_le (Nat.lt_succ_self _)
+      (Nat.le_max_right (sizeOf replaced + 1) (sizeOf processType + 1))
+  calc
+    replaced.CanCompleteBeforeTock =
+        typeCanCompleteThisCycleFuel fuel replaced :=
+      (typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
+        fuel replaced hReplacedFuel).symm
+    _ = typeCanCompleteThisCycleFuel fuel processType := by
+      exact guardedOccurrences_replace_canCompleteThisCycleFuel
+        name replacement processType hGuarded fuel
+    _ = processType.CanCompleteBeforeTock :=
+      typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
+        fuel processType hProcessFuel
+
+/-- Syntax-derived futures of a sequence include the right menu exactly when
+the left syntax may optimistically complete before the next clock. -/
+theorem typeFutureOffers_sequence (left right : PactType) :
+    typeFutureOffers (.seq left right) =
+      if left.CanCompleteBeforeTock then
+        typeFutureOffers left ∪ typeFutureOffers right
+      else typeFutureOffers left := by
+  have hLeftFuel : sizeOf left + 1 ≤
+      sizeOf (PactType.seq left right) := by
+    simp_wf
+    omega
+  have hRightFuel : sizeOf right + 1 ≤
+      sizeOf (PactType.seq left right) := by
+    simp_wf
+    omega
+  have hCompleteFuel : sizeOf left <
+      sizeOf (PactType.seq left right) := by
+    simp_wf
+    omega
+  change typeFutureOffersFuel
+      (sizeOf (PactType.seq left right) + 1)
+      (PactType.seq left right) = _
+  simp only [typeFutureOffersFuel]
+  rw [typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
+      _ left hCompleteFuel,
+    typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
+    typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
+
 /-- Syntax-derived futures distribute over ordinary choice. -/
 theorem typeFutureOffers_choice (left right : PactType) :
     typeFutureOffers (.choice left right) =
@@ -1587,6 +1831,28 @@ theorem typeFutureOffers_fairChoice
   change typeFutureOffersFuel
       (sizeOf (PactType.fairChoice bid left right) + 1)
       (PactType.fairChoice bid left right) = _
+  simp only [typeFutureOffersFuel]
+  rw [typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
+    typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
+
+/-- Parallel future offers are the optimistic union of both syntax-derived
+component menus, with the synchronization interface hidden. -/
+theorem typeFutureOffers_parallel
+    (left right : PactType) (interface : Interface) :
+    typeFutureOffers (.par left right interface) =
+      hideTypeOffers interface
+        (typeFutureOffers left ∪ typeFutureOffers right) := by
+  have hLeftFuel : sizeOf left + 1 ≤
+      sizeOf (PactType.par left right interface) := by
+    simp_wf
+    omega
+  have hRightFuel : sizeOf right + 1 ≤
+      sizeOf (PactType.par left right interface) := by
+    simp_wf
+    omega
+  change typeFutureOffersFuel
+      (sizeOf (PactType.par left right interface) + 1)
+      (PactType.par left right interface) = _
   simp only [typeFutureOffersFuel]
   rw [typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
     typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]

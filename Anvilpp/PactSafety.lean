@@ -302,7 +302,8 @@ theorem checking_runs_in_product_time : RunsInProductTime refinementChecker := b
 /--
 The paper's admissible recursive types: variables are closed, every recursive
 backedge is preceded by at least one synchronized clock step, recursive calls
-are tail terminating, and a message is exchanged at most once per cycle.
+are tail terminating, a message is exchanged at most once per cycle, and
+nested parallel binders have lexically disjoint interfaces.
 
 Tail termination is the finite-control part of regularity.  It ensures that a
 shared backedge never has to retain a newly generated sequence, parallel, or
@@ -312,7 +313,8 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
     PactType.ClockGuarded processType ∧
     PactType.TailRecursive processType ∧
-    PactType.SameCycleMessageLinear processType
+    PactType.SameCycleMessageLinear processType ∧
+    PactType.InterfaceScoped processType
 
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/
 def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
@@ -352,22 +354,19 @@ theorem type_automaton_correspondence
     have hClosed : PactType.AllVariablesBound [] (.var name) :=
       hAdmissible.2.2.1
     simp [PactType.AllVariablesBound] at hClosed
+  rcases hAdmissible with
+    ⟨hSignature, hSupports, hClosed, hGuarded, hTail, hLinear, hScoped⟩
+  have hStep : CompilationStepCorrect signature processType := by
+    intro residual residual' state env label offers hRelated hSymbol
+    exact compilationStepCorrect_of_closedGuardedRegular signature processType
+      hSignature hSupports hClosed hGuarded hTail hLinear hScoped hRelated
+        hSymbol
   refine ⟨
     { relation := fun residual state =>
         TypeCompilationRelation processType state residual
       initial := compileType_initial_relation signature processType
       initial_mem := compileType_initial_mem signature processType
-      stepIff := ?_ }⟩
-  intro residual residual' state env label offers hRelated hSymbol
-  rcases hAdmissible with ⟨hSignature, hSupports, hRegular⟩
-  have hAlphabetParts :
-      env ∈ signature.environments ∧ label ∈ signature.labels ∧
-        offers ∈ signature.offerSummaries := by
-    simpa [compileType, TypeAlphabet.transitionAlphabet] using hSymbol
-  have hEnvironment := hAlphabetParts.1
-  have hEnvironmentWellFormed :=
-    TypeAlphabet.environment_wellFormed hEnvironment
-  sorry
+      stepIff := hStep }⟩
 
 /-- Lemma 4.6: conforming processes simulate into the type automaton. -/
 theorem process_automaton_correspondence

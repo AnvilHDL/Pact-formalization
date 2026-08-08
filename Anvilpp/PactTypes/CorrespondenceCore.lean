@@ -1009,6 +1009,55 @@ theorem compilationSkippingCorrect_of_compilation
     (typeCompilationFuel processType) processType
     (typeCompilationFuel_sufficient processType)
 
+/-- The constructor metadata used only for optimistic future propagation is
+exactly the syntax predicate saying that the represented residual may finish
+before the next clock. -/
+def CompilationCompletingCorrect
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  ∀ state residual,
+    TypeCompilationRelation processType state residual →
+      (state ∈ (compileTypeFuel signature
+          (typeCompilationFuel processType) processType).completing ↔
+        residual.CanCompleteBeforeTock = true)
+
+theorem compilationCompletingCorrect_skip (signature : TypeAlphabet) :
+    CompilationCompletingCorrect signature .skip := by
+  intro state residual hRelated
+  cases hRelated
+  simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    PactType.CanCompleteBeforeTock]
+
+theorem compilationCompletingCorrect_message
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
+    CompilationCompletingCorrect signature (.message msg dir) := by
+  intro state residual hRelated
+  cases hRelated <;>
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      PactType.CanCompleteBeforeTock]
+
+theorem compilationCompletingCorrect_tock (signature : TypeAlphabet) :
+    CompilationCompletingCorrect signature .tock := by
+  intro state residual hRelated
+  cases hRelated <;>
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      PactType.CanCompleteBeforeTock]
+
+theorem compilationCompletingCorrect_progress
+    (signature : TypeAlphabet) (pid : ProcId) :
+    CompilationCompletingCorrect signature (.progress pid) := by
+  intro state residual hRelated
+  cases hRelated <;>
+    simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      PactType.CanCompleteBeforeTock]
+
+theorem compilationCompletingCorrect_var
+    (signature : TypeAlphabet) (name : String) :
+    CompilationCompletingCorrect signature (.var name) := by
+  intro state residual hRelated
+  cases hRelated
+  simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    PactType.CanCompleteBeforeTock]
+
 /-- The raw constructor-fragment form of step correspondence.  It is the
 compositional interface used before the public alphabet filter is applied. -/
 def CompilationFragmentStepCorrect
@@ -1215,6 +1264,26 @@ theorem compilationFutureCorrect_var
 
 /-! ### Parallel environment reconstruction -/
 
+namespace TypeEnvironment
+
+/-- An environment does not mention messages hidden by a parallel interface. -/
+def AvoidsInterface (environment : TypeEnvironment)
+    (interface : Interface) : Prop :=
+  (∀ action ∈ environment.immediate, action.1 ∉ interface) ∧
+    ∀ action ∈ environment.future, action.1 ∉ interface
+
+theorem AvoidsInterface.mono
+    {environment : TypeEnvironment} {larger smaller : Interface}
+    (hAvoids : environment.AvoidsInterface larger)
+    (hSubset : smaller ⊆ larger) :
+    environment.AvoidsInterface smaller := by
+  exact ⟨fun action hAction hSmaller =>
+      hAvoids.1 action hAction (hSubset hSmaller),
+    fun action hAction hSmaller =>
+      hAvoids.2 action hAction (hSubset hSmaller)⟩
+
+end TypeEnvironment
+
 namespace TypeAlphabet
 
 /-- Construction-local environments satisfy the same clock/disjointness
@@ -1271,6 +1340,22 @@ theorem environment_future_avoids_interface
     simp only [typeNeed] at hMessage
     rw [hMessage]
     exact hInterface
+
+/-- Every exported environment avoids a declared sub-interface. -/
+theorem environment_avoids_subinterface
+    {alphabet : TypeAlphabet} {environment : TypeEnvironment}
+    {interface : Interface}
+    (hAlphabet : alphabet.WellFormed)
+    (hEnvironment : environment ∈ alphabet.environments)
+    (hInterface : interface ⊆ alphabet.interface) :
+    environment.AvoidsInterface interface := by
+  constructor
+  · intro action hAction hInternal
+    exact environment_immediate_avoids_interface hAlphabet hEnvironment
+      action hAction (hInterface hInternal)
+  · intro action hAction hInternal
+    exact environment_future_avoids_interface hAlphabet hEnvironment
+      action hAction (hInterface hInternal)
 
 end TypeAlphabet
 
@@ -1969,6 +2054,7 @@ private theorem compileType_message_edge_cases
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
   | «variable» name => simp [hLabel] at hOutput
+  | future => simp [hLabel] at hOutput
   | visible visibleLabel =>
       simp only [hLabel] at hOutput
       split at hOutput
@@ -2234,6 +2320,7 @@ private theorem compileType_tock_edge_cases
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
   | «variable» name => simp [hLabel] at hOutput
+  | future => simp [hLabel] at hOutput
   | visible visibleLabel =>
       simp only [hLabel] at hOutput
       split at hOutput
@@ -2442,6 +2529,7 @@ private theorem compileType_progress_edge_cases
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
   | «variable» name => simp [hLabel] at hOutput
+  | future => simp [hLabel] at hOutput
   | visible visibleLabel =>
       simp only [hLabel] at hOutput
       split at hOutput

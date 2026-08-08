@@ -27,7 +27,9 @@
 - [x] Prove that compiled parallel edges hide immediate interface actions.
 - [x] Define `ClosedGuardedRegular`: all variables are bound, every recursive
   backedge crosses a clock, recursive calls are tail terminating, and a message
-  identifier is exchanged at most once per clock cycle.
+  identifier is exchanged at most once per clock cycle. Parallel interfaces
+  are also lexically scoped, excluding ancestor/descendant reuse while still
+  allowing reuse between siblings.
 - [x] Prove that a mandatory clock prevents same-cycle completion, semantic
   completion/future-offer fuel stabilizes, and unfolding a clock-guarded
   recursion preserves the public `typeFutureOffers` menu.
@@ -40,11 +42,14 @@
 - [ ] Prove future-offer correctness: resolving `FutureSpec.at q removed` with
   `computeFuture` gives the semantic `typeFutureOffers` set for the residual
   represented by `q`, minus `removed`.
-  Clock guarding and tail termination rule out premature recursion-dependent
-  resolution inside retained products. The remaining obligation is to connect
-  graph-based `computeFuture` to `typeFutureOffers` for every related
-  admissible residual. Atomic types, ordinary choice, and fair choice are now
-  complete; recursion reduces to the explicit closed-body future package.
+  Atomic types, ordinary choice, fair choice, and parallel composition are
+  complete; recursion reduces to an explicit closed-body package.  Parallel
+  products now contain non-exported future-observation edges, and
+  `buildParallelAutomaton_computeFuture` proves that every product state has
+  exactly the hidden union of its two component menus.  Thus the intended
+  optimistic result for `skip |[{a}]| (a! ; b!)` includes `{b!}` even when the
+  current internal `a!` cannot synchronize.  Sequence execution transport and
+  the guarded recursion body package remain the main future obligations.
 - [x] Prove the remaining closed atomic cases: clock action/wait and progress.
   Unresolved variables remain an internal fragment case consumed by recursion.
 - [x] Prove ordinary and fair choice preservation, including selection edges
@@ -67,8 +72,14 @@
   correspondence between `List.zipIdx` child tags and branch membership.
 - [ ] Prove conjunctive-offer enabled, else, and wait edges and connect child
   `0` to `parallelTypeBranches`.
-- [ ] Combine the constructor lemmas into the general `stepIff` induction and
-  remove the remaining `sorry` from `type_automaton_correspondence`.
+- [x] Assemble the constructor lemmas into the general `stepIff` hierarchy and
+  remove the direct `sorry` from `type_automaton_correspondence`.  The theorem
+  now consumes `CompilationProofBundle`, built by a terminating structural
+  recursion over closed/guarded/regular types.
+- [ ] Discharge the named temporary leaves used by that hierarchy: raw atomic
+  and choice/fair wrappers, the sequence-future upper bound, synchronized
+  parallel raw steps, guarded recursion-body closure, and the exclusive and
+  conjunctive offer bundles.
 
 ## Structure
 
