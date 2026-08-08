@@ -302,8 +302,7 @@ theorem checking_runs_in_product_time : RunsInProductTime refinementChecker := b
 /--
 The paper's admissible recursive types: variables are closed, every recursive
 backedge is preceded by at least one synchronized clock step, recursive calls
-are tail terminating, a message is exchanged at most once per cycle, and
-parallel synchronization interfaces are lexically scoped.
+are tail terminating, and a message is exchanged at most once per cycle.
 
 Tail termination is the finite-control part of regularity.  It ensures that a
 shared backedge never has to retain a newly generated sequence, parallel, or
@@ -313,8 +312,7 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
     PactType.ClockGuarded processType ∧
     PactType.TailRecursive processType ∧
-    PactType.SameCycleMessageLinear processType ∧
-    PactType.InterfaceScoped processType
+    PactType.SameCycleMessageLinear processType
 
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/
 def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=

@@ -27,9 +27,7 @@
 - [x] Prove that compiled parallel edges hide immediate interface actions.
 - [x] Define `ClosedGuardedRegular`: all variables are bound, every recursive
   backedge crosses a clock, recursive calls are tail terminating, and a message
-  identifier is exchanged at most once per clock cycle. Parallel interfaces
-  are additionally lexically scoped, so one channel cannot be reused by an
-  ancestor and descendant synchronization product in the same cycle.
+  identifier is exchanged at most once per clock cycle.
 - [x] Prove that a mandatory clock prevents same-cycle completion, semantic
   completion/future-offer fuel stabilizes, and unfolding a clock-guarded
   recursion preserves the public `typeFutureOffers` menu.
@@ -50,7 +48,7 @@
   Unresolved variables remain an internal fragment case consumed by recursion.
 - [x] Prove ordinary and fair choice preservation, including selection edges
   and child-state tagging.
-- [x] Prove sequence preservation, including left steps, literal-`skip`
+- [ ] Prove sequence preservation, including left steps, literal-`skip`
   bridge edges, switching to the right child, and the associated future offers.
 - [ ] Prove recursion preservation: the unfolding epsilon edge, substitution
   in `TypeCompilationRelation.recur_body`, matching-variable back-edges, and
