@@ -71,7 +71,16 @@
 - [Anvilpp/Base.lean](Anvilpp/Base.lean): Some basic definitions/abbreviations
 - [Anvilpp/Proc.lean](Anvilpp/Proc.lean): Pact process syntax
 - [Anvilpp/PactSemantics.lean](Anvilpp/PactSemantics.lean): Pact Semantics
-- [Anvilpp/PactTypes.lean](Anvilpp/PactTypes.lean): Type Syntax and Semantics
+- [Anvilpp/PactTypes.lean](Anvilpp/PactTypes.lean): Compatibility façade for
+  the complete Pact type development
+- [Anvilpp/PactTypes/Syntax.lean](Anvilpp/PactTypes/Syntax.lean): Type syntax,
+  erasure, operational semantics, and syntax-derived future offers
+- [Anvilpp/PactTypes/Automata.lean](Anvilpp/PactTypes/Automata.lean): Finite
+  constructor automata and the type compiler
+- [Anvilpp/PactTypes/CorrespondenceCore.lean](Anvilpp/PactTypes/CorrespondenceCore.lean):
+  State/residual invariants and atomic correspondence cases
+- [Anvilpp/PactTypes/CorrespondenceCombinators.lean](Anvilpp/PactTypes/CorrespondenceCombinators.lean):
+  Choice, fair-choice, sequence, and recursion correspondence lemmas
 - [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean): Safety and Compatibility Theorems
 
 ## Main Theorems
