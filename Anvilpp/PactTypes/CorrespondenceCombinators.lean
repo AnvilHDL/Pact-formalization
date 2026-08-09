@@ -3497,6 +3497,195 @@ theorem compilationCompletingCorrect_xoffer
         right
         exact hIndexed.mpr (hChild.mpr hResidual)
 
+/-- Completion correctness for the generated conjunction used by `.offer`.
+This is proved directly over the branch list, avoiding a non-structural
+recursive call on `parallelTypeBranches`. -/
+theorem compilationCompletingCorrect_parallelTypeBranches
+    (signature : TypeAlphabet) : ∀ branches,
+    (∀ (action : BareMessage) (branchType : PactType) (index : Nat),
+      branches[index]? = some (action, branchType) →
+        CompilationCompletingCorrect signature branchType) →
+    CompilationCompletingCorrect signature (parallelTypeBranches branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _
+      simpa [parallelTypeBranches] using
+        (compilationCompletingCorrect_skip signature)
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      intro hBranches
+      have hHead : CompilationCompletingCorrect signature branchType :=
+        hBranches action branchType 0 (by simp)
+      have hSingleton : CompilationCompletingCorrect signature
+          (singletonTypeXOffer (action, branchType)) := by
+        apply compilationCompletingCorrect_xoffer signature .skip
+          [(action, branchType)]
+        · exact compilationCompletingCorrect_skip signature
+        · intro selected selectedType index hEntry
+          have hIndex : index = 0 := by
+            simpa using (List.getElem?_eq_some_iff.mp hEntry).1
+          subst index
+          simp only [List.getElem?_cons_zero, Option.some.injEq,
+            Prod.mk.injEq] at hEntry
+          rcases hEntry with ⟨rfl, rfl⟩
+          exact hHead
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches] using hSingleton
+      | cons next tail =>
+          have hRest : ∀ (selected : BareMessage) (selectedType : PactType)
+              (index : Nat),
+              (next :: tail)[index]? = some (selected, selectedType) →
+                CompilationCompletingCorrect signature selectedType := by
+            intro selected selectedType index hEntry
+            exact hBranches selected selectedType (index + 1) (by
+              simpa using hEntry)
+          have hTail := ih hRest
+          simpa [parallelTypeBranches] using
+            (compilationCompletingCorrect_parallel signature
+              (singletonTypeXOffer (action, branchType))
+              (parallelTypeBranches (next :: tail)) ∅ hSingleton hTail)
+
+/-- Conjunctive offers inherit optimistic completion from the else
+continuation or any branch continuation.  Tagged states inherit the exact
+completion predicate of the generated conjunction or else child. -/
+theorem compilationCompletingCorrect_offer
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    (hElse : CompilationCompletingCorrect signature elseType)
+    (hConjunction : CompilationCompletingCorrect signature
+      (parallelTypeBranches branches)) :
+    CompilationCompletingCorrect signature (.offer elseType branches) := by
+  intro state residual hRelated
+  let conjunctionType := parallelTypeBranches branches
+  let fuel := max (typeCompilationFuel elseType)
+    (conjunctiveCompilationFuel branches)
+  let elseFragment := compileTypeFuel signature fuel elseType
+  let conjunction := compileTypeFuel signature fuel conjunctionType
+  have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+    simp [TypeCompilationFuelSufficient, fuel]
+  have hConjunctionFuel : TypeCompilationFuelSufficient conjunctionType fuel := by
+    rw [TypeCompilationFuelSufficient,
+      typeCompilationFuel_parallelTypeBranches]
+    simp [fuel, conjunctionType]
+  have hElseStable : elseFragment = compileTypeFuel signature
+      (typeCompilationFuel elseType) elseType :=
+    compileTypeFuel_eq_of_sufficient signature elseType hElseFuel
+      (typeCompilationFuel_sufficient elseType)
+  have hConjunctionStable : conjunction = compileTypeFuel signature
+      (typeCompilationFuel conjunctionType) conjunctionType :=
+    compileTypeFuel_eq_of_sufficient signature conjunctionType
+      hConjunctionFuel (typeCompilationFuel_sufficient conjunctionType)
+  have hElseInitial : elseFragment.initial ∈ elseFragment.completing ↔
+      elseType.CanCompleteBeforeTock = true := by
+    have hCanonical := hElse _ elseType
+      (compileType_initial_relation signature elseType)
+    simpa [elseFragment, hElseStable, compileType] using hCanonical
+  simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+  change state ∈
+      (buildConjunctiveOfferAutomaton signature branches elseFragment
+        conjunction).completing ↔ residual.CanCompleteBeforeTock = true
+  cases hRelated with
+  | offer_source =>
+      have hNotConjunction : TypeAutomatonState.root ∉
+          childCompleting 0 conjunction := by
+        rintro hMember
+        simp only [childCompleting, Finset.mem_image] at hMember
+        rcases hMember with ⟨child, _, hEquality⟩
+        cases hEquality
+      have hNotElse : TypeAutomatonState.root ∉
+          childCompleting 1 elseFragment := by
+        rintro hMember
+        simp only [childCompleting, Finset.mem_image] at hMember
+        rcases hMember with ⟨child, _, hEquality⟩
+        cases hEquality
+      have hCondition :
+          (elseFragment.initial ∈ elseFragment.completing ∨
+              branches.any (fun branch =>
+                branch.2.CanCompleteBeforeTock) = true) ↔
+            (PactType.offer elseType branches).CanCompleteBeforeTock = true := by
+        simp only [PactType.CanCompleteBeforeTock]
+        rw [branchCanCompleteBeforeTock_eq_any branches]
+        simp [hElseInitial]
+      simp only [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      constructor
+      · rintro ((hHeader | hConjunctionMember) | hElseMember)
+        · by_cases hValue :
+              elseFragment.initial ∈ elseFragment.completing ∨
+                branches.any (fun branch =>
+                  branch.2.CanCompleteBeforeTock) = true
+          · exact hCondition.mp hValue
+          · rw [if_neg hValue] at hHeader
+            simp at hHeader
+        · exact (hNotConjunction hConjunctionMember).elim
+        · exact (hNotElse hElseMember).elim
+      · intro hResidual
+        left
+        have hValue := hCondition.mpr hResidual
+        rw [if_pos hValue]
+        exact Or.inl (Finset.mem_singleton_self _)
+  | offer_branches _ childResidual _ childQ hChildRelated =>
+      have hChild : childQ ∈ conjunction.completing ↔
+          residual.CanCompleteBeforeTock = true := by
+        have hCanonical := hConjunction childQ residual hChildRelated
+        simpa [conjunction, conjunctionType, hConjunctionStable]
+          using hCanonical
+      have hNotHeader : childState 0 childQ ∉
+          (if elseFragment.initial ∈ elseFragment.completing ∨
+              branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
+            {TypeAutomatonState.root}
+          else (∅ : Finset TypeAutomatonState)) := by
+        split <;> simp [childState]
+      have hNotElse : childState 0 childQ ∉ childCompleting 1 elseFragment := by
+        rintro hMember
+        simp only [childCompleting, Finset.mem_image] at hMember
+        rcases hMember with ⟨other, _, hEquality⟩
+        have hImpossible : 1 = 0 := by injection hEquality
+        omega
+      simp only [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      constructor
+      · rintro ((hHeader | hConjunctionMember) | hElseMember)
+        · exact (hNotHeader hHeader).elim
+        · apply hChild.mp
+          simpa [childCompleting, childState] using hConjunctionMember
+        · exact (hNotElse hElseMember).elim
+      · intro hResidual
+        left
+        right
+        simpa [childCompleting, childState] using hChild.mpr hResidual
+  | offer_else _ childResidual _ childQ hChildRelated =>
+      have hChild : childQ ∈ elseFragment.completing ↔
+          residual.CanCompleteBeforeTock = true := by
+        have hCanonical := hElse childQ residual hChildRelated
+        simpa [elseFragment, hElseStable] using hCanonical
+      have hNotHeader : childState 1 childQ ∉
+          (if elseFragment.initial ∈ elseFragment.completing ∨
+              branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
+            {TypeAutomatonState.root}
+          else (∅ : Finset TypeAutomatonState)) := by
+        split <;> simp [childState]
+      have hNotConjunction : childState 1 childQ ∉
+          childCompleting 0 conjunction := by
+        rintro hMember
+        simp only [childCompleting, Finset.mem_image] at hMember
+        rcases hMember with ⟨other, _, hEquality⟩
+        have hImpossible : 0 = 1 := by injection hEquality
+        omega
+      simp only [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      constructor
+      · rintro ((hHeader | hConjunctionMember) | hElseMember)
+        · exact (hNotHeader hHeader).elim
+        · exact (hNotConjunction hConjunctionMember).elim
+        · apply hChild.mp
+          simpa [childCompleting, childState] using hElseMember
+      · intro hResidual
+        right
+        simpa [childCompleting, childState] using hChild.mpr hResidual
+
 /-! ### Parallel future correspondence -/
 
 /-- The optimistic product observations make parallel future correctness
@@ -4285,6 +4474,81 @@ private theorem supports_branch_of_mem (signature : TypeAlphabet) :
       · exact hSupports.2.1
       · exact ih entry hSupports.2.2 hRest
 
+private theorem allVariablesBound_branch_of_mem (bound : List String) :
+    ∀ branches entry, PactType.AllBranchVariablesBound bound branches →
+      entry ∈ branches → PactType.AllVariablesBound bound entry.2 := by
+  intro branches
+  induction branches with
+  | nil => simp
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      intro entry hAll hEntry
+      simp only [PactType.AllBranchVariablesBound] at hAll
+      simp only [List.mem_cons] at hEntry
+      rcases hEntry with rfl | hRest
+      · exact hAll.1
+      · exact ih entry hAll.2 hRest
+
+private theorem clockGuarded_branch_of_mem :
+    ∀ branches entry, PactType.ClockGuardedBranches branches →
+      entry ∈ branches → PactType.ClockGuarded entry.2 := by
+  intro branches
+  induction branches with
+  | nil => simp
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      intro entry hAll hEntry
+      simp only [PactType.ClockGuardedBranches] at hAll
+      simp only [List.mem_cons] at hEntry
+      rcases hEntry with rfl | hRest
+      · exact hAll.1
+      · exact ih entry hAll.2 hRest
+
+private theorem tailRecursive_branch_of_mem :
+    ∀ branches entry, PactType.TailRecursiveBranches branches →
+      entry ∈ branches → PactType.TailRecursive entry.2 := by
+  intro branches
+  induction branches with
+  | nil => simp
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      intro entry hAll hEntry
+      simp only [PactType.TailRecursiveBranches] at hAll
+      simp only [List.mem_cons] at hEntry
+      rcases hEntry with rfl | hRest
+      · exact hAll.1
+      · exact ih entry hAll.2 hRest
+
+private theorem sameCycleMessageLinear_branch_of_mem :
+    ∀ branches entry, PactType.SameCycleMessageLinearBranches branches →
+      entry ∈ branches → PactType.SameCycleMessageLinear entry.2 := by
+  intro branches
+  induction branches with
+  | nil => simp
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      intro entry hAll hEntry
+      simp only [PactType.SameCycleMessageLinearBranches] at hAll
+      simp only [List.mem_cons] at hEntry
+      rcases hEntry with rfl | hRest
+      · exact hAll.1
+      · exact ih entry hAll.2.2 hRest
+
+private theorem interfaceScoped_branch_of_mem :
+    ∀ branches entry, PactType.InterfaceScopedBranches branches →
+      entry ∈ branches → PactType.InterfaceScoped entry.2 := by
+  intro branches
+  induction branches with
+  | nil => simp
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      intro entry hAll hEntry
+      simp only [PactType.InterfaceScopedBranches] at hAll
+      simp only [List.mem_cons] at hEntry
+      rcases hEntry with rfl | hRest
+      · exact hAll.1
+      · exact ih entry hAll.2 hRest
+
 /- Supporting syntax declares every synchronization interface it contains. -/
 private theorem parallelInterfaces_subset_of_supports_leaf
     (signature : TypeAlphabet) (processType : PactType)
@@ -4777,33 +5041,8 @@ private theorem compilationProofBundle_recursion_leaf
           hScoped hBodyFuture }
 
 /-- Exclusive-offer closure packages its indexed branch/else/wait
-classifiers.  The completion component is already available as
-`compilationCompletingCorrect_xoffer`. -/
-private theorem xoffer_else_completing_regular_leaf
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType))
-    (hSignature : signature.WellFormed)
-    (hSupports : signature.Supports (.xoffer elseType branches))
-    (hClosed : PactType.AllVariablesBound [] (.xoffer elseType branches))
-    (hGuarded : PactType.ClockGuarded (.xoffer elseType branches))
-    (hTail : PactType.TailRecursive (.xoffer elseType branches))
-    (hLinear : PactType.SameCycleMessageLinear (.xoffer elseType branches)) :
-    CompilationCompletingCorrect signature elseType := by
-  sorry
-
-private theorem xoffer_branch_completing_regular_leaf
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType))
-    (hSignature : signature.WellFormed)
-    (hSupports : signature.Supports (.xoffer elseType branches))
-    (hClosed : PactType.AllVariablesBound [] (.xoffer elseType branches))
-    (hGuarded : PactType.ClockGuarded (.xoffer elseType branches))
-    (hTail : PactType.TailRecursive (.xoffer elseType branches))
-    (hLinear : PactType.SameCycleMessageLinear (.xoffer elseType branches))
-    (action : BareMessage) (branchType : PactType) (index : Nat)
-    (hEntry : branches[index]? = some (action, branchType)) :
-    CompilationCompletingCorrect signature branchType := by
-  sorry
+classifiers.  Completion is supplied by the strong-induction hypotheses for
+the else continuation and every indexed branch. -/
 
 private theorem compilationFutureCorrect_xoffer_regular_leaf
     (signature : TypeAlphabet) (elseType : PactType)
@@ -4842,23 +5081,23 @@ private theorem compilationProofBundle_xoffer_leaf
     (hGuarded : PactType.ClockGuarded (.xoffer elseType branches))
     (hTail : PactType.TailRecursive (.xoffer elseType branches))
     (hLinear : PactType.SameCycleMessageLinear (.xoffer elseType branches))
-    (hScoped : PactType.InterfaceScoped (.xoffer elseType branches)) :
+    (hScoped : PactType.InterfaceScoped (.xoffer elseType branches))
+    (hElse : CompilationProofBundle signature elseType)
+    (hBranches : ∀ (action : BareMessage) (branchType : PactType)
+      (index : Nat), branches[index]? = some (action, branchType) →
+        CompilationProofBundle signature branchType) :
     CompilationProofBundle signature (.xoffer elseType branches) := by
   have hFuture := compilationFutureCorrect_xoffer_regular_leaf signature
-    elseType branches hSignature hSupports hClosed hGuarded hTail hLinear
-  have hElseCompleting := xoffer_else_completing_regular_leaf signature
     elseType branches hSignature hSupports hClosed hGuarded hTail hLinear
   have hBranchCompleting : ∀ (action : BareMessage) (branchType : PactType)
       (index : Nat), branches[index]? = some (action, branchType) →
         CompilationCompletingCorrect signature branchType := by
     intro action branchType index hEntry
-    exact xoffer_branch_completing_regular_leaf signature elseType branches
-      hSignature hSupports hClosed hGuarded hTail hLinear action branchType
-      index hEntry
+    exact (hBranches action branchType index hEntry).completing
   exact
     { future := hFuture
       completing := compilationCompletingCorrect_xoffer signature elseType
-        branches hElseCompleting hBranchCompleting
+        branches hElse.completing hBranchCompleting
       scopedStep := compilationFragmentStepCorrect_xoffer_regular_leaf
         signature elseType branches hSignature hSupports hClosed hGuarded hTail
           hLinear hScoped hFuture }
@@ -4880,10 +5119,20 @@ private theorem compilationFutureCorrect_offer_regular_leaf
 private theorem compilationCompletingCorrect_offer_regular_leaf
     (signature : TypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (hGuarded : PactType.ClockGuarded (.offer elseType branches))
-    (hTail : PactType.TailRecursive (.offer elseType branches)) :
+    (hElse : CompilationProofBundle signature elseType)
+    (hBranches : ∀ (action : BareMessage) (branchType : PactType)
+      (index : Nat), branches[index]? = some (action, branchType) →
+        CompilationProofBundle signature branchType) :
     CompilationCompletingCorrect signature (.offer elseType branches) := by
-  sorry
+  have hBranchCompleting : ∀ (action : BareMessage) (branchType : PactType)
+      (index : Nat), branches[index]? = some (action, branchType) →
+        CompilationCompletingCorrect signature branchType := by
+    intro action branchType index hEntry
+    exact (hBranches action branchType index hEntry).completing
+  have hConjunction := compilationCompletingCorrect_parallelTypeBranches
+    signature branches hBranchCompleting
+  exact compilationCompletingCorrect_offer signature elseType branches
+    hElse.completing hConjunction
 
 private theorem compilationFragmentStepCorrect_offer_regular_leaf
     (signature : TypeAlphabet) (elseType : PactType)
@@ -4909,14 +5158,18 @@ private theorem compilationProofBundle_offer_leaf
     (hGuarded : PactType.ClockGuarded (.offer elseType branches))
     (hTail : PactType.TailRecursive (.offer elseType branches))
     (hLinear : PactType.SameCycleMessageLinear (.offer elseType branches))
-    (hScoped : PactType.InterfaceScoped (.offer elseType branches)) :
+    (hScoped : PactType.InterfaceScoped (.offer elseType branches))
+    (hElse : CompilationProofBundle signature elseType)
+    (hBranches : ∀ (action : BareMessage) (branchType : PactType)
+      (index : Nat), branches[index]? = some (action, branchType) →
+        CompilationProofBundle signature branchType) :
     CompilationProofBundle signature (.offer elseType branches) := by
   have hFuture := compilationFutureCorrect_offer_regular_leaf signature
     elseType branches hSignature hSupports hClosed hGuarded hTail hLinear
   exact
     { future := hFuture
       completing := compilationCompletingCorrect_offer_regular_leaf signature
-        elseType branches hGuarded hTail
+        elseType branches hElse hBranches
       scopedStep := compilationFragmentStepCorrect_offer_regular_leaf
         signature elseType branches hSignature hSupports hClosed hGuarded hTail
           hLinear hScoped hFuture }
@@ -5062,17 +5315,114 @@ theorem compilationProofBundle_of_closedGuardedRegular
             signature left right interface hSignature hSupports.1 hLeft hRight }
   | xoffer elseType branches =>
       intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      simp only [TypeAlphabet.Supports] at hSupports
+      simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.ClockGuarded] at hGuarded
+      simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.SameCycleMessageLinear] at hLinear
+      simp only [PactType.InterfaceScoped] at hScoped
+      have hElse := compilationProofBundle_of_closedGuardedRegular signature
+        elseType hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.1
+      have hBranches : ∀ (action : BareMessage) (branchType : PactType)
+          (index : Nat), branches[index]? = some (action, branchType) →
+            CompilationProofBundle signature branchType := by
+        intro action branchType index hEntry
+        have hMember : (action, branchType) ∈ branches := by
+          rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
+          have hAt := List.getElem_mem hBound
+          simpa [hValue] using hAt
+        have hBranchSize : sizeOf branchType <
+            sizeOf (PactType.xoffer elseType branches) := by
+          have hPair := List.sizeOf_lt_of_mem hMember
+          have hComponent : sizeOf branchType <
+              sizeOf (action, branchType) := by
+            simp_wf
+            omega
+          have hList : sizeOf branches <
+              sizeOf (PactType.xoffer elseType branches) := by
+            simp_wf
+            omega
+          omega
+        exact compilationProofBundle_of_closedGuardedRegular signature
+          branchType hSignature
+          (supports_branch_of_mem signature branches (action, branchType)
+            hSupports.2 hMember)
+          (allVariablesBound_branch_of_mem [] branches (action, branchType)
+            hClosed.2 hMember)
+          (clockGuarded_branch_of_mem branches (action, branchType)
+            hGuarded.2 hMember)
+          (tailRecursive_branch_of_mem branches (action, branchType)
+            hTail.2 hMember)
+          (sameCycleMessageLinear_branch_of_mem branches
+            (action, branchType) hLinear.2 hMember)
+          (interfaceScoped_branch_of_mem branches (action, branchType)
+            hScoped.2 hMember)
       exact compilationProofBundle_xoffer_leaf signature elseType branches
-        hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+        hSignature (by simpa [TypeAlphabet.Supports] using hSupports)
+        (by simpa [PactType.AllVariablesBound] using hClosed)
+        (by simpa [PactType.ClockGuarded] using hGuarded)
+        (by simpa [PactType.TailRecursive] using hTail)
+        (by simpa [PactType.SameCycleMessageLinear] using hLinear)
+        (by simpa [PactType.InterfaceScoped] using hScoped) hElse hBranches
   | offer elseType branches =>
       intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      simp only [TypeAlphabet.Supports] at hSupports
+      simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.ClockGuarded] at hGuarded
+      simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.SameCycleMessageLinear] at hLinear
+      simp only [PactType.InterfaceScoped] at hScoped
+      have hElse := compilationProofBundle_of_closedGuardedRegular signature
+        elseType hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.1
+      have hBranches : ∀ (action : BareMessage) (branchType : PactType)
+          (index : Nat), branches[index]? = some (action, branchType) →
+            CompilationProofBundle signature branchType := by
+        intro action branchType index hEntry
+        have hMember : (action, branchType) ∈ branches := by
+          rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
+          have hAt := List.getElem_mem hBound
+          simpa [hValue] using hAt
+        have hBranchSize : sizeOf branchType <
+            sizeOf (PactType.offer elseType branches) := by
+          have hPair := List.sizeOf_lt_of_mem hMember
+          have hComponent : sizeOf branchType <
+              sizeOf (action, branchType) := by
+            simp_wf
+            omega
+          have hList : sizeOf branches <
+              sizeOf (PactType.offer elseType branches) := by
+            simp_wf
+            omega
+          omega
+        exact compilationProofBundle_of_closedGuardedRegular signature
+          branchType hSignature
+          (supports_branch_of_mem signature branches (action, branchType)
+            hSupports.2 hMember)
+          (allVariablesBound_branch_of_mem [] branches (action, branchType)
+            hClosed.2 hMember)
+          (clockGuarded_branch_of_mem branches (action, branchType)
+            hGuarded.2 hMember)
+          (tailRecursive_branch_of_mem branches (action, branchType)
+            hTail.2 hMember)
+          (sameCycleMessageLinear_branch_of_mem branches
+            (action, branchType) hLinear.2 hMember)
+          (interfaceScoped_branch_of_mem branches (action, branchType)
+            hScoped.2 hMember)
       exact compilationProofBundle_offer_leaf signature elseType branches
-        hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+        hSignature (by simpa [TypeAlphabet.Supports] using hSupports)
+        (by simpa [PactType.AllVariablesBound] using hClosed)
+        (by simpa [PactType.ClockGuarded] using hGuarded)
+        (by simpa [PactType.TailRecursive] using hTail)
+        (by simpa [PactType.SameCycleMessageLinear] using hLinear)
+        (by simpa [PactType.InterfaceScoped] using hScoped) hElse hBranches
 termination_by processType => sizeOf processType
 decreasing_by
   all_goals
-    simp_wf
-    omega
+    first
+    | assumption
+    | (simp_wf; omega)
 
 /-- Public one-step bisimulation follows immediately from the hierarchical
 bundle and the uniform fragment-to-public exporter. -/
