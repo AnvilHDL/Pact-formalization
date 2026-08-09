@@ -2092,7 +2092,7 @@ def indexedFragmentCompleting
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childCompleting (indexed.2 + 1) indexed.1.2) ∅
 
-private def indexedFragmentEdges
+def indexedFragmentEdges
     (automata : List (BareMessage × AutomatonFragment)) :
     Finset PendingAutomatonEdge :=
   automata.zipIdx.foldl (fun edges indexed =>

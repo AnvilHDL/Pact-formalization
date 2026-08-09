@@ -1282,7 +1282,89 @@ theorem AvoidsInterface.mono
     fun action hAction hSmaller =>
       hAvoids.2 action hAction (hSubset hSmaller)⟩
 
+theorem tock_avoidsInterface (interface : Interface) :
+    TypeEnvironment.tock.AvoidsInterface interface := by
+  simp [AvoidsInterface, TypeEnvironment.tock]
+
 end TypeEnvironment
+
+/-- Passing through a sibling-local environment may add only actions from the
+parent interface, so avoidance of a disjoint descendant interface is
+preserved. -/
+theorem LocalTypeEnvironment.avoidsInterface_of_disjoint
+    {outer siblingEnvironment localEnvironment : TypeEnvironment}
+    {parentInterface childInterface : Interface}
+    {sibling : PactType} {label : TypeLabel}
+    (hLocal : LocalTypeEnvironment outer parentInterface siblingEnvironment
+      sibling label localEnvironment)
+    (hOuterAvoids : outer.AvoidsInterface childInterface)
+    (hDisjoint : Disjoint parentInterface childInterface) :
+    localEnvironment.AvoidsInterface childInterface := by
+  cases hLocal with
+  | clock outer parentInterface sibling label hClock =>
+      exact TypeEnvironment.tock_avoidsInterface childInterface
+  | ordinary outer siblingEnvironment localEnvironment parentInterface sibling
+      siblingTarget label current future hOuterClock hSiblingClock hOffers
+      hLocalClock hImmediate hFuture =>
+      constructor
+      · intro action hAction hChild
+        rw [hImmediate] at hAction
+        rcases Finset.mem_union.mp hAction with hOuter | hParent
+        · exact hOuterAvoids.1 action hOuter hChild
+        · exact Finset.disjoint_left.mp hDisjoint
+            (Finset.mem_filter.mp hParent).2 hChild
+      · intro action hAction hChild
+        rw [hFuture] at hAction
+        rcases Finset.mem_union.mp (Finset.mem_sdiff.mp hAction).1 with
+          hOuter | hParent
+        · exact hOuterAvoids.2 action hOuter hChild
+        · exact Finset.disjoint_left.mp hDisjoint
+            (Finset.mem_filter.mp hParent).2 hChild
+
+theorem TypeEnvironment.avoidsInterface_of_ordinary_fields
+    {outer localEnvironment : TypeEnvironment}
+    {parentInterface childInterface : Interface}
+    {current future : Finset BareMessage}
+    (hOuterAvoids : outer.AvoidsInterface childInterface)
+    (hDisjoint : Disjoint parentInterface childInterface)
+    (hImmediate : localEnvironment.immediate =
+      outer.immediate ∪ restrictTypeOffers parentInterface current)
+    (hFuture : localEnvironment.future =
+      (outer.future ∪ restrictTypeOffers parentInterface future) \
+        localEnvironment.immediate) :
+    localEnvironment.AvoidsInterface childInterface := by
+  constructor
+  · intro action hAction hChild
+    rw [hImmediate] at hAction
+    rcases Finset.mem_union.mp hAction with hOuter | hParent
+    · exact hOuterAvoids.1 action hOuter hChild
+    · exact Finset.disjoint_left.mp hDisjoint
+        (Finset.mem_filter.mp hParent).2 hChild
+  · intro action hAction hChild
+    rw [hFuture] at hAction
+    rcases Finset.mem_union.mp (Finset.mem_sdiff.mp hAction).1 with
+      hOuter | hParent
+    · exact hOuterAvoids.2 action hOuter hChild
+    · exact Finset.disjoint_left.mp hDisjoint
+        (Finset.mem_filter.mp hParent).2 hChild
+
+/-- Induction-facing raw correspondence.  Enclosing synchronized products may
+supply local environments, provided those environments avoid every parallel
+interface nested below the syntax node. -/
+def CompilationScopedFragmentStepCorrect
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  let fragment := compileTypeFuel signature
+    (typeCompilationFuel processType) processType
+  ∀ {residual residual' : PactType} {state : TypeAutomatonState}
+    {environment : TypeEnvironment} {label : TypeLabel}
+    {offers : TypeOfferSummary},
+    TypeCompilationRelation processType state residual →
+    environment ∈ signature.localEnvironments →
+    environment.AvoidsInterface processType.ParallelInterfaces →
+    (DecoratedTypeTransition environment residual label offers residual' ↔
+      ∃ target,
+        fragment.HasResolvedEdge state environment label offers target ∧
+        TypeCompilationRelation processType target residual')
 
 namespace TypeAlphabet
 
@@ -1459,9 +1541,81 @@ private theorem interfaceOffers_eq_empty_of_avoids
   · intro hEmpty
     simpa using hEmpty
 
+/- The exact ordinary local-environment equations reconstruct the original
+outer environment after hiding the interface.  No offer-summary disjointness
+is needed: the semantic future subtraction is retained verbatim. -/
+/-- The product environment reconstruction uses only well-formedness and
+avoidance of the current interface; exportedness is one sufficient way to
+obtain those facts, but nested products use this more general form. -/
+private theorem combineAutomatonEnvironment_eq_of_ordinaryLocalFields_of_avoids
+    (interface : Interface)
+    {outer leftEnvironment rightEnvironment : TypeEnvironment}
+    {leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage}
+    (hOuterWellFormed : outer.WellFormed)
+    (hOuterAvoids : outer.AvoidsInterface interface)
+    (hOuterClock : outer.clock = false)
+    (hLeftClock : leftEnvironment.clock = false)
+    (hRightClock : rightEnvironment.clock = false)
+    (hLeftImmediate : leftEnvironment.immediate =
+      outer.immediate ∪ restrictTypeOffers interface rightCurrent)
+    (hLeftFuture : leftEnvironment.future =
+      (outer.future ∪ restrictTypeOffers interface rightFuture) \
+        leftEnvironment.immediate)
+    (hRightImmediate : rightEnvironment.immediate =
+      outer.immediate ∪ restrictTypeOffers interface leftCurrent)
+    (hRightFuture : rightEnvironment.future =
+      (outer.future ∪ restrictTypeOffers interface leftFuture) \
+        rightEnvironment.immediate) :
+    combineAutomatonEnvironment interface leftEnvironment rightEnvironment =
+      outer := by
+  have hOuterDisjoint : Disjoint outer.future outer.immediate := by
+    rw [Finset.disjoint_iff_inter_eq_empty, Finset.inter_comm]
+    exact hOuterWellFormed.2 hOuterClock
+  have hHideOuterImmediate :=
+    hideOffers_eq_self_of_avoids interface outer.immediate hOuterAvoids.1
+  have hHideOuterFuture :=
+    hideOffers_eq_self_of_avoids interface outer.future hOuterAvoids.2
+  have hHideLeftImmediate :
+      hideOffers interface leftEnvironment.immediate = outer.immediate := by
+    rw [hLeftImmediate, hideOffers_union, hHideOuterImmediate,
+      hideOffers_restrictTypeOffers, Finset.union_empty]
+  have hHideRightImmediate :
+      hideOffers interface rightEnvironment.immediate = outer.immediate := by
+    rw [hRightImmediate, hideOffers_union, hHideOuterImmediate,
+      hideOffers_restrictTypeOffers, Finset.union_empty]
+  have hHideLeftFuture :
+      hideOffers interface leftEnvironment.future = outer.future := by
+    rw [hLeftFuture, hideOffers_sdiff, hideOffers_union, hHideOuterFuture,
+      hideOffers_restrictTypeOffers, Finset.union_empty, hHideLeftImmediate]
+    exact finset_sdiff_eq_self_of_disjoint hOuterDisjoint
+  have hHideRightFuture :
+      hideOffers interface rightEnvironment.future = outer.future := by
+    rw [hRightFuture, hideOffers_sdiff, hideOffers_union, hHideOuterFuture,
+      hideOffers_restrictTypeOffers, Finset.union_empty, hHideRightImmediate]
+    exact finset_sdiff_eq_self_of_disjoint hOuterDisjoint
+  have hCombinedImmediate :
+        hideOffers interface
+            (leftEnvironment.immediate ∪ rightEnvironment.immediate) =
+          outer.immediate := by
+    rw [hideOffers_union, hHideLeftImmediate, hHideRightImmediate,
+      Finset.union_self]
+  have hCombinedFuture :
+        hideOffers interface
+            (leftEnvironment.future ∪ rightEnvironment.future) =
+          outer.future := by
+    rw [hideOffers_union, hHideLeftFuture, hHideRightFuture,
+      Finset.union_self]
+  cases outer with
+  | mk immediate future clock =>
+      cases clock
+      · simp [combineAutomatonEnvironment, hLeftClock, hRightClock,
+          hCombinedImmediate, hCombinedFuture]
+      · simp at hOuterClock
+
 /-- The exact ordinary local-environment equations reconstruct the original
 outer environment after hiding the interface.  No offer-summary disjointness
 is needed: the semantic future subtraction is retained verbatim. -/
+
 private theorem combineAutomatonEnvironment_eq_of_ordinaryLocalFields
     (signature : TypeAlphabet) (interface : Interface)
     {outer leftEnvironment rightEnvironment : TypeEnvironment}
@@ -1724,6 +1878,93 @@ private theorem localTypeEnvironments_to_syncAutomatonEdges
           signature interface hAlphabet hInterface hOuterEnvironment
           hOuterClock hLeftClock hRightClock hLeftImmediate hLeftFuture
           hRightImmediate hRightFuture
+      constructor
+      · apply syncAutomatonEdges_of_witnesses interface
+          hLeftWitness hRightWitness
+        exact syncAutomatonEdgeWitnesses_of_ordinaryLocalFields interface
+          hCombined hLeftMatch hRightMatch hLeftClock hRightClock
+          hLeftImmediate hLeftFuture hRightImmediate hRightFuture hLabelSync
+      · exact hCombined
+
+/-- Local-domain form of sibling-environment reconstruction.  Avoidance of
+the current interface replaces exportedness/signature well-formedness. -/
+theorem localTypeEnvironments_to_syncAutomatonEdges_local
+    (signature : TypeAlphabet) (interface : Interface)
+    {leftEdges rightEdges : Finset AutomatonFragmentEdge}
+    {outer : TypeEnvironment} {leftEdge rightEdge : AutomatonFragmentEdge}
+    {left right : PactType}
+    (hInterface : interface ⊆ signature.interface)
+    (hOuterEnvironment : outer ∈ signature.localEnvironments)
+    (hOuterAvoids : outer.AvoidsInterface interface)
+    (hLeftEdge : leftEdge ∈ leftEdges)
+    (hRightEdge : rightEdge ∈ rightEdges)
+    (hLeftLocal : LocalTypeEnvironment outer interface
+      rightEdge.environment right rightEdge.label.semantic
+      leftEdge.environment)
+    (hRightLocal : LocalTypeEnvironment outer interface
+      leftEdge.environment left leftEdge.label.semantic
+      rightEdge.environment)
+    (hLeftRealizes :
+      ∀ {target current future},
+        TypeOffers leftEdge.environment left leftEdge.label.semantic target
+          current future →
+        ∃ witness ∈ leftEdges,
+          matchesAutomatonOfferWitness leftEdge witness ∧
+            witness.current = current ∧ witness.future = future)
+    (hRightRealizes :
+      ∀ {target current future},
+        TypeOffers rightEdge.environment right rightEdge.label.semantic target
+          current future →
+        ∃ witness ∈ rightEdges,
+          matchesAutomatonOfferWitness rightEdge witness ∧
+            witness.current = current ∧ witness.future = future)
+    (hLabelSync : TypeLabel.Sync interface leftEdge.label.semantic
+      rightEdge.label.semantic) :
+    syncAutomatonEdges interface leftEdges rightEdges leftEdge rightEdge ∧
+      combineAutomatonEnvironment interface leftEdge.environment
+        rightEdge.environment = outer := by
+  have hLeftCases := LocalTypeEnvironment.clock_or_ordinary hLeftLocal
+  have hRightCases := LocalTypeEnvironment.clock_or_ordinary hRightLocal
+  rcases hLeftCases with hClock | hOrdinary
+  · rcases hClock with ⟨hOuterClock, hRightTock, hLeftTock⟩
+    have hOuterTock := TypeAlphabet.localEnvironment_eq_tock_of_clock
+      hOuterEnvironment hOuterClock
+    have hCombined : combineAutomatonEnvironment interface
+        leftEdge.environment rightEdge.environment = outer := by
+      rw [hLeftTock, hRightTock, hOuterTock]
+      simp [combineAutomatonEnvironment, TypeEnvironment.tock]
+    constructor
+    · apply syncAutomatonEdges_of_witnesses interface hLeftEdge hRightEdge
+      unfold syncAutomatonEdgeWitnesses
+      simp [matchesAutomatonOfferWitness, hLeftTock, hRightTock,
+        hLabelSync]
+      intro hFalse
+      simp [TypeEnvironment.tock] at hFalse
+    · exact hCombined
+  · rcases hOrdinary with
+      ⟨rightTarget, rightCurrent, rightFuture, hOuterClock,
+        hRightClock, hRightOffers, hLeftClock, hLeftImmediate, hLeftFuture⟩
+    rcases hRightCases with hClock | hOrdinary
+    · rcases hClock with ⟨_, hLeftTock, hRightTock⟩
+      rw [hRightTock] at hRightClock
+      simp [TypeEnvironment.tock] at hRightClock
+    · rcases hOrdinary with
+        ⟨leftTarget, leftCurrent, leftFuture, _, hLeftClock',
+          hLeftOffers, hRightClock', hRightImmediate, hRightFuture⟩
+      obtain ⟨leftWitness, hLeftWitness, hLeftMatch,
+          hLeftCurrent, hLeftFutureSummary⟩ := hLeftRealizes hLeftOffers
+      obtain ⟨rightWitness, hRightWitness, hRightMatch,
+          hRightCurrent, hRightFutureSummary⟩ := hRightRealizes hRightOffers
+      rw [← hLeftCurrent] at hRightImmediate
+      rw [← hLeftFutureSummary] at hRightFuture
+      rw [← hRightCurrent] at hLeftImmediate
+      rw [← hRightFutureSummary] at hLeftFuture
+      have hCombined :=
+        combineAutomatonEnvironment_eq_of_ordinaryLocalFields_of_avoids
+          interface
+          (TypeAlphabet.localEnvironment_wellFormed hOuterEnvironment)
+          hOuterAvoids hOuterClock hLeftClock hRightClock hLeftImmediate
+          hLeftFuture hRightImmediate hRightFuture
       constructor
       · apply syncAutomatonEdges_of_witnesses interface
           hLeftWitness hRightWitness
