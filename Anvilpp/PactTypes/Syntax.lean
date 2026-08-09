@@ -802,12 +802,49 @@ def TypeBranchEnabled (env : TypeEnvironment)
 def singletonTypeXOffer (branch : BareMessage × PactType) : PactType :=
   .xoffer .skip [branch]
 
+/-- A selected conjunctive-offer branch has no synthetic else alternative:
+its head action is now mandatory, followed by its continuation. -/
+def selectedTypeBranch (branch : BareMessage × PactType) : PactType :=
+  .seq (.message branch.1.1 branch.1.2) branch.2
+
 /-- Rewrite a conjunctive type offer into parallel singleton exclusive offers. -/
 def parallelTypeBranches : List (BareMessage × PactType) → PactType
   | [] => .skip
   | [branch] => singletonTypeXOffer branch
   | branch :: rest =>
       .par (singletonTypeXOffer branch) (parallelTypeBranches rest) ∅
+
+/-- Post-process the singleton-`xoffer` product after `selected` witnesses that
+the conjunctive offer fired.  Exactly that singleton loses its synthetic
+`skip` else-arm; all other singleton offers are retained.  Consequently the
+single outcome in which every singleton selects else is absent. -/
+def parallelTypeBranchesSelecting
+    (selected : BareMessage × PactType) :
+    List (BareMessage × PactType) → PactType
+  | [] => .skip
+  | [branch] =>
+      if branch = selected then selectedTypeBranch branch
+      else singletonTypeXOffer branch
+  | branch :: rest =>
+      if branch = selected then
+        .par (selectedTypeBranch branch) (parallelTypeBranches rest) ∅
+      else
+        .par (singletonTypeXOffer branch)
+          (parallelTypeBranchesSelecting selected rest) ∅
+
+@[simp] theorem parallelTypeBranchesSelecting_singleton_self
+    (branch : BareMessage × PactType) :
+    parallelTypeBranchesSelecting branch [branch] =
+      selectedTypeBranch branch := by
+  simp [parallelTypeBranchesSelecting]
+
+/-- Even duplicate branches force only one occurrence: the second singleton
+retains its synthetic else arm. -/
+@[simp] theorem parallelTypeBranchesSelecting_duplicate_pair
+    (branch : BareMessage × PactType) :
+    parallelTypeBranchesSelecting branch [branch, branch] =
+      .par (selectedTypeBranch branch) (singletonTypeXOffer branch) ∅ := by
+  simp [parallelTypeBranchesSelecting, parallelTypeBranches]
 
 /-- Actions appearing at the heads of an offer's branches. -/
 def typeBranchActions
@@ -1835,6 +1872,63 @@ theorem typeFutureOffers_fairChoice
   rw [typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
     typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
 
+/-- Syntax-derived futures of an exclusive offer contain the else menu, every
+branch head, and every branch continuation menu. -/
+theorem typeFutureOffers_xoffer
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    typeFutureOffers (.xoffer elseType branches) =
+      branches.foldl (fun offers branch =>
+        offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
+        (typeFutureOffers elseType) := by
+  let fuel := sizeOf (PactType.xoffer elseType branches)
+  have hElseFuel : sizeOf elseType + 1 ≤ fuel := by
+    simp [fuel]
+    omega
+  have hBranchFuel : ∀ branch ∈ branches,
+      sizeOf branch.2 + 1 ≤ fuel := by
+    intro branch hBranch
+    have hPairSize := List.sizeOf_lt_of_mem hBranch
+    have hComponentSize : sizeOf branch.2 < sizeOf branch := by
+      rcases branch
+      simp_wf
+      omega
+    simp [fuel]
+    omega
+  have hFold : ∀ rest : List (BareMessage × PactType),
+      (∀ branch ∈ rest, sizeOf branch.2 + 1 ≤ fuel) →
+      ∀ initial,
+        rest.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2) initial =
+        rest.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffers branch.2) initial := by
+    intro rest hRest
+    induction rest with
+    | nil => simp
+    | cons branch tail ih =>
+        intro initial
+        simp only [List.foldl_cons]
+        rw [typeFutureOffersFuel_eq_typeFutureOffers branch.2 fuel
+          (hRest branch (by simp))]
+        apply ih
+        intro entry hEntry
+        exact hRest entry (by simp [hEntry])
+  change branches.foldl (fun offers branch =>
+      offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+      (typeFutureOffersFuel fuel elseType) = _
+  rw [typeFutureOffersFuel_eq_typeFutureOffers elseType fuel hElseFuel]
+  exact hFold branches hBranchFuel (typeFutureOffers elseType)
+
+/-- Conjunctive offers have the same optimistic syntax menu as exclusive
+offers: the else continuation, every branch head, and every branch menu. -/
+theorem typeFutureOffers_offer
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    typeFutureOffers (.offer elseType branches) =
+      branches.foldl (fun offers branch =>
+        offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
+        (typeFutureOffers elseType) := by
+  simpa only [typeFutureOffers, typeFutureOffersFuel] using
+    typeFutureOffers_xoffer elseType branches
+
 /-- Parallel future offers are the optimistic union of both syntax-derived
 component menus, with the synchronization interface hidden. -/
 theorem typeFutureOffers_parallel
@@ -1991,8 +2085,8 @@ mutual
         (enabled : BareMessage × PactType) :
         env.WellFormed ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
         TypeOffers env (.offer elseType branches) TypeLabel.silent
-          (parallelTypeBranches branches) ∅
-          (typeFutureOffers (parallelTypeBranches branches))
+          (parallelTypeBranchesSelecting enabled branches) ∅
+          (typeFutureOffers (parallelTypeBranchesSelecting enabled branches))
     | offer_else (env : TypeEnvironment) (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
         env.WellFormed ∧
@@ -2196,7 +2290,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       --
       TypeTransition env (.offer elseType branches)
       TypeLabel.silent
-      (parallelTypeBranches branches)
+      (parallelTypeBranchesSelecting enabled branches)
   | offer_else (env : TypeEnvironment) (elseType : PactType)
       (branches : List (BareMessage × PactType)) :
       env.WellFormed ∧

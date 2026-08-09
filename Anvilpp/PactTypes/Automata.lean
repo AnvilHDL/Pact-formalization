@@ -618,6 +618,71 @@ namespace PendingAutomaton
       (state : TypeAutomatonState) : Finset TypeAutomatonState :=
     futureReachableAux automaton automaton.states.card {state}
 
+  /-- An exact reference-preserving state embedding preserves the saturated
+  same-cycle reachable set.  A larger parent carrier only adds redundant
+  saturation rounds. -/
+  theorem futureReachable_eq_of_embedding
+      (child parent : PendingAutomaton)
+      (embed : TypeAutomatonState → TypeAutomatonState)
+      (hReferences : ∀ state,
+        parent.referencedStates (embed state) =
+          (child.referencedStates state).image embed)
+      (hClosed : child.ReferencesClosed)
+      (state : TypeAutomatonState) (hState : state ∈ child.states)
+      (hCard : child.states.card ≤ parent.states.card) :
+      parent.futureReachable (embed state) =
+        (child.futureReachable state).image embed := by
+    obtain ⟨extra, hExtra⟩ := Nat.exists_eq_add_of_le hCard
+    unfold futureReachable
+    rw [show ({embed state} : Finset TypeAutomatonState) =
+        ({state} : Finset TypeAutomatonState).image embed by simp]
+    rw [futureReachableAux_image_of_embedding child parent embed hReferences]
+    rw [hExtra,
+      child.futureReachableAux_add_card_stable hClosed {state} (by
+        simpa using hState) extra]
+
+  /-- Two closed pending graphs with the same edge set have the same
+  same-cycle reachability from any state carried by both graphs.  Their state
+  carriers may differ because constructor views retain different bookkeeping
+  states; only the finite saturation bound changes, and closure makes those
+  extra rounds redundant. -/
+  theorem futureReachable_eq_of_same_edges
+      (first second : PendingAutomaton)
+      (hEdges : first.edges = second.edges)
+      (hFirstClosed : first.ReferencesClosed)
+      (hSecondClosed : second.ReferencesClosed)
+      (state : TypeAutomatonState)
+      (hFirstState : state ∈ first.states)
+      (hSecondState : state ∈ second.states) :
+      first.futureReachable state = second.futureReachable state := by
+    let shared : PendingAutomaton :=
+      { states := first.states ∪ second.states, edges := first.edges }
+    have hFirstCard : first.states.card ≤ shared.states.card :=
+      Finset.card_le_card Finset.subset_union_left
+    have hSecondCard : second.states.card ≤ shared.states.card :=
+      Finset.card_le_card Finset.subset_union_right
+    have hFirst := futureReachable_eq_of_embedding first shared id
+      (fun current => by
+        change first.referencedStates current =
+          (first.referencedStates current).image id
+        ext target
+        simp) hFirstClosed state hFirstState hFirstCard
+    have hSecondReferences : ∀ current,
+        shared.referencedStates (id current) =
+          (second.referencedStates current).image id := by
+      intro current
+      unfold referencedStates
+      rw [hEdges]
+      ext target
+      simp
+    have hSecond := futureReachable_eq_of_embedding second shared id
+      hSecondReferences hSecondClosed state hSecondState hSecondCard
+    have hFirst' : shared.futureReachable state =
+        first.futureReachable state := by simpa using hFirst
+    have hSecond' : shared.futureReachable state =
+        second.futureReachable state := by simpa using hSecond
+    exact hFirst'.symm.trans hSecond'
+
   /-- If a state has no same-cycle future references, saturation cannot leave
   that state. -/
   theorem futureReachable_eq_singleton_of_referencedStates_eq_empty
@@ -755,6 +820,198 @@ namespace PendingAutomaton
       simpa [closure, futureReachable, hUnfoldedStable] using hMonotone
     · exact hUnfoldedSubset
 
+  /-- If an embedding preserves every child reference as a parent reference,
+  every state reachable in the child maps to a state reachable in the parent.
+  This one-sided form permits the parent to add references, as sequence does
+  when it installs continuation bridges. -/
+  theorem futureReachable_image_subset_of_embedding
+      (child parent : PendingAutomaton)
+      (embed : TypeAutomatonState → TypeAutomatonState)
+      (hReferences : ∀ state,
+        (child.referencedStates state).image embed ⊆
+          parent.referencedStates (embed state))
+      (hParentClosed : parent.ReferencesClosed)
+      (state : TypeAutomatonState) (hParentState : embed state ∈ parent.states) :
+      (child.futureReachable state).image embed ⊆
+        parent.futureReachable (embed state) := by
+    let parentReach := parent.futureReachable (embed state)
+    have hParentFixed : parent.futureStep parentReach = parentReach := by
+      apply futureReachableAux_fixed_after_missing parent hParentClosed
+      · simpa [parentReach, futureReachable] using hParentState
+      · omega
+    have hLiftAux : ∀ fuel reached,
+        reached.image embed ⊆ parentReach →
+          (child.futureReachableAux fuel reached).image embed ⊆
+            parentReach := by
+      intro fuel
+      induction fuel with
+      | zero =>
+          intro reached hReached
+          exact hReached
+      | succ fuel ih =>
+          intro reached hReached
+          apply ih (child.futureStep reached)
+          intro target hTarget
+          rcases Finset.mem_image.mp hTarget with
+            ⟨childTarget, hChildTarget, rfl⟩
+          simp only [futureStep, Finset.mem_union, Finset.mem_biUnion]
+            at hChildTarget
+          rcases hChildTarget with hDirect |
+              ⟨childSource, hSource, hReference⟩
+          · exact hReached (Finset.mem_image.mpr
+              ⟨childTarget, hDirect, rfl⟩)
+          · have hMappedSource : embed childSource ∈ parentReach :=
+              hReached (Finset.mem_image.mpr
+                ⟨childSource, hSource, rfl⟩)
+            have hMappedReference : embed childTarget ∈
+                parent.referencedStates (embed childSource) :=
+              hReferences childSource
+                (Finset.mem_image.mpr ⟨childTarget, hReference, rfl⟩)
+            rw [← hParentFixed]
+            exact Finset.mem_union_right _
+              (Finset.mem_biUnion.mpr
+                ⟨embed childSource, hMappedSource, hMappedReference⟩)
+    unfold futureReachable
+    apply hLiftAux child.states.card {state}
+    intro target hTarget
+    rcases Finset.mem_image.mp hTarget with ⟨source, hSource, rfl⟩
+    simp only [Finset.mem_singleton] at hSource
+    subst source
+    exact subset_futureReachableAux parent parent.states.card {embed state}
+      (by simp)
+
+  /-- The starting state is always contained in its finite reference closure. -/
+  theorem mem_futureReachable_self (automaton : PendingAutomaton)
+      (state : TypeAutomatonState) :
+      state ∈ automaton.futureReachable state := by
+    apply subset_futureReachableAux automaton automaton.states.card {state}
+    simp [futureReachable]
+
+  /-- Every immediate same-cycle reference is contained in the finite
+  reference closure of its source. -/
+  theorem referencedStates_subset_futureReachable
+      (automaton : PendingAutomaton) (source : TypeAutomatonState)
+      (hClosed : automaton.ReferencesClosed)
+      (hSource : source ∈ automaton.states) :
+      automaton.referencedStates source ⊆
+        automaton.futureReachable source := by
+    rw [automaton.futureReachable_unfold source hClosed hSource]
+    intro target hTarget
+    exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr
+      ⟨target, hTarget, automaton.mem_futureReachable_self target⟩)
+
+  /-- Reference closure is transitive: the closure of any already reached
+  state is contained in the original closure. -/
+  theorem futureReachable_subset_of_mem
+      (automaton : PendingAutomaton) {source target : TypeAutomatonState}
+      (hClosed : automaton.ReferencesClosed)
+      (hSource : source ∈ automaton.states)
+      (hTarget : target ∈ automaton.futureReachable source) :
+      automaton.futureReachable target ⊆
+        automaton.futureReachable source := by
+    let closure := automaton.futureReachable source
+    have hClosureFixed : automaton.futureStep closure = closure := by
+      apply futureReachableAux_fixed_after_missing automaton hClosed
+      · simpa [closure, futureReachable] using hSource
+      · omega
+    have hSingletonSubset : ({target} : Finset TypeAutomatonState) ⊆
+        closure := by
+      simpa [closure] using hTarget
+    have hMonotone := futureReachableAux_mono automaton
+      automaton.states.card hSingletonSubset
+    have hClosureStable : automaton.futureReachableAux
+        automaton.states.card closure = closure :=
+      futureReachableAux_fixed_of_futureStep_eq automaton closure
+        hClosureFixed automaton.states.card
+    change automaton.futureReachableAux automaton.states.card {target} ⊆
+      closure
+    rw [← hClosureStable]
+    exact hMonotone
+
+  /-- A finite reference closure is contained in any set which contains its
+  source and is closed under immediate references. -/
+  theorem futureReachable_subset_of_reference_closed
+      (automaton : PendingAutomaton) (source : TypeAutomatonState)
+      (allowed : Finset TypeAutomatonState)
+      (hSource : source ∈ allowed)
+      (hAllowed : ∀ state ∈ allowed,
+        automaton.referencedStates state ⊆ allowed) :
+      automaton.futureReachable source ⊆ allowed := by
+    unfold futureReachable
+    have hAux : ∀ fuel reached, reached ⊆ allowed →
+        automaton.futureReachableAux fuel reached ⊆ allowed := by
+      intro fuel
+      induction fuel with
+      | zero =>
+          intro reached hReached
+          exact hReached
+      | succ fuel ih =>
+          intro reached hReached
+          apply ih
+          intro state hState
+          simp only [futureStep, Finset.mem_union,
+            Finset.mem_biUnion] at hState
+          rcases hState with hState | ⟨parent, hParent, hReference⟩
+          · exact hReached hState
+          · exact hAllowed parent (hReached hParent) hReference
+    apply hAux
+    simpa using hSource
+
+  /-- A root whose immediate references are exactly a set of child entries,
+  possibly together with a self-reference, reaches precisely itself and the
+  complete closures of those child entries.  This packages the harmless
+  self-loop pattern used by the offer constructors. -/
+  theorem futureReachable_eq_self_union_biUnion
+      (automaton : PendingAutomaton) (source : TypeAutomatonState)
+      (entries : Finset TypeAutomatonState)
+      (hClosed : automaton.ReferencesClosed)
+      (hSource : source ∈ automaton.states)
+      (hReferencesUpper : automaton.referencedStates source ⊆
+        insert source entries)
+      (hEntries : entries ⊆ automaton.referencedStates source) :
+      automaton.futureReachable source =
+        {source} ∪ entries.biUnion automaton.futureReachable := by
+    apply Finset.Subset.antisymm
+    · apply automaton.futureReachable_subset_of_reference_closed source
+        ({source} ∪ entries.biUnion automaton.futureReachable)
+      · simp
+      · intro state hState reference hReference
+        simp only [Finset.mem_union, Finset.mem_singleton,
+          Finset.mem_biUnion] at hState ⊢
+        rcases hState with rfl | ⟨entry, hEntry, hReachable⟩
+        · have hClassified := hReferencesUpper hReference
+          simp only [Finset.mem_insert] at hClassified
+          rcases hClassified with rfl | hEntry
+          · exact Or.inl rfl
+          · exact Or.inr ⟨reference, hEntry,
+              automaton.mem_futureReachable_self reference⟩
+        · have hEntryState : entry ∈ automaton.states :=
+            hClosed source hSource (hEntries hEntry)
+          have hReferenceReachable : reference ∈
+              automaton.futureReachable entry := by
+            have hStateInStates : state ∈ automaton.states :=
+              (automaton.futureReachable_subset_of_reference_closed
+                entry automaton.states hEntryState
+                  (fun current hCurrent => hClosed current hCurrent))
+                hReachable
+            have hReferenceAtState :=
+              automaton.referencedStates_subset_futureReachable state
+                hClosed hStateInStates
+            have hStateClosure := automaton.futureReachable_subset_of_mem
+              hClosed hEntryState hReachable
+            exact hStateClosure (hReferenceAtState hReference)
+          exact Or.inr ⟨entry, hEntry, hReferenceReachable⟩
+    · intro state hState
+      simp only [Finset.mem_union, Finset.mem_singleton,
+        Finset.mem_biUnion] at hState
+      rcases hState with rfl | ⟨entry, hEntry, hReachable⟩
+      · exact automaton.mem_futureReachable_self _
+      · have hEntryReachable :=
+          automaton.referencedStates_subset_futureReachable source hClosed
+            hSource (hEntries hEntry)
+        exact (automaton.futureReachable_subset_of_mem hClosed hSource
+          hEntryReachable) hReachable
+
 end PendingAutomaton
 
 /--
@@ -767,6 +1024,135 @@ revisiting a finite state cannot expose a new state.
 def computeFuture (automaton : PendingAutomaton)
     (state : TypeAutomatonState) : Finset BareMessage :=
   (automaton.futureReachable state).biUnion automaton.offersAt
+
+/-- Once a state is in the same-cycle reference closure, everything reachable
+from it is already included in the source's future menu. -/
+theorem computeFuture_subset_of_mem_futureReachable
+    (automaton : PendingAutomaton) {source target : TypeAutomatonState}
+    (hClosed : automaton.ReferencesClosed)
+    (hSource : source ∈ automaton.states)
+    (hTarget : target ∈ automaton.futureReachable source) :
+    computeFuture automaton target ⊆ computeFuture automaton source := by
+  intro action hAction
+  simp only [computeFuture, Finset.mem_biUnion] at hAction ⊢
+  rcases hAction with ⟨reached, hReached, hOffer⟩
+  exact ⟨reached,
+    automaton.futureReachable_subset_of_mem hClosed hSource hTarget hReached,
+    hOffer⟩
+
+/-- If following a symbolic reference can only decrease the directly visible
+offer menu, then the finite reference closure adds no offers.  This is the
+generic fixed-point principle used by the execution view of a parallel
+product. -/
+theorem computeFuture_eq_offersAt_of_references_monotone
+    (automaton : PendingAutomaton) (source : TypeAutomatonState)
+    (hClosed : automaton.ReferencesClosed)
+    (hSource : source ∈ automaton.states)
+    (hMonotone : ∀ state ∈ automaton.states,
+      ∀ target ∈ automaton.referencedStates state,
+        automaton.offersAt target ⊆ automaton.offersAt state) :
+    computeFuture automaton source = automaton.offersAt source := by
+  classical
+  let allowed := automaton.states.filter fun state =>
+    automaton.offersAt state ⊆ automaton.offersAt source
+  have hSourceAllowed : source ∈ allowed := by
+    simp [allowed, hSource]
+  have hAllowedClosed : ∀ state ∈ allowed,
+      automaton.referencedStates state ⊆ allowed := by
+    intro state hState target hTarget
+    have hFields := Finset.mem_filter.mp hState
+    have hTargetState := hClosed state hFields.1 hTarget
+    apply Finset.mem_filter.mpr
+    exact ⟨hTargetState, (hMonotone state hFields.1 target hTarget).trans
+      hFields.2⟩
+  apply Finset.Subset.antisymm
+  · intro action hAction
+    simp only [computeFuture, Finset.mem_biUnion] at hAction
+    rcases hAction with ⟨state, hReachable, hOffer⟩
+    have hReachableAllowed :=
+      automaton.futureReachable_subset_of_reference_closed source allowed
+        hSourceAllowed hAllowedClosed hReachable
+    exact (Finset.mem_filter.mp hReachableAllowed).2 hOffer
+  · intro action hAction
+    simp only [computeFuture, Finset.mem_biUnion]
+    exact ⟨source, automaton.mem_futureReachable_self source, hAction⟩
+
+/-- Predicate-scoped variant of reference monotonicity.  It is useful when a
+constructor carrier contains bookkeeping states which are deliberately not
+semantic residuals: only the closure starting from a represented state must
+remain represented and menu-decreasing. -/
+theorem computeFuture_eq_offersAt_of_references_monotone_on
+    (automaton : PendingAutomaton) (source : TypeAutomatonState)
+    (represented : TypeAutomatonState → Prop)
+    (hClosed : automaton.ReferencesClosed)
+    (hSourceState : source ∈ automaton.states)
+    (hSource : represented source)
+    (hStep : ∀ state ∈ automaton.states, represented state →
+      ∀ target ∈ automaton.referencedStates state,
+        represented target ∧
+          automaton.offersAt target ⊆ automaton.offersAt state) :
+    computeFuture automaton source = automaton.offersAt source := by
+  classical
+  let allowed := automaton.states.filter fun state =>
+    represented state ∧
+      automaton.offersAt state ⊆ automaton.offersAt source
+  have hSourceAllowed : source ∈ allowed := by
+    simp [allowed, hSourceState, hSource]
+  have hAllowedClosed : ∀ state ∈ allowed,
+      automaton.referencedStates state ⊆ allowed := by
+    intro state hState target hTarget
+    have hFields := Finset.mem_filter.mp hState
+    have hTargetState := hClosed state hFields.1 hTarget
+    have hNext := hStep state hFields.1 hFields.2.1 target hTarget
+    apply Finset.mem_filter.mpr
+    exact ⟨hTargetState, hNext.1, hNext.2.trans hFields.2.2⟩
+  apply Finset.Subset.antisymm
+  · intro action hAction
+    simp only [computeFuture, Finset.mem_biUnion] at hAction
+    rcases hAction with ⟨state, hReachable, hOffer⟩
+    have hReachableAllowed :=
+      automaton.futureReachable_subset_of_reference_closed source allowed
+        hSourceAllowed hAllowedClosed hReachable
+    exact (Finset.mem_filter.mp hReachableAllowed).2.2 hOffer
+  · intro action hAction
+    simp only [computeFuture, Finset.mem_biUnion]
+    exact ⟨source, automaton.mem_futureReachable_self source, hAction⟩
+
+/-- `computeFuture` at a constructor root with only child-entry references
+and an optional self-reference is the root's direct menu union the complete
+menu of every child entry. -/
+theorem computeFuture_eq_offersAt_union_biUnion
+    (automaton : PendingAutomaton) (source : TypeAutomatonState)
+    (entries : Finset TypeAutomatonState)
+    (hClosed : automaton.ReferencesClosed)
+    (hSource : source ∈ automaton.states)
+    (hReferencesUpper : automaton.referencedStates source ⊆
+      insert source entries)
+    (hEntries : entries ⊆ automaton.referencedStates source) :
+    computeFuture automaton source =
+      automaton.offersAt source ∪ entries.biUnion (computeFuture automaton) := by
+  rw [computeFuture,
+    automaton.futureReachable_eq_self_union_biUnion source entries hClosed
+      hSource hReferencesUpper hEntries]
+  ext action
+  simp only [Finset.mem_biUnion, Finset.mem_union, Finset.mem_singleton]
+  constructor
+  · rintro ⟨state, hState, hAction⟩
+    rcases hState with rfl | ⟨entry, hEntry, hReachable⟩
+    · exact Or.inl hAction
+    · apply Or.inr
+      refine ⟨entry, hEntry, ?_⟩
+      change action ∈
+        (automaton.futureReachable entry).biUnion automaton.offersAt
+      exact Finset.mem_biUnion.mpr ⟨state, hReachable, hAction⟩
+  · rintro (hAction | ⟨entry, hEntry, hFuture⟩)
+    · exact ⟨source, Or.inl rfl, hAction⟩
+    · change action ∈
+          (automaton.futureReachable entry).biUnion automaton.offersAt
+        at hFuture
+      rcases Finset.mem_biUnion.mp hFuture with
+        ⟨state, hReachable, hAction⟩
+      exact ⟨state, Or.inr ⟨entry, hEntry, hReachable⟩, hAction⟩
 
 /-- `computeFuture` is the least closed future menu: collect the offers stored
 at the current state, then union the complete menus of every immediate
@@ -826,6 +1212,55 @@ theorem computeFuture_eq_of_embedding
       simpa using hState) extra]
   exact PendingAutomaton.biUnion_offersAt_image_of_embedding
     child parent embed hOffers _
+
+/-- `computeFuture` is independent of bookkeeping-only differences in the
+state carrier once both pending graphs are closed and have the same edges. -/
+theorem computeFuture_eq_of_same_edges
+    (first second : PendingAutomaton)
+    (hEdges : first.edges = second.edges)
+    (hFirstClosed : first.ReferencesClosed)
+    (hSecondClosed : second.ReferencesClosed)
+    (state : TypeAutomatonState)
+    (hFirstState : state ∈ first.states)
+    (hSecondState : state ∈ second.states) :
+    computeFuture first state = computeFuture second state := by
+  let shared : PendingAutomaton :=
+    { states := first.states ∪ second.states, edges := first.edges }
+  have hFirstCard : first.states.card ≤ shared.states.card :=
+    Finset.card_le_card Finset.subset_union_left
+  have hSecondCard : second.states.card ≤ shared.states.card :=
+    Finset.card_le_card Finset.subset_union_right
+  have hFirst := computeFuture_eq_of_embedding first shared id
+    (fun current => by
+      change first.referencedStates current =
+        (first.referencedStates current).image id
+      ext target
+      simp)
+    (fun current => by
+      change first.offersAt current = first.offersAt current
+      rfl)
+      hFirstClosed state hFirstState hFirstCard
+  have hSecondReferences : ∀ current,
+      shared.referencedStates (id current) =
+        (second.referencedStates current).image id := by
+    intro current
+    unfold PendingAutomaton.referencedStates
+    rw [hEdges]
+    ext target
+    simp
+  have hSecondOffers : ∀ current,
+      shared.offersAt (id current) = second.offersAt current := by
+    intro current
+    unfold PendingAutomaton.offersAt
+    rw [hEdges]
+    rfl
+  have hSecond := computeFuture_eq_of_embedding second shared id
+    hSecondReferences hSecondOffers hSecondClosed state hSecondState hSecondCard
+  have hFirst' : computeFuture shared state = computeFuture first state := by
+    simpa using hFirst
+  have hSecond' : computeFuture shared state = computeFuture second state := by
+    simpa using hSecond
+  exact hFirst'.symm.trans hSecond'
 
 /-- With no outgoing same-cycle reference, future resolution is exactly the
 offers stored directly at the state. -/
@@ -2258,14 +2693,10 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
-/--
-Build a conjunctive offer with one fresh root.
-
-If at least one branch is enabled, enter the precompiled parallel product of
-singleton exclusive offers. If no branch is immediate or future, enter the
-else continuation. The conjunction and else automata are tagged as children
-`0` and `1`, respectively.
--/
+/-- Legacy unspecialized conjunction builder, retained for the generic graph
+lemmas about an arbitrary conjunction child.  The compiler uses the selected
+builder below, which removes only the all-else outcome after an enabled branch
+has witnessed entry. -/
 def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton conjunction : AutomatonFragment) : AutomatonFragment := by
@@ -2359,6 +2790,131 @@ theorem buildConjunctiveOfferAutomaton_futureTargetsInStates
     simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
+/-- Post-construction conjunctive-offer builder.  Each enabled witness enters
+its own copy of the singleton product with that witness's synthetic else arm
+removed; the other singleton else arms remain available. -/
+def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
+    AutomatonFragment := by
+  classical
+  let states := {TypeAutomatonState.root} ∪ childStates 0 elseAutomaton ∪
+    indexedFragmentStates selectedConjunctions
+  let accepting := childAccepting 0 elseAutomaton ∪
+    indexedFragmentAccepting selectedConjunctions
+  let skipping := childSkipping 0 elseAutomaton ∪
+    indexedFragmentSkipping selectedConjunctions
+  let completing :=
+    (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
+        branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
+      {TypeAutomatonState.root}
+    else ∅) ∪ childCompleting 0 elseAutomaton ∪
+      indexedFragmentCompleting selectedConjunctions
+  let needs := typeBranchNeeds branches
+  let actions := typeBranchActions branches
+  let enabledEdges : Finset PendingAutomatonEdge :=
+    selectedConjunctions.zipIdx.foldl (fun edges indexed =>
+      let index := indexed.2
+      let action := indexed.1.1
+      let conjunction := indexed.1.2
+      let enablingEnvironments := signature.localEnvironments.filter
+        fun environment => typeNeed action ∈ environment.immediate
+      edges ∪ enablingEnvironments.image fun environment =>
+        { source := TypeAutomatonState.root
+          environment := environment
+          label := .visible TypeLabel.silent
+          current := ∅
+          future := .at (childState (index + 1) conjunction.initial) ∅
+          target := childState (index + 1) conjunction.initial }) ∅
+  let waitEdges : Finset PendingAutomatonEdge :=
+    let waitingEnvironments := signature.localEnvironments.filter fun environment =>
+      environment.clock = false ∧
+      needs ∩ environment.immediate = ∅ ∧
+      needs ∩ environment.future ≠ ∅
+    waitingEnvironments.image fun environment =>
+      let waiting := (environment.future.image typeNeed) ∩ actions
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible TypeLabel.silent
+        current := waiting
+        future := .at TypeAutomatonState.root waiting
+        target := TypeAutomatonState.root }
+  let elseEdges : Finset PendingAutomatonEdge :=
+    let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+      needs ∩ environment.immediate = ∅ ∧
+      needs ∩ environment.future = ∅
+    resolvedEnvironments.image fun environment =>
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible TypeLabel.silent
+        current := actions
+        future := .at (childState 0 elseAutomaton.initial) ∅
+        target := childState 0 elseAutomaton.initial }
+  exact finishAutomatonFragment states .root accepting skipping completing
+    (childPendingEdges 0 elseAutomaton ∪
+      indexedFragmentEdges selectedConjunctions ∪ enabledEdges ∪
+        waitEdges ∪ elseEdges)
+
+theorem buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
+    (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (hElseTargets : elseAutomaton.FutureTargetsInStates)
+    (hConjunctionTargets : ∀ entry ∈ selectedConjunctions,
+      entry.2.FutureTargetsInStates)
+    (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
+    (hConjunctionInitial : ∀ entry ∈ selectedConjunctions,
+      entry.2.initial ∈ entry.2.states) :
+    (buildSelectedConjunctiveOfferAutomaton signature branches elseAutomaton
+      selectedConjunctions).FutureTargetsInStates := by
+  classical
+  intro edge hEdge target removed hFuture
+  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hConjunction) | hEnabled) | hWait) | hResolved)
+  · have hTarget := childPendingEdges_futureTargetsInStates 0 elseAutomaton
+      hElseTargets edge hElse target removed hFuture
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
+  · have hTarget := indexedFragment_futureTargetsInStates
+      selectedConjunctions hConjunctionTargets edge hConjunction target removed
+        hFuture
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
+  · rw [mem_foldl_union_iff] at hEnabled
+    rcases hEnabled with hEmpty | ⟨indexed, hIndexed, hNewEdge⟩
+    · simp at hEmpty
+    · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      rcases hNewEdge with ⟨environment, _, rfl⟩
+      simp only at hFuture
+      cases hFuture
+      have hIndexedFields := List.mem_zipIdx hIndexed
+      simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+        at hIndexedFields
+      rcases hIndexedFields with ⟨hBound, hValue⟩
+      have hEntry : indexed.1 ∈ selectedConjunctions := by
+        have hMember := List.getElem_mem hBound
+        simpa [hValue] using hMember
+      have hIndexedState : childState (indexed.2 + 1)
+          indexed.1.2.initial ∈
+          indexedFragmentStates selectedConjunctions := by
+        rw [indexedFragmentStates, mem_foldl_union_iff]
+        exact Or.inr ⟨indexed, hIndexed, Finset.mem_image.mpr
+          ⟨indexed.1.2.initial, hConjunctionInitial indexed.1 hEntry, rfl⟩⟩
+      simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+        hIndexedState]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    rcases hWait with ⟨environment, _, rfl⟩
+    simp only at hFuture
+    cases hFuture
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    rcases hResolved with ⟨environment, _, rfl⟩
+    simp only at hFuture
+    cases hFuture
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+      childStates, childState, hElseInitial]
+
 /-!
 ### Constructor compiler
 -/
@@ -2447,6 +3003,40 @@ theorem typeCompilationFuel_parallelTypeBranches
           simp [parallelTypeBranches, singletonTypeXOffer,
             typeCompilationFuel, typeBranchCompilationFuel,
             conjunctiveCompilationFuel, ih]
+
+/-- Forcing one singleton branch removes only its synthetic else outcome and
+does not change the compilation budget of the generated parallel product. -/
+theorem typeCompilationFuel_parallelTypeBranchesSelecting
+    (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType)) :
+    typeCompilationFuel (parallelTypeBranchesSelecting selected branches) =
+      conjunctiveCompilationFuel branches := by
+  induction branches with
+  | nil =>
+      simp [parallelTypeBranchesSelecting, typeCompilationFuel,
+        conjunctiveCompilationFuel]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          by_cases hSelected : (action, processType) = selected
+          · subst selected
+            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+              typeCompilationFuel, typeBranchCompilationFuel,
+              conjunctiveCompilationFuel]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, typeCompilationFuel,
+              typeBranchCompilationFuel, conjunctiveCompilationFuel]
+      | cons next tail =>
+          by_cases hSelected : (action, processType) = selected
+          · subst selected
+            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+              typeCompilationFuel, typeBranchCompilationFuel,
+              conjunctiveCompilationFuel,
+              typeCompilationFuel_parallelTypeBranches]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, typeCompilationFuel,
+              typeBranchCompilationFuel, conjunctiveCompilationFuel, ih]
 
 /-- `fuel` covers every recursive call made while compiling `processType`. -/
 def TypeCompilationFuelSufficient
@@ -2658,10 +3248,11 @@ def compileTypeFuel (signature : TypeAlphabet) :
       -- conjunctive offer: compile its singleton-offer parallel product first.
       | .offer elseType branches =>
           let elseAutomaton := compileTypeFuel signature fuel elseType
-          let conjunction := compileTypeFuel signature fuel
-            (parallelTypeBranches branches)
-          exact buildConjunctiveOfferAutomaton
-            signature branches elseAutomaton conjunction
+          let selectedConjunctions := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          exact buildSelectedConjunctiveOfferAutomaton
+            signature branches elseAutomaton selectedConjunctions
 
 /-- Once fuel covers the custom compilation budget, one more unit leaves the
 constructor fragment unchanged. -/
@@ -2787,23 +3378,28 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
                 omega
           exact hMap branches hBranches
       | offer elseType branches =>
-          change buildConjunctiveOfferAutomaton signature branches
+          change buildSelectedConjunctiveOfferAutomaton signature branches
               (compileTypeFuel signature (fuel + 1) elseType)
-              (compileTypeFuel signature (fuel + 1)
-                (parallelTypeBranches branches)) =
-            buildConjunctiveOfferAutomaton signature branches
+              (branches.map fun selected =>
+                (selected.1, compileTypeFuel signature (fuel + 1)
+                  (parallelTypeBranchesSelecting selected branches))) =
+            buildSelectedConjunctiveOfferAutomaton signature branches
               (compileTypeFuel signature fuel elseType)
-              (compileTypeFuel signature fuel (parallelTypeBranches branches))
+              (branches.map fun selected =>
+                (selected.1, compileTypeFuel signature fuel
+                  (parallelTypeBranchesSelecting selected branches)))
           have hElse : typeCompilationFuel elseType ≤ fuel := by
             simp [typeCompilationFuel] at hFuel
             omega
-          have hConjunction :
-              typeCompilationFuel (parallelTypeBranches branches) ≤ fuel := by
-            rw [typeCompilationFuel_parallelTypeBranches]
-            simp [typeCompilationFuel] at hFuel
-            omega
-          rw [ih elseType hElse,
-            ih (parallelTypeBranches branches) hConjunction]
+          rw [ih elseType hElse]
+          congr 1
+          apply List.map_congr_left
+          intro selected hSelected
+          congr 1
+          apply ih
+          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+          simp [typeCompilationFuel] at hFuel
+          omega
 
 /-- Any two sufficient parent budgets produce the same constructor fragment. -/
 private theorem compileTypeFuel_add_stable
