@@ -1611,6 +1611,429 @@ theorem syncAutomatonEdges_accepts_independent_offer_witness :
 
 /-! ### Reusable constructor combinators -/
 
+/-- One step of backward closure for completion: add every state with a
+silent (non-clock, non-message) outgoing edge into an already-completing
+state.  Administrative edges do not consume a cycle, so completion at a
+target transports backward to such a source. -/
+private def completingBackStep (body : AutomatonFragment)
+    (reached : Finset TypeAutomatonState) : Finset TypeAutomatonState :=
+  reached ∪
+    (body.edges.filter fun edge =>
+      edge.label.semantic = TypeLabel.silent ∧ edge.target ∈ reached).image
+      fun edge => edge.source
+
+private def completingBackClosureAux (body : AutomatonFragment) :
+    Nat → Finset TypeAutomatonState → Finset TypeAutomatonState
+  | 0, reached => reached
+  | fuel + 1, reached =>
+      completingBackClosureAux body fuel (completingBackStep body reached)
+
+/-- Saturate backward closure for at most `|Q|` rounds, matching the
+`futureReachable` fixed-point bound: a finite state space cannot expose a new
+predecessor after that many rounds. -/
+private def completingBackClosure (body : AutomatonFragment)
+    (seed : Finset TypeAutomatonState) : Finset TypeAutomatonState :=
+  completingBackClosureAux body body.states.card seed
+
+/-! ### Backward-closure characterization
+
+`completingBackClosure` is definitionally a forward `futureReachable`
+saturation on the *reversed* silent-edge graph: reverse every silent edge of
+`body`, encoding its (reversed) target as a `FutureSpec.at` reference, and
+reuse the whole `PendingAutomaton.futureReachable` proof library instead of
+redeveloping the fixed-point argument. -/
+
+/-- One silent edge of `body`, reversed and repackaged as a `FutureSpec.at`
+reference from its target back to its source. -/
+private def silentBackEdge (edge : PendingAutomatonEdge) : PendingAutomatonEdge :=
+  { source := edge.target
+    environment := TypeEnvironment.empty
+    label := .visible TypeLabel.silent
+    current := ∅
+    future := .at edge.source ∅
+    target := edge.target }
+
+private def silentBackEdges (body : AutomatonFragment) :
+    Finset PendingAutomatonEdge :=
+  (body.edges.filter fun edge => edge.label.semantic = TypeLabel.silent).image
+    silentBackEdge
+
+/-- The pending automaton whose forward same-cycle reference closure from a
+state computes exactly the states that reach it backward through silent
+edges of `body`. -/
+private def silentBackPending (body : AutomatonFragment) : PendingAutomaton :=
+  { states := body.states, edges := silentBackEdges body }
+
+private theorem silentBackPending_referencedStates
+    (body : AutomatonFragment) (state : TypeAutomatonState) :
+    (silentBackPending body).referencedStates state =
+      (body.edges.filter fun edge =>
+        edge.label.semantic = TypeLabel.silent ∧ edge.target = state).image
+        fun edge => edge.source := by
+  classical
+  ext source
+  constructor
+  · intro hMember
+    simp only [PendingAutomaton.referencedStates, silentBackPending,
+      Finset.mem_biUnion, Finset.mem_filter] at hMember
+    obtain ⟨backEdge, ⟨hBackEdge, hSource⟩, hReference⟩ := hMember
+    simp only [silentBackEdges, Finset.mem_image, Finset.mem_filter] at hBackEdge
+    obtain ⟨edge, ⟨hEdge, hLabel⟩, hBackEdgeEq⟩ := hBackEdge
+    have hSourceEq : edge.target = state := by
+      rw [← hBackEdgeEq] at hSource
+      simpa [silentBackEdge] using hSource
+    have hReferenceEq : source = edge.source := by
+      rw [← hBackEdgeEq] at hReference
+      simpa [silentBackEdge, AutomatonConstructionLabel.semantic,
+        TypeLabel.silent] using hReference
+    simp only [Finset.mem_image, Finset.mem_filter]
+    exact ⟨edge, ⟨hEdge, hLabel, hSourceEq⟩, hReferenceEq.symm⟩
+  · intro hMember
+    simp only [Finset.mem_image, Finset.mem_filter] at hMember
+    obtain ⟨edge, ⟨hEdge, hLabel, hTarget⟩, hSourceEq⟩ := hMember
+    have hFilterMem : edge ∈ body.edges.filter fun edge =>
+        edge.label.semantic = TypeLabel.silent := by
+      simp [hEdge, hLabel]
+    simp only [PendingAutomaton.referencedStates, silentBackPending,
+      Finset.mem_biUnion, Finset.mem_filter]
+    refine ⟨silentBackEdge edge, ⟨?_, ?_⟩, ?_⟩
+    · simp only [silentBackEdges, Finset.mem_image]
+      exact ⟨edge, hFilterMem, rfl⟩
+    · simp [silentBackEdge, hTarget]
+    · simp [silentBackEdge, AutomatonConstructionLabel.semantic,
+        TypeLabel.silent, hSourceEq]
+
+private theorem completingBackStep_eq_futureStep (body : AutomatonFragment)
+    (reached : Finset TypeAutomatonState) :
+    completingBackStep body reached =
+      (silentBackPending body).futureStep reached := by
+  classical
+  simp only [completingBackStep, PendingAutomaton.futureStep]
+  congr 1
+  ext source
+  simp only [Finset.mem_biUnion, silentBackPending_referencedStates,
+    Finset.mem_image, Finset.mem_filter]
+  constructor
+  · rintro ⟨edge, ⟨hEdge, hLabel, hTargetReached⟩, rfl⟩
+    exact ⟨edge.target, hTargetReached, edge, ⟨hEdge, hLabel, rfl⟩, rfl⟩
+  · rintro ⟨target, hTargetReached, edge, ⟨hEdge, hLabel, hTarget⟩, rfl⟩
+    exact ⟨edge, ⟨hEdge, hLabel, hTarget ▸ hTargetReached⟩, rfl⟩
+
+private theorem completingBackClosureAux_eq_futureReachableAux
+    (body : AutomatonFragment) :
+    ∀ fuel reached,
+      completingBackClosureAux body fuel reached =
+        (silentBackPending body).futureReachableAux fuel reached := by
+  intro fuel
+  induction fuel with
+  | zero => intro reached; rfl
+  | succ fuel ih =>
+      intro reached
+      simp only [completingBackClosureAux, PendingAutomaton.futureReachableAux]
+      rw [completingBackStep_eq_futureStep]
+      exact ih _
+
+/-- `completingBackClosure` is exactly forward `futureReachable` saturation on
+the reversed silent-edge graph, started from `seed` instead of a singleton.
+This transports the entire proved `futureReachable` fixed-point theory
+(closure, monotonicity, unfolding) to backward completion closure. -/
+private theorem completingBackClosure_eq_futureReachableAux
+    (body : AutomatonFragment) (seed : Finset TypeAutomatonState) :
+    completingBackClosure body seed =
+      (silentBackPending body).futureReachableAux body.states.card seed := by
+  simp only [completingBackClosure]
+  exact completingBackClosureAux_eq_futureReachableAux body body.states.card
+    seed
+
+/-- The reversed silent-edge graph is reference-closed whenever `body`'s
+states already contain every edge endpoint (ordinary edge endpoints, not
+symbolic future references, so no `FutureTargetsInStates` premise is needed
+here). -/
+private theorem silentBackPending_referencesClosed
+    (body : AutomatonFragment)
+    (hSources : ∀ edge ∈ body.edges, edge.source ∈ body.states) :
+    (silentBackPending body).ReferencesClosed := by
+  intro state _ target hTarget
+  rw [silentBackPending_referencedStates] at hTarget
+  simp only [Finset.mem_image, Finset.mem_filter] at hTarget
+  rcases hTarget with ⟨edge, ⟨hEdge, _, _⟩, rfl⟩
+  simpa [silentBackPending] using hSources edge hEdge
+
+/-- Backward completion closure unfolds by one symbolic silent-predecessor
+step: a state is in the closure of `seed` exactly when it already belongs to
+`seed`, or it has an outgoing silent edge into a state whose own backward
+closure already contains `seed`-reachable material.  In practice this is used
+through the two directional corollaries below. -/
+private theorem completingBackClosure_superset_seed
+    (body : AutomatonFragment) (seed : Finset TypeAutomatonState) :
+    seed ⊆ completingBackClosure body seed := by
+  rw [completingBackClosure_eq_futureReachableAux]
+  exact PendingAutomaton.subset_futureReachableAux (silentBackPending body)
+    body.states.card seed
+
+/-- If `source` has a silent edge into some state already in the closure of
+`seed`, then `source` itself is in the closure of `seed`.  This is the
+predecessor-step direction used to place the recursion root/backedge sources
+into the closure. -/
+private theorem completingBackClosure_mem_of_silentEdge
+    (body : AutomatonFragment) (seed : Finset TypeAutomatonState)
+    (hSeedStates : seed ⊆ body.states)
+    (hStates : ∀ edge ∈ body.edges, edge.source ∈ body.states)
+    (edge : PendingAutomatonEdge) (hEdge : edge ∈ body.edges)
+    (hLabel : edge.label.semantic = TypeLabel.silent)
+    (hTarget : edge.target ∈ completingBackClosure body seed) :
+    edge.source ∈ completingBackClosure body seed := by
+  rw [completingBackClosure_eq_futureReachableAux] at hTarget ⊢
+  have hClosed := silentBackPending_referencesClosed body hStates
+  let reached := (silentBackPending body).futureReachableAux
+    body.states.card seed
+  have hFixed : (silentBackPending body).futureStep reached = reached := by
+    apply PendingAutomaton.futureReachableAux_fixed_after_missing
+      (silentBackPending body) hClosed body.states.card seed
+      (by simpa [silentBackPending] using hSeedStates)
+    simp [silentBackPending]
+  have hStepMem : edge.source ∈ (silentBackPending body).futureStep reached := by
+    apply Finset.mem_union_right
+    apply Finset.mem_biUnion.mpr
+    refine ⟨edge.target, hTarget, ?_⟩
+    rw [silentBackPending_referencedStates]
+    simp only [Finset.mem_image, Finset.mem_filter]
+    exact ⟨edge, ⟨hEdge, hLabel, rfl⟩, rfl⟩
+  rwa [hFixed] at hStepMem
+
+/-- Backward completion closure is contained in any predecessor-closed set
+containing `seed`: if a set contains `seed` and is closed under taking silent
+predecessors, the whole closure lands inside it.  This is the direction used
+to bound the closure from above by a syntactic completion characterization. -/
+private theorem completingBackClosure_subset_of_predecessor_closed
+    (body : AutomatonFragment) (seed allowed : Finset TypeAutomatonState)
+    (hSeed : seed ⊆ allowed)
+    (hAllowed : ∀ edge ∈ body.edges,
+      edge.label.semantic = TypeLabel.silent → edge.target ∈ allowed →
+        edge.source ∈ allowed) :
+    completingBackClosure body seed ⊆ allowed := by
+  rw [completingBackClosure_eq_futureReachableAux]
+  have hAux : ∀ fuel reached, reached ⊆ allowed →
+      (silentBackPending body).futureReachableAux fuel reached ⊆ allowed := by
+    intro fuel
+    induction fuel with
+    | zero => intro reached hReached; exact hReached
+    | succ fuel ih =>
+        intro reached hReached
+        simp only [PendingAutomaton.futureReachableAux]
+        apply ih
+        intro state hState
+        simp only [PendingAutomaton.futureStep, Finset.mem_union,
+          Finset.mem_biUnion] at hState
+        rcases hState with hState | ⟨source, hSource, hReference⟩
+        · exact hReached hState
+        · rw [silentBackPending_referencedStates] at hReference
+          simp only [Finset.mem_image, Finset.mem_filter] at hReference
+          rcases hReference with ⟨edge, ⟨hEdge, hLabel, hTarget⟩, rfl⟩
+          apply hAllowed edge hEdge hLabel
+          rw [hTarget]
+          exact hReached hSource
+  exact hAux body.states.card seed hSeed
+
+/-- Backward completion closure is monotone in the seed: a larger seed (still
+bounded by the fragment's states) can only close over a larger set. -/
+private theorem completingBackClosure_mono
+    (body : AutomatonFragment)
+    (hSources : ∀ edge ∈ body.edges, edge.source ∈ body.states)
+    {seed1 seed2 : Finset TypeAutomatonState}
+    (hSeed2 : seed2 ⊆ body.states) (hSubset : seed1 ⊆ seed2) :
+    completingBackClosure body seed1 ⊆ completingBackClosure body seed2 := by
+  apply completingBackClosure_subset_of_predecessor_closed
+  · exact hSubset.trans (completingBackClosure_superset_seed body seed2)
+  · intro edge hEdge hLabel hTarget
+    exact completingBackClosure_mem_of_silentEdge body seed2 hSeed2 hSources
+      edge hEdge hLabel hTarget
+
+/-- Inserting a state with no incoming silent edges into the seed only adds
+that state itself to the closure: it can never unlock a new predecessor,
+since no edge targets it. -/
+private theorem completingBackClosure_union_isolated_target
+    (body : AutomatonFragment)
+    (hSources : ∀ edge ∈ body.edges, edge.source ∈ body.states)
+    (isolated : TypeAutomatonState) (hIsolatedState : isolated ∈ body.states)
+    (seed : Finset TypeAutomatonState) (hSeed : seed ⊆ body.states)
+    (hNoIncoming : ∀ edge ∈ body.edges, edge.target ≠ isolated) :
+    completingBackClosure body ({isolated} ∪ seed) =
+      {isolated} ∪ completingBackClosure body seed := by
+  apply Finset.Subset.antisymm
+  · apply completingBackClosure_subset_of_predecessor_closed
+    · exact Finset.union_subset_union (Finset.Subset.refl _)
+        (completingBackClosure_superset_seed body seed)
+    · intro edge hEdge hLabel hTarget
+      simp only [Finset.mem_union, Finset.mem_singleton] at hTarget ⊢
+      rcases hTarget with hTarget | hTarget
+      · exact absurd hTarget (hNoIncoming edge hEdge)
+      · exact Or.inr (completingBackClosure_mem_of_silentEdge body seed hSeed
+          hSources edge hEdge hLabel hTarget)
+  · apply Finset.union_subset
+    · exact (Finset.subset_union_left).trans
+        (completingBackClosure_superset_seed body ({isolated} ∪ seed))
+    · apply completingBackClosure_mono body hSources
+        (Finset.union_subset (by simpa using hIsolatedState) hSeed)
+      exact Finset.subset_union_right
+
+/-- A carrier whose states and edges are `body`'s own states/edges, each
+tagged by `childState index`, but whose completing/skipping/accepting/initial
+bookkeeping is irrelevant to backward closure and is therefore left blank.
+This is definitionally the state/edge shape shared by `buildRecursionAutomaton`'s
+`taggedCarrier` (at `index = 0`) and by any other constructor that lifts a
+child fragment's edges with `childPendingEdge`. -/
+private def taggedFragment (index : Nat) (body : AutomatonFragment) :
+    AutomatonFragment :=
+  { states := childStates index body
+    initial := childState index body.initial
+    accepting := ∅
+    skipping := ∅
+    completing := ∅
+    edges := body.edges.image fun edge =>
+      { source := childState index edge.source
+        environment := edge.environment
+        label := edge.label
+        current := edge.current
+        future := edge.future
+        target := childState index edge.target } }
+
+/-- The reversed silent-edge predecessor function commutes exactly with
+`childState index`-tagging: predecessors of a tagged state in the tagged
+carrier are exactly the tagged predecessors of the untagged state in `body`.
+-/
+private theorem silentBackPending_taggedFragment_referencedStates
+    (index : Nat) (body : AutomatonFragment) (state : TypeAutomatonState) :
+    (silentBackPending (taggedFragment index body)).referencedStates
+        (childState index state) =
+      ((silentBackPending body).referencedStates state).image (childState index) := by
+  classical
+  rw [silentBackPending_referencedStates, silentBackPending_referencedStates]
+  ext source
+  constructor
+  · intro hMember
+    simp only [taggedFragment, Finset.mem_image, Finset.mem_filter] at hMember
+    obtain ⟨edge, ⟨⟨original, hOriginal, hEdgeEq⟩, hLabel, hTarget⟩, hSourceEq⟩ :=
+      hMember
+    subst hEdgeEq
+    simp only at hLabel hTarget
+    have hTargetEq : original.target = state := by injection hTarget
+    simp only [Finset.mem_image, Finset.mem_filter]
+    exact ⟨original.source, ⟨original, ⟨hOriginal, hLabel, hTargetEq⟩, rfl⟩,
+      hSourceEq⟩
+  · intro hMember
+    simp only [Finset.mem_image, Finset.mem_filter] at hMember
+    obtain ⟨candidate, ⟨original, ⟨hOriginal, hLabel, hTarget⟩, hSourceEq⟩, hEq⟩ :=
+      hMember
+    simp only [taggedFragment, Finset.mem_image, Finset.mem_filter]
+    refine ⟨_, ⟨⟨original, hOriginal, rfl⟩, ?_, ?_⟩, ?_⟩
+    · simpa using hLabel
+    · simp [childState, hTarget]
+    · simp only [childState, hSourceEq]; exact hEq
+
+/-- Backward completion closure commutes with `childState`-tagging: computing
+the closure in the tagged carrier and reading off tagged states is the same
+as computing the closure directly in `body` and tagging the result.  This is
+the single reusable embedding underlying every constructor's use of backward
+completion closure over a tagged child. -/
+private theorem completingBackClosure_taggedFragment_image
+    (index : Nat) (body : AutomatonFragment) (seed : Finset TypeAutomatonState) :
+    completingBackClosure (taggedFragment index body) (seed.image (childState index)) =
+      (completingBackClosure body seed).image (childState index) := by
+  classical
+  rw [completingBackClosure_eq_futureReachableAux,
+    completingBackClosure_eq_futureReachableAux]
+  have hStatesCard : (taggedFragment index body).states.card = body.states.card := by
+    simp only [taggedFragment, childStates]
+    exact Finset.card_image_of_injective body.states
+      (fun a b hEq => by injection hEq)
+  rw [hStatesCard]
+  exact PendingAutomaton.futureReachableAux_image_of_embedding
+    (silentBackPending body) (silentBackPending (taggedFragment index body))
+    (childState index)
+    (fun state => silentBackPending_taggedFragment_referencedStates index body state)
+    body.states.card seed
+
+/-- `completingBackStep`, hence the whole closure, depends only on the
+`(source, label, target)` projection of each edge.  Two fragments whose edges
+agree on that projection (in particular differing only in unused `future`
+bookkeeping) and whose declared state sets both bound the true edge/seed
+footprint compute the same backward completion closure regardless of their
+raw `states.card` fuel bound.  This lets `buildRecursionAutomaton`'s literal
+`taggedCarrier` be identified with the canonical `taggedFragment` used by the
+embedding lemma above. -/
+private theorem completingBackClosure_eq_of_edges_agree
+    (first second : AutomatonFragment)
+    (hAgree : ∀ source label target,
+        (∃ edge ∈ first.edges,
+          edge.source = source ∧ edge.label = label ∧ edge.target = target) ↔
+        (∃ edge ∈ second.edges,
+          edge.source = source ∧ edge.label = label ∧ edge.target = target))
+    (hFirstSources : ∀ edge ∈ first.edges, edge.source ∈ first.states)
+    (hSecondSources : ∀ edge ∈ second.edges, edge.source ∈ second.states)
+    (seed : Finset TypeAutomatonState)
+    (hSeedFirst : seed ⊆ first.states) (hSeedSecond : seed ⊆ second.states) :
+    completingBackClosure first seed = completingBackClosure second seed := by
+  classical
+  have hStep : ∀ reached, completingBackStep first reached =
+      completingBackStep second reached := by
+    intro reached
+    simp only [completingBackStep]
+    congr 1
+    ext source
+    simp only [Finset.mem_image, Finset.mem_filter]
+    constructor
+    · rintro ⟨edge, ⟨hEdge, hLabel, hReached⟩, rfl⟩
+      obtain ⟨edge', hEdge', hSourceEq, hLabelEq, hTargetEq⟩ :=
+        (hAgree edge.source edge.label edge.target).mp ⟨edge, hEdge, rfl, rfl, rfl⟩
+      exact ⟨edge', ⟨hEdge', hLabelEq ▸ hLabel, hTargetEq ▸ hReached⟩, hSourceEq⟩
+    · rintro ⟨edge, ⟨hEdge, hLabel, hReached⟩, rfl⟩
+      obtain ⟨edge', hEdge', hSourceEq, hLabelEq, hTargetEq⟩ :=
+        (hAgree edge.source edge.label edge.target).mpr ⟨edge, hEdge, rfl, rfl, rfl⟩
+      exact ⟨edge', ⟨hEdge', hLabelEq ▸ hLabel, hTargetEq ▸ hReached⟩, hSourceEq⟩
+  have hAux : ∀ fuel reached, completingBackClosureAux first fuel reached =
+      completingBackClosureAux second fuel reached := by
+    intro fuel
+    induction fuel with
+    | zero => intro reached; rfl
+    | succ fuel ih =>
+        intro reached
+        simp only [completingBackClosureAux, hStep]
+        exact ih _
+  have hFirstClosed := silentBackPending_referencesClosed first hFirstSources
+  have hSecondClosed := silentBackPending_referencesClosed second hSecondSources
+  have hFirstPad : (silentBackPending first).futureReachableAux
+      (first.states.card + second.states.card) seed =
+        (silentBackPending first).futureReachableAux first.states.card seed := by
+    have hCard : first.states.card + second.states.card =
+        (silentBackPending first).states.card + second.states.card := rfl
+    rw [hCard]
+    exact PendingAutomaton.futureReachableAux_add_card_stable
+      (silentBackPending first) hFirstClosed seed
+        (by simpa [silentBackPending] using hSeedFirst) second.states.card
+  have hSecondPad : (silentBackPending second).futureReachableAux
+      (first.states.card + second.states.card) seed =
+        (silentBackPending second).futureReachableAux second.states.card seed := by
+    have hCard : first.states.card + second.states.card =
+        (silentBackPending second).states.card + first.states.card := by
+      rw [Nat.add_comm]; rfl
+    rw [hCard]
+    exact PendingAutomaton.futureReachableAux_add_card_stable
+      (silentBackPending second) hSecondClosed seed
+        (by simpa [silentBackPending] using hSeedSecond) first.states.card
+  have hFirstEq : completingBackClosureAux first
+      (first.states.card + second.states.card) seed =
+        completingBackClosure first seed := by
+    rw [completingBackClosureAux_eq_futureReachableAux, hFirstPad,
+      ← completingBackClosureAux_eq_futureReachableAux, completingBackClosure]
+  have hSecondEq : completingBackClosureAux second
+      (first.states.card + second.states.card) seed =
+        completingBackClosure second seed := by
+    rw [completingBackClosureAux_eq_futureReachableAux, hSecondPad,
+      ← completingBackClosureAux_eq_futureReachableAux, completingBackClosure]
+  rw [← hFirstEq, ← hSecondEq,
+    hAux (first.states.card + second.states.card) seed]
+
 /--
 Build a recursion binder with an explicit silent header step.
 
@@ -1626,11 +2049,32 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
   let recursiveCallSources :=
     (body.edges.filter fun edge => edge.label = .variable name).image
       fun edge => childState 0 edge.source
-  let completing :=
+  let seedCompleting :=
     (if body.initial ∈ body.completing then
       {TypeAutomatonState.root} ∪ recursiveCallSources
     else ∅) ∪
       childCompleting 0 body
+  -- Close backward through administrative (silent, non-clock) edges of the
+  -- tagged carrier, so completion installed at a recursive-call source (or
+  -- the header) propagates to every state that can reach it without
+  -- consuming a cycle.  `root` has no incoming tagged edges, so it never
+  -- gains extra predecessors from this closure.
+  let taggedBodyEdges : Finset PendingAutomatonEdge :=
+    body.edges.image fun edge =>
+      { source := childState 0 edge.source
+        environment := edge.environment
+        label := edge.label
+        current := edge.current
+        future := edge.future
+        target := childState 0 edge.target }
+  let taggedCarrier : AutomatonFragment :=
+    { states := states
+      initial := TypeAutomatonState.root
+      accepting := accepting
+      skipping := skipping
+      completing := ∅
+      edges := taggedBodyEdges }
+  let completing := completingBackClosure taggedCarrier seedCompleting
   let headerEdges : Finset PendingAutomatonEdge :=
     signature.localEnvironments.image fun environment =>
       { source := TypeAutomatonState.root
@@ -1689,6 +2133,236 @@ theorem buildRecursionAutomaton_futureTargetsInStates
             bodyTarget removed hSpec
           simp [buildRecursionAutomaton, finishAutomatonFragment, childStates,
             childState, hBodyTarget]
+
+/-- `buildRecursionAutomaton`'s completing set, unfolded to the reusable
+`taggedFragment`/`completingBackClosure` embedding: a tagged body state
+`childState 0 bodyState` is completing exactly when `bodyState` is in the
+backward completion closure computed directly on `body`, seeded by whichever
+of `body.completing` and (if `body`'s entry itself completes) the untagged
+recursive-call sources apply.  The fresh `root` is completing exactly when it
+was seeded, i.e. when `body.initial ∈ body.completing`. -/
+theorem buildRecursionAutomaton_completing_eq
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (hSources : ∀ edge ∈ body.edges, edge.source ∈ body.states)
+    (hCompletingStates : body.completing ⊆ body.states) :
+    let untaggedSources :=
+      (body.edges.filter fun edge => edge.label = .variable name).image
+        fun edge => edge.source
+    let untaggedSeed :=
+      (if body.initial ∈ body.completing then untaggedSources else ∅) ∪
+        body.completing
+    (buildRecursionAutomaton signature name body).completing =
+      (if body.initial ∈ body.completing then
+        {TypeAutomatonState.root} else ∅) ∪
+        (completingBackClosure body untaggedSeed).image (childState 0) := by
+  classical
+  intro untaggedSources untaggedSeed
+  set taggedCarrierEdges : Finset PendingAutomatonEdge :=
+    body.edges.image fun edge =>
+      { source := childState 0 edge.source, environment := edge.environment,
+        label := edge.label, current := edge.current, future := edge.future,
+        target := childState 0 edge.target } with hTaggedCarrierEdgesDef
+  have hGoal : (buildRecursionAutomaton signature name body).completing =
+      completingBackClosure
+        { states := {TypeAutomatonState.root} ∪ childStates 0 body
+          initial := TypeAutomatonState.root, accepting := childAccepting 0 body
+          skipping := childSkipping 0 body, completing := ∅
+          edges := taggedCarrierEdges }
+        ((if body.initial ∈ body.completing then
+            {TypeAutomatonState.root} ∪
+              (body.edges.filter fun edge => edge.label = .variable name).image
+                fun edge => childState 0 edge.source
+          else ∅) ∪ childCompleting 0 body) := by
+    simp only [buildRecursionAutomaton, finishAutomatonFragment,
+      hTaggedCarrierEdgesDef]
+  rw [hGoal]
+  have hSeedEq : ((if body.initial ∈ body.completing then
+        {TypeAutomatonState.root} ∪
+          (body.edges.filter fun edge => edge.label = .variable name).image
+            fun edge => childState 0 edge.source
+      else (∅ : Finset TypeAutomatonState)) ∪ childCompleting 0 body) =
+      (if body.initial ∈ body.completing then
+        ({TypeAutomatonState.root} : Finset TypeAutomatonState) else ∅) ∪
+        untaggedSeed.image (childState 0) := by
+    simp only [untaggedSeed, untaggedSources]
+    split
+    · rw [Finset.image_union, childCompleting, Finset.image_image]
+      ext state
+      simp only [Finset.mem_union, Finset.mem_singleton, Finset.mem_image,
+        Function.comp, or_assoc]
+    · simp [childCompleting]
+  rw [hSeedEq]
+  have hEdgesAgree : ∀ source label target,
+      (∃ edge ∈ taggedCarrierEdges,
+        edge.source = source ∧ edge.label = label ∧ edge.target = target) ↔
+      (∃ edge ∈ (taggedFragment 0 body).edges,
+        edge.source = source ∧ edge.label = label ∧ edge.target = target) := by
+    intro source label target
+    simp only [hTaggedCarrierEdgesDef, taggedFragment, Finset.mem_image]
+  have hFirstSources : ∀ edge ∈ taggedCarrierEdges,
+      edge.source ∈ {TypeAutomatonState.root} ∪ childStates 0 body := by
+    intro edge hEdge
+    simp only [hTaggedCarrierEdgesDef, Finset.mem_image] at hEdge
+    obtain ⟨original, hOriginal, rfl⟩ := hEdge
+    apply Finset.mem_union_right
+    simp only [childStates, Finset.mem_image]
+    exact ⟨original.source, hSources original hOriginal, rfl⟩
+  have hSecondSources : ∀ edge ∈ (taggedFragment 0 body).edges,
+      edge.source ∈ (taggedFragment 0 body).states := by
+    intro edge hEdge
+    simp only [taggedFragment, Finset.mem_image] at hEdge
+    obtain ⟨original, hOriginal, rfl⟩ := hEdge
+    simp only [taggedFragment, childStates, Finset.mem_image]
+    exact ⟨original.source, hSources original hOriginal, rfl⟩
+  have hSeedUntaggedStates : untaggedSeed ⊆ body.states := by
+    intro state hState
+    simp only [untaggedSeed, untaggedSources, Finset.mem_union] at hState
+    rcases hState with hState | hState
+    · split at hState
+      · simp only [Finset.mem_image] at hState
+        obtain ⟨edge, hEdge, rfl⟩ := hState
+        exact hSources edge (Finset.mem_filter.mp hEdge).1
+      · simp at hState
+    · exact hCompletingStates hState
+  have hSeedFirstStates : untaggedSeed.image (childState 0) ⊆
+      {TypeAutomatonState.root} ∪ childStates 0 body := by
+    intro state hState
+    simp only [Finset.mem_image] at hState
+    obtain ⟨original, hOriginal, rfl⟩ := hState
+    exact Finset.mem_union_right _ (Finset.mem_image.mpr
+      ⟨original, hSeedUntaggedStates hOriginal, rfl⟩)
+  have hSeedSecondStates : untaggedSeed.image (childState 0) ⊆
+      (taggedFragment 0 body).states := by
+    intro state hState
+    simp only [Finset.mem_image] at hState
+    obtain ⟨original, hOriginal, rfl⟩ := hState
+    simp only [taggedFragment, childStates, Finset.mem_image]
+    exact ⟨original, hSeedUntaggedStates hOriginal, rfl⟩
+  have hRootNoIncoming : ∀ edge ∈ taggedCarrierEdges,
+      edge.target ≠ TypeAutomatonState.root := by
+    intro edge hEdge
+    simp only [hTaggedCarrierEdgesDef, Finset.mem_image] at hEdge
+    obtain ⟨original, _, rfl⟩ := hEdge
+    simp [childState]
+  have hEdgesEq : completingBackClosure
+      { states := {TypeAutomatonState.root} ∪ childStates 0 body
+        initial := TypeAutomatonState.root, accepting := childAccepting 0 body
+        skipping := childSkipping 0 body, completing := ∅
+        edges := taggedCarrierEdges }
+      (untaggedSeed.image (childState 0)) =
+      (completingBackClosure body untaggedSeed).image (childState 0) := by
+    rw [completingBackClosure_eq_of_edges_agree _ _ hEdgesAgree hFirstSources
+      hSecondSources _ hSeedFirstStates hSeedSecondStates]
+    exact completingBackClosure_taggedFragment_image 0 body untaggedSeed
+  by_cases hInit : body.initial ∈ body.completing
+  · simp only [hInit, if_true]
+    rw [completingBackClosure_union_isolated_target _ hFirstSources
+        TypeAutomatonState.root (Finset.mem_union_left _ (Finset.mem_singleton_self _))
+        (untaggedSeed.image (childState 0)) hSeedFirstStates hRootNoIncoming,
+      hEdgesEq]
+  · simp only [hInit, if_false, Finset.empty_union]
+    exact hEdgesEq
+
+/-- Upper bound on `buildRecursionAutomaton`'s installed completion metadata.
+
+Backward completion closure travels only along edges whose *semantic* label is
+`TypeLabel.silent`.  Therefore a body state that (i) is not itself marked
+completing by the body fragment, (ii) is not the source of a matching
+recursive-call marker, and (iii) has no silent outgoing edge other than a
+self-loop, is never marked completing by the binder, no matter what the rest of
+the graph looks like.
+
+This is the exact converse bound needed to audit the installed metadata against
+the syntax predicate `PactType.CanCompleteBeforeTock` of the *substituted*
+residual: any state whose substituted residual completes while satisfying
+(i)-(iii) exhibits a mismatch. -/
+theorem buildRecursionAutomaton_not_mem_completing_of_no_silent_escape
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (state : TypeAutomatonState)
+    (hNotCompleting : state ∉ body.completing)
+    (hNoVariable : ∀ edge ∈ body.edges, edge.source = state →
+      edge.label ≠ AutomatonConstructionLabel.variable name)
+    (hNoSilentEscape : ∀ edge ∈ body.edges, edge.source = state →
+      edge.label.semantic = TypeLabel.silent → edge.target = state) :
+    childState 0 state ∉
+      (buildRecursionAutomaton signature name body).completing := by
+  classical
+  set taggedCarrierEdges : Finset PendingAutomatonEdge :=
+    body.edges.image fun edge =>
+      { source := childState 0 edge.source, environment := edge.environment,
+        label := edge.label, current := edge.current, future := edge.future,
+        target := childState 0 edge.target } with hTaggedCarrierEdgesDef
+  set seedCompleting : Finset TypeAutomatonState :=
+    (if body.initial ∈ body.completing then
+        {TypeAutomatonState.root} ∪
+          (body.edges.filter fun edge => edge.label = .variable name).image
+            fun edge => childState 0 edge.source
+      else ∅) ∪ childCompleting 0 body with hSeedCompletingDef
+  have hGoal : (buildRecursionAutomaton signature name body).completing =
+      completingBackClosure
+        { states := {TypeAutomatonState.root} ∪ childStates 0 body
+          initial := TypeAutomatonState.root, accepting := childAccepting 0 body
+          skipping := childSkipping 0 body, completing := ∅
+          edges := taggedCarrierEdges }
+        seedCompleting := by
+    simp only [buildRecursionAutomaton, finishAutomatonFragment,
+      hTaggedCarrierEdgesDef, hSeedCompletingDef]
+  rw [hGoal]
+  have hTaggedSource : ∀ edge ∈ taggedCarrierEdges,
+      edge.source = childState 0 state →
+        ∃ original ∈ body.edges, original.source = state ∧
+          original.label = edge.label ∧
+          (original.target = state ↔ edge.target = childState 0 state) := by
+    intro edge hEdge hSource
+    simp only [hTaggedCarrierEdgesDef, Finset.mem_image] at hEdge
+    obtain ⟨original, hOriginal, rfl⟩ := hEdge
+    simp only at hSource ⊢
+    have hOriginalSource : original.source = state := by
+      simpa [childState] using hSource
+    refine ⟨original, hOriginal, hOriginalSource, rfl, ?_⟩
+    constructor
+    · intro hTarget; simp [childState, hTarget]
+    · intro hTarget; simpa [childState] using hTarget
+  have hNotSeed : childState 0 state ∉ seedCompleting := by
+    simp only [hSeedCompletingDef, Finset.mem_union, childCompleting,
+      Finset.mem_image, not_or]
+    constructor
+    · split
+      · simp only [Finset.mem_union, Finset.mem_singleton, Finset.mem_image,
+          Finset.mem_filter, not_or]
+        refine ⟨by simp [childState], ?_⟩
+        rintro ⟨edge, ⟨hEdge, hLabel⟩, hEq⟩
+        have hSource : edge.source = state := by simpa [childState] using hEq
+        exact hNoVariable edge hEdge hSource hLabel
+      · simp
+    · rintro ⟨original, hOriginal, hEq⟩
+      have hOriginalEq : original = state := by simpa [childState] using hEq
+      exact hNotCompleting (hOriginalEq ▸ hOriginal)
+  have hSubset : completingBackClosure
+      { states := {TypeAutomatonState.root} ∪ childStates 0 body
+        initial := TypeAutomatonState.root, accepting := childAccepting 0 body
+        skipping := childSkipping 0 body, completing := ∅
+        edges := taggedCarrierEdges }
+      seedCompleting ⊆
+      ((taggedCarrierEdges.image fun edge => edge.source) ∪
+        seedCompleting).erase (childState 0 state) := by
+    apply completingBackClosure_subset_of_predecessor_closed
+    · intro candidate hCandidate
+      refine Finset.mem_erase.mpr ⟨?_, Finset.mem_union_right _ hCandidate⟩
+      rintro rfl
+      exact hNotSeed hCandidate
+    · intro edge hEdge hLabel hTarget
+      refine Finset.mem_erase.mpr ⟨?_,
+        Finset.mem_union_left _ (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩)⟩
+      intro hSourceEq
+      obtain ⟨original, hOriginal, hOriginalSource, hOriginalLabel,
+        hTargetIff⟩ := hTaggedSource edge hEdge hSourceEq
+      have hOriginalTarget : original.target = state :=
+        hNoSilentEscape original hOriginal hOriginalSource
+          (by rw [hOriginalLabel]; exact hLabel)
+      exact (Finset.mem_erase.mp hTarget).1 (hTargetIff.mp hOriginalTarget)
+  intro hMember
+  exact (Finset.mem_erase.mp (hSubset hMember)).1 rfl
 
 /--
 Build a binary choice.
