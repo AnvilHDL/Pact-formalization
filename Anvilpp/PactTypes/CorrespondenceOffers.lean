@@ -4733,17 +4733,10 @@ private theorem TypeOffers.offer_wait_fields_of_unresolved
       exact (hUnresolved hConditions.2.2).elim
   | offer_wait => exact ⟨rfl, rfl⟩
 
-/-- Conjunctive offers preserve raw pending-fragment step correspondence. -/
-theorem compilationFragmentStepCorrect_offer
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType))
-    (hConjunctionStep : CompilationFragmentStepCorrect signature
-      (parallelTypeBranches branches))
-    (hElseStep : CompilationFragmentStepCorrect signature elseType)
-    (hFuture : CompilationFutureCorrect signature
-      (.offer elseType branches)) :
-    CompilationFragmentStepCorrect signature (.offer elseType branches) := by
-  sorry
+/- The former unrestricted `compilationFragmentStepCorrect_offer` theorem was
+removed here.  It described the obsolete all-else conjunction child and had no
+callers.  The compiler and semantics now agree through the proved scoped
+theorem below, indexed by `parallelTypeBranchesSelecting selected branches`. -/
 /-
   classical
   let conjunctionType := parallelTypeBranches branches

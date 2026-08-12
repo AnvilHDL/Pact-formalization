@@ -1959,7 +1959,7 @@ private theorem buildSequenceAutomaton_outgoing_left
             label := .future
             current := ∅
             future := .at (childState 1 right.initial) ∅
-            target := childState 0 state }) := by
+            target := childState 1 right.initial }) := by
   classical
   constructor
   · rintro ⟨hEdge, hSource⟩
@@ -4520,7 +4520,7 @@ private theorem buildSequenceAutomaton_rightFuture_subset_of_completing
         label := .future
         current := ∅
         future := .at (childState 1 right.initial) ∅
-        target := childState 0 state }
+        target := childState 1 right.initial }
     simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
       Finset.mem_filter]
     refine ⟨bridge, ⟨?_, rfl⟩, ?_⟩
@@ -7046,6 +7046,21 @@ private theorem sameCycleMessageLinear_branch_of_mem :
       · exact hAll.1
       · exact ih entry hAll.2.2 hRest
 
+private theorem binderHygienic_branch_of_mem (bound : List String) :
+    ∀ branches entry, PactType.BinderHygienicBranches bound branches →
+      entry ∈ branches → PactType.BinderHygienic bound entry.2 := by
+  intro branches entry hHygienic hMember
+  induction branches with
+  | nil => simp at hMember
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      simp only [PactType.BinderHygienicBranches] at hHygienic
+      rcases hHygienic with ⟨hHead, hRest⟩
+      simp only [List.mem_cons] at hMember
+      rcases hMember with rfl | hMember
+      · exact hHead
+      · exact ih hRest hMember
+
 private theorem interfaceScoped_branch_of_mem :
     ∀ branches entry, PactType.InterfaceScopedBranches branches →
       entry ∈ branches → PactType.InterfaceScoped entry.2 := by
@@ -7181,38 +7196,45 @@ one of the already proved completion combinators, none of which needs them.  A
 (`le_rfl`). -/
 private theorem compilationCompletingCorrect_of_nestedRecursion
     (signature : TypeAlphabet) : ∀ processType : PactType,
+    signature.Supports processType →
     PactType.ClockGuarded processType →
     PactType.TailRecursive processType →
+    PactType.BinderHygienic [] processType →
     (∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) ≤ sizeOf processType →
+      signature.Supports (.recur nestedName nestedBody) →
       PactType.ClockGuarded (.recur nestedName nestedBody) →
       PactType.TailRecursive (.recur nestedName nestedBody) →
+      PactType.BinderHygienic [] (.recur nestedName nestedBody) →
         CompilationCompletingCorrect signature (.recur nestedName nestedBody)) →
     CompilationCompletingCorrect signature processType := by
   intro processType
   cases processType with
   | message msg dir =>
-      intro _ _ _
+      intro _ _ _ _ _
       exact compilationCompletingCorrect_message signature msg dir
   | progress pid =>
-      intro _ _ _
+      intro _ _ _ _ _
       exact compilationCompletingCorrect_progress signature pid
   | tock =>
-      intro _ _ _
+      intro _ _ _ _ _
       exact compilationCompletingCorrect_tock signature
   | skip =>
-      intro _ _ _
+      intro _ _ _ _ _
       exact compilationCompletingCorrect_skip signature
   | var name =>
-      intro _ _ _
+      intro _ _ _ _ _
       exact compilationCompletingCorrect_var signature name
   | recur nestedName nestedBody =>
-      intro hGuarded hTail hNestedRecursion
-      exact hNestedRecursion nestedName nestedBody le_rfl hGuarded hTail
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      exact hNestedRecursion nestedName nestedBody le_rfl hSupports hGuarded
+        hTail hHygienic
   | choice left right =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hLeftSize : sizeOf left < sizeOf (PactType.choice left right) := by
         simp_wf
         omega
@@ -7220,21 +7242,27 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hLeftSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hGuarded.2 hTail.2
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hRightSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_choice signature left right hLeft
         hRight
   | fairChoice bid left right =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hLeftSize : sizeOf left <
           sizeOf (PactType.fairChoice bid left right) := by
         simp_wf
@@ -7244,21 +7272,27 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hLeftSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hGuarded.2 hTail.2
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hRightSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_fairChoice signature bid left right
         hLeft hRight
   | seq left right =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hLeftSize : sizeOf left < sizeOf (PactType.seq left right) := by
         simp_wf
         omega
@@ -7266,21 +7300,27 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hLeftSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hGuarded.2 hTail.2
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hRightSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_sequence signature left right hLeft
         hRight
   | par left right interface =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hLeftSize : sizeOf left <
           sizeOf (PactType.par left right interface) := by
         simp_wf
@@ -7290,30 +7330,38 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hLeftSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hGuarded.2 hTail.2
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hRightSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_parallel signature left right interface
         hLeft hRight
   | xoffer elseType branches =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hElseSize : sizeOf elseType <
           sizeOf (PactType.xoffer elseType branches) := by
         simp_wf
         omega
       have hElse := compilationCompletingCorrect_of_nestedRecursion signature
-        elseType hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hElseSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hElseSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hBranches : ∀ (action : BareMessage) (branchType : PactType)
           (index : Nat), branches[index]? = some (action, branchType) →
             CompilationCompletingCorrect signature branchType := by
@@ -7335,30 +7383,38 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
             omega
           omega
         exact compilationCompletingCorrect_of_nestedRecursion signature
-          branchType
+          branchType (supports_branch_of_mem signature branches
+            (action, branchType) hSupports.2 hMember)
           (clockGuarded_branch_of_mem branches (action, branchType)
             hGuarded.2 hMember)
           (tailRecursive_branch_of_mem branches (action, branchType)
             hTail.2 hMember)
-          (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+          (binderHygienic_branch_of_mem [] branches (action, branchType)
+            hHygienic.2 hMember)
+          (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+              hNestedTail hNestedHygienic =>
             hNestedRecursion nestedName nestedBody
-              (le_trans hSize (le_of_lt hBranchSize)) hNestedGuarded
-                hNestedTail)
+              (le_trans hSize (le_of_lt hBranchSize)) hNestedSupports
+                hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_xoffer signature elseType branches
         hElse hBranches
   | offer elseType branches =>
-      intro hGuarded hTail hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
+      simp only [PactType.BinderHygienic] at hHygienic
       have hElseSize : sizeOf elseType <
           sizeOf (PactType.offer elseType branches) := by
         simp_wf
         omega
       have hElse := compilationCompletingCorrect_of_nestedRecursion signature
-        elseType hGuarded.1 hTail.1
-        (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+            hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
-            (le_trans hSize (le_of_lt hElseSize)) hNestedGuarded hNestedTail)
+            (le_trans hSize (le_of_lt hElseSize)) hNestedSupports
+              hNestedGuarded hNestedTail hNestedHygienic)
       have hBranches : ∀ (action : BareMessage) (branchType : PactType)
           (index : Nat), branches[index]? = some (action, branchType) →
             CompilationCompletingCorrect signature branchType := by
@@ -7380,15 +7436,19 @@ private theorem compilationCompletingCorrect_of_nestedRecursion
             omega
           omega
         exact compilationCompletingCorrect_of_nestedRecursion signature
-          branchType
+          branchType (supports_branch_of_mem signature branches
+            (action, branchType) hSupports.2 hMember)
           (clockGuarded_branch_of_mem branches (action, branchType)
             hGuarded.2 hMember)
           (tailRecursive_branch_of_mem branches (action, branchType)
             hTail.2 hMember)
-          (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+          (binderHygienic_branch_of_mem [] branches (action, branchType)
+            hHygienic.2 hMember)
+          (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
+              hNestedTail hNestedHygienic =>
             hNestedRecursion nestedName nestedBody
-              (le_trans hSize (le_of_lt hBranchSize)) hNestedGuarded
-                hNestedTail)
+              (le_trans hSize (le_of_lt hBranchSize)) hNestedSupports
+                hNestedGuarded hNestedTail hNestedHygienic)
       have hConjunction : ∀ (selected : BareMessage × PactType) (index : Nat),
           branches[index]? = some selected →
             CompilationCompletingCorrect signature
@@ -7435,42 +7495,52 @@ have hVanilla := recursionBodyCompletingCorrect_vanilla signature name body
 The `_` argument is the `sizeOf` decrease consumed by `decreasing_by`. -/
 private theorem recursionBodyCompletingCorrect_vanilla
     (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hSupports : signature.Supports body)
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
+    (hHygienic : PactType.BinderHygienic [] body)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
+      signature.Supports (.recur nestedName nestedBody) →
       PactType.ClockGuarded (.recur nestedName nestedBody) →
       PactType.TailRecursive (.recur nestedName nestedBody) →
+      PactType.BinderHygienic [] (.recur nestedName nestedBody) →
         CompilationCompletingCorrect signature (.recur nestedName nestedBody)) :
     CompilationCompletingCorrect signature body := by
   have hBodySize : sizeOf body < sizeOf (PactType.recur name body) := by
     simp_wf
     omega
-  exact compilationCompletingCorrect_of_nestedRecursion signature body hGuarded
-    hTail
-    (fun nestedName nestedBody hSize hNestedGuarded hNestedTail =>
+  exact compilationCompletingCorrect_of_nestedRecursion signature body hSupports
+    hGuarded hTail hHygienic
+    (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded hNestedTail
+        hNestedHygienic =>
       hNestedRecursion nestedName nestedBody
-        (lt_of_le_of_lt hSize hBodySize) hNestedGuarded hNestedTail)
+        (lt_of_le_of_lt hSize hBodySize) hNestedSupports hNestedGuarded
+          hNestedTail hNestedHygienic)
 
 /-- Corollary fixing the constant `v := body.CanCompleteBeforeTock` at the
 body's own compiled fragment: the entry state of the standalone compilation of
 `body` is `completing` exactly when the unsubstituted syntax predicate holds. -/
 private theorem recursionBodyCompletingCorrect_vanilla_initial
     (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hSupports : signature.Supports body)
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
+    (hHygienic : PactType.BinderHygienic [] body)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
+      signature.Supports (.recur nestedName nestedBody) →
       PactType.ClockGuarded (.recur nestedName nestedBody) →
       PactType.TailRecursive (.recur nestedName nestedBody) →
+      PactType.BinderHygienic [] (.recur nestedName nestedBody) →
         CompilationCompletingCorrect signature (.recur nestedName nestedBody)) :
     ((compileTypeFuel signature (typeCompilationFuel body) body).initial ∈
         (compileTypeFuel signature (typeCompilationFuel body) body).completing ↔
       body.CanCompleteBeforeTock = true) := by
   have hVanilla := recursionBodyCompletingCorrect_vanilla signature name body
-    hGuarded hTail hNestedRecursion
+    hSupports hGuarded hTail hHygienic hNestedRecursion
   have hCanonical := hVanilla _ body
     (compileType_initial_relation signature body)
   simpa [compileType] using hCanonical
@@ -7481,13 +7551,17 @@ remaining fuel, so this is the shape actually met at a recursion node. -/
 private theorem recursionBodyCompletingCorrect_vanilla_initial_of_sufficient
     (signature : TypeAlphabet) (name : String) (body : PactType) (fuel : Nat)
     (hFuel : TypeCompilationFuelSufficient body fuel)
+    (hSupports : signature.Supports body)
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
+    (hHygienic : PactType.BinderHygienic [] body)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
+      signature.Supports (.recur nestedName nestedBody) →
       PactType.ClockGuarded (.recur nestedName nestedBody) →
       PactType.TailRecursive (.recur nestedName nestedBody) →
+      PactType.BinderHygienic [] (.recur nestedName nestedBody) →
         CompilationCompletingCorrect signature (.recur nestedName nestedBody)) :
     ((compileTypeFuel signature fuel body).initial ∈
         (compileTypeFuel signature fuel body).completing ↔
@@ -7498,7 +7572,7 @@ private theorem recursionBodyCompletingCorrect_vanilla_initial_of_sufficient
       (typeCompilationFuel_sufficient body)
   rw [hStable]
   exact recursionBodyCompletingCorrect_vanilla_initial signature name body
-    hGuarded hTail hNestedRecursion
+    hSupports hGuarded hTail hHygienic hNestedRecursion
 
 private theorem parallelInterfaces_subset_of_supports_leaf
     (signature : TypeAlphabet) (processType : PactType)
@@ -10829,6 +10903,7 @@ private theorem recursionBodyFutureAndExecutionCorrect_regular_leaf
     (hSignature : signature.WellFormed)
     (hSupports : signature.Supports (.recur name body))
     (hClosed : PactType.AllVariablesBound [] (.recur name body))
+    (hHygienic : PactType.BinderHygienic [] (.recur name body))
     (hGuarded : PactType.ClockGuarded (.recur name body))
     (hTail : PactType.TailRecursive (.recur name body))
     (hLinear : PactType.SameCycleMessageLinear (.recur name body)) :
@@ -10836,21 +10911,6588 @@ private theorem recursionBodyFutureAndExecutionCorrect_regular_leaf
       CompilationSequenceExecutionCorrect signature (.recur name body) := by
   sorry
 
-/-- Completion metadata for a guarded binder.  Guarded calls cannot complete
-before the next tock, so the root and tagged-body clauses reduce to the body
-predicate and guarded substitution. -/
+/-- Literal termination is always a same-cycle completion.  This is a
+compiler invariant, not a semantic assumption: every constructor transports
+child `skipping` states into its `completing` metadata, and recursion includes
+the body's completing states in the seed of its non-clock predecessor
+closure. -/
+private theorem compileTypeFuel_skipping_subset_completing
+    (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+        (compileTypeFuel signature fuel processType).skipping ⊆
+          (compileTypeFuel signature fuel processType).completing := by
+  classical
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel state hSkipping
+      cases processType with
+      | message msg dir =>
+          simpa [compileTypeFuel, finishAutomatonFragment] using
+            (Or.inr hSkipping)
+      | progress pid =>
+          simpa [compileTypeFuel, finishAutomatonFragment] using
+            (Or.inr hSkipping)
+      | tock =>
+          simpa [compileTypeFuel, finishAutomatonFragment] using hSkipping
+      | skip =>
+          simpa [compileTypeFuel, finishAutomatonFragment] using hSkipping
+      | var name =>
+          simp [compileTypeFuel, finishAutomatonFragment] at hSkipping
+      | recur name body =>
+          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hBody := ih body hBodyFuel
+          let bodyFragment := compileTypeFuel signature fuel body
+          have hCompletion := buildRecursionAutomaton_completing_eq signature
+            name bodyFragment
+          simp only [compileTypeFuel] at hSkipping ⊢
+          rw [hCompletion]
+          have hChild : ∃ child ∈ bodyFragment.skipping,
+              childState 0 child = state := by
+            simpa [bodyFragment, buildRecursionAutomaton,
+              finishAutomatonFragment, childSkipping] using hSkipping
+          rcases hChild with ⟨child, hChildSkipping, rfl⟩
+          apply Finset.mem_union_right
+          apply Finset.mem_image.mpr
+          refine ⟨child, completingBackClosure_superset_seed bodyFragment _ ?_,
+            rfl⟩
+          exact Finset.mem_union_right _ (hBody hChildSkipping)
+      | choice left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeft := ih left hLeftFuel
+          have hRight := ih right hRightFuel
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
+          rcases hSkipping with hLeftSkipping | hRightSkipping
+          · simp only [childSkipping, Finset.mem_image] at hLeftSkipping
+            rcases hLeftSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inl (Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hLeft hChild, rfl⟩))
+          · simp only [childSkipping, Finset.mem_image] at hRightSkipping
+            rcases hRightSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hRight hChild, rfl⟩)
+      | fairChoice bid left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeft := ih left hLeftFuel
+          have hRight := ih right hRightFuel
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
+          rcases hSkipping with hLeftSkipping | hRightSkipping
+          · simp only [childSkipping, Finset.mem_image] at hLeftSkipping
+            rcases hLeftSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inl (Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hLeft hChild, rfl⟩))
+          · simp only [childSkipping, Finset.mem_image] at hRightSkipping
+            rcases hRightSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hRight hChild, rfl⟩)
+      | seq left right =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRight := ih right hRightFuel
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
+          simp only [childSkipping, Finset.mem_image] at hSkipping
+          rcases hSkipping with ⟨child, hChild, rfl⟩
+          exact Or.inr (by
+            simp only [childCompleting, Finset.mem_image]
+            exact ⟨child, hRight hChild, rfl⟩)
+      | par left right interface =>
+          simp [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment] at hSkipping
+      | xoffer elseType branches =>
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hBranchFuel : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          let automata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          have hElse := ih elseType hElseFuel
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
+          rcases hSkipping with hElseSkipping | hIndexedSkipping
+          · simp only [childSkipping, Finset.mem_image] at hElseSkipping
+            rcases hElseSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inl (Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hElse hChild, rfl⟩))
+          ·
+            rw [indexedFragmentSkipping, mem_foldl_union_iff] at hIndexedSkipping
+            rw [indexedFragmentCompleting, mem_foldl_union_iff]
+            rcases hIndexedSkipping with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            · simp at hEmpty
+            · right
+              right
+              refine ⟨indexed, hIndexed, ?_⟩
+              simp only [automata, childSkipping, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              simp only [childCompleting, Finset.mem_image]
+              refine ⟨child, ?_, rfl⟩
+              have hEntryMem : indexed.1 ∈ branches.map fun branch =>
+                  (branch.1, compileTypeFuel signature fuel branch.2) := by
+                have hMapped := List.mem_map_of_mem (f := Prod.fst) hIndexed
+                simpa using hMapped
+              rcases List.mem_map.mp hEntryMem with
+                ⟨branch, hBranch, hEntry⟩
+              have hFragment : indexed.1.2 =
+                  compileTypeFuel signature fuel branch.2 := by
+                exact (congrArg Prod.snd hEntry).symm
+              rw [hFragment] at hChildSkipping ⊢
+              exact ih branch.2
+                (le_trans
+                  (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                    branch hBranch) hBranchFuel) hChildSkipping
+      | offer elseType branches =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hConjunctionFuel : conjunctiveCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          let automata := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          have hElse := ih elseType hElseFuel
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
+          rcases hSkipping with hElseSkipping | hIndexedSkipping
+          · simp only [childSkipping, Finset.mem_image] at hElseSkipping
+            rcases hElseSkipping with ⟨child, hChild, rfl⟩
+            exact Or.inl (Or.inr (by
+              simp only [childCompleting, Finset.mem_image]
+              exact ⟨child, hElse hChild, rfl⟩))
+          ·
+            rw [indexedFragmentSkipping, mem_foldl_union_iff] at hIndexedSkipping
+            rw [indexedFragmentCompleting, mem_foldl_union_iff]
+            rcases hIndexedSkipping with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            · simp at hEmpty
+            · right
+              right
+              refine ⟨indexed, hIndexed, ?_⟩
+              simp only [automata, childSkipping, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              simp only [childCompleting, Finset.mem_image]
+              refine ⟨child, ?_, rfl⟩
+              have hEntryMem : indexed.1 ∈ branches.map fun selected =>
+                  (selected.1, compileTypeFuel signature fuel
+                    (parallelTypeBranchesSelecting selected branches)) := by
+                have hMapped := List.mem_map_of_mem (f := Prod.fst) hIndexed
+                simpa using hMapped
+              rcases List.mem_map.mp hEntryMem with
+                ⟨selected, hSelected, hEntry⟩
+              have hFragment : indexed.1.2 = compileTypeFuel signature fuel
+                  (parallelTypeBranchesSelecting selected branches) := by
+                exact (congrArg Prod.snd hEntry).symm
+              rw [hFragment] at hChildSkipping ⊢
+              apply ih (parallelTypeBranchesSelecting selected branches)
+                _ hChildSkipping
+              rw [TypeCompilationFuelSufficient,
+                typeCompilationFuel_parallelTypeBranchesSelecting]
+              exact hConjunctionFuel
+
+/-- Every element of a branch list inherits the ambient tail flag. -/
+private theorem tailBranchOccurrences_mem
+    (name : String) (tail : Prop) :
+    ∀ (branches : List (BareMessage × PactType))
+      (entry : BareMessage × PactType),
+      PactType.TailBranchOccurrences name tail branches →
+      entry ∈ branches →
+        PactType.TailOccurrences name tail entry.2 := by
+  intro branches
+  induction branches with
+  | nil => intro entry _ hMem; simp at hMem
+  | cons head rest ih =>
+      intro entry hTail hMem
+      obtain ⟨action, processType⟩ := head
+      simp only [PactType.TailBranchOccurrences] at hTail
+      rcases List.mem_cons.mp hMem with rfl | hRest
+      · exact hTail.1
+      · exact ih entry hTail.2 hRest
+
+private theorem tailOccurrences_parallelTypeBranches
+    (name : String) :
+    ∀ (branches : List (BareMessage × PactType)),
+      PactType.TailBranchOccurrences name False branches →
+        PactType.TailOccurrences name False
+          (parallelTypeBranches branches) := by
+  intro branches
+  induction branches with
+  | nil => intro _; simp [parallelTypeBranches, PactType.TailOccurrences]
+  | cons branch rest ih =>
+      obtain ⟨action, processType⟩ := branch
+      intro hTail
+      have hFields : PactType.TailOccurrences name False processType ∧
+          PactType.TailBranchOccurrences name False rest := by
+        simpa only [PactType.TailBranchOccurrences] using hTail
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranches, singletonTypeXOffer,
+            PactType.TailOccurrences, PactType.TailBranchOccurrences]
+          exact ⟨trivial, hFields.1, trivial⟩
+      | cons next tailBranches =>
+          simp only [parallelTypeBranches, singletonTypeXOffer,
+            PactType.TailOccurrences, PactType.TailBranchOccurrences]
+          exact ⟨⟨trivial, hFields.1, trivial⟩, ih hFields.2⟩
+
+private theorem tailOccurrences_parallelTypeBranchesSelecting
+    (name : String) (selected : BareMessage × PactType) :
+    ∀ (branches : List (BareMessage × PactType)),
+      PactType.TailBranchOccurrences name False branches →
+        PactType.TailOccurrences name False
+          (parallelTypeBranchesSelecting selected branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _
+      simp [parallelTypeBranchesSelecting, PactType.TailOccurrences]
+  | cons branch rest ih =>
+      obtain ⟨action, processType⟩ := branch
+      intro hTail
+      have hFields : PactType.TailOccurrences name False processType ∧
+          PactType.TailBranchOccurrences name False rest := by
+        simpa only [PactType.TailBranchOccurrences] using hTail
+      cases rest with
+      | nil =>
+          by_cases hSelected : (action, processType) = selected
+          · simp only [parallelTypeBranchesSelecting, if_pos hSelected,
+              selectedTypeBranch, PactType.TailOccurrences]
+            exact ⟨trivial, hFields.1⟩
+          · simp only [parallelTypeBranchesSelecting, if_neg hSelected,
+              singletonTypeXOffer, PactType.TailOccurrences,
+              PactType.TailBranchOccurrences]
+            exact ⟨trivial, hFields.1, trivial⟩
+      | cons next tailBranches =>
+          by_cases hSelected : (action, processType) = selected
+          · simp only [parallelTypeBranchesSelecting, if_pos hSelected,
+              selectedTypeBranch, PactType.TailOccurrences]
+            exact ⟨⟨trivial, hFields.1⟩,
+              tailOccurrences_parallelTypeBranches name _ hFields.2⟩
+          · simp only [parallelTypeBranchesSelecting, if_neg hSelected,
+              singletonTypeXOffer, PactType.TailOccurrences,
+              PactType.TailBranchOccurrences]
+            exact ⟨⟨trivial, hFields.1, trivial⟩, ih hFields.2⟩
+
+private theorem tailRecursive_parallelTypeBranches :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.TailRecursiveBranches branches →
+        PactType.TailRecursive (parallelTypeBranches branches) := by
+  intro branches
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.TailRecursive]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      intro hTail
+      have hFields : branchType.TailRecursive ∧
+          PactType.TailRecursiveBranches rest := by
+        simpa only [PactType.TailRecursiveBranches] using hTail
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.TailRecursive, PactType.TailRecursiveBranches] using
+              hFields.1
+      | cons next tail =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.TailRecursive, PactType.TailRecursiveBranches] using
+              And.intro hFields.1 (ih hFields.2)
+
+private theorem tailRecursive_parallelTypeBranchesSelecting
+    (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.TailRecursiveBranches branches →
+        PactType.TailRecursive
+          (parallelTypeBranchesSelecting selected branches) := by
+  intro branches
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.TailRecursive]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      intro hTail
+      have hFields : branchType.TailRecursive ∧
+          PactType.TailRecursiveBranches rest := by
+        simpa only [PactType.TailRecursiveBranches] using hTail
+      cases rest with
+      | nil =>
+          by_cases hSelected : (action, branchType) = selected
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              selectedTypeBranch, PactType.TailRecursive, hFields.1]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, PactType.TailRecursive,
+              PactType.TailRecursiveBranches, hFields.1]
+      | cons next tail =>
+          by_cases hSelected : (action, branchType) = selected
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              selectedTypeBranch, PactType.TailRecursive, hFields.1,
+              tailRecursive_parallelTypeBranches (next :: tail) hFields.2]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, PactType.TailRecursive,
+              PactType.TailRecursiveBranches, hFields.1, ih hFields.2]
+
+private theorem binderHygienic_parallelTypeBranches (bound : List String) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.BinderHygienicBranches bound branches →
+        PactType.BinderHygienic bound (parallelTypeBranches branches) := by
+  intro branches
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.BinderHygienic]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      intro hHygienic
+      have hFields : branchType.BinderHygienic bound ∧
+          PactType.BinderHygienicBranches bound rest := by
+        simpa only [PactType.BinderHygienicBranches] using hHygienic
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.BinderHygienic, PactType.BinderHygienicBranches] using
+              hFields.1
+      | cons next tail =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.BinderHygienic, PactType.BinderHygienicBranches] using
+              And.intro hFields.1 (ih hFields.2)
+
+private theorem binderHygienic_parallelTypeBranchesSelecting
+    (bound : List String) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.BinderHygienicBranches bound branches →
+        PactType.BinderHygienic bound
+          (parallelTypeBranchesSelecting selected branches) := by
+  intro branches
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.BinderHygienic]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      intro hHygienic
+      have hFields : branchType.BinderHygienic bound ∧
+          PactType.BinderHygienicBranches bound rest := by
+        simpa only [PactType.BinderHygienicBranches] using hHygienic
+      cases rest with
+      | nil =>
+          by_cases hSelected : (action, branchType) = selected
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              selectedTypeBranch, PactType.BinderHygienic, hFields.1]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, PactType.BinderHygienic,
+              PactType.BinderHygienicBranches, hFields.1]
+      | cons next tail =>
+          by_cases hSelected : (action, branchType) = selected
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              selectedTypeBranch, PactType.BinderHygienic, hFields.1,
+              binderHygienic_parallelTypeBranches bound (next :: tail)
+                hFields.2]
+          · simp [parallelTypeBranchesSelecting, hSelected,
+              singletonTypeXOffer, PactType.BinderHygienic,
+              PactType.BinderHygienicBranches, hFields.1, ih hFields.2]
+
+/- Binder-context preservation for represented residuals. -/
+private theorem compilationRelation_allVariablesBound
+    {bound : List String} {original residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation original state residual) :
+    original.AllVariablesBound bound → residual.AllVariablesBound bound := by
+  intro hBound
+  induction hRelated generalizing bound with
+  | skip => simpa [PactType.AllVariablesBound]
+  | message_source => simpa
+  | message_final => simp [PactType.AllVariablesBound]
+  | cycle_source => simpa
+  | cycle_final => simp [PactType.AllVariablesBound]
+  | progress_source => simpa
+  | progress_final => simp [PactType.AllVariablesBound]
+  | «variable» => simpa
+  | recur_source => simpa
+  | recur_body name body childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      apply PactType.replaceVar_allVariablesBound bound name (.recur name body)
+      · simpa [PactType.AllVariablesBound] using hBound
+      · exact ih (bound := name :: bound) hBound
+  | choice_source => simpa
+  | choice_left left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.1
+  | choice_right left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.2
+  | fair_source => simpa
+  | fair_left bid left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.1
+  | fair_right bid left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.2
+  | sequence_left left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound ⊢
+      exact ⟨ih hBound.1, hBound.2⟩
+  | sequence_right left right childResidual childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.2
+  | parallel left right leftResidual rightResidual interface leftState
+      rightState hLeft hRight ihLeft ihRight =>
+      simp only [PactType.AllVariablesBound] at hBound ⊢
+      exact ⟨ihLeft hBound.1, ihRight hBound.2⟩
+  | xoffer_source => simpa
+  | xoffer_else elseType childResidual branches childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.1
+  | xoffer_branch elseType branchType childResidual branches action index
+      childState hEntry hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      have hMember : (action, branchType) ∈ branches :=
+        List.mem_of_getElem? hEntry
+      exact ih (allVariablesBound_branch_of_mem bound branches
+        (action, branchType) hBound.2 hMember)
+  | offer_source => simpa
+  | offer_branches elseType childResidual branches selected index childState
+      hEntry hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih (allVariablesBound_parallelTypeBranchesSelecting bound selected
+        branches hBound.2)
+  | offer_else elseType childResidual branches childState hChild ih =>
+      simp only [PactType.AllVariablesBound] at hBound
+      exact ih hBound.1
+
+/- A represented residual may cease to be hygienic after unfolding (the
+replacement can carry binders below a sibling binder), but it remains fresh
+for every externally active binder name.  This is exactly what substitution
+fusion needs. -/
+private theorem compilationRelation_binderFreshFor
+    {forbidden : List String} {original residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation original state residual) :
+    original.BinderHygienic forbidden → residual.BinderFreshFor forbidden := by
+  intro hHygienic
+  induction hRelated generalizing forbidden with
+  | skip => simp [PactType.BinderFreshFor]
+  | message_source => simp [PactType.BinderFreshFor]
+  | message_final => simp [PactType.BinderFreshFor]
+  | cycle_source => simp [PactType.BinderFreshFor]
+  | cycle_final => simp [PactType.BinderFreshFor]
+  | progress_source => simp [PactType.BinderFreshFor]
+  | progress_final => simp [PactType.BinderFreshFor]
+  | «variable» => simp [PactType.BinderFreshFor]
+  | recur_source => exact PactType.binderHygienic_binderFreshFor _ _ hHygienic
+  | recur_body name body childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      have hReplacementFresh :
+          (PactType.recur name body).BinderFreshFor forbidden := by
+        simp only [PactType.BinderFreshFor]
+        exact ⟨hHygienic.1,
+          PactType.binderHygienic_binderFreshFor forbidden body
+            (PactType.binderHygienic_mono
+              (by intro x hx; exact List.mem_cons_of_mem name hx)
+              body hHygienic.2)⟩
+      apply PactType.replaceVar_binderFreshFor forbidden name (.recur name body)
+        hReplacementFresh childResidual
+      exact ih (forbidden := name :: forbidden) hHygienic.2
+  | choice_source => exact PactType.binderHygienic_binderFreshFor _ _ hHygienic
+  | choice_left left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.1
+  | choice_right left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.2
+  | fair_source => exact PactType.binderHygienic_binderFreshFor _ _ hHygienic
+  | fair_left bid left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.1
+  | fair_right bid left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.2
+  | sequence_left left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic, PactType.BinderFreshFor]
+        at hHygienic ⊢
+      exact ⟨ih hHygienic.1,
+        PactType.binderHygienic_binderFreshFor forbidden right hHygienic.2⟩
+  | sequence_right left right childResidual childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.2
+  | parallel left right leftResidual rightResidual interface leftState
+      rightState hLeft hRight ihLeft ihRight =>
+      simp only [PactType.BinderHygienic, PactType.BinderFreshFor]
+        at hHygienic ⊢
+      exact ⟨ihLeft hHygienic.1, ihRight hHygienic.2⟩
+  | xoffer_source => exact PactType.binderHygienic_binderFreshFor _ _ hHygienic
+  | xoffer_else elseType childResidual branches childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.1
+  | xoffer_branch elseType branchType childResidual branches action index
+      childState hEntry hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      have hMember : (action, branchType) ∈ branches :=
+        List.mem_of_getElem? hEntry
+      exact ih (binderHygienic_branch_of_mem forbidden branches
+        (action, branchType) hHygienic.2 hMember)
+  | offer_source => exact PactType.binderHygienic_binderFreshFor _ _ hHygienic
+  | offer_branches elseType childResidual branches selected index childState
+      hEntry hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih (binderHygienic_parallelTypeBranchesSelecting forbidden selected
+        branches hHygienic.2)
+  | offer_else elseType childResidual branches childState hChild ih =>
+      simp only [PactType.BinderHygienic] at hHygienic
+      exact ih hHygienic.1
+
+/- A forbidden tail occurrence remains forbidden in every residual represented
+by a compiler state.  The recursion case is the only non-structural one:
+same-name replacement removes the free name, while a different binder uses
+the general substitution-preservation theorem. -/
+private theorem compilationRelation_tailOccurrences_false
+    (name : String) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual) :
+    processType.TailOccurrences name False →
+      residual.TailOccurrences name False := by
+  induction hRelated with
+  | skip => simp [PactType.TailOccurrences]
+  | message_source msg dir => intro hTail; exact hTail
+  | message_final msg dir => simp [PactType.TailOccurrences]
+  | cycle_source => intro hTail; exact hTail
+  | cycle_final => simp [PactType.TailOccurrences]
+  | progress_source pid => intro hTail; exact hTail
+  | progress_final pid => simp [PactType.TailOccurrences]
+  | «variable» other => intro hTail; exact hTail
+  | recur_source binder body => intro hTail; exact hTail
+  | recur_body binder body childResidual childState hChild ih =>
+      intro hTail
+      by_cases hName : binder = name
+      · subst binder
+        exact PactType.tailOccurrences_false_replaceVar_self_recur name body
+          childResidual
+      · have hBodyTail : body.TailOccurrences name False := by
+          simpa only [PactType.TailOccurrences, if_neg hName] using hTail
+        exact PactType.tailOccurrences_false_replaceVar name binder
+          (.recur binder body) hTail childResidual (ih hBodyTail)
+  | choice_source left right => intro hTail; exact hTail
+  | choice_left left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.1
+  | choice_right left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.2
+  | fair_source bid left right => intro hTail; exact hTail
+  | fair_left bid left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.1
+  | fair_right bid left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.2
+  | sequence_left left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      simpa only [PactType.TailOccurrences] using And.intro
+        (ih hFields.1) hFields.2
+  | sequence_right left right childResidual childState hChild ih =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.2
+  | parallel left right leftResidual rightResidual interface leftState
+      rightState hLeft hRight ihLeft ihRight =>
+      intro hTail
+      have hFields : left.TailOccurrences name False ∧
+          right.TailOccurrences name False := by
+        simpa only [PactType.TailOccurrences] using hTail
+      simpa only [PactType.TailOccurrences] using And.intro
+        (ihLeft hFields.1) (ihRight hFields.2)
+  | xoffer_source elseType branches => intro hTail; exact hTail
+  | xoffer_else elseType childResidual branches childState hChild ih =>
+      intro hTail
+      have hFields : elseType.TailOccurrences name False ∧
+          PactType.TailBranchOccurrences name False branches := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.1
+  | xoffer_branch elseType branchType childResidual branches action index
+      childState hEntry hChild ih =>
+      intro hTail
+      have hFields : elseType.TailOccurrences name False ∧
+          PactType.TailBranchOccurrences name False branches := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih (tailBranchOccurrences_mem name False branches
+        (action, branchType) hFields.2 (List.mem_of_getElem? hEntry))
+  | offer_source elseType branches => intro hTail; exact hTail
+  | offer_branches elseType childResidual branches selected index childState
+      hEntry hChild ih =>
+      intro hTail
+      have hFields : elseType.TailOccurrences name False ∧
+          PactType.TailBranchOccurrences name False branches := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih (tailOccurrences_parallelTypeBranchesSelecting name selected
+        branches hFields.2)
+  | offer_else elseType childResidual branches childState hChild ih =>
+      intro hTail
+      have hFields : elseType.TailOccurrences name False ∧
+          PactType.TailBranchOccurrences name False branches := by
+        simpa only [PactType.TailOccurrences] using hTail
+      exact ih hFields.1
+
+/- In a represented non-tail context, parametric recursion completion is
+literally ordinary syntax completion. -/
+private theorem compilationRelation_canCompleteBeforeTockSubst_eq_of_false
+    (name : String) (value : Bool) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual)
+    (hTail : processType.TailOccurrences name False) :
+    PactType.canCompleteBeforeTockSubst name value residual =
+      residual.CanCompleteBeforeTock :=
+  PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false name value
+    residual (compilationRelation_tailOccurrences_false name hRelated hTail)
+
+/-- **Recursive-call sources represent bare variables.**
+
+If a compiled fragment still carries an unresolved `.variable name` marker
+edge, then — provided `name` occurs only in tail position — the source of that
+edge represents exactly the residual `PactType.var name`, and the ambient tail
+flag holds.
+
+The `tail` conjunct is what makes the induction go through: a `.variable name`
+marker occurring in a non-tail position (the left of a sequence, either side
+of a parallel composition, or a conjunctive-offer branch) is impossible,
+because there `TailOccurrences name False` holds and the conclusion `tail`
+degenerates to `False`.  In the tail positions that remain (choice branches,
+the right of a sequence, exclusive-offer continuations, and the body of a
+non-shadowing binder) the representative residual is transported unchanged by
+the corresponding `TypeCompilationRelation` constructor, so it stays
+`PactType.var name`; under a non-shadowing binder `replaceVar` leaves it
+alone, which is why `other ≠ name` is extracted first.
+
+Stating the conclusion as the relation itself (rather than as uniqueness of
+the represented residual) additionally supplies *existence* of a
+representative, which the seed-inclusion step of
+`recursionBodyCompletingClosure_subset` needs.
+
+The induction mirrors `compileTypeFuel_futureTargetsInStates`: structural on
+the compilation fuel, one case per constructor of the compiler. -/
+private theorem compileTypeFuel_variableEdge_source_var
+    (signature : TypeAlphabet) (name : String) :
+    ∀ (fuel : Nat) (processType : PactType) (tail : Prop),
+      TypeCompilationFuelSufficient processType fuel →
+      PactType.TailOccurrences name tail processType →
+      ∀ edge ∈ (compileTypeFuel signature fuel processType).edges,
+        edge.label = AutomatonConstructionLabel.variable name →
+          tail ∧ TypeCompilationRelation processType edge.source
+            (PactType.var name) := by
+  classical
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType tail hFuel
+      exact (Nat.not_lt_zero _ (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType tail hFuel hTail edge hEdge hLabel
+      cases processType with
+      | skip =>
+          exfalso
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with ⟨environment, _, hEq⟩
+          rw [← hEq] at hLabel
+          exact absurd hLabel (by simp)
+      | message msg dir =>
+          exfalso
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with ((⟨e, _, hEq⟩ | ⟨e, _, hEq⟩) | ⟨e, _, hEq⟩) <;>
+            (rw [← hEq] at hLabel; exact absurd hLabel (by simp))
+      | tock =>
+          exfalso
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with (⟨e, _, hEq⟩ | ⟨e, _, hEq⟩)
+          · rw [← hEq] at hLabel
+            split at hLabel <;> exact absurd hLabel (by simp)
+          · rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+      | progress pid =>
+          exfalso
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with (⟨e, _, hEq⟩ | ⟨e, _, hEq⟩) <;>
+            (rw [← hEq] at hLabel; exact absurd hLabel (by simp))
+      | var other =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image] at hEdge
+          rcases hEdge with ⟨environment, _, hEq⟩
+          rw [← hEq] at hLabel
+          have hName : other = name := by
+            simpa using hLabel
+          subst hName
+          have hSource : edge.source = TypeAutomatonState.root := by
+            rw [← hEq]
+          refine ⟨?_, ?_⟩
+          · simpa [PactType.TailOccurrences] using hTail
+          · rw [hSource]
+            exact TypeCompilationRelation.variable _
+      | recur other body =>
+          have hBody : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+            at hEdge
+          rcases hEdge with ⟨environment, _, hEq⟩ | ⟨bodyEdge, hBodyEdge, hEq⟩
+          · exfalso
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · by_cases hVarOther :
+                bodyEdge.label = AutomatonConstructionLabel.variable other
+            · exfalso
+              rw [if_pos hVarOther] at hEq
+              rw [← hEq] at hLabel
+              exact absurd hLabel (by simp)
+            · rw [if_neg hVarOther] at hEq
+              have hBodyLabel :
+                  bodyEdge.label = AutomatonConstructionLabel.variable name := by
+                rw [← hEq] at hLabel
+                exact hLabel
+              have hOther : other ≠ name := by
+                intro hEqName
+                exact hVarOther (hEqName ▸ hBodyLabel)
+              have hTailBody : PactType.TailOccurrences name tail body := by
+                have hTail' := hTail
+                simp only [PactType.TailOccurrences] at hTail'
+                rw [if_neg hOther] at hTail'
+                exact hTail'
+              have hIH := ih body tail hBody hTailBody bodyEdge hBodyEdge
+                hBodyLabel
+              refine ⟨hIH.1, ?_⟩
+              have hSource :
+                  edge.source = TypeAutomatonState.child 0 bodyEdge.source := by
+                rw [← hEq]; rfl
+              rw [hSource]
+              have hRecur := TypeCompilationRelation.recur_body other body
+                (PactType.var name) bodyEdge.source hIH.2
+              simpa [PactType.replaceVar, hOther] using hRecur
+      | choice left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hTailLeft : PactType.TailOccurrences name tail left ∧
+              PactType.TailOccurrences name tail right := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton] at hEdge
+          rcases hEdge with (⟨childEdge, hChildEdge, hEq⟩ |
+            ⟨childEdge, hChildEdge, hEq⟩) | ⟨environment, _, hEq | hEq⟩
+          · have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih left tail hLeft hTailLeft.1 childEdge hChildEdge
+              hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 0 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.choice_left left right
+              (PactType.var name) childEdge.source hIH.2
+          · have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih right tail hRight hTailLeft.2 childEdge hChildEdge
+              hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 1 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.choice_right left right
+              (PactType.var name) childEdge.source hIH.2
+          · exfalso
+            rw [hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · exfalso
+            rw [hEq] at hLabel
+            exact absurd hLabel (by simp)
+      | fairChoice bid left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hTailLeft : PactType.TailOccurrences name tail left ∧
+              PactType.TailOccurrences name tail right := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton] at hEdge
+          rcases hEdge with (⟨childEdge, hChildEdge, hEq⟩ |
+            ⟨childEdge, hChildEdge, hEq⟩) | ⟨environment, _, hEq | hEq⟩
+          · have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih left tail hLeft hTailLeft.1 childEdge hChildEdge
+              hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 0 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.fair_left bid left right
+              (PactType.var name) childEdge.source hIH.2
+          · have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih right tail hRight hTailLeft.2 childEdge hChildEdge
+              hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 1 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.fair_right bid left right
+              (PactType.var name) childEdge.source hIH.2
+          · exfalso
+            rw [hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · exfalso
+            rw [hEq] at hLabel
+            exact absurd hLabel (by simp)
+      | seq left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hTailFields : PactType.TailOccurrences name False left ∧
+              PactType.TailOccurrences name tail right := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion] at hEdge
+          rcases hEdge with ((⟨childEdge, hChildEdge, hEq⟩ |
+              ⟨childEdge, hChildEdge, hEq⟩) |
+            ⟨skipState, _, environment, _, hEq⟩) | ⟨completeState, _, hEq⟩
+          · exact absurd (ih left False hLeft hTailFields.1 childEdge
+              hChildEdge (by rw [← hEq] at hLabel; exact hLabel)).1 (by simp)
+          · have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih right tail hRight hTailFields.2 childEdge hChildEdge
+              hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 1 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.sequence_right left right
+              (PactType.var name) childEdge.source hIH.2
+          · exfalso
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · exfalso
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+      | par left right interface =>
+          exfalso
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hTailFields : PactType.TailOccurrences name False left ∧
+              PactType.TailOccurrences name False right := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with hTransition | hObservation
+          · rcases hTransition with
+              ⟨leftEdge, ⟨hLeftEdge, _⟩, rightEdge, ⟨⟨hRightEdge, _⟩, _⟩, hEq⟩
+            rw [← hEq] at hLabel
+            simp only at hLabel
+            have hComponent :
+                leftEdge.label = AutomatonConstructionLabel.variable name ∨
+                  rightEdge.label = AutomatonConstructionLabel.variable name := by
+              cases hLeftLabel : leftEdge.label <;>
+                cases hRightLabel : rightEdge.label <;>
+                  simp_all [AutomatonConstructionLabel.combine]
+            rcases hComponent with hComponent | hComponent
+            · simp only [resolvedAutomatonEdges, Finset.mem_image] at hLeftEdge
+              rcases hLeftEdge with ⟨raw, hRaw, hRawEq⟩
+              refine (ih left False hLeft hTailFields.1 raw hRaw ?_).1
+              rw [← hRawEq] at hComponent
+              exact hComponent
+            · simp only [resolvedAutomatonEdges, Finset.mem_image] at hRightEdge
+              rcases hRightEdge with ⟨raw, hRaw, hRawEq⟩
+              refine (ih right False hRight hTailFields.2 raw hRaw ?_).1
+              rw [← hRawEq] at hComponent
+              exact hComponent
+          · rcases hObservation with hLeftFuture | hRightFuture
+            · rcases hLeftFuture with ⟨leftState, _, rightState, _, hEq⟩
+              rw [← hEq] at hLabel
+              exact absurd hLabel (by simp)
+            · rcases hRightFuture with ⟨leftState, _, rightState, _, hEq⟩
+              rw [← hEq] at hLabel
+              exact absurd hLabel (by simp)
+      | xoffer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hBranches : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hTailFields : PactType.TailOccurrences name tail elseType ∧
+              PactType.TailBranchOccurrences name tail branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          rcases hEdge with
+            ((((hElseEdge | hIndexed) | hBranch) | hWait) | hResolved)
+          · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
+            rcases hElseEdge with ⟨childEdge, hChildEdge, hEq⟩
+            have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih elseType tail hElse hTailFields.1 childEdge
+              hChildEdge hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 0 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.xoffer_else elseType
+              (PactType.var name) branches childEdge.source hIH.2
+          · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+            rcases hIndexed with hEmpty | ⟨indexed, hIndexedMem, hChild⟩
+            · simp at hEmpty
+            · simp only [childPendingEdges, Finset.mem_image] at hChild
+              rcases hChild with ⟨childEdge, hChildEdge, hEq⟩
+              have hIndexedFields := List.mem_zipIdx hIndexedMem
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hIndexedFields
+              rcases hIndexedFields with ⟨hBound, hValue⟩
+              have hIndexedEntry :
+                  (branches.map fun branch =>
+                    (branch.1, compileTypeFuel signature fuel
+                      branch.2))[indexed.2]? = some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              rw [List.getElem?_map] at hIndexedEntry
+              rcases Option.map_eq_some_iff.mp hIndexedEntry with
+                ⟨entry, hEntry, hEntryEq⟩
+              have hChildLabel :
+                  childEdge.label =
+                    AutomatonConstructionLabel.variable name := by
+                rw [← hEq] at hLabel
+                exact hLabel
+              have hEntryMem : entry ∈ branches :=
+                List.mem_of_getElem? hEntry
+              have hEntryFuel :
+                  TypeCompilationFuelSufficient entry.2 fuel :=
+                le_trans (typeCompilationFuel_le_typeBranchCompilationFuel
+                  branches entry hEntryMem) hBranches
+              have hFragmentEq :
+                  indexed.1.2 = compileTypeFuel signature fuel entry.2 := by
+                rw [← hEntryEq]
+              rw [hFragmentEq] at hChildEdge
+              have hIH := ih entry.2 tail hEntryFuel
+                (tailBranchOccurrences_mem name tail branches entry
+                  hTailFields.2 hEntryMem) childEdge hChildEdge hChildLabel
+              refine ⟨hIH.1, ?_⟩
+              have hSource : edge.source =
+                  TypeAutomatonState.child (indexed.2 + 1) childEdge.source := by
+                rw [← hEq]; rfl
+              rw [hSource]
+              exact TypeCompilationRelation.xoffer_branch elseType entry.2
+                (PactType.var name) branches entry.1 indexed.2
+                childEdge.source hEntry hIH.2
+          · rw [mem_foldl_union_iff] at hBranch
+            rcases hBranch with hEmpty | ⟨indexed, _, hNewEdge⟩
+            · simp at hEmpty
+            · exfalso
+              simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+              rcases hNewEdge with ⟨environment, _, hEq⟩
+              rw [← hEq] at hLabel
+              exact absurd hLabel (by simp)
+          · exfalso
+            simp only [Finset.mem_image, Finset.mem_filter] at hWait
+            rcases hWait with ⟨environment, _, hEq⟩
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · exfalso
+            simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+            rcases hResolved with ⟨environment, _, hEq⟩
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+      | offer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hConjunction : conjunctiveCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hTailFields : PactType.TailOccurrences name tail elseType ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          rcases hEdge with
+            ((((hElseEdge | hIndexed) | hEnabled) | hWait) | hResolved)
+          · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
+            rcases hElseEdge with ⟨childEdge, hChildEdge, hEq⟩
+            have hChildLabel :
+                childEdge.label = AutomatonConstructionLabel.variable name := by
+              rw [← hEq] at hLabel
+              exact hLabel
+            have hIH := ih elseType tail hElse hTailFields.1 childEdge
+              hChildEdge hChildLabel
+            refine ⟨hIH.1, ?_⟩
+            have hSource : edge.source =
+                TypeAutomatonState.child 0 childEdge.source := by
+              rw [← hEq]; rfl
+            rw [hSource]
+            exact TypeCompilationRelation.offer_else elseType
+              (PactType.var name) branches childEdge.source hIH.2
+          · exfalso
+            rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+            rcases hIndexed with hEmpty | ⟨indexed, hIndexedMem, hChild⟩
+            · simp at hEmpty
+            · simp only [childPendingEdges, Finset.mem_image] at hChild
+              rcases hChild with ⟨childEdge, hChildEdge, hEq⟩
+              have hIndexedFields := List.mem_zipIdx hIndexedMem
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hIndexedFields
+              rcases hIndexedFields with ⟨hBound, hValue⟩
+              have hIndexedEntry :
+                  (branches.map fun selected =>
+                    (selected.1, compileTypeFuel signature fuel
+                      (parallelTypeBranchesSelecting selected
+                        branches)))[indexed.2]? = some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              rw [List.getElem?_map] at hIndexedEntry
+              rcases Option.map_eq_some_iff.mp hIndexedEntry with
+                ⟨entry, hEntry, hEntryEq⟩
+              have hChildLabel :
+                  childEdge.label =
+                    AutomatonConstructionLabel.variable name := by
+                rw [← hEq] at hLabel
+                exact hLabel
+              have hSelectedFuel : TypeCompilationFuelSufficient
+                  (parallelTypeBranchesSelecting entry branches) fuel := by
+                have := typeCompilationFuel_parallelTypeBranchesSelecting entry
+                  branches
+                simp only [TypeCompilationFuelSufficient, this]
+                exact hConjunction
+              have hFragmentEq : indexed.1.2 = compileTypeFuel signature fuel
+                  (parallelTypeBranchesSelecting entry branches) := by
+                rw [← hEntryEq]
+              rw [hFragmentEq] at hChildEdge
+              exact (ih (parallelTypeBranchesSelecting entry branches) False
+                hSelectedFuel
+                (tailOccurrences_parallelTypeBranchesSelecting name entry
+                  branches hTailFields.2) childEdge hChildEdge hChildLabel).1
+          · exfalso
+            rw [mem_foldl_union_iff] at hEnabled
+            rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
+            · simp at hEmpty
+            · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+              rcases hNewEdge with ⟨environment, _, hEq⟩
+              rw [← hEq] at hLabel
+              exact absurd hLabel (by simp)
+          · exfalso
+            simp only [Finset.mem_image, Finset.mem_filter] at hWait
+            rcases hWait with ⟨environment, _, hEq⟩
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+          · exfalso
+            simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+            rcases hResolved with ⟨environment, _, hEq⟩
+            rw [← hEq] at hLabel
+            exact absurd hLabel (by simp)
+
+/-- Every state placed in the compiler's literal-termination set represents
+`skip`.  This is the target-total half of `compileTypeFuel_skipping_iff`; it
+is needed for the administrative bridge of sequence. -/
+private theorem compiledFragmentSkipping_represented
+    (signature : TypeAlphabet) :
+    ∀ (fuel : Nat) (processType : PactType),
+      TypeCompilationFuelSufficient processType fuel →
+      ∀ state ∈ (compileTypeFuel signature fuel processType).skipping,
+        TypeCompilationRelation processType state .skip := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel state hSkipping
+      cases processType with
+      | skip =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hSkipping
+          subst state
+          exact .skip
+      | message msg dir =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hSkipping
+          subst state
+          exact .message_final msg dir
+      | tock =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hSkipping
+          subst state
+          exact .cycle_final
+      | progress pid =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hSkipping
+          subst state
+          exact .progress_final pid
+      | var other =>
+          simp [compileTypeFuel, finishAutomatonFragment] at hSkipping
+      | recur binder body =>
+          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment, childSkipping, Finset.mem_image]
+              at hSkipping
+          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩
+          have hChild := ih body hBodyFuel child hChildSkipping
+          convert TypeCompilationRelation.recur_body binder body .skip
+            child hChild using 1 <;>
+              simp [PactType.replaceVar, childState]
+      | choice left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childSkipping,
+            Finset.mem_image] at hSkipping
+          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩ |
+            ⟨child, hChildSkipping, rfl⟩
+          · exact TypeCompilationRelation.choice_left left right .skip child
+              (ih left hLeftFuel child hChildSkipping)
+          · exact TypeCompilationRelation.choice_right left right .skip child
+              (ih right hRightFuel child hChildSkipping)
+      | fairChoice bid left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childSkipping,
+            Finset.mem_image] at hSkipping
+          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩ |
+            ⟨child, hChildSkipping, rfl⟩
+          · exact TypeCompilationRelation.fair_left bid left right .skip child
+              (ih left hLeftFuel child hChildSkipping)
+          · exact TypeCompilationRelation.fair_right bid left right .skip child
+              (ih right hRightFuel child hChildSkipping)
+      | seq left right =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childSkipping, Finset.mem_image]
+              at hSkipping
+          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩
+          exact TypeCompilationRelation.sequence_right left right .skip child
+            (ih right hRightFuel child hChildSkipping)
+      | par left right interface =>
+          simp [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment] at hSkipping
+      | xoffer elseType branches =>
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping
+          rcases hSkipping with hElse | hBranch
+          · simp only [childSkipping, Finset.mem_image] at hElse
+            rcases hElse with ⟨child, hChildSkipping, rfl⟩
+            exact TypeCompilationRelation.xoffer_else elseType .skip branches
+              child (ih elseType hElseFuel child hChildSkipping)
+          · rw [indexedFragmentSkipping, mem_foldl_union_iff] at hBranch
+            rcases hBranch with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            · simp at hEmpty
+            · simp only [childSkipping, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              have hFields := List.mem_zipIdx hIndexed
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hFields
+              rcases hFields with ⟨hBound, hValue⟩
+              have hAt : branchAutomata[indexed.2]? = some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              simp only [branchAutomata, List.getElem?_map] at hAt
+              cases hOriginal : branches[indexed.2]? with
+              | none => simp [hOriginal] at hAt
+              | some branch =>
+                rcases branch with ⟨action, branchType⟩
+                simp only [hOriginal, Option.map_some, Option.some.injEq]
+                  at hAt
+                have hBranchMem : (action, branchType) ∈ branches :=
+                  List.mem_of_getElem? hOriginal
+                have hBranchesFuel :
+                    typeBranchCompilationFuel branches ≤ fuel := by
+                  simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                    at hFuel
+                  omega
+                have hBranchFuel :
+                    TypeCompilationFuelSufficient branchType fuel :=
+                  le_trans
+                    (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                      (action, branchType) hBranchMem) hBranchesFuel
+                have hFragment : indexed.1.2 =
+                    compileTypeFuel signature fuel branchType := by
+                  simpa using (congrArg Prod.snd hAt).symm
+                rw [hFragment] at hChildSkipping
+                have hChildRelated := ih branchType hBranchFuel child
+                  hChildSkipping
+                exact TypeCompilationRelation.xoffer_branch elseType
+                  branchType .skip branches action indexed.2 child hOriginal
+                    hChildRelated
+      | offer elseType branches =>
+          let selectedConjunctions := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hSkipping
+          rcases hSkipping with hElse | hSelected
+          · simp only [childSkipping, Finset.mem_image] at hElse
+            rcases hElse with ⟨child, hChildSkipping, rfl⟩
+            exact TypeCompilationRelation.offer_else elseType .skip branches
+              child (ih elseType hElseFuel child hChildSkipping)
+          · rw [indexedFragmentSkipping, mem_foldl_union_iff] at hSelected
+            rcases hSelected with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            · simp at hEmpty
+            · simp only [childSkipping, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              have hFields := List.mem_zipIdx hIndexed
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hFields
+              rcases hFields with ⟨hBound, hValue⟩
+              have hAt : selectedConjunctions[indexed.2]? =
+                  some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              simp only [selectedConjunctions, List.getElem?_map] at hAt
+              cases hOriginal : branches[indexed.2]? with
+              | none => simp [hOriginal] at hAt
+              | some selected =>
+                simp only [hOriginal, Option.map_some, Option.some.injEq]
+                  at hAt
+                have hChildFuel : TypeCompilationFuelSufficient
+                    (parallelTypeBranchesSelecting selected branches) fuel := by
+                  rw [TypeCompilationFuelSufficient,
+                    typeCompilationFuel_parallelTypeBranchesSelecting]
+                  simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                    at hFuel
+                  omega
+                have hFragment : indexed.1.2 = compileTypeFuel signature fuel
+                    (parallelTypeBranchesSelecting selected branches) := by
+                  simpa using (congrArg Prod.snd hAt).symm
+                rw [hFragment] at hChildSkipping
+                have hChildRelated := ih
+                  (parallelTypeBranchesSelecting selected branches) hChildFuel
+                    child hChildSkipping
+                exact TypeCompilationRelation.offer_branches elseType .skip
+                  branches selected indexed.2 child hOriginal hChildRelated
+
+private theorem branchCanCompleteBeforeTockSubst_of_getElem
+    (name : String) (value : Bool) :
+    ∀ (branches : List (BareMessage × PactType)) (index : Nat)
+      (action : BareMessage) (branchType : PactType),
+      branches[index]? = some (action, branchType) →
+      PactType.canCompleteBeforeTockSubst name value branchType = true →
+      PactType.branchCanCompleteBeforeTockSubst name value branches = true := by
+  intro branches
+  induction branches with
+  | nil => intro index action branchType hEntry; simp at hEntry
+  | cons head rest ih =>
+      intro index action branchType hEntry hComplete
+      rcases head with ⟨headAction, headType⟩
+      cases index with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq,
+            Prod.mk.injEq] at hEntry
+          rcases hEntry with ⟨rfl, rfl⟩
+          simp [PactType.branchCanCompleteBeforeTockSubst, hComplete]
+      | succ index =>
+          simp only [List.getElem?_cons_succ] at hEntry
+          simp [PactType.branchCanCompleteBeforeTockSubst,
+            ih index action branchType hEntry hComplete]
+
+private theorem canCompleteBeforeTockSubst_parallelTypeBranches
+    (name : String) (value : Bool)
+    (branches : List (BareMessage × PactType)) :
+    PactType.canCompleteBeforeTockSubst name value
+      (parallelTypeBranches branches) = true := by
+  induction branches with
+  | nil =>
+      simp [parallelTypeBranches, PactType.canCompleteBeforeTockSubst]
+  | cons branch rest ih =>
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            PactType.canCompleteBeforeTockSubst,
+            PactType.branchCanCompleteBeforeTockSubst]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            PactType.canCompleteBeforeTockSubst,
+            PactType.branchCanCompleteBeforeTockSubst] at ih ⊢
+          exact ih
+
+private theorem canCompleteBeforeTockSubst_parallelTypeBranchesSelecting_of_mem
+    (name : String) (value : Bool) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType), selected ∈ branches →
+      PactType.canCompleteBeforeTockSubst name value
+          (parallelTypeBranchesSelecting selected branches) =
+        PactType.canCompleteBeforeTockSubst name value selected.2 := by
+  intro branches
+  induction branches with
+  | nil => intro hMem; simp at hMem
+  | cons branch rest ih =>
+      intro hMem
+      cases rest with
+      | nil =>
+          have hEqual : branch = selected := by
+            simpa [eq_comm] using hMem
+          subst branch
+          simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+            PactType.canCompleteBeforeTockSubst]
+      | cons next tail =>
+          by_cases hSelected : branch = selected
+          · subst branch
+            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+              PactType.canCompleteBeforeTockSubst,
+              canCompleteBeforeTockSubst_parallelTypeBranches]
+          · have hRest : selected ∈ next :: tail := by
+              rcases List.mem_cons.mp hMem with hHead | hTail
+              · exact absurd hHead.symm hSelected
+              · exact hTail
+            simp only [parallelTypeBranchesSelecting, if_neg hSelected]
+            simp [PactType.canCompleteBeforeTockSubst, singletonTypeXOffer,
+              PactType.branchCanCompleteBeforeTockSubst, ih hRest]
+
+/- Valuation forms of the three branch-completion facts above.  These are the
+exact list equations needed by the binder-context predecessor induction; the
+old scalar facts remain useful at its singleton wrapper. -/
+private theorem branchCompletionEval_of_getElem
+    (valuation : String → Bool) :
+    ∀ (branches : List (BareMessage × PactType)) (index : Nat)
+      (action : BareMessage) (branchType : PactType),
+      branches[index]? = some (action, branchType) →
+      PactType.completionEval valuation branchType = true →
+      PactType.branchCompletionEval valuation branches = true := by
+  intro branches
+  induction branches with
+  | nil => intro index action branchType hEntry; simp at hEntry
+  | cons head rest ih =>
+      intro index action branchType hEntry hComplete
+      rcases head with ⟨headAction, headType⟩
+      cases index with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq,
+            Prod.mk.injEq] at hEntry
+          rcases hEntry with ⟨rfl, rfl⟩
+          simp [PactType.branchCompletionEval, hComplete]
+      | succ index =>
+          simp only [List.getElem?_cons_succ] at hEntry
+          simp [PactType.branchCompletionEval,
+            ih index action branchType hEntry hComplete]
+
+private theorem completionEval_parallelTypeBranches
+    (valuation : String → Bool)
+    (branches : List (BareMessage × PactType)) :
+    PactType.completionEval valuation (parallelTypeBranches branches) = true := by
+  induction branches with
+  | nil =>
+      simp [parallelTypeBranches, PactType.completionEval]
+  | cons branch rest ih =>
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            PactType.completionEval, PactType.branchCompletionEval]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer,
+            PactType.completionEval, PactType.branchCompletionEval] at ih ⊢
+          exact ih
+
+private theorem completionEval_parallelTypeBranchesSelecting_of_mem
+    (valuation : String → Bool) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType), selected ∈ branches →
+      PactType.completionEval valuation
+          (parallelTypeBranchesSelecting selected branches) =
+        PactType.completionEval valuation selected.2 := by
+  intro branches
+  induction branches with
+  | nil => intro hMem; simp at hMem
+  | cons branch rest ih =>
+      intro hMem
+      cases rest with
+      | nil =>
+          have hEqual : branch = selected := by
+            simpa [eq_comm] using hMem
+          subst branch
+          simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+            PactType.completionEval]
+      | cons next tail =>
+          by_cases hSelected : branch = selected
+          · subst branch
+            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+              PactType.completionEval,
+              completionEval_parallelTypeBranches]
+          · have hRest : selected ∈ next :: tail := by
+              rcases List.mem_cons.mp hMem with hHead | hTail
+              · exact absurd hHead.symm hSelected
+              · exact hTail
+            simp only [parallelTypeBranchesSelecting, if_neg hSelected]
+            simp [PactType.completionEval, singletonTypeXOffer,
+              PactType.branchCompletionEval, ih hRest]
+
+/- The syntax equation represented by a recursion header/backedge in an
+ambient binder valuation.  Hygiene prevents the inserted binder from being
+captured, and `completionEval_update_self` supplies the Boolean fixed point. -/
+private theorem completionEval_unfold_recur_of_hygienic
+    (active : List String) (valuation : String → Bool)
+    (binder : String) (body : PactType)
+    (hSupported : ∀ name, name ∉ active → valuation name = false)
+    (hFresh : body.BinderFreshFor (binder :: active)) :
+    PactType.completionEval valuation
+        (body.replaceVar binder (.recur binder body)) =
+      PactType.completionEval valuation (.recur binder body) := by
+  rw [PactType.completionEval_replaceVar_of_hygienic active valuation binder
+    (.recur binder body) hSupported body hFresh]
+  simpa only [PactType.completionEval] using
+    PactType.completionEval_update_self valuation binder body
+
+/- **Non-clock predecessor step for substituted completion.**
+
+If the target of a non-clock edge of a compiled fragment represents a residual
+that completes before the next tock — scoring a bare `.var name` as `value`
+rather than `false` — then the edge's source also represents such a residual.
+This is the graph obligation of the forward (`⊆`) half of
+`recursionBodyCompletingClosure_iff`.
+
+Two features of this statement were forced by counterexamples found while
+assembling the forward half, and must not be weakened back:
+
+* The conclusion is **existential** (`∃ sourceResidual, related ∧ complete`),
+  not the seemingly more convenient universal form `∀ r, related → complete`.
+  The universal form cannot be discharged, and a parallel product refutes it
+  up to the existence of one synchronised edge.  Take
+  `body = .par (.var "y") .skip ∅` inside a binder for `"x"`.  The product
+  edge synchronising the left fragment's `.variable "y"` marker
+  (`.root → .final`, silent) with the right fragment's silent self-loop is
+  itself silent; its source `.pair .root .root` represents
+  `.par (.var "y") .skip ∅`, whose substituted completion for `"x"` is
+  `false`; and its target `.pair .final .root` represents *nothing at all*,
+  since the `.var` fragment's `.final` is unrelated.  So the universal
+  premise holds vacuously while the universal conclusion fails.  (This was
+  not turned into a kernel-checked regression lemma: whether that product
+  edge is actually emitted depends on `syncAutomatonEdges` at a concrete
+  signature, and the point stands regardless — the universal form is not
+  provable by this induction.)  Crucially, filtering the ambient set by the
+  universal predicate does *not* rescue it either: `buildParallelAutomaton`
+  emits a `.future` self-loop at *every* product state, so the unrepresented
+  target is an edge source and therefore does lie in the ambient set.  The
+  existential form is immune, because the vacuous premise becomes an
+  unsatisfiable one.
+* The hypothesis is `≠ TypeLabel.tock`, not `= TypeLabel.silent`.  Silent
+  implies non-clock, so this is only a strengthening at the use site, but the
+  induction *requires* it: `buildParallelAutomaton` can hide two visible
+  message edges inside one silent product edge, and the induction hypothesis
+  has to be applied to those non-silent components.  `≠ tock` survives that
+  decomposition by `AutomatonConstructionLabel.component_nonclock_of_sync`,
+  whereas `= silent` does not.  It is also exactly the right condition
+  semantically: the only compiled edge that legitimately destroys completion
+  is the clock edge of `.tock`.
+
+Intended proof: induction on the compilation fuel, one case per constructor.
+Atomic constructors are direct (the clock edge of `.tock` is excluded by the
+hypothesis, every other atomic edge is a silent self-loop or lands in
+`.skip`); the `.var` case is vacuous because its `.final` target represents
+nothing.  Child edges of `.choice`/`.fairChoice`/`.seq`/`.xoffer`/`.offer`
+transport through the matching relation constructor and the corresponding
+`canCompleteBeforeTockSubst` clause.  Fresh administrative edges are handled
+by `compileTypeFuel_initial_relation` (their targets are child entries).  The
+`.seq` bridge edges additionally need that a `skipping` state represents
+`.skip` — a further mechanical induction that does not exist yet.  The `.par`
+case decomposes through `resolvedAutomatonEdges` and
+`component_nonclock_of_sync`.  The `.recur` case relates the header edge and
+the installed backedges to `PactType.replaceVar_canCompleteBeforeTock`. -/
+mutual
+
+private theorem compiledFragmentNonClockPredecessor_eval
+    (signature : TypeAlphabet) (active : List String)
+    (valuation : String → Bool) (fuel : Nat) :
+    ∀ (processType : PactType),
+      (∀ name, name ∉ active → valuation name = false) →
+      TypeCompilationFuelSufficient processType fuel →
+      PactType.TailRecursive processType →
+      PactType.BinderHygienic active processType →
+      ∀ edge ∈ (compileTypeFuel signature fuel processType).edges,
+        edge.label.semantic ≠ TypeLabel.tock →
+        ∀ targetResidual,
+          TypeCompilationRelation processType edge.target targetResidual →
+          PactType.completionEval valuation targetResidual = true →
+            ∃ sourceResidual,
+              TypeCompilationRelation processType edge.source sourceResidual ∧
+              PactType.completionEval valuation sourceResidual = true := by
+  classical
+  cases fuel with
+  | zero =>
+      intro processType _ hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel =>
+      have ih := fun (active : List String) (valuation : String → Bool) =>
+        compiledFragmentNonClockPredecessor_eval signature active valuation fuel
+      intro processType hSupported hFuel hTail hHygienic edge hEdge
+        hNonClock targetResidual hTargetRelated hTargetComplete
+      generalize hTargetState : edge.target = targetState at hTargetRelated
+      cases processType with
+      | skip =>
+          cases hTargetRelated
+          refine ⟨.skip, ?_, by simp [PactType.completionEval]⟩
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with ⟨environment, _, hEq⟩
+          simpa [← hEq] using TypeCompilationRelation.skip
+      | message msg dir =>
+          cases hTargetRelated with
+          | message_source =>
+              simp only [compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+              rcases hEdge with ((⟨environment, _, hEq⟩ |
+                  ⟨environment, _, hEq⟩) | ⟨environment, _, hEq⟩)
+              · rw [← hEq] at hTargetState
+                simp at hTargetState
+              · refine ⟨.message msg dir, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using
+                  TypeCompilationRelation.message_source msg dir
+              · rw [← hEq] at hTargetState
+                simp at hTargetState
+          | message_final =>
+              simp only [compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+              rcases hEdge with ((⟨environment, _, hEq⟩ |
+                  ⟨environment, _, hEq⟩) | ⟨environment, _, hEq⟩)
+              · refine ⟨.message msg dir, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using
+                  TypeCompilationRelation.message_source msg dir
+              · rw [← hEq] at hTargetState
+                simp at hTargetState
+              · refine ⟨.skip, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using
+                  TypeCompilationRelation.message_final msg dir
+      | tock =>
+          cases hTargetRelated with
+          | cycle_source =>
+              simp [PactType.completionEval] at hTargetComplete
+          | cycle_final =>
+              simp only [compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image] at hEdge
+              rcases hEdge with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+              · rw [← hEq] at hTargetState hNonClock
+                by_cases hClock : environment.clock = true
+                · apply (hNonClock (by simp [hClock,
+                    AutomatonConstructionLabel.semantic])).elim
+                · simp [hClock] at hTargetState
+              · refine ⟨.skip, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using TypeCompilationRelation.cycle_final
+      | progress pid =>
+          cases hTargetRelated with
+          | progress_source =>
+              simp only [compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+              rcases hEdge with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+              · rw [← hEq] at hTargetState
+                simp at hTargetState
+              · rw [← hEq] at hTargetState
+                simp at hTargetState
+          | progress_final =>
+              simp only [compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+              rcases hEdge with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+              · refine ⟨.progress pid, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using
+                  TypeCompilationRelation.progress_source pid
+              · refine ⟨.skip, ?_, by simp
+                    [PactType.completionEval]⟩
+                simpa [← hEq] using
+                  TypeCompilationRelation.progress_final pid
+      | var other =>
+          cases hTargetRelated
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image] at hEdge
+          rcases hEdge with ⟨environment, _, hEq⟩
+          rw [← hEq] at hTargetState
+          simp at hTargetState
+      | recur binder body =>
+          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : body.TailOccurrences binder True ∧
+              body.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : binder ∉ active ∧
+              body.BinderHygienic (binder :: active) := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          have hFreshBody : body.BinderFreshFor (binder :: active) :=
+            PactType.binderHygienic_binderFreshFor (binder :: active) body
+              hHygienicFields.2
+          let recursiveType : PactType := .recur binder body
+          let bodyFragment := compileTypeFuel signature fuel body
+          simp only [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+              at hEdge
+          cases hTargetRelated with
+          | recur_source =>
+              rcases hEdge with ⟨environment, _, hEq⟩ |
+                ⟨bodyEdge, _, hEq⟩
+              · subst edge
+                simp [Pact.childState] at hTargetState
+              · by_cases hVariable : bodyEdge.label = .variable binder
+                · rw [if_pos hVariable] at hEq
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+                · rw [if_neg hVariable] at hEq
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+          | recur_body _ _ childResidual childState hChildRelated =>
+              rcases hEdge with ⟨environment, _, hEq⟩ |
+                ⟨bodyEdge, hBodyEdge, hEq⟩
+              · subst edge
+                have hChildState : bodyFragment.initial = childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel body hBodyFuel
+                have hResidual : childResidual = body :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst childResidual
+                refine ⟨recursiveType, ?_, ?_⟩
+                · simpa [recursiveType] using
+                    TypeCompilationRelation.recur_source binder body
+                · rw [← completionEval_unfold_recur_of_hygienic active
+                    valuation binder body hSupported hFreshBody]
+                  simpa [recursiveType] using hTargetComplete
+              · by_cases hVariable : bodyEdge.label = .variable binder
+                · rw [if_pos hVariable] at hEq
+                  subst edge
+                  have hChildState : bodyFragment.initial = childState := by
+                    injection hTargetState
+                  have hInitial := compileTypeFuel_initial_relation signature
+                    fuel body hBodyFuel
+                  have hResidual : childResidual = body :=
+                    TypeCompilationRelation.residual_unique hChildRelated
+                      (hChildState ▸ hInitial)
+                  subst childResidual
+                  have hMarker := compileTypeFuel_variableEdge_source_var
+                    signature binder fuel body True hBodyFuel hTailFields.1
+                      bodyEdge hBodyEdge hVariable
+                  have hSourceRelation : TypeCompilationRelation
+                      (.recur binder body) (.child 0 bodyEdge.source)
+                        recursiveType := by
+                    have hLifted := TypeCompilationRelation.recur_body binder
+                      body (.var binder) bodyEdge.source hMarker.2
+                    simpa [recursiveType, PactType.replaceVar] using hLifted
+                  refine ⟨recursiveType, hSourceRelation, ?_⟩
+                  rw [← completionEval_unfold_recur_of_hygienic active
+                      valuation binder body hSupported hFreshBody]
+                  simpa [recursiveType] using hTargetComplete
+                · rw [if_neg hVariable] at hEq
+                  subst edge
+                  have hChildTarget : bodyEdge.target = childState := by
+                    injection hTargetState
+                  let extendedValuation : String → Bool :=
+                    Function.update valuation binder
+                      (PactType.completionEval valuation recursiveType)
+                  have hExtendedSupported : ∀ variableName,
+                      variableName ∉ binder :: active →
+                        extendedValuation variableName = false := by
+                    intro variableName hNotMem
+                    have hNe : variableName ≠ binder := by
+                      intro hEq
+                      subst variableName
+                      exact hNotMem (by simp)
+                    simp [extendedValuation, Function.update, hNe,
+                      hSupported variableName (by
+                        intro hMem
+                        exact hNotMem (List.mem_cons_of_mem binder hMem))]
+                  have hTargetFresh :
+                      childResidual.BinderFreshFor (binder :: active) :=
+                    compilationRelation_binderFreshFor hChildRelated
+                      hHygienicFields.2
+                  have hTargetEval : PactType.completionEval extendedValuation
+                      childResidual = true := by
+                    rw [← PactType.completionEval_replaceVar_of_hygienic active
+                      valuation binder recursiveType hSupported
+                        childResidual hTargetFresh]
+                    simpa [recursiveType] using hTargetComplete
+                  have hBodyNonClock :
+                      bodyEdge.label.semantic ≠ TypeLabel.tock := by
+                    simpa using hNonClock
+                  obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                    ih (binder :: active) extendedValuation body
+                      hExtendedSupported hBodyFuel hTailFields.2
+                        hHygienicFields.2 bodyEdge hBodyEdge hBodyNonClock
+                          childResidual (hChildTarget ▸ hChildRelated) hTargetEval
+                  have hSourceFresh :
+                      sourceResidual.BinderFreshFor (binder :: active) :=
+                    compilationRelation_binderFreshFor hSourceRelated
+                      hHygienicFields.2
+                  refine ⟨sourceResidual.replaceVar binder recursiveType,
+                    TypeCompilationRelation.recur_body binder body
+                      sourceResidual bodyEdge.source hSourceRelated, ?_⟩
+                  rw [PactType.completionEval_replaceVar_of_hygienic active
+                    valuation binder recursiveType hSupported
+                      sourceResidual hSourceFresh]
+                  exact hSourceComplete
+      | choice left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic active ∧
+              right.BinderHygienic active := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childPendingEdges,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton] at hEdge
+          cases hTargetRelated with
+          | choice_source =>
+              rcases hEdge with
+                (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
+                  ⟨environment, _, hEq | hEq⟩
+              all_goals subst edge
+              all_goals simp [childPendingEdge, Pact.childState] at hTargetState
+          | choice_left _ _ _ childState hChildRelated =>
+              rcases hEdge with
+                (⟨childEdge, hChildEdge, hEq⟩ |
+                  ⟨childEdge, _, hEq⟩) |
+                    ⟨environment, _, hEq | hEq⟩
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation left hSupported hLeftFuel hTailFields.1
+                    hHygienicFields.1 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.choice_left left right
+                    sourceResidual childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel left).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel left hLeftFuel
+                have hResidual : targetResidual = left :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.choice left right,
+                  TypeCompilationRelation.choice_source left right, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation left = true ∨
+                    PactType.completionEval valuation right = true from
+                      Or.inl hTargetComplete)
+              · subst edge
+                simp [Pact.childState] at hTargetState
+          | choice_right _ _ _ childState hChildRelated =>
+              rcases hEdge with
+                (⟨childEdge, _, hEq⟩ |
+                  ⟨childEdge, hChildEdge, hEq⟩) |
+                    ⟨environment, _, hEq | hEq⟩
+              · subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation right hSupported hRightFuel hTailFields.2
+                    hHygienicFields.2 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.choice_right left right
+                    sourceResidual childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · subst edge
+                simp [Pact.childState] at hTargetState
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel right).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel right hRightFuel
+                have hResidual : targetResidual = right :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.choice left right,
+                  TypeCompilationRelation.choice_source left right, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation left = true ∨
+                    PactType.completionEval valuation right = true from
+                      Or.inr hTargetComplete)
+      | fairChoice bid left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic active ∧
+              right.BinderHygienic active := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childPendingEdges,
+            Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+            Finset.mem_singleton] at hEdge
+          cases hTargetRelated with
+          | fair_source =>
+              rcases hEdge with
+                (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
+                  ⟨environment, _, hEq | hEq⟩
+              all_goals subst edge
+              all_goals simp [childPendingEdge, Pact.childState] at hTargetState
+          | fair_left _ _ _ _ childState hChildRelated =>
+              rcases hEdge with
+                (⟨childEdge, hChildEdge, hEq⟩ |
+                  ⟨childEdge, _, hEq⟩) |
+                    ⟨environment, _, hEq | hEq⟩
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation left hSupported hLeftFuel hTailFields.1
+                    hHygienicFields.1 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.fair_left bid left right
+                    sourceResidual childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel left).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel left hLeftFuel
+                have hResidual : targetResidual = left :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.fairChoice bid left right,
+                  TypeCompilationRelation.fair_source bid left right, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation left = true ∨
+                    PactType.completionEval valuation right = true from
+                      Or.inl hTargetComplete)
+              · subst edge
+                simp [Pact.childState] at hTargetState
+          | fair_right _ _ _ _ childState hChildRelated =>
+              rcases hEdge with
+                (⟨childEdge, _, hEq⟩ |
+                  ⟨childEdge, hChildEdge, hEq⟩) |
+                    ⟨environment, _, hEq | hEq⟩
+              · subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation right hSupported hRightFuel hTailFields.2
+                    hHygienicFields.2 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.fair_right bid left right
+                    sourceResidual childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · subst edge
+                simp [Pact.childState] at hTargetState
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel right).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel right hRightFuel
+                have hResidual : targetResidual = right :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.fairChoice bid left right,
+                  TypeCompilationRelation.fair_source bid left right, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation left = true ∨
+                    PactType.completionEval valuation right = true from
+                      Or.inr hTargetComplete)
+      | seq left right =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic active ∧
+              right.BinderHygienic active := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_biUnion] at hEdge
+          cases hTargetRelated with
+          | sequence_left _ _ childResidual childState hChildRelated =>
+              simp only [PactType.completionEval,
+                Bool.and_eq_true] at hTargetComplete
+              rcases hEdge with
+                ((⟨childEdge, hChildEdge, hEq⟩ |
+                    ⟨childEdge, _, hEq⟩) |
+                  ⟨bridgeState, _, environment, _, hEq⟩) |
+                    ⟨bridgeState, _, hEq⟩
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation left hSupported hLeftFuel hTailFields.1
+                    hHygienicFields.1 childEdge hChildEdge
+                    hChildNonClock childResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete.1
+                refine ⟨.seq sourceResidual right,
+                  TypeCompilationRelation.sequence_left left right
+                    sourceResidual childEdge.source hSourceRelated, ?_⟩
+                simp [PactType.completionEval, hSourceComplete,
+                  hTargetComplete.2]
+              · subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · subst edge
+                simp [Pact.childState] at hTargetState
+              · subst edge
+                simp [Pact.childState] at hTargetState
+          | sequence_right _ _ childResidual childState hChildRelated =>
+              rcases hEdge with
+                ((⟨childEdge, _, hEq⟩ |
+                  ⟨childEdge, hChildEdge, hEq⟩) |
+                  ⟨bridgeState, hBridgeSkipping, environment, _, hEq⟩) |
+                    ⟨bridgeState, hBridgeCompleting, hEq⟩
+              · subst edge
+                simp [Pact.childState] at hTargetState
+              · subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation right hSupported hRightFuel hTailFields.2
+                    hHygienicFields.2 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.sequence_right left right
+                    sourceResidual childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel right).initial =
+                      childState := by
+                  injection hTargetState
+                have hRightInitial := compileTypeFuel_initial_relation
+                  signature fuel right hRightFuel
+                have hResidual : targetResidual = right :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hRightInitial)
+                subst targetResidual
+                have hLeftSkip : TypeCompilationRelation left bridgeState .skip :=
+                  compiledFragmentSkipping_represented signature fuel left
+                    hLeftFuel bridgeState hBridgeSkipping
+                refine ⟨.seq .skip right,
+                  TypeCompilationRelation.sequence_left left right .skip
+                    bridgeState hLeftSkip, ?_⟩
+                simp [PactType.completionEval, hTargetComplete]
+              · subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel right).initial =
+                      childState := by
+                  injection hTargetState
+                have hRightInitial := compileTypeFuel_initial_relation
+                  signature fuel right hRightFuel
+                have hResidual : targetResidual = right :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hRightInitial)
+                subst targetResidual
+                obtain ⟨leftResidual, hLeftRelated, hLeftComplete⟩ :=
+                  compiledFragmentCompleting_represented signature active fuel
+                    left hLeftFuel hTailFields.1
+                      hHygienicFields.1 bridgeState hBridgeCompleting
+                have hLeftEval : PactType.completionEval valuation
+                    leftResidual = true := by
+                  apply PactType.completionEval_mono (fun _ => false) valuation
+                    (by intro variableName; simp)
+                  rw [PactType.completionEval_eq_canCompleteBeforeTock_of_all_false]
+                  · exact hLeftComplete
+                  · intro variableName
+                    rfl
+                refine ⟨.seq leftResidual right,
+                  TypeCompilationRelation.sequence_left left right
+                    leftResidual bridgeState hLeftRelated, ?_⟩
+                simp [PactType.completionEval, hLeftEval,
+                  hTargetComplete]
+      | par left right interface =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic active ∧
+              right.BinderHygienic active := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          cases hTargetRelated with
+          | parallel _ _ leftResidual rightResidual _ leftState rightState
+              hLeftRelated hRightRelated =>
+              simp only [PactType.completionEval,
+                Bool.and_eq_true] at hTargetComplete
+              rcases hEdge with hTransition | hObservation
+              · rcases hTransition with
+                  ⟨leftEdge, ⟨hLeftEdge, _⟩, rightEdge,
+                    ⟨⟨hRightEdge, _⟩, hSync⟩, hEq⟩
+                subst edge
+                rcases hSync with
+                  ⟨leftWitness, hLeftWitness, rightWitness, hRightWitness,
+                    hWitnesses⟩
+                have hLabelSync : TypeLabel.Sync interface
+                    leftEdge.label.semantic rightEdge.label.semantic :=
+                  hWitnesses.2.2.2
+                have hComponentNonClock :=
+                  AutomatonConstructionLabel.component_nonclock_of_sync
+                    interface leftEdge.label rightEdge.label hLabelSync
+                      hNonClock
+                simp only [resolvedAutomatonEdges, Finset.mem_image]
+                  at hLeftEdge hRightEdge
+                rcases hLeftEdge with
+                  ⟨leftRaw, hLeftRaw, hLeftResolved⟩
+                rcases hRightEdge with
+                  ⟨rightRaw, hRightRaw, hRightResolved⟩
+                have hLeftTarget : leftRaw.target = leftState := by
+                  rw [← hLeftResolved] at hTargetState
+                  injection hTargetState
+                have hRightTarget : rightRaw.target = rightState := by
+                  rw [← hRightResolved] at hTargetState
+                  injection hTargetState
+                have hLeftNonClock :
+                    leftRaw.label.semantic ≠ TypeLabel.tock := by
+                  simpa [← hLeftResolved] using hComponentNonClock.1
+                have hRightNonClock :
+                    rightRaw.label.semantic ≠ TypeLabel.tock := by
+                  simpa [← hRightResolved] using hComponentNonClock.2
+                obtain ⟨leftSourceResidual, hLeftSource,
+                    hLeftComplete⟩ :=
+                  ih active valuation left hSupported hLeftFuel hTailFields.1
+                    hHygienicFields.1 leftRaw hLeftRaw
+                    hLeftNonClock leftResidual
+                      (hLeftTarget ▸ hLeftRelated) hTargetComplete.1
+                obtain ⟨rightSourceResidual, hRightSource,
+                    hRightComplete⟩ :=
+                  ih active valuation right hSupported hRightFuel hTailFields.2
+                    hHygienicFields.2 rightRaw hRightRaw
+                    hRightNonClock rightResidual
+                      (hRightTarget ▸ hRightRelated) hTargetComplete.2
+                refine ⟨.par leftSourceResidual rightSourceResidual interface,
+                  ?_, ?_⟩
+                · convert TypeCompilationRelation.parallel left right
+                    leftSourceResidual rightSourceResidual interface
+                      leftRaw.source rightRaw.source hLeftSource hRightSource
+                    using 1 <;>
+                      simp [← hLeftResolved, ← hRightResolved]
+                · simp [PactType.completionEval,
+                    hLeftComplete, hRightComplete]
+              · rcases hObservation with hLeftFuture | hRightFuture
+                · rcases hLeftFuture with
+                    ⟨leftSource, _, rightSource, _, hEq⟩
+                  subst edge
+                  have hLeftState : leftSource = leftState := by
+                    injection hTargetState
+                  have hRightState : rightSource = rightState := by
+                    injection hTargetState
+                  subst leftSource
+                  subst rightSource
+                  exact ⟨.par leftResidual rightResidual interface,
+                    TypeCompilationRelation.parallel left right leftResidual
+                      rightResidual interface leftState rightState hLeftRelated
+                        hRightRelated,
+                    by simpa [PactType.completionEval] using
+                      hTargetComplete⟩
+                · rcases hRightFuture with
+                    ⟨leftSource, _, rightSource, _, hEq⟩
+                  subst edge
+                  have hLeftState : leftSource = leftState := by
+                    injection hTargetState
+                  have hRightState : rightSource = rightState := by
+                    injection hTargetState
+                  subst leftSource
+                  subst rightSource
+                  exact ⟨.par leftResidual rightResidual interface,
+                    TypeCompilationRelation.parallel left right leftResidual
+                      rightResidual interface leftState rightState hLeftRelated
+                        hRightRelated,
+                    by simpa [PactType.completionEval] using
+                      hTargetComplete⟩
+      | xoffer elseType branches =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hBranchFuel : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hTailFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : elseType.BinderHygienic active ∧
+              PactType.BinderHygienicBranches active branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          cases hTargetRelated with
+          | xoffer_source =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, _, hEq⟩
+                subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, _, hEq⟩
+                  subst edge
+                  simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [mem_foldl_union_iff] at hBranch
+                rcases hBranch with hEmpty | ⟨indexed, _, hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                exact ⟨.xoffer elseType branches,
+                  TypeCompilationRelation.xoffer_source elseType branches,
+                  hTargetComplete⟩
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+          | xoffer_else _ childResidual _ childState hChildRelated =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, hChildEdge, hEq⟩
+                subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation elseType hSupported hElseFuel
+                    hTailFields.1 hHygienicFields.1 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.xoffer_else elseType sourceResidual
+                    branches childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, _, hEq⟩
+                  subst edge
+                  simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [mem_foldl_union_iff] at hBranch
+                rcases hBranch with hEmpty | ⟨indexed, _, hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel elseType).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel elseType hElseFuel
+                have hResidual : targetResidual = elseType :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.xoffer elseType branches,
+                  TypeCompilationRelation.xoffer_source elseType branches, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation elseType = true ∨
+                    PactType.branchCompletionEval valuation branches = true
+                      from Or.inl hTargetComplete)
+          | xoffer_branch _ branchType childResidual _ action index childState
+              hEntry hChildRelated =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, _, hEq⟩
+                subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexedEntry, hIndexedMem,
+                    hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, hChildEdge, hEq⟩
+                  subst edge
+                  have hIndex : indexedEntry.2 = index := by
+                    injection hTargetState with hTag hChildTarget
+                    omega
+                  subst index
+                  have hChildTarget : childEdge.target = childState := by
+                    injection hTargetState
+                  have hFields := List.mem_zipIdx hIndexedMem
+                  simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                    at hFields
+                  rcases hFields with ⟨hBound, hValue⟩
+                  have hIndexedAt : branchAutomata[indexedEntry.2]? =
+                      some indexedEntry.1 := by
+                    rw [List.getElem?_eq_getElem hBound, ← hValue]
+                  have hCanonicalAt : branchAutomata[indexedEntry.2]? = some
+                      (action, compileTypeFuel signature fuel branchType) := by
+                    simp [branchAutomata, hEntry]
+                  rw [hCanonicalAt] at hIndexedAt
+                  have hEntryEq : indexedEntry.1 =
+                      (action, compileTypeFuel signature fuel branchType) :=
+                    Option.some.inj hIndexedAt.symm
+                  rw [hEntryEq] at hChildEdge
+                  have hBranchMember : (action, branchType) ∈ branches :=
+                    List.mem_of_getElem? hEntry
+                  have hThisFuel : TypeCompilationFuelSufficient branchType fuel :=
+                    (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                      (action, branchType) hBranchMember).trans hBranchFuel
+                  have hThisTail : branchType.TailRecursive :=
+                    tailRecursive_branch_of_mem branches (action, branchType)
+                      hTailFields.2 hBranchMember
+                  have hThisHygienic : branchType.BinderHygienic active :=
+                    binderHygienic_branch_of_mem active branches
+                      (action, branchType) hHygienicFields.2 hBranchMember
+                  have hChildNonClock :
+                      childEdge.label.semantic ≠ TypeLabel.tock := by
+                    simpa [childPendingEdge] using hNonClock
+                  obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                    ih active valuation branchType hSupported hThisFuel
+                      hThisTail hThisHygienic childEdge hChildEdge
+                      hChildNonClock targetResidual
+                        (hChildTarget ▸ hChildRelated) hTargetComplete
+                  exact ⟨sourceResidual,
+                    TypeCompilationRelation.xoffer_branch elseType branchType
+                      sourceResidual branches action indexedEntry.2 childEdge.source
+                        hEntry hSourceRelated,
+                    hSourceComplete⟩
+              · rw [mem_foldl_union_iff] at hBranch
+                rcases hBranch with hEmpty | ⟨indexedEntry, hIndexedMem,
+                    hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  have hIndex : indexedEntry.2 = index := by
+                    injection hTargetState with hTag hChildTarget
+                    omega
+                  subst index
+                  have hFields := List.mem_zipIdx hIndexedMem
+                  simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                    at hFields
+                  rcases hFields with ⟨hBound, hValue⟩
+                  have hIndexedAt : branchAutomata[indexedEntry.2]? =
+                      some indexedEntry.1 := by
+                    rw [List.getElem?_eq_getElem hBound, ← hValue]
+                  have hCanonicalAt : branchAutomata[indexedEntry.2]? = some
+                      (action, compileTypeFuel signature fuel branchType) := by
+                    simp [branchAutomata, hEntry]
+                  rw [hCanonicalAt] at hIndexedAt
+                  have hEntryEq : indexedEntry.1 =
+                      (action, compileTypeFuel signature fuel branchType) :=
+                    Option.some.inj hIndexedAt.symm
+                  have hInitial := compileTypeFuel_initial_relation signature
+                    fuel branchType (by
+                      have hMember : (action, branchType) ∈ branches :=
+                        List.mem_of_getElem? hEntry
+                      exact (typeCompilationFuel_le_typeBranchCompilationFuel
+                        branches (action, branchType) hMember).trans hBranchFuel)
+                  have hInitialState :
+                      (compileTypeFuel signature fuel branchType).initial =
+                        childState := by
+                    rw [hEntryEq] at hTargetState
+                    injection hTargetState
+                  have hResidual : targetResidual = branchType :=
+                    TypeCompilationRelation.residual_unique hChildRelated
+                      (hInitialState ▸ hInitial)
+                  subst targetResidual
+                  refine ⟨.xoffer elseType branches,
+                    TypeCompilationRelation.xoffer_source elseType branches,
+                    ?_⟩
+                  simpa [PactType.completionEval] using
+                    (show PactType.completionEval valuation elseType = true ∨
+                      PactType.branchCompletionEval valuation branches = true
+                        from Or.inr
+                          (branchCompletionEval_of_getElem valuation branches
+                            indexedEntry.2 action branchType hEntry
+                              hTargetComplete))
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+      | offer elseType branches =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : elseType.BinderHygienic active ∧
+              PactType.BinderHygienicBranches active branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let selectedConjunctions := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          cases hTargetRelated with
+          | offer_source =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, _, hEq⟩
+                subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, _, hEq⟩
+                  subst edge
+                  simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [mem_foldl_union_iff] at hEnabled
+                rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                exact ⟨.offer elseType branches,
+                  TypeCompilationRelation.offer_source elseType branches,
+                  hTargetComplete⟩
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+          | offer_else _ childResidual _ childState hChildRelated =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, hChildEdge, hEq⟩
+                subst edge
+                have hChildTarget : childEdge.target = childState := by
+                  injection hTargetState
+                have hChildNonClock :
+                    childEdge.label.semantic ≠ TypeLabel.tock := by
+                  simpa [childPendingEdge] using hNonClock
+                obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                  ih active valuation elseType hSupported hElseFuel
+                    hTailFields.1 hHygienicFields.1 childEdge hChildEdge
+                    hChildNonClock targetResidual
+                      (hChildTarget ▸ hChildRelated) hTargetComplete
+                exact ⟨sourceResidual,
+                  TypeCompilationRelation.offer_else elseType sourceResidual
+                    branches childEdge.source hSourceRelated,
+                  hSourceComplete⟩
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, _, hEq⟩
+                  subst edge
+                  simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [mem_foldl_union_iff] at hEnabled
+                rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                have hChildState :
+                    (compileTypeFuel signature fuel elseType).initial =
+                      childState := by
+                  injection hTargetState
+                have hInitial := compileTypeFuel_initial_relation signature
+                  fuel elseType hElseFuel
+                have hResidual : targetResidual = elseType :=
+                  TypeCompilationRelation.residual_unique hChildRelated
+                    (hChildState ▸ hInitial)
+                subst targetResidual
+                refine ⟨.offer elseType branches,
+                  TypeCompilationRelation.offer_source elseType branches, ?_⟩
+                simpa [PactType.completionEval] using
+                  (show PactType.completionEval valuation elseType = true ∨
+                    PactType.branchCompletionEval valuation branches = true
+                      from Or.inl hTargetComplete)
+          | offer_branches _ childResidual _ selected index childState hEntry
+              hChildRelated =>
+              rcases hEdge with
+                ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
+              · simp only [childPendingEdges, Finset.mem_image] at hElse
+                rcases hElse with ⟨childEdge, _, hEq⟩
+                subst edge
+                simp [childPendingEdge, Pact.childState] at hTargetState
+              · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+                rcases hIndexed with hEmpty | ⟨indexedEntry, hIndexedMem,
+                    hChild⟩
+                · simp at hEmpty
+                · simp only [childPendingEdges, Finset.mem_image] at hChild
+                  rcases hChild with ⟨childEdge, hChildEdge, hEq⟩
+                  subst edge
+                  have hIndex : indexedEntry.2 = index := by
+                    injection hTargetState with hTag hChildTarget
+                    omega
+                  subst index
+                  have hChildTarget : childEdge.target = childState := by
+                    injection hTargetState
+                  have hFields := List.mem_zipIdx hIndexedMem
+                  simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                    at hFields
+                  rcases hFields with ⟨hBound, hValue⟩
+                  have hIndexedAt : selectedConjunctions[indexedEntry.2]? =
+                      some indexedEntry.1 := by
+                    rw [List.getElem?_eq_getElem hBound, ← hValue]
+                  have hCanonicalAt : selectedConjunctions[indexedEntry.2]? =
+                      some (selected.1, compileTypeFuel signature fuel
+                        (parallelTypeBranchesSelecting selected branches)) := by
+                    simp [selectedConjunctions, hEntry]
+                  rw [hCanonicalAt] at hIndexedAt
+                  have hEntryEq : indexedEntry.1 =
+                      (selected.1, compileTypeFuel signature fuel
+                        (parallelTypeBranchesSelecting selected branches)) :=
+                    Option.some.inj hIndexedAt.symm
+                  rw [hEntryEq] at hChildEdge
+                  have hThisFuel : TypeCompilationFuelSufficient
+                      (parallelTypeBranchesSelecting selected branches) fuel := by
+                    rw [TypeCompilationFuelSufficient,
+                      typeCompilationFuel_parallelTypeBranchesSelecting]
+                    simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                      at hFuel
+                    omega
+                  have hThisTail :=
+                    tailRecursive_parallelTypeBranchesSelecting selected
+                      branches hTailFields.2
+                  have hThisHygienic :=
+                    binderHygienic_parallelTypeBranchesSelecting active
+                      selected branches hHygienicFields.2
+                  have hChildNonClock :
+                      childEdge.label.semantic ≠ TypeLabel.tock := by
+                    simpa [childPendingEdge] using hNonClock
+                  obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                    ih active valuation
+                      (parallelTypeBranchesSelecting selected branches)
+                      hSupported hThisFuel hThisTail hThisHygienic childEdge
+                        hChildEdge hChildNonClock
+                        targetResidual (hChildTarget ▸ hChildRelated)
+                          hTargetComplete
+                  exact ⟨sourceResidual,
+                    TypeCompilationRelation.offer_branches elseType
+                      sourceResidual branches selected indexedEntry.2
+                        childEdge.source hEntry hSourceRelated,
+                    hSourceComplete⟩
+              · rw [mem_foldl_union_iff] at hEnabled
+                rcases hEnabled with hEmpty | ⟨indexedEntry, hIndexedMem,
+                    hNewEdge⟩
+                · simp at hEmpty
+                · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+                  rcases hNewEdge with ⟨environment, _, hEq⟩
+                  subst edge
+                  have hIndex : indexedEntry.2 = index := by
+                    injection hTargetState with hTag hChildTarget
+                    omega
+                  subst index
+                  have hFields := List.mem_zipIdx hIndexedMem
+                  simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                    at hFields
+                  rcases hFields with ⟨hBound, hValue⟩
+                  have hIndexedAt : selectedConjunctions[indexedEntry.2]? =
+                      some indexedEntry.1 := by
+                    rw [List.getElem?_eq_getElem hBound, ← hValue]
+                  have hCanonicalAt : selectedConjunctions[indexedEntry.2]? =
+                      some (selected.1, compileTypeFuel signature fuel
+                        (parallelTypeBranchesSelecting selected branches)) := by
+                    simp [selectedConjunctions, hEntry]
+                  rw [hCanonicalAt] at hIndexedAt
+                  have hEntryEq : indexedEntry.1 =
+                      (selected.1, compileTypeFuel signature fuel
+                        (parallelTypeBranchesSelecting selected branches)) :=
+                    Option.some.inj hIndexedAt.symm
+                  have hThisFuel : TypeCompilationFuelSufficient
+                      (parallelTypeBranchesSelecting selected branches) fuel := by
+                    rw [TypeCompilationFuelSufficient,
+                      typeCompilationFuel_parallelTypeBranchesSelecting]
+                    simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                      at hFuel
+                    omega
+                  have hInitial := compileTypeFuel_initial_relation signature
+                    fuel (parallelTypeBranchesSelecting selected branches)
+                      hThisFuel
+                  have hInitialState : (compileTypeFuel signature fuel
+                      (parallelTypeBranchesSelecting selected branches)).initial =
+                        childState := by
+                    rw [hEntryEq] at hTargetState
+                    injection hTargetState
+                  have hResidual : targetResidual =
+                      parallelTypeBranchesSelecting selected branches :=
+                    TypeCompilationRelation.residual_unique hChildRelated
+                      (hInitialState ▸ hInitial)
+                  subst targetResidual
+                  have hSelectedMem : selected ∈ branches :=
+                    List.mem_of_getElem? hEntry
+                  have hSelectedComplete : PactType.completionEval valuation
+                      selected.2 = true := by
+                    rw [← completionEval_parallelTypeBranchesSelecting_of_mem
+                      valuation selected branches hSelectedMem]
+                    exact hTargetComplete
+                  refine ⟨.offer elseType branches,
+                    TypeCompilationRelation.offer_source elseType branches,
+                    ?_⟩
+                  simpa [PactType.completionEval] using
+                    (show PactType.completionEval valuation elseType = true ∨
+                      PactType.branchCompletionEval valuation branches = true
+                        from Or.inr
+                          (branchCompletionEval_of_getElem valuation branches
+                            indexedEntry.2 selected.1 selected.2 hEntry
+                              hSelectedComplete))
+              · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+                rcases hWait with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+              · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+                rcases hResolved with ⟨environment, _, hEq⟩
+                subst edge
+                simp [Pact.childState] at hTargetState
+
+  termination_by fuel
+  decreasing_by all_goals omega
+
+/-- Every compiler state marked as completing represents a semantic residual.
+The proof carries the stronger fact that the witness itself completes; the
+recursion case then closes the non-clock predecessor saturation using
+`compiledFragmentNonClockPredecessor_subst`. -/
+private theorem compiledFragmentCompleting_represented
+    (signature : TypeAlphabet) (bound : List String) (fuel : Nat) :
+    ∀ (processType : PactType),
+      TypeCompilationFuelSufficient processType fuel →
+      PactType.TailRecursive processType →
+      PactType.BinderHygienic bound processType →
+      ∀ state ∈ (compileTypeFuel signature fuel processType).completing,
+        ∃ residual, TypeCompilationRelation processType state residual ∧
+          residual.CanCompleteBeforeTock = true := by
+  classical
+  cases fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel =>
+      have ih := fun (bound : List String) =>
+        compiledFragmentCompleting_represented signature bound fuel
+      intro processType hFuel hTail hHygienic state hCompleting
+      cases processType with
+      | message msg dir =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_insert, Finset.mem_singleton] at hCompleting
+          rcases hCompleting with rfl | rfl
+          · exact ⟨.message msg dir,
+              TypeCompilationRelation.message_source msg dir, by
+                simp [PactType.CanCompleteBeforeTock]⟩
+          · exact ⟨.skip, TypeCompilationRelation.message_final msg dir, by
+                simp [PactType.CanCompleteBeforeTock]⟩
+      | progress pid =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_insert, Finset.mem_singleton] at hCompleting
+          rcases hCompleting with rfl | rfl
+          · exact ⟨.progress pid,
+              TypeCompilationRelation.progress_source pid, by
+                simp [PactType.CanCompleteBeforeTock]⟩
+          · exact ⟨.skip, TypeCompilationRelation.progress_final pid, by
+                simp [PactType.CanCompleteBeforeTock]⟩
+      | tock =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hCompleting
+          subst state
+          exact ⟨.skip, TypeCompilationRelation.cycle_final, by
+            simp [PactType.CanCompleteBeforeTock]⟩
+      | skip =>
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_singleton] at hCompleting
+          subst state
+          exact ⟨.skip, TypeCompilationRelation.skip, by
+            simp [PactType.CanCompleteBeforeTock]⟩
+      | var other =>
+          simp [compileTypeFuel, finishAutomatonFragment] at hCompleting
+      | choice left right =>
+          have hFuelLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hFuelRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic bound ∧
+              right.BinderHygienic bound := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let leftFragment := compileTypeFuel signature fuel left
+          let rightFragment := compileTypeFuel signature fuel right
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hCompleting
+          rcases hCompleting with (hRoot | hLeft) | hRight
+          · have hInitial : leftFragment.initial ∈ leftFragment.completing ∨
+                rightFragment.initial ∈ rightFragment.completing := by
+              by_contra hNo
+              rw [if_neg hNo] at hRoot
+              simp at hRoot
+            have hState : state = .root := by
+              rw [if_pos hInitial] at hRoot
+              simpa using hRoot
+            subst state
+            rcases hInitial with hLeftInitial | hRightInitial
+            · obtain ⟨residual, hRelated, hComplete⟩ :=
+                ih bound left hFuelLeft hTailFields.1 hHygienicFields.1
+                  leftFragment.initial
+                  (by simpa [leftFragment] using hLeftInitial)
+              have hResidual : residual = left :=
+                TypeCompilationRelation.residual_unique hRelated
+                  (compileTypeFuel_initial_relation signature fuel left
+                    hFuelLeft)
+              subst residual
+              exact ⟨.choice left right,
+                TypeCompilationRelation.choice_source left right, by
+                  simp [PactType.CanCompleteBeforeTock, hComplete]⟩
+            · obtain ⟨residual, hRelated, hComplete⟩ :=
+                ih bound right hFuelRight hTailFields.2 hHygienicFields.2
+                  rightFragment.initial
+                  (by simpa [rightFragment] using hRightInitial)
+              have hResidual : residual = right :=
+                TypeCompilationRelation.residual_unique hRelated
+                  (compileTypeFuel_initial_relation signature fuel right
+                    hFuelRight)
+              subst residual
+              exact ⟨.choice left right,
+                TypeCompilationRelation.choice_source left right, by
+                  simp [PactType.CanCompleteBeforeTock, hComplete]⟩
+          · rcases Finset.mem_image.mp hLeft with
+              ⟨child, hChildCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound left hFuelLeft hTailFields.1 hHygienicFields.1 child
+                hChildCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.choice_left left right residual child
+                hRelated, hComplete⟩
+          · rcases Finset.mem_image.mp hRight with
+              ⟨child, hChildCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound right hFuelRight hTailFields.2 hHygienicFields.2 child
+                hChildCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.choice_right left right residual child
+                hRelated, hComplete⟩
+      | fairChoice bid left right =>
+          have hFuelLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hFuelRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic bound ∧
+              right.BinderHygienic bound := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let leftFragment := compileTypeFuel signature fuel left
+          let rightFragment := compileTypeFuel signature fuel right
+          simp only [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hCompleting
+          rcases hCompleting with (hRoot | hLeft) | hRight
+          · have hInitial : leftFragment.initial ∈ leftFragment.completing ∨
+                rightFragment.initial ∈ rightFragment.completing := by
+              by_contra hNo
+              rw [if_neg hNo] at hRoot
+              simp at hRoot
+            have hState : state = .root := by
+              rw [if_pos hInitial] at hRoot
+              simpa using hRoot
+            subst state
+            rcases hInitial with hLeftInitial | hRightInitial
+            · obtain ⟨residual, hRelated, hComplete⟩ :=
+                ih bound left hFuelLeft hTailFields.1 hHygienicFields.1
+                  leftFragment.initial
+                  (by simpa [leftFragment] using hLeftInitial)
+              have hResidual : residual = left :=
+                TypeCompilationRelation.residual_unique hRelated
+                  (compileTypeFuel_initial_relation signature fuel left
+                    hFuelLeft)
+              subst residual
+              exact ⟨.fairChoice bid left right,
+                TypeCompilationRelation.fair_source bid left right, by
+                  simp [PactType.CanCompleteBeforeTock, hComplete]⟩
+            · obtain ⟨residual, hRelated, hComplete⟩ :=
+                ih bound right hFuelRight hTailFields.2 hHygienicFields.2
+                  rightFragment.initial
+                  (by simpa [rightFragment] using hRightInitial)
+              have hResidual : residual = right :=
+                TypeCompilationRelation.residual_unique hRelated
+                  (compileTypeFuel_initial_relation signature fuel right
+                    hFuelRight)
+              subst residual
+              exact ⟨.fairChoice bid left right,
+                TypeCompilationRelation.fair_source bid left right, by
+                  simp [PactType.CanCompleteBeforeTock, hComplete]⟩
+          · rcases Finset.mem_image.mp hLeft with
+              ⟨child, hChildCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound left hFuelLeft hTailFields.1 hHygienicFields.1 child
+                hChildCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.fair_left bid left right residual child
+                hRelated, hComplete⟩
+          · rcases Finset.mem_image.mp hRight with
+              ⟨child, hChildCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound right hFuelRight hTailFields.2 hHygienicFields.2 child
+                hChildCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.fair_right bid left right residual child
+                hRelated, hComplete⟩
+      | seq left right =>
+          have hFuelLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hFuelRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic bound ∧
+              right.BinderHygienic bound := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let leftFragment := compileTypeFuel signature fuel left
+          let rightFragment := compileTypeFuel signature fuel right
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hCompleting
+          rcases hCompleting with hLeft | hRight
+          · have hRightInitial : rightFragment.initial ∈
+                rightFragment.completing := by
+              by_contra hNo
+              rw [if_neg hNo] at hLeft
+              simp at hLeft
+            rw [if_pos hRightInitial] at hLeft
+            rcases Finset.mem_image.mp hLeft with
+              ⟨leftState, hLeftCompleting, rfl⟩
+            obtain ⟨leftResidual, hLeftRelated, hLeftComplete⟩ :=
+              ih bound left hFuelLeft hTailFields.1 hHygienicFields.1 leftState
+                hLeftCompleting
+            obtain ⟨rightResidual, hRightRelated, hRightComplete⟩ :=
+              ih bound right hFuelRight hTailFields.2 hHygienicFields.2
+                rightFragment.initial
+                hRightInitial
+            have hRightResidual : rightResidual = right :=
+              TypeCompilationRelation.residual_unique hRightRelated
+                (compileTypeFuel_initial_relation signature fuel right
+                  hFuelRight)
+            subst rightResidual
+            exact ⟨.seq leftResidual right,
+              TypeCompilationRelation.sequence_left left right leftResidual
+                leftState hLeftRelated, by
+                  simp [PactType.CanCompleteBeforeTock, hLeftComplete,
+                    hRightComplete]⟩
+          · rcases Finset.mem_image.mp hRight with
+              ⟨rightState, hRightCompleting, rfl⟩
+            obtain ⟨rightResidual, hRightRelated, hRightComplete⟩ :=
+              ih bound right hFuelRight hTailFields.2 hHygienicFields.2
+                rightState
+                hRightCompleting
+            exact ⟨rightResidual,
+              TypeCompilationRelation.sequence_right left right rightResidual
+                rightState hRightRelated, hRightComplete⟩
+      | par left right interface =>
+          have hFuelLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hFuelRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : left.BinderHygienic bound ∧
+              right.BinderHygienic bound := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, Finset.mem_biUnion,
+            Finset.mem_image] at hCompleting
+          rcases hCompleting with
+            ⟨leftState, hLeftCompleting, rightState, hRightCompleting, rfl⟩
+          obtain ⟨leftResidual, hLeftRelated, hLeftComplete⟩ :=
+            ih bound left hFuelLeft hTailFields.1 hHygienicFields.1 leftState
+              hLeftCompleting
+          obtain ⟨rightResidual, hRightRelated, hRightComplete⟩ :=
+            ih bound right hFuelRight hTailFields.2 hHygienicFields.2
+              rightState
+              hRightCompleting
+          exact ⟨.par leftResidual rightResidual interface,
+            TypeCompilationRelation.parallel left right leftResidual
+              rightResidual interface leftState rightState hLeftRelated
+                hRightRelated, by
+              simp [PactType.CanCompleteBeforeTock, hLeftComplete,
+                hRightComplete]⟩
+      | recur binder body =>
+          have hFuelBody : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : body.TailOccurrences binder True ∧
+              body.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : binder ∉ bound ∧
+              body.BinderHygienic (binder :: bound) := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let bodyFragment := compileTypeFuel signature fuel body
+          simp only [compileTypeFuel] at hCompleting
+          rw [buildRecursionAutomaton_completing_eq signature binder
+            bodyFragment] at hCompleting
+          rcases Finset.mem_union.mp hCompleting with hRoot | hTagged
+          · have hBodyInitial : bodyFragment.initial ∈
+                bodyFragment.completing := by
+              by_contra hNo
+              rw [if_neg hNo] at hRoot
+              simp at hRoot
+            have hState : state = .root := by
+              rw [if_pos hBodyInitial] at hRoot
+              simpa using hRoot
+            subst state
+            obtain ⟨bodyResidual, hBodyRelated, hBodyComplete⟩ :=
+              ih (binder :: bound) body hFuelBody hTailFields.2
+                hHygienicFields.2
+                bodyFragment.initial
+                hBodyInitial
+            have hResidual : bodyResidual = body :=
+              TypeCompilationRelation.residual_unique hBodyRelated
+                (compileTypeFuel_initial_relation signature fuel body
+                  hFuelBody)
+            subst bodyResidual
+            exact ⟨.recur binder body,
+              TypeCompilationRelation.recur_source binder body, by
+                simpa [PactType.CanCompleteBeforeTock] using hBodyComplete⟩
+          · rcases Finset.mem_image.mp hTagged with
+              ⟨bodyState, hClosure, rfl⟩
+            let seed :=
+              (if bodyFragment.initial ∈ bodyFragment.completing then
+                  (bodyFragment.edges.filter
+                    fun edge => edge.label = .variable binder).image
+                      fun edge => edge.source
+                else ∅) ∪ bodyFragment.completing
+            let allowed :=
+              ((bodyFragment.edges.image fun edge => edge.source) ∪
+                  bodyFragment.completing).filter fun q =>
+                ∃ residual, TypeCompilationRelation body q residual ∧
+                  PactType.canCompleteBeforeTockSubst binder
+                    body.CanCompleteBeforeTock residual = true
+            have hSeed : seed ⊆ allowed := by
+              intro q hq
+              rcases Finset.mem_union.mp hq with hVariable | hBodyCompleting
+              · have hInitial : bodyFragment.initial ∈
+                    bodyFragment.completing := by
+                  by_contra hNo
+                  simp [seed, hNo] at hVariable
+                simp only [seed, hInitial, if_true, Finset.mem_image,
+                  Finset.mem_filter] at hVariable
+                rcases hVariable with ⟨edge, ⟨hEdge, hLabel⟩, rfl⟩
+                obtain ⟨entryResidual, hEntryRelated, hEntryComplete⟩ :=
+                  ih (binder :: bound) body hFuelBody hTailFields.2
+                    hHygienicFields.2
+                    bodyFragment.initial hInitial
+                have hEntryResidual : entryResidual = body :=
+                  TypeCompilationRelation.residual_unique hEntryRelated
+                    (compileTypeFuel_initial_relation signature fuel body
+                      hFuelBody)
+                subst entryResidual
+                have hMarker := compileTypeFuel_variableEdge_source_var
+                  signature binder fuel body True hFuelBody hTailFields.1 edge
+                    hEdge hLabel
+                exact Finset.mem_filter.mpr
+                  ⟨Finset.mem_union_left _
+                    (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩),
+                    .var binder, hMarker.2, by
+                      simp [PactType.canCompleteBeforeTockSubst,
+                        hEntryComplete]⟩
+              · obtain ⟨residual, hRelated, hComplete⟩ :=
+                  ih (binder :: bound) body hFuelBody hTailFields.2
+                    hHygienicFields.2 q hBodyCompleting
+                exact Finset.mem_filter.mpr
+                  ⟨Finset.mem_union_right _ hBodyCompleting, residual,
+                    hRelated, PactType.canCompleteBeforeTock_le_subst binder
+                      body.CanCompleteBeforeTock residual hComplete⟩
+            have hClosed : ∀ edge ∈ bodyFragment.edges,
+                edge.label.semantic ≠ TypeLabel.tock →
+                edge.target ∈ allowed → edge.source ∈ allowed := by
+              intro edge hEdge hNonClock hTarget
+              obtain ⟨targetResidual, hTargetRelated, hTargetComplete⟩ :=
+                (Finset.mem_filter.mp hTarget).2
+              let recursiveValuation : String → Bool :=
+                Function.update (fun _ => false) binder
+                  body.CanCompleteBeforeTock
+              have hSupported : ∀ variableName,
+                  variableName ∉ binder :: bound →
+                    recursiveValuation variableName = false := by
+                intro variableName hNotMem
+                have hNe : variableName ≠ binder := by
+                  intro hEq
+                  subst variableName
+                  exact hNotMem (by simp)
+                simp [recursiveValuation, Function.update, hNe]
+              have hTargetEval : PactType.completionEval recursiveValuation
+                  targetResidual = true := by
+                simpa [recursiveValuation] using
+                  (show PactType.completionEval
+                      (Function.update (fun _ => false) binder
+                        body.CanCompleteBeforeTock) targetResidual = true by
+                    rw [PactType.completionEval_singleton_eq_canCompleteBeforeTockSubst]
+                    exact hTargetComplete)
+              obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+                compiledFragmentNonClockPredecessor_eval signature
+                  (binder :: bound) recursiveValuation fuel body hSupported
+                    hFuelBody hTailFields.2 hHygienicFields.2 edge
+                      hEdge hNonClock targetResidual hTargetRelated hTargetEval
+              have hSourceSubst :
+                  PactType.canCompleteBeforeTockSubst binder
+                    body.CanCompleteBeforeTock sourceResidual = true := by
+                rw [← PactType.completionEval_singleton_eq_canCompleteBeforeTockSubst]
+                simpa [recursiveValuation] using hSourceComplete
+              exact Finset.mem_filter.mpr
+                ⟨Finset.mem_union_left _
+                    (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩),
+                  sourceResidual, hSourceRelated, hSourceSubst⟩
+            have hAllowed : bodyState ∈ allowed :=
+              completingBackClosure_subset_of_predecessor_closed bodyFragment
+                seed allowed hSeed hClosed hClosure
+            obtain ⟨residual, hRelated, hSubst⟩ :=
+              (Finset.mem_filter.mp hAllowed).2
+            refine ⟨residual.replaceVar binder (.recur binder body),
+              TypeCompilationRelation.recur_body binder body residual
+                bodyState hRelated, ?_⟩
+            rw [PactType.replaceVar_canCompleteBeforeTock]
+            simpa [PactType.CanCompleteBeforeTock] using hSubst
+      | xoffer elseType branches =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hBranchFuel : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hTailFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : elseType.BinderHygienic bound ∧
+              PactType.BinderHygienicBranches bound branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let elseFragment := compileTypeFuel signature fuel elseType
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hCompleting
+          rcases hCompleting with (hRoot | hElse) | hIndexed
+          · have hCondition : elseFragment.initial ∈
+                  elseFragment.completing ∨
+                branches.any (fun branch =>
+                  branch.2.CanCompleteBeforeTock) = true := by
+              by_contra hNo
+              rw [if_neg hNo] at hRoot
+              simp at hRoot
+            have hState : state = .root := by
+              rw [if_pos hCondition] at hRoot
+              simpa using hRoot
+            subst state
+            have hComplete :
+                (PactType.xoffer elseType branches).CanCompleteBeforeTock =
+                  true := by
+              rcases hCondition with hElseInitial | hBranch
+              · obtain ⟨residual, hRelated, hResidualComplete⟩ :=
+                  ih bound elseType hElseFuel hTailFields.1 hHygienicFields.1
+                    elseFragment.initial
+                    (by simpa [elseFragment] using hElseInitial)
+                have hResidual : residual = elseType :=
+                  TypeCompilationRelation.residual_unique hRelated
+                    (compileTypeFuel_initial_relation signature fuel elseType
+                      hElseFuel)
+                subst residual
+                simp [PactType.CanCompleteBeforeTock,
+                  branchCanCompleteBeforeTock_eq_any, hResidualComplete]
+              · simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+                right
+                simpa [branchCanCompleteBeforeTock_eq_any] using hBranch
+            exact ⟨.xoffer elseType branches,
+              TypeCompilationRelation.xoffer_source elseType branches,
+                hComplete⟩
+          · rcases Finset.mem_image.mp hElse with
+              ⟨elseState, hElseCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound elseType hElseFuel hTailFields.1 hHygienicFields.1
+                elseState hElseCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.xoffer_else elseType residual branches
+                elseState hRelated, hComplete⟩
+          · rw [indexedFragmentCompleting, mem_foldl_union_iff] at hIndexed
+            rcases hIndexed with hEmpty |
+              ⟨indexed, hIndexedEntry, hChildCompleting⟩
+            · simp at hEmpty
+            · simp only [childCompleting, Finset.mem_image] at hChildCompleting
+              rcases hChildCompleting with
+                ⟨childState', hChildCompleting, hState⟩
+              have hFields := List.mem_zipIdx hIndexedEntry
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hFields
+              rcases hFields with ⟨hBound, hValue⟩
+              have hAt : branchAutomata[indexed.2]? = some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              simp only [branchAutomata, List.getElem?_map] at hAt
+              cases hOriginal : branches[indexed.2]? with
+              | none => simp [hOriginal] at hAt
+              | some branch =>
+                  rcases branch with ⟨action, branchType⟩
+                  simp only [hOriginal, Option.map_some, Option.some.injEq]
+                    at hAt
+                  have hMember : (action, branchType) ∈ branches :=
+                    List.mem_of_getElem? hOriginal
+                  have hFuelBranch : TypeCompilationFuelSufficient branchType
+                      fuel := by
+                    exact (typeCompilationFuel_le_typeBranchCompilationFuel
+                      branches (action, branchType) hMember).trans hBranchFuel
+                  have hTailBranch : branchType.TailRecursive :=
+                    tailRecursive_branch_of_mem branches (action, branchType)
+                      hTailFields.2 hMember
+                  have hHygienicBranch : branchType.BinderHygienic bound :=
+                    binderHygienic_branch_of_mem bound branches
+                      (action, branchType) hHygienicFields.2 hMember
+                  have hFragment : indexed.1.2 =
+                      compileTypeFuel signature fuel branchType := by
+                    simpa using (congrArg Prod.snd hAt).symm
+                  rw [hFragment] at hChildCompleting
+                  obtain ⟨residual, hRelated, hComplete⟩ :=
+                    ih bound branchType hFuelBranch hTailBranch
+                      hHygienicBranch childState' hChildCompleting
+                  have hState' : state = childState (indexed.2 + 1)
+                      childState' := hState.symm
+                  subst state
+                  exact ⟨residual,
+                    TypeCompilationRelation.xoffer_branch elseType branchType
+                      residual branches action indexed.2 childState' hOriginal
+                        hRelated, hComplete⟩
+      | offer elseType branches =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hTailFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTail
+          have hHygienicFields : elseType.BinderHygienic bound ∧
+              PactType.BinderHygienicBranches bound branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let elseFragment := compileTypeFuel signature fuel elseType
+          let selectedConjunctions := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hCompleting
+          rcases hCompleting with (hRoot | hElse) | hIndexed
+          · have hCondition : elseFragment.initial ∈
+                  elseFragment.completing ∨
+                branches.any (fun branch =>
+                  branch.2.CanCompleteBeforeTock) = true := by
+              by_contra hNo
+              rw [if_neg hNo] at hRoot
+              simp at hRoot
+            have hState : state = .root := by
+              rw [if_pos hCondition] at hRoot
+              simpa using hRoot
+            subst state
+            have hComplete :
+                (PactType.offer elseType branches).CanCompleteBeforeTock =
+                  true := by
+              rcases hCondition with hElseInitial | hBranch
+              · obtain ⟨residual, hRelated, hResidualComplete⟩ :=
+                  ih bound elseType hElseFuel hTailFields.1 hHygienicFields.1
+                    elseFragment.initial
+                    (by simpa [elseFragment] using hElseInitial)
+                have hResidual : residual = elseType :=
+                  TypeCompilationRelation.residual_unique hRelated
+                    (compileTypeFuel_initial_relation signature fuel elseType
+                      hElseFuel)
+                subst residual
+                simp [PactType.CanCompleteBeforeTock,
+                  branchCanCompleteBeforeTock_eq_any, hResidualComplete]
+              · simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+                right
+                simpa [branchCanCompleteBeforeTock_eq_any] using hBranch
+            exact ⟨.offer elseType branches,
+              TypeCompilationRelation.offer_source elseType branches,
+                hComplete⟩
+          · rcases Finset.mem_image.mp hElse with
+              ⟨elseState, hElseCompleting, rfl⟩
+            obtain ⟨residual, hRelated, hComplete⟩ :=
+              ih bound elseType hElseFuel hTailFields.1 hHygienicFields.1
+                elseState hElseCompleting
+            exact ⟨residual,
+              TypeCompilationRelation.offer_else elseType residual branches
+                elseState hRelated, hComplete⟩
+          · rw [indexedFragmentCompleting, mem_foldl_union_iff] at hIndexed
+            rcases hIndexed with hEmpty |
+              ⟨indexed, hIndexedEntry, hChildCompleting⟩
+            · simp at hEmpty
+            · simp only [childCompleting, Finset.mem_image] at hChildCompleting
+              rcases hChildCompleting with
+                ⟨childState', hChildCompleting, hState⟩
+              have hFields := List.mem_zipIdx hIndexedEntry
+              simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+                at hFields
+              rcases hFields with ⟨hBound, hValue⟩
+              have hAt : selectedConjunctions[indexed.2]? =
+                  some indexed.1 := by
+                rw [List.getElem?_eq_getElem hBound, ← hValue]
+              simp only [selectedConjunctions, List.getElem?_map] at hAt
+              cases hOriginal : branches[indexed.2]? with
+              | none => simp [hOriginal] at hAt
+              | some selected =>
+                  simp only [hOriginal, Option.map_some, Option.some.injEq]
+                    at hAt
+                  have hMember : selected ∈ branches :=
+                    List.mem_of_getElem? hOriginal
+                  have hFuelSelected : TypeCompilationFuelSufficient
+                      (parallelTypeBranchesSelecting selected branches) fuel := by
+                    rw [TypeCompilationFuelSufficient,
+                      typeCompilationFuel_parallelTypeBranchesSelecting]
+                    simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                      at hFuel
+                    omega
+                  have hTailSelected :=
+                    tailRecursive_parallelTypeBranchesSelecting selected
+                      branches hTailFields.2
+                  have hHygienicSelected :=
+                    binderHygienic_parallelTypeBranchesSelecting bound selected
+                      branches hHygienicFields.2
+                  have hFragment : indexed.1.2 = compileTypeFuel signature fuel
+                      (parallelTypeBranchesSelecting selected branches) := by
+                    simpa using (congrArg Prod.snd hAt).symm
+                  rw [hFragment] at hChildCompleting
+                  obtain ⟨residual, hRelated, hComplete⟩ :=
+                    ih bound (parallelTypeBranchesSelecting selected branches)
+                      hFuelSelected hTailSelected hHygienicSelected childState'
+                        hChildCompleting
+                  have hState' : state = childState (indexed.2 + 1)
+                      childState' := hState.symm
+                  subst state
+                  exact ⟨residual,
+                    TypeCompilationRelation.offer_branches elseType residual
+                      branches selected indexed.2 childState' hOriginal
+                        hRelated, hComplete⟩
+
+  termination_by fuel
+  decreasing_by all_goals omega
+
+end
+
+/- Singleton specialization used by the outermost recursion closure.  The
+substantive induction is valuation-polymorphic above so nested binders can
+extend the environment without losing enclosing recursion values. -/
+private theorem compiledFragmentNonClockPredecessor_subst
+    (signature : TypeAlphabet) (name : String) (value : Bool)
+    (fuel : Nat) (processType : PactType)
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hTail : processType.TailRecursive)
+    (hHygienic : processType.BinderHygienic [name])
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel signature fuel processType).edges)
+    (hNonClock : edge.label.semantic ≠ TypeLabel.tock)
+    (targetResidual : PactType)
+    (hTargetRelated : TypeCompilationRelation processType edge.target
+      targetResidual)
+    (hTargetComplete : PactType.canCompleteBeforeTockSubst name value
+      targetResidual = true) :
+    ∃ sourceResidual,
+      TypeCompilationRelation processType edge.source sourceResidual ∧
+        PactType.canCompleteBeforeTockSubst name value sourceResidual = true := by
+  let valuation : String → Bool :=
+    Function.update (fun _ => false) name value
+  have hSupported : ∀ variableName, variableName ∉ [name] →
+      valuation variableName = false := by
+    intro variableName hNotMem
+    have hNe : variableName ≠ name := by
+      intro hEq
+      subst variableName
+      exact hNotMem (by simp)
+    simp [valuation, Function.update, hNe]
+  have hTargetEval : PactType.completionEval valuation targetResidual = true := by
+    simpa [valuation] using
+      (show PactType.completionEval
+          (Function.update (fun _ => false) name value) targetResidual = true by
+        rw [PactType.completionEval_singleton_eq_canCompleteBeforeTockSubst]
+        exact hTargetComplete)
+  obtain ⟨sourceResidual, hSourceRelated, hSourceEval⟩ :=
+    compiledFragmentNonClockPredecessor_eval signature [name] valuation fuel
+      processType hSupported hFuel hTail hHygienic edge hEdge hNonClock
+        targetResidual hTargetRelated hTargetEval
+  refine ⟨sourceResidual, hSourceRelated, ?_⟩
+  rw [← PactType.completionEval_singleton_eq_canCompleteBeforeTockSubst]
+  simpa [valuation] using hSourceEval
+
+/-- Forward (`⊆`) half of `recursionBodyCompletingClosure_iff`.
+
+`completingBackClosure_subset_of_predecessor_closed` is applied with the
+ambient set
+
+  `edges.image (·.source) ∪ completing`
+
+— deliberately *not* `states`, which is exactly what makes any carrier
+well-formedness invariant unnecessary — filtered by the predicate
+
+  `fun q => ∃ r, TypeCompilationRelation body q r ∧ subst r = true`.
+
+`TypeCompilationRelation.residual_unique` then transfers the witness to the
+given `residual`.  See `compiledFragmentNonClockPredecessor_subst` for why
+this predicate is existential rather than universal: the universal variant is
+refuted by a `.variable` marker hidden inside a parallel product, whose target
+represents nothing.
+
+Seed inclusion has two parts.  The `completing` half combines
+`compiledFragmentCompleting_represented` (to get a witness at all) with
+`hVanilla` and `PactType.canCompleteBeforeTock_le_subst`.  The recursive-call
+half applies only in the branch where the body entry is completing; there
+`compileTypeFuel_variableEdge_source_var` supplies both the witness and its
+identity `PactType.var name`, whose substituted value is
+`body.CanCompleteBeforeTock` — and that is `true` precisely because the entry
+is completing, by `hVanilla` at `compileTypeFuel_initial_relation`. -/
+private theorem recursionBodyCompletingClosure_subset
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hTailOccurrences : PactType.TailOccurrences name True body)
+    (hBodyTail : PactType.TailRecursive body)
+    (hBodyHygienic : PactType.BinderHygienic [name] body)
+    (hVanilla : CompilationCompletingCorrect signature body)
+    (state : TypeAutomatonState) (residual : PactType)
+    (hRelated : TypeCompilationRelation body state residual)
+    (hMem : state ∈ completingBackClosure
+        (compileTypeFuel signature (typeCompilationFuel body) body)
+        ((if (compileTypeFuel signature (typeCompilationFuel body) body).initial ∈
+              (compileTypeFuel signature (typeCompilationFuel body)
+                body).completing then
+            ((compileTypeFuel signature (typeCompilationFuel body)
+                body).edges.filter
+              fun edge => edge.label = .variable name).image
+                fun edge => edge.source
+          else ∅) ∪
+          (compileTypeFuel signature (typeCompilationFuel body)
+            body).completing)) :
+    PactType.canCompleteBeforeTockSubst name body.CanCompleteBeforeTock
+      residual = true := by
+  classical
+  have hMemAllowed := completingBackClosure_subset_of_predecessor_closed
+    (compileTypeFuel signature (typeCompilationFuel body) body) _
+    ((((compileTypeFuel signature (typeCompilationFuel body) body).edges.image
+          fun e => e.source) ∪
+        (compileTypeFuel signature (typeCompilationFuel body)
+          body).completing).filter
+      fun q => ∃ r, TypeCompilationRelation body q r ∧
+        PactType.canCompleteBeforeTockSubst name body.CanCompleteBeforeTock r
+          = true)
+    ?seed ?closed hMem
+  · obtain ⟨r, hRel, hSubst⟩ := (Finset.mem_filter.mp hMemAllowed).2
+    rwa [TypeCompilationRelation.residual_unique hRel hRelated] at hSubst
+  case seed =>
+    intro q hq
+    rcases Finset.mem_union.mp hq with hVar | hCompleting
+    · have hIf : (compileTypeFuel signature (typeCompilationFuel body)
+          body).initial ∈ (compileTypeFuel signature
+            (typeCompilationFuel body) body).completing := by
+        by_contra hNo
+        rw [if_neg hNo] at hVar
+        exact absurd hVar (by simp)
+      rw [if_pos hIf] at hVar
+      simp only [Finset.mem_image, Finset.mem_filter] at hVar
+      obtain ⟨e, ⟨hE, hLabel⟩, hSource⟩ := hVar
+      have hStep := (compileTypeFuel_variableEdge_source_var signature name
+        (typeCompilationFuel body) body True
+        (typeCompilationFuel_sufficient body) hTailOccurrences e hE hLabel).2
+      have hValue : body.CanCompleteBeforeTock = true :=
+        (hVanilla _ _ (compileTypeFuel_initial_relation signature
+          (typeCompilationFuel body) body
+          (typeCompilationFuel_sufficient body))).mp hIf
+      refine Finset.mem_filter.mpr
+        ⟨Finset.mem_union_left _ (Finset.mem_image.mpr ⟨e, hE, hSource⟩),
+          PactType.var name, ?_, ?_⟩
+      · rw [← hSource]; exact hStep
+      · simp [PactType.canCompleteBeforeTockSubst, hValue]
+    · refine Finset.mem_filter.mpr
+        ⟨Finset.mem_union_right _ hCompleting, ?_⟩
+      obtain ⟨r, hRel, hComplete⟩ :=
+        compiledFragmentCompleting_represented signature [name]
+          (typeCompilationFuel body) body
+            (typeCompilationFuel_sufficient body) hBodyTail hBodyHygienic q
+              hCompleting
+      exact ⟨r, hRel, PactType.canCompleteBeforeTock_le_subst name _ r
+        hComplete⟩
+  case closed =>
+    intro e hE hSilent hTargetMem
+    obtain ⟨rTarget, hRelTarget, hSubstTarget⟩ :=
+      (Finset.mem_filter.mp hTargetMem).2
+    obtain ⟨rSource, hRelSource, hSubstSource⟩ :=
+      compiledFragmentNonClockPredecessor_subst signature name
+        body.CanCompleteBeforeTock (typeCompilationFuel body) body
+        (typeCompilationFuel_sufficient body) hBodyTail hBodyHygienic e hE
+          hSilent rTarget hRelTarget hSubstTarget
+    exact Finset.mem_filter.mpr
+      ⟨Finset.mem_union_left _ (Finset.mem_image.mpr ⟨e, hE, rfl⟩),
+        rSource, hRelSource, hSubstSource⟩
+
+/-- Whenever `value = false`, substituting `.var name` by `false` changes
+nothing relative to the unsubstituted predicate: every `.var other` clause of
+`canCompleteBeforeTockSubst` already evaluates to `false` unless `other = name`,
+in which case it evaluates to `value = false` too.  So a genuine subst/plain
+discrepancy is only possible when `value = true`; this lets
+`recursionBodyCompletingClosure_superset` skip all graph reasoning whenever
+`value = false`. -/
+private theorem canCompleteBeforeTockSubst_false (name : String)
+    (processType : PactType) :
+    PactType.canCompleteBeforeTockSubst name false processType =
+      processType.CanCompleteBeforeTock := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      cases processType with
+      | message msg dir =>
+          simp [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock]
+      | tock =>
+          simp [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock]
+      | skip =>
+          simp [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock]
+      | var other =>
+          simp [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock]
+      | recur other body =>
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          by_cases hName : name = other
+          · simp [PactType.canCompleteBeforeTockSubst, hName,
+              PactType.CanCompleteBeforeTock]
+          · simp only [PactType.canCompleteBeforeTockSubst, hName, if_false,
+              PactType.CanCompleteBeforeTock,
+              ih (sizeOf body) hBodySize body rfl]
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches :
+              PactType.branchCanCompleteBeforeTockSubst name false branches =
+                PactType.BranchCanCompleteBeforeTock branches := by
+            clear hElseSize hSize
+            induction branches with
+            | nil =>
+                simp [PactType.branchCanCompleteBeforeTockSubst,
+                  PactType.BranchCanCompleteBeforeTock]
+            | cons branch rest ihRest =>
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hHead : sizeOf branch < sizeOf (branch :: rest) := by
+                    simp_wf; omega
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf; omega
+                  omega
+                have hRestSize : sizeOf rest < n := by
+                  have hHead : sizeOf rest < sizeOf (branch :: rest) := by
+                    simp_wf; omega
+                  omega
+                unfold PactType.branchCanCompleteBeforeTockSubst
+                  PactType.BranchCanCompleteBeforeTock
+                rw [ih (sizeOf branch.2) hBranchSize branch.2 rfl,
+                  ihRest hRestSize]
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl, hBranches]
+
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches :
+              PactType.branchCanCompleteBeforeTockSubst name false branches =
+                PactType.BranchCanCompleteBeforeTock branches := by
+            clear hElseSize hSize
+            induction branches with
+            | nil =>
+                simp [PactType.branchCanCompleteBeforeTockSubst,
+                  PactType.BranchCanCompleteBeforeTock]
+            | cons branch rest ihRest =>
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hHead : sizeOf branch < sizeOf (branch :: rest) := by
+                    simp_wf; omega
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf; omega
+                  omega
+                have hRestSize : sizeOf rest < n := by
+                  have hHead : sizeOf rest < sizeOf (branch :: rest) := by
+                    simp_wf; omega
+                  omega
+                unfold PactType.branchCanCompleteBeforeTockSubst
+                  PactType.BranchCanCompleteBeforeTock
+                rw [ih (sizeOf branch.2) hBranchSize branch.2 rfl,
+                  ihRest hRestSize]
+          simp only [PactType.canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl, hBranches]
+
+/- Lift a parametric completion-closure witness through any constructor child
+whose pending edges and completing states are embedded by `childState`.  This
+is the common graph step used by choice, sequence-right, and both offer
+constructors; the hypotheses deliberately mention only the two projections
+needed by backward closure. -/
+/- A valuation whose live variables occur only in forbidden (non-tail)
+positions has no effect on same-cycle completion.  The branch statement is
+proved locally so the two offer constructors share the same structural
+argument. -/
+private theorem completionEval_eq_canCompleteBeforeTock_of_tailFalse
+    (valuation : String → Bool) : ∀ processType : PactType,
+    (∀ name, valuation name = true →
+      processType.TailOccurrences name False) →
+    PactType.completionEval valuation processType =
+      processType.CanCompleteBeforeTock := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType valuation with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          (∀ name, valuation name = true →
+            PactType.TailBranchOccurrences name False branches) →
+          PactType.branchCompletionEval valuation branches =
+            PactType.BranchCanCompleteBeforeTock branches := by
+        intro branches hBranchesSize hTail
+        induction branches with
+        | nil =>
+            simp [PactType.branchCompletionEval,
+              PactType.BranchCanCompleteBeforeTock]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hBranchTail : ∀ name, valuation name = true →
+                branchType.TailOccurrences name False := by
+              intro name hValue
+              have hFields := hTail name hValue
+              simp only [PactType.TailBranchOccurrences] at hFields
+              exact hFields.1
+            have hRestTail : ∀ name, valuation name = true →
+                PactType.TailBranchOccurrences name False rest := by
+              intro name hValue
+              have hFields := hTail name hValue
+              simp only [PactType.TailBranchOccurrences] at hFields
+              exact hFields.2
+            simp only [PactType.branchCompletionEval,
+              PactType.BranchCanCompleteBeforeTock]
+            rw [ih (sizeOf branchType) hBranchSize valuation branchType rfl
+                hBranchTail,
+              restIH hRestSize hRestTail]
+      intro hTail
+      cases processType with
+      | message msg dir =>
+          simp [PactType.completionEval, PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [PactType.completionEval, PactType.CanCompleteBeforeTock]
+      | skip =>
+          simp [PactType.completionEval, PactType.CanCompleteBeforeTock]
+      | tock =>
+          simp [PactType.completionEval, PactType.CanCompleteBeforeTock]
+      | var other =>
+          have hFalse : valuation other = false := by
+            cases hValue : valuation other with
+            | false => rfl
+            | true =>
+                exfalso
+                have hImpossible : other = other → False := by
+                  simpa only [PactType.TailOccurrences] using
+                    (hTail other hValue)
+                exact hImpossible rfl
+          simp [PactType.completionEval, PactType.CanCompleteBeforeTock,
+            hFalse]
+      | recur binder body =>
+          have hBodySize : sizeOf body < n := by
+            rw [← hSize]; simp_wf; omega
+          let nestedValuation := Function.update valuation binder false
+          have hBodyTail : ∀ name, nestedValuation name = true →
+              body.TailOccurrences name False := by
+            intro name hValue
+            have hNe : name ≠ binder := by
+              intro hEq
+              subst name
+              simp [nestedValuation] at hValue
+            have hOuterValue : valuation name = true := by
+              simpa [nestedValuation, Function.update, hNe] using hValue
+            have hOuterTail := hTail name hOuterValue
+            simpa only [PactType.TailOccurrences, if_neg hNe.symm] using
+              hOuterTail
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock]
+          exact ih (sizeOf body) hBodySize nestedValuation body rfl hBodyTail
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                left.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                right.TailOccurrences name False) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFields.1,
+            ih (sizeOf right) hRightSize valuation right rfl hFields.2]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                left.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                right.TailOccurrences name False) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFields.1,
+            ih (sizeOf right) hRightSize valuation right rfl hFields.2]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                left.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                right.TailOccurrences name False) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFields.1,
+            ih (sizeOf right) hRightSize valuation right rfl hFields.2]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                left.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                right.TailOccurrences name False) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFields.1,
+            ih (sizeOf right) hRightSize valuation right rfl hFields.2]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                elseType.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                PactType.TailBranchOccurrences name False branches) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize valuation elseType rfl hFields.1,
+            hBranches branches hBranchesSize hFields.2]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields :
+              (∀ name, valuation name = true →
+                elseType.TailOccurrences name False) ∧
+              (∀ name, valuation name = true →
+                PactType.TailBranchOccurrences name False branches) := by
+            constructor <;> intro name hValue
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.1
+            · have hPair := hTail name hValue
+              simp only [PactType.TailOccurrences] at hPair
+              exact hPair.2
+          simp only [PactType.completionEval,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize valuation elseType rfl hFields.1,
+            hBranches branches hBranchesSize hFields.2]
+
+/- Tail regularity makes completion affine in the live free variables: if a
+finite valuation makes a type complete, then either the type already completes
+with every free variable false, or one live tail variable suffices by itself.
+This is the syntax projection that lets a nested binder reuse the existing
+one-variable graph closure induction. -/
+private theorem branchCompletionEval_eq_branchCanCompleteBeforeTock_of_tailFalse
+    (valuation : String → Bool) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ name, valuation name = true →
+        PactType.TailBranchOccurrences name False branches) →
+      PactType.branchCompletionEval valuation branches =
+        PactType.BranchCanCompleteBeforeTock branches := by
+  intro branches hTail
+  induction branches with
+  | nil =>
+      simp [PactType.branchCompletionEval,
+        PactType.BranchCanCompleteBeforeTock]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      have hHead : ∀ name, valuation name = true →
+          branchType.TailOccurrences name False := by
+        intro name hValue
+        have hFields := hTail name hValue
+        simp only [PactType.TailBranchOccurrences] at hFields
+        exact hFields.1
+      have hRest : ∀ name, valuation name = true →
+          PactType.TailBranchOccurrences name False rest := by
+        intro name hValue
+        have hFields := hTail name hValue
+        simp only [PactType.TailBranchOccurrences] at hFields
+        exact hFields.2
+      simp only [PactType.branchCompletionEval,
+        PactType.BranchCanCompleteBeforeTock,
+        completionEval_eq_canCompleteBeforeTock_of_tailFalse valuation
+          branchType hHead,
+        ih hRest]
+
+private theorem completionEval_eq_true_witness
+    (active : List String) (valuation : String → Bool) :
+    ∀ processType : PactType,
+      processType.BinderFreshFor active →
+      (∀ name, name ∈ active →
+        processType.TailOccurrences name True) →
+      (∀ name, name ∉ active → valuation name = false) →
+      PactType.completionEval valuation processType = true →
+      processType.CanCompleteBeforeTock = true ∨
+        ∃ name ∈ active, valuation name = true ∧
+          PactType.canCompleteBeforeTockSubst name true processType = true := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType active valuation with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches active branches →
+          (∀ name, name ∈ active →
+            PactType.TailBranchOccurrences name True branches) →
+          (∀ name, name ∉ active → valuation name = false) →
+          PactType.branchCompletionEval valuation branches = true →
+          PactType.BranchCanCompleteBeforeTock branches = true ∨
+            ∃ name ∈ active, valuation name = true ∧
+              PactType.branchCanCompleteBeforeTockSubst name true branches =
+                true := by
+        intro branches hBranchesSize hFresh hTail hSupported
+          hComplete
+        induction branches with
+        | nil =>
+            simp [PactType.branchCompletionEval] at hComplete
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hFreshFields : branchType.BinderFreshFor active ∧
+                PactType.BinderFreshForBranches active rest := by
+              simpa only [PactType.BinderFreshForBranches] using hFresh
+            have hTailHead : ∀ name, name ∈ active →
+                branchType.TailOccurrences name True := by
+              intro name hName
+              have hFields := hTail name hName
+              simp only [PactType.TailBranchOccurrences] at hFields
+              exact hFields.1
+            have hTailRest : ∀ name, name ∈ active →
+                PactType.TailBranchOccurrences name True rest := by
+              intro name hName
+              have hFields := hTail name hName
+              simp only [PactType.TailBranchOccurrences] at hFields
+              exact hFields.2
+            simp only [PactType.branchCompletionEval, Bool.or_eq_true]
+              at hComplete
+            rcases hComplete with hHead | hRest
+            · rcases ih (sizeOf branchType) hBranchSize active valuation
+                branchType rfl hFreshFields.1 hTailHead
+                  hSupported hHead with hPlain | hWitness
+              · exact Or.inl (by
+                  simp [PactType.BranchCanCompleteBeforeTock, hPlain])
+              · rcases hWitness with ⟨name, hName, hValue, hSubst⟩
+                exact Or.inr ⟨name, hName, hValue, by
+                  simp [PactType.branchCanCompleteBeforeTockSubst, hSubst]⟩
+            · rcases restIH hRestSize hFreshFields.2
+                hTailRest hRest with hPlain | hWitness
+              · exact Or.inl (by
+                  simp [PactType.BranchCanCompleteBeforeTock, hPlain])
+              · rcases hWitness with ⟨name, hName, hValue, hSubst⟩
+                exact Or.inr ⟨name, hName, hValue, by
+                  simp [PactType.branchCanCompleteBeforeTockSubst, hSubst]⟩
+      intro hFresh hTail hSupported hComplete
+      cases processType with
+      | message msg dir =>
+          exact Or.inl (by simp [PactType.CanCompleteBeforeTock])
+      | progress pid =>
+          exact Or.inl (by simp [PactType.CanCompleteBeforeTock])
+      | skip =>
+          exact Or.inl (by simp [PactType.CanCompleteBeforeTock])
+      | tock =>
+          simp [PactType.completionEval] at hComplete
+      | var other =>
+          have hValue : valuation other = true := by
+            simpa only [PactType.completionEval] using hComplete
+          have hMember : other ∈ active := by
+            by_contra hNotMember
+            rw [hSupported other hNotMember] at hValue
+            contradiction
+          exact Or.inr ⟨other, hMember, hValue, by
+            simp [PactType.canCompleteBeforeTockSubst]⟩
+      | recur binder body =>
+          have hBodySize : sizeOf body < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : binder ∉ active ∧
+              body.BinderFreshFor active := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          let nestedValuation := Function.update valuation binder false
+          have hNestedSupported : ∀ name, name ∉ active →
+              nestedValuation name = false := by
+            intro name hName
+            by_cases hEq : name = binder
+            · subst name; simp [nestedValuation]
+            · simpa [nestedValuation, Function.update, hEq] using
+                hSupported name hName
+          have hBodyTail : ∀ name, name ∈ active →
+              body.TailOccurrences name True := by
+            intro name hName
+            have hNe : binder ≠ name := by
+              intro hEq; subst name; exact hFreshFields.1 hName
+            simpa only [PactType.TailOccurrences, if_neg hNe] using
+              hTail name hName
+          have hBodyComplete : PactType.completionEval nestedValuation body =
+              true := by
+            simpa only [PactType.completionEval] using hComplete
+          rcases ih (sizeOf body) hBodySize active nestedValuation body rfl
+              hFreshFields.2 hBodyTail hNestedSupported
+                hBodyComplete with hPlain | hWitness
+          · exact Or.inl (by
+              simpa only [PactType.CanCompleteBeforeTock] using hPlain)
+          · rcases hWitness with ⟨name, hName, hValue, hSubst⟩
+            have hNe : name ≠ binder := by
+              intro hEq; subst name; exact hFreshFields.1 hName
+            have hOuterValue : valuation name = true := by
+              simpa [nestedValuation, Function.update, hNe] using hValue
+            exact Or.inr ⟨name, hName, hOuterValue, by
+              simpa [PactType.canCompleteBeforeTockSubst, hNe] using hSubst⟩
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : left.BinderFreshFor active ∧
+              right.BinderFreshFor active := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hTailLeft : ∀ name, name ∈ active →
+              left.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hTailRight : ∀ name, name ∈ active →
+              right.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          simp only [PactType.completionEval, Bool.or_eq_true] at hComplete
+          rcases hComplete with hLeft | hRight
+          · rcases ih (sizeOf left) hLeftSize active valuation left rfl
+                hFreshFields.1 hTailLeft hSupported hLeft
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+          · rcases ih (sizeOf right) hRightSize active valuation right rfl
+                hFreshFields.2 hTailRight hSupported hRight
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : left.BinderFreshFor active ∧
+              right.BinderFreshFor active := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hTailLeft : ∀ name, name ∈ active →
+              left.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hTailRight : ∀ name, name ∈ active →
+              right.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          simp only [PactType.completionEval, Bool.or_eq_true] at hComplete
+          rcases hComplete with hLeft | hRight
+          · rcases ih (sizeOf left) hLeftSize active valuation left rfl
+                hFreshFields.1 hTailLeft hSupported hLeft
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+          · rcases ih (sizeOf right) hRightSize active valuation right rfl
+                hFreshFields.2 hTailRight hSupported hRight
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : left.BinderFreshFor active ∧
+              right.BinderFreshFor active := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hTailLeftFalse : ∀ name, valuation name = true →
+              left.TailOccurrences name False := by
+            intro name hValue
+            have hName : name ∈ active := by
+              by_contra hNotMember
+              rw [hSupported name hNotMember] at hValue
+              contradiction
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hTailRight : ∀ name, name ∈ active →
+              right.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          have hCompleteFields : PactType.completionEval valuation left = true ∧
+              PactType.completionEval valuation right = true := by
+            simpa only [PactType.completionEval, Bool.and_eq_true] using hComplete
+          have hLeftPlain : left.CanCompleteBeforeTock = true := by
+            rw [← completionEval_eq_canCompleteBeforeTock_of_tailFalse
+              valuation left hTailLeftFalse]
+            exact hCompleteFields.1
+          rcases ih (sizeOf right) hRightSize active valuation right rfl
+              hFreshFields.2 hTailRight hSupported
+                hCompleteFields.2 with hPlain | ⟨name, hName, hValue, hSubst⟩
+          · exact Or.inl (by
+              simp [PactType.CanCompleteBeforeTock, hLeftPlain, hPlain])
+          · have hTailPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hTailPair
+            have hLeftTail := hTailPair.1
+            have hLeftSubst :=
+              PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                name true left hLeftTail
+            exact Or.inr ⟨name, hName, hValue, by
+              simp [PactType.canCompleteBeforeTockSubst, hLeftSubst,
+                hLeftPlain, hSubst]⟩
+      | par left right interface =>
+          have hCompleteFields : PactType.completionEval valuation left = true ∧
+              PactType.completionEval valuation right = true := by
+            simpa only [PactType.completionEval, Bool.and_eq_true] using hComplete
+          have hLeftTail : ∀ name, valuation name = true →
+              left.TailOccurrences name False := by
+            intro name hValue
+            have hName : name ∈ active := by
+              by_contra hNotMember
+              rw [hSupported name hNotMember] at hValue
+              contradiction
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hRightTail : ∀ name, valuation name = true →
+              right.TailOccurrences name False := by
+            intro name hValue
+            have hName : name ∈ active := by
+              by_contra hNotMember
+              rw [hSupported name hNotMember] at hValue
+              contradiction
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          have hLeftPlain : left.CanCompleteBeforeTock = true := by
+            rw [← completionEval_eq_canCompleteBeforeTock_of_tailFalse
+              valuation left hLeftTail]
+            exact hCompleteFields.1
+          have hRightPlain : right.CanCompleteBeforeTock = true := by
+            rw [← completionEval_eq_canCompleteBeforeTock_of_tailFalse
+              valuation right hRightTail]
+            exact hCompleteFields.2
+          exact Or.inl (by
+            simp [PactType.CanCompleteBeforeTock, hLeftPlain, hRightPlain])
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : elseType.BinderFreshFor active ∧
+              PactType.BinderFreshForBranches active branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hTailElse : ∀ name, name ∈ active →
+              elseType.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hTailBranches : ∀ name, name ∈ active →
+              PactType.TailBranchOccurrences name True branches := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          simp only [PactType.completionEval, Bool.or_eq_true] at hComplete
+          rcases hComplete with hElse | hBranch
+          · rcases ih (sizeOf elseType) hElseSize active valuation elseType rfl
+                hFreshFields.1 hTailElse hSupported hElse
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+          · rcases hBranches branches hBranchesSize hFreshFields.2
+                hTailBranches hSupported hBranch with
+                hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFreshFields : elseType.BinderFreshFor active ∧
+              PactType.BinderFreshForBranches active branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hTailElse : ∀ name, name ∈ active →
+              elseType.TailOccurrences name True := by
+            intro name hName
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.1
+          have hTailBranchesFalse : ∀ name, valuation name = true →
+              PactType.TailBranchOccurrences name False branches := by
+            intro name hValue
+            have hName : name ∈ active := by
+              by_contra hNotMember
+              rw [hSupported name hNotMember] at hValue
+              contradiction
+            have hPair := hTail name hName
+            simp only [PactType.TailOccurrences] at hPair
+            exact hPair.2
+          simp only [PactType.completionEval, Bool.or_eq_true] at hComplete
+          rcases hComplete with hElse | hBranch
+          · rcases ih (sizeOf elseType) hElseSize active valuation elseType rfl
+                hFreshFields.1 hTailElse hSupported hElse
+                with hPlain | ⟨name, hName, hValue, hSubst⟩
+            · exact Or.inl (by simp [PactType.CanCompleteBeforeTock, hPlain])
+            · exact Or.inr ⟨name, hName, hValue, by
+                simp [PactType.canCompleteBeforeTockSubst, hSubst]⟩
+          · have hBranchPlain :
+                PactType.BranchCanCompleteBeforeTock branches = true := by
+              rw [←
+                branchCompletionEval_eq_branchCanCompleteBeforeTock_of_tailFalse
+                  valuation branches hTailBranchesFalse]
+              exact hBranch
+            exact Or.inl (by
+              simp [PactType.CanCompleteBeforeTock, hBranchPlain])
+
+private theorem completingBackClosure_lift_taggedChild
+    (parent child : AutomatonFragment) (index : Nat)
+    (name : String) (value : Bool)
+    (hOutgoing : ∀ state edge,
+      edge ∈ parent.edges ∧ edge.source = childState index state ↔
+        ∃ childEdge ∈ child.edges, childEdge.source = state ∧
+          edge = childPendingEdge index childEdge)
+    (hCompleting : ∀ state,
+      childState index state ∈ parent.completing ↔
+        state ∈ child.completing)
+    {state : TypeAutomatonState}
+    (hMember : state ∈ completingBackClosure child
+      ((if value then
+          (child.edges.filter fun edge => edge.label = .variable name).image
+            fun edge => edge.source
+        else ∅) ∪ child.completing)) :
+    childState index state ∈ completingBackClosure parent
+      ((if value then
+          (parent.edges.filter fun edge => edge.label = .variable name).image
+            fun edge => edge.source
+        else ∅) ∪ parent.completing) := by
+  classical
+  let childSeed :=
+    (if value then
+        (child.edges.filter fun edge => edge.label = .variable name).image
+          fun edge => edge.source
+      else ∅) ∪ child.completing
+  let parentSeed :=
+    (if value then
+        (parent.edges.filter fun edge => edge.label = .variable name).image
+          fun edge => edge.source
+      else ∅) ∪ parent.completing
+  have hTagged : childState index state ∈ completingBackClosure
+      (taggedFragment index child) (childSeed.image (childState index)) := by
+    rw [completingBackClosure_taggedFragment_image]
+    exact Finset.mem_image.mpr ⟨state, hMember, rfl⟩
+  have hEdges : ∀ source label target,
+      (∃ edge ∈ (taggedFragment index child).edges,
+        edge.source = source ∧ edge.label = label ∧ edge.target = target) →
+      ∃ edge ∈ parent.edges,
+        edge.source = source ∧ edge.label = label ∧ edge.target = target := by
+    rintro source label target ⟨edge, hEdge, hSource, hLabel, hTarget⟩
+    simp only [taggedFragment, Finset.mem_image] at hEdge
+    obtain ⟨childEdge, hChildEdge, rfl⟩ := hEdge
+    have hParentEdge := (hOutgoing childEdge.source
+      (childPendingEdge index childEdge)).mpr
+        ⟨childEdge, hChildEdge, rfl, rfl⟩
+    exact ⟨childPendingEdge index childEdge, hParentEdge.1,
+      hSource, hLabel, hTarget⟩
+  have hLifted := completingBackClosure_mono_edges
+    (taggedFragment index child) parent hEdges _ hTagged
+  apply completingBackClosure_mono parent (seed1 := childSeed.image
+    (childState index)) (seed2 := parentSeed) _ hLifted
+  intro tagged hTaggedSeed
+  rcases Finset.mem_image.mp hTaggedSeed with ⟨source, hSourceSeed, rfl⟩
+  rcases Finset.mem_union.mp hSourceSeed with hVariable | hChildCompleting
+  · apply Finset.mem_union_left
+    by_cases hValue : value
+    · simp only [childSeed, parentSeed, hValue, if_true] at hVariable ⊢
+      simp only [Finset.mem_image, Finset.mem_filter] at hVariable ⊢
+      obtain ⟨childEdge, ⟨hChildEdge, hLabel⟩, hSource⟩ := hVariable
+      let parentEdge := childPendingEdge index childEdge
+      have hParentEdge := (hOutgoing childEdge.source parentEdge).mpr
+        ⟨childEdge, hChildEdge, rfl, rfl⟩
+      refine ⟨parentEdge, ⟨hParentEdge.1, ?_⟩, ?_⟩
+      · simpa [parentEdge, childPendingEdge] using hLabel
+      · simp [parentEdge, childPendingEdge, ← hSource]
+    · simp [childSeed, hValue] at hVariable
+  · exact Finset.mem_union_right _
+      ((hCompleting source).mpr hChildCompleting)
+
+/- Soundness of the scalar completion seed, with no recursion fixed-point
+gate: a state reached backwards from a live variable marker or an ordinary
+completing state represents a residual that completes under that scalar
+interpretation.  This is used only to show that an unrelated inner-binder
+marker cannot occur on an outer-binder closure path. -/
+private theorem parametricCompletingBackClosure_sound
+    (signature : TypeAlphabet) (name : String) (value : Bool)
+    (processType : PactType)
+    (hTailOccurrences : processType.TailOccurrences name True)
+    (hTailRecursive : processType.TailRecursive)
+    (hHygienic : processType.BinderHygienic [name])
+    (state : TypeAutomatonState)
+    (hMember : state ∈ completingBackClosure
+      (compileTypeFuel signature (typeCompilationFuel processType) processType)
+      ((if value then
+          ((compileTypeFuel signature (typeCompilationFuel processType)
+              processType).edges.filter
+            fun edge => edge.label = .variable name).image
+              fun edge => edge.source
+        else ∅) ∪
+        (compileTypeFuel signature (typeCompilationFuel processType)
+          processType).completing)) :
+    ∃ residual, TypeCompilationRelation processType state residual ∧
+      PactType.canCompleteBeforeTockSubst name value residual = true := by
+  classical
+  let fragment := compileTypeFuel signature
+    (typeCompilationFuel processType) processType
+  let seed :=
+    (if value then
+        (fragment.edges.filter fun edge => edge.label = .variable name).image
+          fun edge => edge.source
+      else ∅) ∪ fragment.completing
+  let allowed := ((fragment.edges.image fun edge => edge.source) ∪
+      fragment.completing).filter fun q =>
+        ∃ residual, TypeCompilationRelation processType q residual ∧
+          PactType.canCompleteBeforeTockSubst name value residual = true
+  have hAllowed := completingBackClosure_subset_of_predecessor_closed fragment
+    seed allowed ?_ ?_ (by simpa [fragment, seed] using hMember)
+  · exact (Finset.mem_filter.mp hAllowed).2
+  · intro q hSeed
+    rcases Finset.mem_union.mp hSeed with hVariable | hCompleting
+    · by_cases hValue : value
+      · simp only [seed, hValue, if_true, Finset.mem_image,
+          Finset.mem_filter] at hVariable
+        obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVariable
+        have hRelated := (compileTypeFuel_variableEdge_source_var signature name
+          (typeCompilationFuel processType) processType True
+          (typeCompilationFuel_sufficient processType) hTailOccurrences edge
+            (by simpa [fragment] using hEdge) hLabel).2
+        refine Finset.mem_filter.mpr
+          ⟨Finset.mem_union_left _ (Finset.mem_image.mpr
+            ⟨edge, by simpa [fragment] using hEdge, hSource⟩),
+            .var name, ?_, ?_⟩
+        · rw [← hSource]
+          exact hRelated
+        · simp [PactType.canCompleteBeforeTockSubst, hValue]
+      · simp [seed, hValue] at hVariable
+    · obtain ⟨residual, hRelated, hPlain⟩ :=
+        compiledFragmentCompleting_represented signature [name]
+          (typeCompilationFuel processType) processType
+          (typeCompilationFuel_sufficient processType) hTailRecursive
+            hHygienic q (by simpa [fragment] using hCompleting)
+      exact Finset.mem_filter.mpr
+        ⟨Finset.mem_union_right _ (by simpa [fragment] using hCompleting),
+          residual, hRelated,
+          PactType.canCompleteBeforeTock_le_subst name value residual hPlain⟩
+  · intro edge hEdge hNonClock hTarget
+    obtain ⟨targetResidual, hTargetRelated, hTargetComplete⟩ :=
+      (Finset.mem_filter.mp hTarget).2
+    obtain ⟨sourceResidual, hSourceRelated, hSourceComplete⟩ :=
+      compiledFragmentNonClockPredecessor_subst signature name value
+        (typeCompilationFuel processType) processType
+        (typeCompilationFuel_sufficient processType) hTailRecursive hHygienic
+          edge (by simpa [fragment] using hEdge) hNonClock targetResidual
+            hTargetRelated hTargetComplete
+    exact Finset.mem_filter.mpr
+      ⟨Finset.mem_union_left _ (Finset.mem_image.mpr
+        ⟨edge, by simpa [fragment] using hEdge, rfl⟩),
+        sourceResidual, hSourceRelated, hSourceComplete⟩
+
+/- Lift an outer-variable closure through a distinct recursion binder.  A raw
+marker for the inner binder is not copied unchanged by the builder, so the
+caller supplies the semantic fact that no such source belongs to this outer
+closure. -/
+private theorem completingBackClosure_lift_recursion_nonmatching
+    (signature : TypeAlphabet) (outer binder : String) (value : Bool)
+    (child : AutomatonFragment) (hDistinct : outer ≠ binder)
+    (hNoInnerSource : ∀ edge ∈ child.edges,
+      edge.label = .variable binder →
+      edge.source ∉ completingBackClosure child
+        ((if value then
+            (child.edges.filter fun e => e.label = .variable outer).image
+              fun e => e.source
+          else ∅) ∪ child.completing))
+    {state : TypeAutomatonState}
+    (hMember : state ∈ completingBackClosure child
+      ((if value then
+          (child.edges.filter fun edge => edge.label = .variable outer).image
+            fun edge => edge.source
+        else ∅) ∪ child.completing)) :
+    childState 0 state ∈ completingBackClosure
+      (buildRecursionAutomaton signature binder child)
+      ((if value then
+          ((buildRecursionAutomaton signature binder child).edges.filter
+            fun edge => edge.label = .variable outer).image
+              fun edge => edge.source
+        else ∅) ∪
+        (buildRecursionAutomaton signature binder child).completing) := by
+  classical
+  let parent := buildRecursionAutomaton signature binder child
+  let childSeed :=
+    (if value then
+        (child.edges.filter fun edge => edge.label = .variable outer).image
+          fun edge => edge.source
+      else ∅) ∪ child.completing
+  let parentSeed :=
+    (if value then
+        (parent.edges.filter fun edge => edge.label = .variable outer).image
+          fun edge => edge.source
+      else ∅) ∪ parent.completing
+  let childClosure := completingBackClosure child childSeed
+  let parentClosure := completingBackClosure parent parentSeed
+  let allowed := childClosure.filter fun q => childState 0 q ∈ parentClosure
+  have hCompleting : ∀ q ∈ child.completing,
+      childState 0 q ∈ parent.completing := by
+    intro q hQ
+    simp only [parent]
+    rw [buildRecursionAutomaton_completing_eq signature binder child]
+    apply Finset.mem_union_right
+    apply Finset.mem_image.mpr
+    refine ⟨q, completingBackClosure_superset_seed child _ ?_, rfl⟩
+    exact Finset.mem_union_right _ hQ
+  have hAllowed : childClosure ⊆ allowed := by
+    apply completingBackClosure_subset_of_predecessor_closed child childSeed
+      allowed
+    · intro q hSeed
+      refine Finset.mem_filter.mpr
+        ⟨completingBackClosure_superset_seed child childSeed hSeed, ?_⟩
+      rcases Finset.mem_union.mp hSeed with hVariable | hChildCompleting
+      · by_cases hValue : value
+        · simp only [childSeed, hValue, if_true, Finset.mem_image,
+            Finset.mem_filter] at hVariable
+          obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVariable
+          have hNotInner : edge.label ≠ .variable binder := by
+            rw [hLabel]
+            intro hEq
+            injection hEq with hNames
+            exact hDistinct hNames
+          let parentEdge := childPendingEdge 0 edge
+          have hParentEdge : parentEdge ∈ parent.edges := by
+            simp only [parent, buildRecursionAutomaton,
+              finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+            right
+            exact ⟨edge, hEdge, by
+              simp [parentEdge, childPendingEdge, hNotInner]⟩
+          apply completingBackClosure_superset_seed parent parentSeed
+          apply Finset.mem_union_left
+          simp only [parentSeed, hValue, if_true, Finset.mem_image,
+            Finset.mem_filter]
+          refine ⟨parentEdge, ⟨hParentEdge, ?_⟩, ?_⟩
+          · simpa [parentEdge, childPendingEdge] using hLabel
+          · simp [parentEdge, childPendingEdge, ← hSource]
+        · simp [childSeed, hValue] at hVariable
+      · apply completingBackClosure_superset_seed parent parentSeed
+        exact Finset.mem_union_right _
+          (hCompleting q hChildCompleting)
+    · intro edge hEdge hNonClock hTargetAllowed
+      have hTargetFields := Finset.mem_filter.mp hTargetAllowed
+      have hSourceChild : edge.source ∈ childClosure :=
+        completingBackClosure_mem_of_nonClockEdge child childSeed edge hEdge
+          hNonClock hTargetFields.1
+      by_cases hInner : edge.label = .variable binder
+      · exact absurd hSourceChild (hNoInnerSource edge hEdge hInner)
+      · let parentEdge := childPendingEdge 0 edge
+        have hParentEdge : parentEdge ∈ parent.edges := by
+          simp only [parent, buildRecursionAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+          right
+          exact ⟨edge, hEdge, by
+            simp [parentEdge, childPendingEdge, hInner]⟩
+        have hSourceParent : childState 0 edge.source ∈ parentClosure :=
+          completingBackClosure_mem_of_nonClockEdge parent parentSeed
+            parentEdge hParentEdge (by
+              simpa [parentEdge, childPendingEdge] using hNonClock) (by
+                simpa [parentEdge, childPendingEdge] using hTargetFields.2)
+        exact Finset.mem_filter.mpr ⟨hSourceChild, hSourceParent⟩
+  exact (Finset.mem_filter.mp (hAllowed (by
+    simpa [childClosure, childSeed] using hMember))).2
+
+/- Lift a closure seeded by the inner binder's own live markers.  The caller
+has already established that the tagged body entry is in the enclosing
+closure; every matching marker is therefore an installed non-clock backedge
+into that entry. -/
+private theorem completingBackClosure_lift_recursion_matching
+    (signature : TypeAlphabet) (outer binder : String) (value : Bool)
+    (child : AutomatonFragment)
+    (hInitial : childState 0 child.initial ∈ completingBackClosure
+      (buildRecursionAutomaton signature binder child)
+      ((if value then
+          ((buildRecursionAutomaton signature binder child).edges.filter
+            fun edge => edge.label = .variable outer).image
+              (fun edge => edge.source)
+        else ∅) ∪
+        (buildRecursionAutomaton signature binder child).completing))
+    {state : TypeAutomatonState}
+    (hMember : state ∈ completingBackClosure child
+      ((child.edges.filter fun edge => edge.label = .variable binder).image
+          (fun edge => edge.source) ∪ child.completing)) :
+    childState 0 state ∈ completingBackClosure
+      (buildRecursionAutomaton signature binder child)
+      ((if value then
+          ((buildRecursionAutomaton signature binder child).edges.filter
+            fun edge => edge.label = .variable outer).image
+              (fun edge => edge.source)
+        else ∅) ∪
+        (buildRecursionAutomaton signature binder child).completing) := by
+  classical
+  let parent := buildRecursionAutomaton signature binder child
+  let childSeed :=
+    (child.edges.filter fun edge => edge.label = .variable binder).image
+      (fun edge => edge.source) ∪ child.completing
+  let parentSeed :=
+    (if value then
+        (parent.edges.filter fun edge => edge.label = .variable outer).image
+          (fun edge => edge.source)
+      else ∅) ∪ parent.completing
+  let childClosure := completingBackClosure child childSeed
+  let parentClosure := completingBackClosure parent parentSeed
+  let allowed := childClosure.filter fun q => childState 0 q ∈ parentClosure
+  have hEntry : childState 0 child.initial ∈ parentClosure := by
+    simpa [parentClosure, parent, parentSeed] using hInitial
+  have hCompleting : ∀ q ∈ child.completing,
+      childState 0 q ∈ parent.completing := by
+    intro q hQ
+    simp only [parent]
+    rw [buildRecursionAutomaton_completing_eq signature binder child]
+    apply Finset.mem_union_right
+    apply Finset.mem_image.mpr
+    refine ⟨q, completingBackClosure_superset_seed child _ ?_, rfl⟩
+    exact Finset.mem_union_right _ hQ
+  have installedPredecessor : ∀ edge ∈ child.edges,
+      edge.label = .variable binder →
+      childState 0 edge.source ∈ parentClosure := by
+    intro edge hEdge hLabel
+    let backedge : PendingAutomatonEdge :=
+      { source := childState 0 edge.source
+        environment := edge.environment
+        label := .visible TypeLabel.silent
+        current := ∅
+        future := .at (childState 0 child.initial) ∅
+        target := childState 0 child.initial }
+    have hBackedge : backedge ∈ parent.edges := by
+      simp only [parent, buildRecursionAutomaton, finishAutomatonFragment,
+        Finset.mem_union, Finset.mem_image]
+      right
+      exact ⟨edge, hEdge, by simp [backedge, hLabel]⟩
+    exact completingBackClosure_mem_of_nonClockEdge parent parentSeed backedge
+      hBackedge (by
+        intro hEq
+        cases hEq)
+      (by simpa [backedge] using hEntry)
+  have hAllowed : childClosure ⊆ allowed := by
+    apply completingBackClosure_subset_of_predecessor_closed child childSeed
+      allowed
+    · intro q hSeed
+      refine Finset.mem_filter.mpr
+        ⟨completingBackClosure_superset_seed child childSeed hSeed, ?_⟩
+      rcases Finset.mem_union.mp hSeed with hVariable | hChildCompleting
+      · simp only [childSeed, Finset.mem_image, Finset.mem_filter] at hVariable
+        obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVariable
+        rw [← hSource]
+        exact installedPredecessor edge hEdge hLabel
+      · apply completingBackClosure_superset_seed parent parentSeed
+        exact Finset.mem_union_right _
+          (hCompleting q hChildCompleting)
+    · intro edge hEdge hNonClock hTargetAllowed
+      have hTargetFields := Finset.mem_filter.mp hTargetAllowed
+      have hSourceChild : edge.source ∈ childClosure :=
+        completingBackClosure_mem_of_nonClockEdge child childSeed edge hEdge
+          hNonClock hTargetFields.1
+      by_cases hInner : edge.label = .variable binder
+      · exact Finset.mem_filter.mpr
+          ⟨hSourceChild, installedPredecessor edge hEdge hInner⟩
+      · let parentEdge := childPendingEdge 0 edge
+        have hParentEdge : parentEdge ∈ parent.edges := by
+          simp only [parent, buildRecursionAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+          right
+          exact ⟨edge, hEdge, by
+            simp [parentEdge, childPendingEdge, hInner]⟩
+        have hSourceParent : childState 0 edge.source ∈ parentClosure :=
+          completingBackClosure_mem_of_nonClockEdge parent parentSeed
+            parentEdge hParentEdge (by
+              simpa [parentEdge, childPendingEdge] using hNonClock) (by
+                simpa [parentEdge, childPendingEdge] using hTargetFields.2)
+        exact Finset.mem_filter.mpr ⟨hSourceChild, hSourceParent⟩
+  exact (Finset.mem_filter.mp (hAllowed (by
+    simpa [childClosure, childSeed] using hMember))).2
+
+private theorem branchCanCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+    (name : String) (value : Bool) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.TailBranchOccurrences name False branches →
+        PactType.branchCanCompleteBeforeTockSubst name value branches =
+          PactType.BranchCanCompleteBeforeTock branches := by
+  intro branches hTail
+  induction branches with
+  | nil =>
+      simp [PactType.branchCanCompleteBeforeTockSubst,
+        PactType.BranchCanCompleteBeforeTock]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      simp only [PactType.TailBranchOccurrences] at hTail
+      simp only [PactType.branchCanCompleteBeforeTockSubst,
+        PactType.BranchCanCompleteBeforeTock,
+        PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+          name value branchType hTail.1,
+        ih hTail.2]
+
+private theorem branchCanCompleteBeforeTockSubst_eq_true_iff
+    (name : String) (value : Bool) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.branchCanCompleteBeforeTockSubst name value branches = true ↔
+        ∃ branch ∈ branches,
+          PactType.canCompleteBeforeTockSubst name value branch.2 = true := by
+  intro branches
+  induction branches with
+  | nil =>
+      simp [PactType.branchCanCompleteBeforeTockSubst]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      unfold PactType.branchCanCompleteBeforeTockSubst
+      rw [Bool.or_eq_true, ih]
+      constructor
+      · rintro (hHead | ⟨entry, hEntry, hComplete⟩)
+        · exact ⟨(action, branchType), List.mem_cons_self, hHead⟩
+        · exact ⟨entry,
+            List.mem_cons_of_mem (action, branchType) hEntry, hComplete⟩
+      · rintro ⟨entry, hEntry, hComplete⟩
+        rcases List.mem_cons.mp hEntry with rfl | hRest
+        · exact Or.inl hComplete
+        · exact Or.inr ⟨entry, hRest, hComplete⟩
+
+private theorem exists_getElem?_eq_some_of_mem
+    {Element : Type} {element : Element} {items : List Element}
+    (hMember : element ∈ items) :
+    ∃ index : Nat, items[index]? = some element := by
+  rcases List.mem_iff_getElem.mp hMember with ⟨index, hBound, hValue⟩
+  refine ⟨index, ?_⟩
+  rw [List.getElem?_eq_getElem hBound, hValue]
+
+/-- Generic (not fixed to `body`) form of the reverse-closure argument,
+quantified over an arbitrary subterm `processType` with its own compiled
+fragment and own seed.  This is required because `TypeCompilationRelation`'s
+constructors (e.g. `choice_left`) recurse through strictly smaller *type*
+arguments, so a `body`-fixed motive cannot serve as an induction target: the
+induction hypothesis needed at `choice_left` is a fact about `left`'s own
+fragment, not `body`'s.
+
+`hVanilla` is threaded as an explicit parameter (not re-derived via
+`compilationCompletingCorrect_of_nestedRecursion`, which would need a forward
+reference to `compilationCompletingCorrect_recursion_regular_leaf`, defined
+later in this file, for its nested-recursion case): the CALLER supplies
+`CompilationCompletingCorrect signature processType`, and at each recursive
+step into a strictly smaller child (`left`/`right`/...), the child's own
+`CompilationCompletingCorrect` fact is derived directly from the parent's via
+the tagged-completing-set argument above, not re-derived from scratch.
+
+Only the atomic and choice/fairChoice cases are proved here; the remaining
+constructors are separate, precisely-scoped sorries (see the comment at each
+site for exactly what remains). -/
+private theorem recursionBodyCompletingClosure_superset_aux
+    (signature : TypeAlphabet) :
+    ∀ (name : String) (value : Bool) (processType : PactType),
+      PactType.TailOccurrences name True processType →
+      signature.Supports processType →
+      PactType.ClockGuarded processType →
+      PactType.TailRecursive processType →
+      PactType.BinderHygienic [name] processType →
+      (∀ child : PactType, sizeOf child < sizeOf processType →
+        signature.Supports child → child.ClockGuarded → child.TailRecursive →
+          child.BinderHygienic [name] →
+            CompilationCompletingCorrect signature child) →
+      CompilationCompletingCorrect signature processType →
+      ∀ state residual,
+        TypeCompilationRelation processType state residual →
+        PactType.canCompleteBeforeTockSubst name value residual = true →
+        state ∈ completingBackClosure
+          (compileTypeFuel signature (typeCompilationFuel processType) processType)
+          ((if value then
+              ((compileTypeFuel signature (typeCompilationFuel processType)
+                  processType).edges.filter
+                fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+            else ∅) ∪
+            (compileTypeFuel signature (typeCompilationFuel processType)
+              processType).completing) := by
+  classical
+  intro name value processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType name value with
+  | _ n ih =>
+      intro hTailOccurrences hSupports hGuarded hTailRecursive hHygienic
+        hChildrenVanilla hVanilla state residual hRelated hComplete
+      -- Plain-completion shortcut: whenever the CURRENT residual already
+      -- plainly completes, no graph reasoning is needed at all, regardless
+      -- of constructor or depth.
+      by_cases hPlain : residual.CanCompleteBeforeTock = true
+      · have hInCompleting := (hVanilla state residual hRelated).mpr hPlain
+        exact completingBackClosure_superset_seed _ _
+          (Finset.mem_union_right _ hInCompleting)
+      cases processType with
+      | message msg dir =>
+          exact absurd hPlain (by cases hRelated <;>
+            simp [PactType.CanCompleteBeforeTock])
+      | progress pid =>
+          exact absurd hPlain (by cases hRelated <;>
+            simp [PactType.CanCompleteBeforeTock])
+      | skip =>
+          exact absurd hPlain (by cases hRelated <;>
+            simp [PactType.CanCompleteBeforeTock])
+      | tock =>
+          cases hRelated with
+          | cycle_source =>
+              -- residual = .tock, which never subst-completes (unconditionally
+              -- false in canCompleteBeforeTockSubst's own .tock clause): the
+              -- contradiction is in hComplete, not hPlain.
+              exact absurd hComplete (by
+                simp [PactType.canCompleteBeforeTockSubst])
+          | cycle_final =>
+              -- residual = .skip, which always plainly completes: the
+              -- contradiction is in hPlain.
+              exact absurd (by simp [PactType.CanCompleteBeforeTock] :
+                (PactType.skip).CanCompleteBeforeTock = true) hPlain
+      | var other =>
+          cases hRelated
+          have hSelectionEnv : (TypeEnvironment.tock : TypeEnvironment) ∈
+              signature.localEnvironments := by
+            simp [TypeAlphabet.localEnvironments]
+          by_cases hName : name = other
+          · have hValueTrue : value = true := by
+              simpa [PactType.canCompleteBeforeTockSubst, hName] using hComplete
+            have hEdgeMem : (TypeAutomatonState.root : TypeAutomatonState) ∈
+                ((compileTypeFuel signature
+                    (typeCompilationFuel (PactType.var other))
+                    (PactType.var other)).edges.filter
+                  fun edge => edge.label = .variable name).image
+                    fun edge => edge.source := by
+              let marker : PendingAutomatonEdge :=
+                { source := TypeAutomatonState.root
+                  environment := TypeEnvironment.tock
+                  label := .variable other
+                  current := ∅
+                  future := .explicit ∅
+                  target := TypeAutomatonState.final }
+              refine Finset.mem_image.mpr ⟨marker, ?_, rfl⟩
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                finishAutomatonFragment, Finset.mem_filter, Finset.mem_image]
+              exact ⟨⟨TypeEnvironment.tock, hSelectionEnv, by simp [marker]⟩,
+                by simp [marker, hName]⟩
+            rw [hValueTrue]
+            exact completingBackClosure_superset_seed _ _
+              (Finset.mem_union_left _ hEdgeMem)
+          · exfalso
+            simp [PactType.canCompleteBeforeTockSubst, hName,
+              Ne.symm hName] at hComplete
+      | recur other body' =>
+          sorry
+      | choice left right =>
+          have hSupportFields : signature.Supports left ∧
+              signature.Supports right := by
+            simpa only [TypeAlphabet.Supports] using hSupports
+          have hGuardFields : left.ClockGuarded ∧ right.ClockGuarded := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          have hRecursiveFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTailRecursive
+          have hHygienicFields : left.BinderHygienic [name] ∧
+              right.BinderHygienic [name] := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hTailOccFields : PactType.TailOccurrences name True left ∧
+              PactType.TailOccurrences name True right := by
+            simpa only [PactType.TailOccurrences] using hTailOccurrences
+          have hLeftFuelSufficient : TypeCompilationFuelSufficient left
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_left _ _
+          have hRightFuelSufficient : TypeCompilationFuelSufficient right
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_right _ _
+          have hLeftFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                left =
+              compileTypeFuel signature (typeCompilationFuel left) left :=
+            compileTypeFuel_eq_of_sufficient signature left
+              hLeftFuelSufficient (typeCompilationFuel_sufficient left)
+          have hRightFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                right =
+              compileTypeFuel signature (typeCompilationFuel right) right :=
+            compileTypeFuel_eq_of_sufficient signature right
+              hRightFuelSufficient (typeCompilationFuel_sufficient right)
+          have hVanillaLeft : CompilationCompletingCorrect signature left := by
+            intro s r hr
+            constructor
+            · intro hMem
+              have hMemOuter : (childState 0 s : TypeAutomatonState) ∈
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.choice left right)) (.choice left right)).completing := by
+                simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildChoiceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, hLeftFuelEq]
+                exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨s, hMem, rfl⟩))
+              exact (hVanilla (childState 0 s) r
+                (TypeCompilationRelation.choice_left left right r s hr)).mp
+                hMemOuter
+            · intro hCanComplete
+              have hMemOuter := (hVanilla (childState 0 s) r
+                (TypeCompilationRelation.choice_left left right r s hr)).mpr
+                hCanComplete
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment,
+                Finset.mem_union, childCompleting, hLeftFuelEq,
+                hRightFuelEq] at hMemOuter
+              rcases hMemOuter with (hRoot | hLeftMem) | hRightMem
+              · exfalso; split at hRoot <;> simp [childState] at hRoot
+              · obtain ⟨w, hw, hEq⟩ := Finset.mem_image.mp hLeftMem
+                have hws : w = s := by simpa [childState] using hEq
+                subst hws; exact hw
+              · exfalso
+                obtain ⟨w, _, hEq⟩ := Finset.mem_image.mp hRightMem
+                simp [childState] at hEq
+          have hVanillaRight : CompilationCompletingCorrect signature right := by
+            intro s r hr
+            constructor
+            · intro hMem
+              have hMemOuter : (childState 1 s : TypeAutomatonState) ∈
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.choice left right)) (.choice left right)).completing := by
+                simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildChoiceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, hRightFuelEq]
+                exact Or.inr (Finset.mem_image.mpr ⟨s, hMem, rfl⟩)
+              exact (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.choice_right left right r s hr)).mp
+                hMemOuter
+            · intro hCanComplete
+              have hMemOuter := (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.choice_right left right r s hr)).mpr
+                hCanComplete
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment,
+                Finset.mem_union, childCompleting, hLeftFuelEq,
+                hRightFuelEq] at hMemOuter
+              rcases hMemOuter with (hRoot | hLeftMem) | hRightMem
+              · exfalso; split at hRoot <;> simp [childState] at hRoot
+              · exfalso
+                obtain ⟨w, _, hEq⟩ := Finset.mem_image.mp hLeftMem
+                simp [childState] at hEq
+              · obtain ⟨w, hw, hEq⟩ := Finset.mem_image.mp hRightMem
+                have hws : w = s := by simpa [childState] using hEq
+                subst hws; exact hw
+          have hLeftEdgesSubset : ∀ source label target,
+              (∃ edge ∈ (taggedFragment 0 (compileTypeFuel signature
+                  (typeCompilationFuel left) left)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) →
+              (∃ edge ∈ (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) := by
+            rintro source label target ⟨edge, hEdge, hSourceEq, hLabelEq, hTargetEq⟩
+            simp only [taggedFragment, Finset.mem_image] at hEdge
+            obtain ⟨original, hOriginal, rfl⟩ := hEdge
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+              buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+              hLeftFuelEq]
+            exact ⟨childPendingEdge 0 original,
+              Or.inl (Or.inl (Finset.mem_image.mpr ⟨original, hOriginal, rfl⟩)),
+              hSourceEq, hLabelEq, hTargetEq⟩
+          have hRightEdgesSubset : ∀ source label target,
+              (∃ edge ∈ (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) →
+              (∃ edge ∈ (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) := by
+            rintro source label target ⟨edge, hEdge, hSourceEq, hLabelEq, hTargetEq⟩
+            simp only [taggedFragment, Finset.mem_image] at hEdge
+            obtain ⟨original, hOriginal, rfl⟩ := hEdge
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+              buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+              hRightFuelEq]
+            exact ⟨childPendingEdge 1 original,
+              Or.inl (Or.inr (Finset.mem_image.mpr ⟨original, hOriginal, rfl⟩)),
+              hSourceEq, hLabelEq, hTargetEq⟩
+          have hLeftSeedSubset : ((if value then
+                ((compileTypeFuel signature (typeCompilationFuel left)
+                    left).edges.filter fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+              else ∅) ∪
+              (compileTypeFuel signature (typeCompilationFuel left)
+                left).completing).image (childState 0) ⊆
+              (if value then
+                  ((compileTypeFuel signature (typeCompilationFuel
+                      (.choice left right)) (.choice left right)).edges.filter
+                    fun edge => edge.label = .variable name).image
+                      fun edge => edge.source
+                else ∅) ∪
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right)).completing := by
+            intro t ht
+            simp only [Finset.mem_image] at ht
+            obtain ⟨u, hu, rfl⟩ := ht
+            rcases Finset.mem_union.mp hu with hVar | hCompleting
+            · apply Finset.mem_union_left
+              by_cases hv : value
+              · simp only [hv, if_true] at hVar ⊢
+                simp only [Finset.mem_image, Finset.mem_filter] at hVar ⊢
+                obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVar
+                refine ⟨childPendingEdge 0 edge, ⟨?_, ?_⟩, ?_⟩
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, hLeftFuelEq]
+                  exact Or.inl (Or.inl (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩))
+                · simpa [childPendingEdge] using hLabel
+                · simp [childPendingEdge, ← hSource]
+              · simp [hv] at hVar
+            · apply Finset.mem_union_right
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+                childCompleting, hLeftFuelEq]
+              exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨u, hCompleting, rfl⟩))
+          have hRightSeedSubset : ((if value then
+                ((compileTypeFuel signature (typeCompilationFuel right)
+                    right).edges.filter fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+              else ∅) ∪
+              (compileTypeFuel signature (typeCompilationFuel right)
+                right).completing).image (childState 1) ⊆
+              (if value then
+                  ((compileTypeFuel signature (typeCompilationFuel
+                      (.choice left right)) (.choice left right)).edges.filter
+                    fun edge => edge.label = .variable name).image
+                      fun edge => edge.source
+                else ∅) ∪
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right)).completing := by
+            intro t ht
+            simp only [Finset.mem_image] at ht
+            obtain ⟨u, hu, rfl⟩ := ht
+            rcases Finset.mem_union.mp hu with hVar | hCompleting
+            · apply Finset.mem_union_left
+              by_cases hv : value
+              · simp only [hv, if_true] at hVar ⊢
+                simp only [Finset.mem_image, Finset.mem_filter] at hVar ⊢
+                obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVar
+                refine ⟨childPendingEdge 1 edge, ⟨?_, ?_⟩, ?_⟩
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, hRightFuelEq]
+                  exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩))
+                · simpa [childPendingEdge] using hLabel
+                · simp [childPendingEdge, ← hSource]
+              · simp [hv] at hVar
+            · apply Finset.mem_union_right
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+                childCompleting, hRightFuelEq]
+              exact Or.inr (Finset.mem_image.mpr ⟨u, hCompleting, rfl⟩)
+          cases hRelated with
+          | choice_left _ _ _ innerState hInner =>
+              have hLeftMem := ih (sizeOf left) hLeftSize
+                (name := name) (value := value) (processType := left) rfl
+                hTailOccFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hLeftSize)) hVanillaLeft
+                innerState residual hInner hComplete
+              have hLift1 : childState 0 innerState ∈
+                  completingBackClosure
+                    (taggedFragment 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel left)
+                            left).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel left)
+                        left).completing).image (childState 0)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨innerState, hLeftMem, rfl⟩
+              have hLift2 := completingBackClosure_mono_edges
+                (taggedFragment 0 (compileTypeFuel signature
+                  (typeCompilationFuel left) left))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right))
+                hLeftEdgesSubset _ hLift1
+              exact completingBackClosure_mono _ hLeftSeedSubset hLift2
+          | choice_right _ _ _ innerState hInner =>
+              have hRightMem := ih (sizeOf right) hRightSize
+                (name := name) (value := value) (processType := right) rfl
+                hTailOccFields.2 hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                innerState residual hInner hComplete
+              have hLift1 : childState 1 innerState ∈
+                  completingBackClosure
+                    (taggedFragment 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel right)
+                            right).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel right)
+                        right).completing).image (childState 1)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨innerState, hRightMem, rfl⟩
+              have hLift2 := completingBackClosure_mono_edges
+                (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.choice left right)) (.choice left right))
+                hRightEdgesSubset _ hLift1
+              exact completingBackClosure_mono _ hRightSeedSubset hLift2
+          | choice_source =>
+              -- residual = .choice left right itself; the plain-completion
+              -- shortcut already handled ccbtLeft || ccbtRight = true, so
+              -- here at least one side has a genuine subst-only discrepancy.
+              -- Recurse into that side's OWN initial state, lift, then hop
+              -- via the (silent) selection edge.
+              have hCompleteFields : PactType.canCompleteBeforeTockSubst name
+                    value left = true ∨
+                  PactType.canCompleteBeforeTockSubst name value right = true := by
+                simpa only [PactType.canCompleteBeforeTockSubst, Bool.or_eq_true]
+                  using hComplete
+              have hSelectionEnv : (TypeEnvironment.tock : TypeEnvironment) ∈
+                  signature.localEnvironments := by
+                simp [TypeAlphabet.localEnvironments]
+              rcases hCompleteFields with hL | hR
+              · have hLeftMem := ih (sizeOf left) hLeftSize
+                  (name := name) (value := value) (processType := left) rfl
+                  hTailOccFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hLeftSize)) hVanillaLeft
+                  (compileTypeFuel signature (typeCompilationFuel left)
+                    left).initial left
+                  (compileTypeFuel_initial_relation signature
+                    (typeCompilationFuel left) left
+                    (typeCompilationFuel_sufficient left))
+                  hL
+                have hLift1 : childState 0 (compileTypeFuel signature
+                    (typeCompilationFuel left) left).initial ∈
+                    completingBackClosure
+                      (taggedFragment 0 (compileTypeFuel signature
+                        (typeCompilationFuel left) left))
+                      (((if value then
+                          ((compileTypeFuel signature (typeCompilationFuel left)
+                              left).edges.filter
+                            fun edge => edge.label = .variable name).image
+                              fun edge => edge.source
+                        else ∅) ∪
+                        (compileTypeFuel signature (typeCompilationFuel left)
+                          left).completing).image (childState 0)) := by
+                  rw [completingBackClosure_taggedFragment_image]
+                  exact Finset.mem_image.mpr ⟨_, hLeftMem, rfl⟩
+                have hLift2 := completingBackClosure_mono_edges
+                  (taggedFragment 0 (compileTypeFuel signature
+                    (typeCompilationFuel left) left))
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.choice left right)) (.choice left right))
+                  hLeftEdgesSubset _ hLift1
+                have hLift3 := completingBackClosure_mono _ hLeftSeedSubset hLift2
+                apply completingBackClosure_mem_of_nonClockEdge _ _
+                  { source := TypeAutomatonState.root
+                    environment := TypeEnvironment.tock
+                    label := .visible TypeLabel.silent
+                    current := ∅
+                    future := .at (childState 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left).initial) ∅
+                    target := childState 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left).initial }
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert,
+                    Finset.mem_singleton, hLeftFuelEq]
+                  exact Or.inr ⟨TypeEnvironment.tock, hSelectionEnv, Or.inl rfl⟩
+                · simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+                · exact hLift3
+              · have hRightMem := ih (sizeOf right) hRightSize
+                  (name := name) (value := value) (processType := right) rfl
+                  hTailOccFields.2 hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                  (compileTypeFuel signature (typeCompilationFuel right)
+                    right).initial right
+                  (compileTypeFuel_initial_relation signature
+                    (typeCompilationFuel right) right
+                    (typeCompilationFuel_sufficient right))
+                  hR
+                have hLift1 : childState 1 (compileTypeFuel signature
+                    (typeCompilationFuel right) right).initial ∈
+                    completingBackClosure
+                      (taggedFragment 1 (compileTypeFuel signature
+                        (typeCompilationFuel right) right))
+                      (((if value then
+                          ((compileTypeFuel signature (typeCompilationFuel right)
+                              right).edges.filter
+                            fun edge => edge.label = .variable name).image
+                              fun edge => edge.source
+                        else ∅) ∪
+                        (compileTypeFuel signature (typeCompilationFuel right)
+                          right).completing).image (childState 1)) := by
+                  rw [completingBackClosure_taggedFragment_image]
+                  exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
+                have hLift2 := completingBackClosure_mono_edges
+                  (taggedFragment 1 (compileTypeFuel signature
+                    (typeCompilationFuel right) right))
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.choice left right)) (.choice left right))
+                  hRightEdgesSubset _ hLift1
+                have hLift3 := completingBackClosure_mono _ hRightSeedSubset hLift2
+                apply completingBackClosure_mem_of_nonClockEdge _ _
+                  { source := TypeAutomatonState.root
+                    environment := TypeEnvironment.tock
+                    label := .visible TypeLabel.silent
+                    current := ∅
+                    future := .at (childState 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right).initial) ∅
+                    target := childState 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right).initial }
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert,
+                    Finset.mem_singleton, hRightFuelEq]
+                  exact Or.inr ⟨TypeEnvironment.tock, hSelectionEnv, Or.inr rfl⟩
+                · simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+                · exact hLift3
+      | fairChoice bid left right =>
+          have hSupportFields : signature.Supports left ∧
+              signature.Supports right := by
+            have hFields : bid ∈ signature.fair ∧
+                signature.Supports left ∧ signature.Supports right := by
+              simpa only [TypeAlphabet.Supports] using hSupports
+            exact hFields.2
+          have hGuardFields : left.ClockGuarded ∧ right.ClockGuarded := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          have hRecursiveFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTailRecursive
+          have hHygienicFields : left.BinderHygienic [name] ∧
+              right.BinderHygienic [name] := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hTailOccFields : PactType.TailOccurrences name True left ∧
+              PactType.TailOccurrences name True right := by
+            simpa only [PactType.TailOccurrences] using hTailOccurrences
+          have hLeftFuelSufficient : TypeCompilationFuelSufficient left
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_left _ _
+          have hRightFuelSufficient : TypeCompilationFuelSufficient right
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_right _ _
+          have hLeftFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                left =
+              compileTypeFuel signature (typeCompilationFuel left) left :=
+            compileTypeFuel_eq_of_sufficient signature left
+              hLeftFuelSufficient (typeCompilationFuel_sufficient left)
+          have hRightFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                right =
+              compileTypeFuel signature (typeCompilationFuel right) right :=
+            compileTypeFuel_eq_of_sufficient signature right
+              hRightFuelSufficient (typeCompilationFuel_sufficient right)
+          have hVanillaLeft : CompilationCompletingCorrect signature left := by
+            intro s r hr
+            constructor
+            · intro hMem
+              have hMemOuter : (childState 0 s : TypeAutomatonState) ∈
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.fairChoice bid left right)) (.fairChoice bid left right)).completing := by
+                simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildChoiceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, hLeftFuelEq]
+                exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨s, hMem, rfl⟩))
+              exact (hVanilla (childState 0 s) r
+                (TypeCompilationRelation.fair_left bid left right r s hr)).mp
+                hMemOuter
+            · intro hCanComplete
+              have hMemOuter := (hVanilla (childState 0 s) r
+                (TypeCompilationRelation.fair_left bid left right r s hr)).mpr
+                hCanComplete
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment,
+                Finset.mem_union, childCompleting, hLeftFuelEq,
+                hRightFuelEq] at hMemOuter
+              rcases hMemOuter with (hRoot | hLeftMem) | hRightMem
+              · exfalso; split at hRoot <;> simp [childState] at hRoot
+              · obtain ⟨w, hw, hEq⟩ := Finset.mem_image.mp hLeftMem
+                have hws : w = s := by simpa [childState] using hEq
+                subst hws; exact hw
+              · exfalso
+                obtain ⟨w, _, hEq⟩ := Finset.mem_image.mp hRightMem
+                simp [childState] at hEq
+          have hVanillaRight : CompilationCompletingCorrect signature right := by
+            intro s r hr
+            constructor
+            · intro hMem
+              have hMemOuter : (childState 1 s : TypeAutomatonState) ∈
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.fairChoice bid left right)) (.fairChoice bid left right)).completing := by
+                simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildChoiceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, hRightFuelEq]
+                exact Or.inr (Finset.mem_image.mpr ⟨s, hMem, rfl⟩)
+              exact (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.fair_right bid left right r s hr)).mp
+                hMemOuter
+            · intro hCanComplete
+              have hMemOuter := (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.fair_right bid left right r s hr)).mpr
+                hCanComplete
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment,
+                Finset.mem_union, childCompleting, hLeftFuelEq,
+                hRightFuelEq] at hMemOuter
+              rcases hMemOuter with (hRoot | hLeftMem) | hRightMem
+              · exfalso; split at hRoot <;> simp [childState] at hRoot
+              · exfalso
+                obtain ⟨w, _, hEq⟩ := Finset.mem_image.mp hLeftMem
+                simp [childState] at hEq
+              · obtain ⟨w, hw, hEq⟩ := Finset.mem_image.mp hRightMem
+                have hws : w = s := by simpa [childState] using hEq
+                subst hws; exact hw
+          have hLeftEdgesSubset : ∀ source label target,
+              (∃ edge ∈ (taggedFragment 0 (compileTypeFuel signature
+                  (typeCompilationFuel left) left)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) →
+              (∃ edge ∈ (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) := by
+            rintro source label target ⟨edge, hEdge, hSourceEq, hLabelEq, hTargetEq⟩
+            simp only [taggedFragment, Finset.mem_image] at hEdge
+            obtain ⟨original, hOriginal, rfl⟩ := hEdge
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+              buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+              hLeftFuelEq]
+            exact ⟨childPendingEdge 0 original,
+              Or.inl (Or.inl (Finset.mem_image.mpr ⟨original, hOriginal, rfl⟩)),
+              hSourceEq, hLabelEq, hTargetEq⟩
+          have hRightEdgesSubset : ∀ source label target,
+              (∃ edge ∈ (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) →
+              (∃ edge ∈ (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) := by
+            rintro source label target ⟨edge, hEdge, hSourceEq, hLabelEq, hTargetEq⟩
+            simp only [taggedFragment, Finset.mem_image] at hEdge
+            obtain ⟨original, hOriginal, rfl⟩ := hEdge
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+              buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+              hRightFuelEq]
+            exact ⟨childPendingEdge 1 original,
+              Or.inl (Or.inr (Finset.mem_image.mpr ⟨original, hOriginal, rfl⟩)),
+              hSourceEq, hLabelEq, hTargetEq⟩
+          have hLeftSeedSubset : ((if value then
+                ((compileTypeFuel signature (typeCompilationFuel left)
+                    left).edges.filter fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+              else ∅) ∪
+              (compileTypeFuel signature (typeCompilationFuel left)
+                left).completing).image (childState 0) ⊆
+              (if value then
+                  ((compileTypeFuel signature (typeCompilationFuel
+                      (.fairChoice bid left right)) (.fairChoice bid left right)).edges.filter
+                    fun edge => edge.label = .variable name).image
+                      fun edge => edge.source
+                else ∅) ∪
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right)).completing := by
+            intro t ht
+            simp only [Finset.mem_image] at ht
+            obtain ⟨u, hu, rfl⟩ := ht
+            rcases Finset.mem_union.mp hu with hVar | hCompleting
+            · apply Finset.mem_union_left
+              by_cases hv : value
+              · simp only [hv, if_true] at hVar ⊢
+                simp only [Finset.mem_image, Finset.mem_filter] at hVar ⊢
+                obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVar
+                refine ⟨childPendingEdge 0 edge, ⟨?_, ?_⟩, ?_⟩
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, hLeftFuelEq]
+                  exact Or.inl (Or.inl (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩))
+                · simpa [childPendingEdge] using hLabel
+                · simp [childPendingEdge, ← hSource]
+              · simp [hv] at hVar
+            · apply Finset.mem_union_right
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+                childCompleting, hLeftFuelEq]
+              exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨u, hCompleting, rfl⟩))
+          have hRightSeedSubset : ((if value then
+                ((compileTypeFuel signature (typeCompilationFuel right)
+                    right).edges.filter fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+              else ∅) ∪
+              (compileTypeFuel signature (typeCompilationFuel right)
+                right).completing).image (childState 1) ⊆
+              (if value then
+                  ((compileTypeFuel signature (typeCompilationFuel
+                      (.fairChoice bid left right)) (.fairChoice bid left right)).edges.filter
+                    fun edge => edge.label = .variable name).image
+                      fun edge => edge.source
+                else ∅) ∪
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right)).completing := by
+            intro t ht
+            simp only [Finset.mem_image] at ht
+            obtain ⟨u, hu, rfl⟩ := ht
+            rcases Finset.mem_union.mp hu with hVar | hCompleting
+            · apply Finset.mem_union_left
+              by_cases hv : value
+              · simp only [hv, if_true] at hVar ⊢
+                simp only [Finset.mem_image, Finset.mem_filter] at hVar ⊢
+                obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVar
+                refine ⟨childPendingEdge 1 edge, ⟨?_, ?_⟩, ?_⟩
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, hRightFuelEq]
+                  exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩))
+                · simpa [childPendingEdge] using hLabel
+                · simp [childPendingEdge, ← hSource]
+              · simp [hv] at hVar
+            · apply Finset.mem_union_right
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+                childCompleting, hRightFuelEq]
+              exact Or.inr (Finset.mem_image.mpr ⟨u, hCompleting, rfl⟩)
+          cases hRelated with
+          | fair_left _ _ _ _ innerState hInner =>
+              have hLeftMem := ih (sizeOf left) hLeftSize
+                (name := name) (value := value) (processType := left) rfl
+                hTailOccFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hLeftSize)) hVanillaLeft
+                innerState residual hInner hComplete
+              have hLift1 : childState 0 innerState ∈
+                  completingBackClosure
+                    (taggedFragment 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel left)
+                            left).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel left)
+                        left).completing).image (childState 0)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨innerState, hLeftMem, rfl⟩
+              have hLift2 := completingBackClosure_mono_edges
+                (taggedFragment 0 (compileTypeFuel signature
+                  (typeCompilationFuel left) left))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right))
+                hLeftEdgesSubset _ hLift1
+              exact completingBackClosure_mono _ hLeftSeedSubset hLift2
+          | fair_right _ _ _ _ innerState hInner =>
+              have hRightMem := ih (sizeOf right) hRightSize
+                (name := name) (value := value) (processType := right) rfl
+                hTailOccFields.2 hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                innerState residual hInner hComplete
+              have hLift1 : childState 1 innerState ∈
+                  completingBackClosure
+                    (taggedFragment 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel right)
+                            right).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel right)
+                        right).completing).image (childState 1)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨innerState, hRightMem, rfl⟩
+              have hLift2 := completingBackClosure_mono_edges
+                (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.fairChoice bid left right)) (.fairChoice bid left right))
+                hRightEdgesSubset _ hLift1
+              exact completingBackClosure_mono _ hRightSeedSubset hLift2
+          | fair_source =>
+              -- residual = .choice left right itself; the plain-completion
+              -- shortcut already handled ccbtLeft || ccbtRight = true, so
+              -- here at least one side has a genuine subst-only discrepancy.
+              -- Recurse into that side's OWN initial state, lift, then hop
+              -- via the (silent) selection edge.
+              have hCompleteFields : PactType.canCompleteBeforeTockSubst name
+                    value left = true ∨
+                  PactType.canCompleteBeforeTockSubst name value right = true := by
+                simpa only [PactType.canCompleteBeforeTockSubst, Bool.or_eq_true]
+                  using hComplete
+              have hSelectionEnv : (TypeEnvironment.tock : TypeEnvironment) ∈
+                  signature.localEnvironments := by
+                simp [TypeAlphabet.localEnvironments]
+              rcases hCompleteFields with hL | hR
+              · have hLeftMem := ih (sizeOf left) hLeftSize
+                  (name := name) (value := value) (processType := left) rfl
+                  hTailOccFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hLeftSize)) hVanillaLeft
+                  (compileTypeFuel signature (typeCompilationFuel left)
+                    left).initial left
+                  (compileTypeFuel_initial_relation signature
+                    (typeCompilationFuel left) left
+                    (typeCompilationFuel_sufficient left))
+                  hL
+                have hLift1 : childState 0 (compileTypeFuel signature
+                    (typeCompilationFuel left) left).initial ∈
+                    completingBackClosure
+                      (taggedFragment 0 (compileTypeFuel signature
+                        (typeCompilationFuel left) left))
+                      (((if value then
+                          ((compileTypeFuel signature (typeCompilationFuel left)
+                              left).edges.filter
+                            fun edge => edge.label = .variable name).image
+                              fun edge => edge.source
+                        else ∅) ∪
+                        (compileTypeFuel signature (typeCompilationFuel left)
+                          left).completing).image (childState 0)) := by
+                  rw [completingBackClosure_taggedFragment_image]
+                  exact Finset.mem_image.mpr ⟨_, hLeftMem, rfl⟩
+                have hLift2 := completingBackClosure_mono_edges
+                  (taggedFragment 0 (compileTypeFuel signature
+                    (typeCompilationFuel left) left))
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.fairChoice bid left right)) (.fairChoice bid left right))
+                  hLeftEdgesSubset _ hLift1
+                have hLift3 := completingBackClosure_mono _ hLeftSeedSubset hLift2
+                apply completingBackClosure_mem_of_nonClockEdge _ _
+                  { source := TypeAutomatonState.root
+                    environment := TypeEnvironment.tock
+                    label := .visible (TypeLabel.fair bid true)
+                    current := ∅
+                    future := .at (childState 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left).initial) ∅
+                    target := childState 0 (compileTypeFuel signature
+                      (typeCompilationFuel left) left).initial }
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert,
+                    Finset.mem_singleton, hLeftFuelEq]
+                  exact Or.inr ⟨TypeEnvironment.tock, hSelectionEnv, Or.inl rfl⟩
+                · simp [AutomatonConstructionLabel.semantic, TypeLabel.fair]
+                · exact hLift3
+              · have hRightMem := ih (sizeOf right) hRightSize
+                  (name := name) (value := value) (processType := right) rfl
+                  hTailOccFields.2 hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                  (compileTypeFuel signature (typeCompilationFuel right)
+                    right).initial right
+                  (compileTypeFuel_initial_relation signature
+                    (typeCompilationFuel right) right
+                    (typeCompilationFuel_sufficient right))
+                  hR
+                have hLift1 : childState 1 (compileTypeFuel signature
+                    (typeCompilationFuel right) right).initial ∈
+                    completingBackClosure
+                      (taggedFragment 1 (compileTypeFuel signature
+                        (typeCompilationFuel right) right))
+                      (((if value then
+                          ((compileTypeFuel signature (typeCompilationFuel right)
+                              right).edges.filter
+                            fun edge => edge.label = .variable name).image
+                              fun edge => edge.source
+                        else ∅) ∪
+                        (compileTypeFuel signature (typeCompilationFuel right)
+                          right).completing).image (childState 1)) := by
+                  rw [completingBackClosure_taggedFragment_image]
+                  exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
+                have hLift2 := completingBackClosure_mono_edges
+                  (taggedFragment 1 (compileTypeFuel signature
+                    (typeCompilationFuel right) right))
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.fairChoice bid left right)) (.fairChoice bid left right))
+                  hRightEdgesSubset _ hLift1
+                have hLift3 := completingBackClosure_mono _ hRightSeedSubset hLift2
+                apply completingBackClosure_mem_of_nonClockEdge _ _
+                  { source := TypeAutomatonState.root
+                    environment := TypeEnvironment.tock
+                    label := .visible (TypeLabel.fair bid false)
+                    current := ∅
+                    future := .at (childState 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right).initial) ∅
+                    target := childState 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right).initial }
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildChoiceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert,
+                    Finset.mem_singleton, hRightFuelEq]
+                  exact Or.inr ⟨TypeEnvironment.tock, hSelectionEnv, Or.inr rfl⟩
+                · simp [AutomatonConstructionLabel.semantic, TypeLabel.fair]
+                · exact hLift3
+      | seq left right =>
+          have hSupportFields : signature.Supports left ∧
+              signature.Supports right := by
+            simpa only [TypeAlphabet.Supports] using hSupports
+          have hGuardFields : left.ClockGuarded ∧ right.ClockGuarded := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          have hRecursiveFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hTailRecursive
+          have hHygienicFields : left.BinderHygienic [name] ∧
+              right.BinderHygienic [name] := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hTailOccFields : PactType.TailOccurrences name False left ∧
+              PactType.TailOccurrences name True right := by
+            simpa only [PactType.TailOccurrences] using hTailOccurrences
+          have hVanillaLeft : CompilationCompletingCorrect signature left :=
+            hChildrenVanilla left hLeftSize hSupportFields.1 hGuardFields.1
+              hRecursiveFields.1 hHygienicFields.1
+          have hLeftFuelSufficient : TypeCompilationFuelSufficient left
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_left _ _
+          have hLeftFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                left =
+              compileTypeFuel signature (typeCompilationFuel left) left :=
+            compileTypeFuel_eq_of_sufficient signature left
+              hLeftFuelSufficient (typeCompilationFuel_sufficient left)
+          have hRightFuelSufficient : TypeCompilationFuelSufficient right
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) :=
+            le_max_right _ _
+          have hRightFuelEq : compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right))
+                right =
+              compileTypeFuel signature (typeCompilationFuel right) right :=
+            compileTypeFuel_eq_of_sufficient signature right
+              hRightFuelSufficient (typeCompilationFuel_sufficient right)
+          have hTailOccRight : PactType.TailOccurrences name True right :=
+            hTailOccFields.2
+          -- `.seq left right`'s completing field is
+          -- `(if right.initial ∈ right.completing then childCompleting 0 left
+          -- else ∅) ∪ childCompleting 1 right`: the `childCompleting 1 right`
+          -- part is unconditional, so `childState 1 s`'s membership still
+          -- reduces cleanly to `s ∈ right.completing`, exactly as for choice.
+          have hVanillaRight : CompilationCompletingCorrect signature right := by
+            intro s r hr
+            constructor
+            · intro hMem
+              have hMemOuter : (childState 1 s : TypeAutomatonState) ∈
+                  (compileTypeFuel signature (typeCompilationFuel
+                    (.seq left right)) (.seq left right)).completing := by
+                simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildSequenceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, hRightFuelEq]
+                exact Or.inr (Finset.mem_image.mpr ⟨s, hMem, rfl⟩)
+              exact (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.sequence_right left right r s hr)).mp
+                hMemOuter
+            · intro hCanComplete
+              have hMemOuter := (hVanilla (childState 1 s) r
+                (TypeCompilationRelation.sequence_right left right r s hr)).mpr
+                hCanComplete
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildSequenceAutomaton, finishAutomatonFragment,
+                Finset.mem_union, childCompleting, hRightFuelEq] at hMemOuter
+              rcases hMemOuter with hLeftMem | hRightMem
+              · exfalso
+                split at hLeftMem
+                · obtain ⟨w, _, hEq⟩ := Finset.mem_image.mp hLeftMem
+                  simp [childState] at hEq
+                · simp at hLeftMem
+              · obtain ⟨w, hw, hEq⟩ := Finset.mem_image.mp hRightMem
+                have hws : w = s := by simpa [childState] using hEq
+                subst hws; exact hw
+          have hRightEdgesSubset : ∀ source label target,
+              (∃ edge ∈ (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) →
+              (∃ edge ∈ (compileTypeFuel signature (typeCompilationFuel
+                  (.seq left right)) (.seq left right)).edges,
+                edge.source = source ∧ edge.label = label ∧
+                  edge.target = target) := by
+            rintro source label target ⟨edge, hEdge, hSourceEq, hLabelEq, hTargetEq⟩
+            simp only [taggedFragment, Finset.mem_image] at hEdge
+            obtain ⟨original, hOriginal, rfl⟩ := hEdge
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+              buildSequenceAutomaton, finishAutomatonFragment, Finset.mem_union,
+              hRightFuelEq]
+            exact ⟨childPendingEdge 1 original,
+              Or.inl (Or.inl (Or.inr (Finset.mem_image.mpr
+                ⟨original, hOriginal, rfl⟩))),
+              hSourceEq, hLabelEq, hTargetEq⟩
+          have hRightSeedSubset : ((if value then
+                ((compileTypeFuel signature (typeCompilationFuel right)
+                    right).edges.filter fun edge => edge.label = .variable name).image
+                  fun edge => edge.source
+              else ∅) ∪
+              (compileTypeFuel signature (typeCompilationFuel right)
+                right).completing).image (childState 1) ⊆
+              (if value then
+                  ((compileTypeFuel signature (typeCompilationFuel
+                      (.seq left right)) (.seq left right)).edges.filter
+                    fun edge => edge.label = .variable name).image
+                      fun edge => edge.source
+                else ∅) ∪
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.seq left right)) (.seq left right)).completing := by
+            intro t ht
+            simp only [Finset.mem_image] at ht
+            obtain ⟨u, hu, rfl⟩ := ht
+            rcases Finset.mem_union.mp hu with hVar | hCompleting
+            · apply Finset.mem_union_left
+              by_cases hv : value
+              · simp only [hv, if_true] at hVar ⊢
+                simp only [Finset.mem_image, Finset.mem_filter] at hVar ⊢
+                obtain ⟨edge, ⟨hEdge, hLabel⟩, hSource⟩ := hVar
+                refine ⟨childPendingEdge 1 edge, ⟨?_, ?_⟩, ?_⟩
+                · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                    buildSequenceAutomaton, finishAutomatonFragment,
+                    Finset.mem_union, hRightFuelEq]
+                  exact Or.inl (Or.inl (Or.inr (Finset.mem_image.mpr
+                    ⟨edge, hEdge, rfl⟩)))
+                · simpa [childPendingEdge] using hLabel
+                · simp [childPendingEdge, ← hSource]
+              · simp [hv] at hVar
+            · apply Finset.mem_union_right
+              simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                buildSequenceAutomaton, finishAutomatonFragment, Finset.mem_union,
+                childCompleting, hRightFuelEq]
+              exact Or.inr (Finset.mem_image.mpr ⟨u, hCompleting, rfl⟩)
+          cases hRelated with
+          | sequence_right _ _ _ innerState hInner =>
+              have hRightMem := ih (sizeOf right) hRightSize
+                (name := name) (value := value) (processType := right) rfl
+                hTailOccRight hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                innerState residual hInner hComplete
+              have hLift1 : childState 1 innerState ∈
+                  completingBackClosure
+                    (taggedFragment 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel right)
+                            right).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel right)
+                        right).completing).image (childState 1)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨innerState, hRightMem, rfl⟩
+              have hLift2 := completingBackClosure_mono_edges
+                (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.seq left right)) (.seq left right))
+                hRightEdgesSubset _ hLift1
+              exact completingBackClosure_mono _ hRightSeedSubset hLift2
+          | sequence_left _ _ childResidual innerState hInner =>
+              have hCompleteFields :
+                  PactType.canCompleteBeforeTockSubst name value
+                        childResidual = true ∧
+                    PactType.canCompleteBeforeTockSubst name value right =
+                      true := by
+                simpa only [PactType.canCompleteBeforeTockSubst,
+                  Bool.and_eq_true] using hComplete
+              have hInnerTail : childResidual.TailOccurrences name False :=
+                compilationRelation_tailOccurrences_false name hInner
+                  hTailOccFields.1
+              have hInnerPlain : childResidual.CanCompleteBeforeTock = true := by
+                simpa only [
+                  PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                    name value childResidual hInnerTail] using hCompleteFields.1
+              have hLeftCompleting : innerState ∈
+                  (compileTypeFuel signature (typeCompilationFuel left)
+                    left).completing :=
+                (hVanillaLeft innerState childResidual hInner).mpr hInnerPlain
+              have hRightMem := ih (sizeOf right) hRightSize
+                (name := name) (value := value) (processType := right) rfl
+                hTailOccRight hSupportFields.2 hGuardFields.2
+                  hRecursiveFields.2 hHygienicFields.2
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hRightSize)) hVanillaRight
+                (compileTypeFuel signature (typeCompilationFuel right)
+                  right).initial right
+                (compileTypeFuel_initial_relation signature
+                  (typeCompilationFuel right) right
+                  (typeCompilationFuel_sufficient right)) hCompleteFields.2
+              have hRightLift1 : childState 1 (compileTypeFuel signature
+                    (typeCompilationFuel right) right).initial ∈
+                  completingBackClosure
+                    (taggedFragment 1 (compileTypeFuel signature
+                      (typeCompilationFuel right) right))
+                    (((if value then
+                        ((compileTypeFuel signature (typeCompilationFuel right)
+                            right).edges.filter
+                          fun edge => edge.label = .variable name).image
+                            fun edge => edge.source
+                      else ∅) ∪
+                      (compileTypeFuel signature (typeCompilationFuel right)
+                        right).completing).image (childState 1)) := by
+                rw [completingBackClosure_taggedFragment_image]
+                exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
+              have hRightLift2 := completingBackClosure_mono_edges
+                (taggedFragment 1 (compileTypeFuel signature
+                  (typeCompilationFuel right) right))
+                (compileTypeFuel signature (typeCompilationFuel
+                  (.seq left right)) (.seq left right))
+                hRightEdgesSubset _ hRightLift1
+              have hRightLifted := completingBackClosure_mono _
+                hRightSeedSubset hRightLift2
+              let futureBridge : PendingAutomatonEdge :=
+                { source := childState 0 innerState
+                  environment := .empty
+                  label := .future
+                  current := ∅
+                  future := .at (childState 1
+                    (compileTypeFuel signature (typeCompilationFuel right)
+                      right).initial) ∅
+                  target := childState 1
+                    (compileTypeFuel signature (typeCompilationFuel right)
+                      right).initial }
+              apply completingBackClosure_mem_of_nonClockEdge _ _ futureBridge
+              · simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
+                  buildSequenceAutomaton, finishAutomatonFragment,
+                  Finset.mem_union, Finset.mem_image, hLeftFuelEq,
+                  hRightFuelEq, futureBridge]
+                exact Or.inr ⟨innerState, hLeftCompleting, rfl⟩
+              · simp [futureBridge, AutomatonConstructionLabel.semantic,
+                  TypeLabel.silent]
+              · exact hRightLifted
+      | par left right interface =>
+          cases hRelated with
+          | parallel _ _ leftResidual rightResidual _ leftState rightState
+              hLeftRelated hRightRelated =>
+              have hTailFields : left.TailOccurrences name False ∧
+                  right.TailOccurrences name False := by
+                simpa only [PactType.TailOccurrences] using hTailOccurrences
+              have hLeftResidualTail :
+                  leftResidual.TailOccurrences name False :=
+                compilationRelation_tailOccurrences_false name hLeftRelated
+                  hTailFields.1
+              have hRightResidualTail :
+                  rightResidual.TailOccurrences name False :=
+                compilationRelation_tailOccurrences_false name hRightRelated
+                  hTailFields.2
+              exfalso
+              apply hPlain
+              simpa only [PactType.canCompleteBeforeTockSubst,
+                PactType.CanCompleteBeforeTock,
+                PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                  name value leftResidual hLeftResidualTail,
+                PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                  name value rightResidual hRightResidualTail] using hComplete
+      | xoffer elseType branches =>
+          let fuel := max (typeCompilationFuel elseType)
+            (typeBranchCompilationFuel branches)
+          let elseFragment := compileTypeFuel signature fuel elseType
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          let parentFragment := buildExclusiveOfferAutomaton signature branches
+            elseFragment branchAutomata
+          have hParent : compileTypeFuel signature
+              (typeCompilationFuel (.xoffer elseType branches))
+                (.xoffer elseType branches) = parentFragment := by
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+            rfl
+          have hSupportFields : signature.Supports elseType ∧
+              signature.SupportsBranches branches := by
+            simpa only [TypeAlphabet.Supports] using hSupports
+          have hTailFields : elseType.TailOccurrences name True ∧
+              PactType.TailBranchOccurrences name True branches := by
+            simpa only [PactType.TailOccurrences] using hTailOccurrences
+          have hGuardFields : elseType.ClockGuarded ∧
+              PactType.ClockGuardedBranches branches := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          have hRecursiveFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTailRecursive
+          have hHygienicFields : elseType.BinderHygienic [name] ∧
+              PactType.BinderHygienicBranches [name] branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, fuel]
+          have hElseStable : elseFragment = compileTypeFuel signature
+              (typeCompilationFuel elseType) elseType :=
+            compileTypeFuel_eq_of_sufficient signature elseType hElseFuel
+              (typeCompilationFuel_sufficient elseType)
+          have hElseCompleting : ∀ child,
+              childState 0 child ∈ parentFragment.completing ↔
+                child ∈ elseFragment.completing := by
+            intro child
+            exact buildExclusiveOffer_child0_completing_iff signature branches
+              elseFragment branchAutomata child
+          have hElseOutgoing : ∀ child edge,
+              edge ∈ parentFragment.edges ∧
+                  edge.source = childState 0 child ↔
+                ∃ childEdge ∈ elseFragment.edges,
+                  childEdge.source = child ∧
+                    edge = childPendingEdge 0 childEdge := by
+            intro child edge
+            exact buildExclusiveOfferAutomaton_outgoing_else signature branches
+              elseFragment branchAutomata child edge
+          have hVanillaElse : CompilationCompletingCorrect signature elseType := by
+            intro child childResidual hChildRelated
+            have hParentIff := hVanilla (childState 0 child) childResidual
+              (TypeCompilationRelation.xoffer_else elseType childResidual
+                branches child hChildRelated)
+            rw [hParent] at hParentIff
+            rw [← hElseStable]
+            exact (hElseCompleting child).symm.trans hParentIff
+          have liftElse : ∀ {child},
+              child ∈ completingBackClosure elseFragment
+                ((if value then
+                    (elseFragment.edges.filter fun edge =>
+                      edge.label = .variable name).image fun edge => edge.source
+                  else ∅) ∪ elseFragment.completing) →
+              childState 0 child ∈ completingBackClosure parentFragment
+                ((if value then
+                    (parentFragment.edges.filter fun edge =>
+                      edge.label = .variable name).image fun edge => edge.source
+                  else ∅) ∪ parentFragment.completing) := by
+            intro child hChild
+            exact completingBackClosure_lift_taggedChild parentFragment
+              elseFragment 0 name value hElseOutgoing hElseCompleting hChild
+          cases hRelated with
+          | xoffer_else _ _ _ child hChildRelated =>
+              have hChildMem := ih (sizeOf elseType) hElseSize
+                (name := name) (value := value) (processType := elseType) rfl
+                hTailFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hElseSize)) hVanillaElse child residual
+                  hChildRelated hComplete
+              rw [← hElseStable] at hChildMem
+              rw [hParent]
+              exact liftElse hChildMem
+          | xoffer_branch _ branchType _ _ action index child hEntry
+              hChildRelated =>
+              have hBranchMember : (action, branchType) ∈ branches :=
+                List.mem_of_getElem? hEntry
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair := List.sizeOf_lt_of_mem hBranchMember
+                have hComponent : sizeOf branchType <
+                    sizeOf (action, branchType) := by simp_wf; omega
+                rw [← hSize]
+                simp_wf
+                omega
+              have hBranchFuel : TypeCompilationFuelSufficient branchType
+                  fuel :=
+                (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                  (action, branchType) hBranchMember).trans (by simp [fuel])
+              let branchFragment := compileTypeFuel signature fuel branchType
+              have hBranchStable : branchFragment = compileTypeFuel signature
+                  (typeCompilationFuel branchType) branchType :=
+                compileTypeFuel_eq_of_sufficient signature branchType
+                  hBranchFuel (typeCompilationFuel_sufficient branchType)
+              have hAutomatonEntry : branchAutomata[index]? =
+                  some (action, branchFragment) := by
+                simp [branchAutomata, branchFragment, hEntry]
+              have hBranchTail : branchType.TailOccurrences name True :=
+                tailBranchOccurrences_mem name True branches
+                  (action, branchType) hTailFields.2 hBranchMember
+              have hBranchSupports : signature.Supports branchType :=
+                supports_branch_of_mem signature branches (action, branchType)
+                  hSupportFields.2 hBranchMember
+              have hBranchGuarded : branchType.ClockGuarded :=
+                clockGuarded_branch_of_mem branches (action, branchType)
+                  hGuardFields.2 hBranchMember
+              have hBranchRecursive : branchType.TailRecursive :=
+                tailRecursive_branch_of_mem branches (action, branchType)
+                  hRecursiveFields.2 hBranchMember
+              have hBranchHygienic : branchType.BinderHygienic [name] :=
+                binderHygienic_branch_of_mem [name] branches (action, branchType)
+                  hHygienicFields.2 hBranchMember
+              have hBranchCompleting : ∀ q,
+                  childState (index + 1) q ∈ parentFragment.completing ↔
+                    q ∈ branchFragment.completing := by
+                intro q
+                exact buildExclusiveOffer_branch_completing_iff signature
+                  branches elseFragment branchAutomata index
+                    (action, branchFragment) hAutomatonEntry q
+              have hBranchOutgoing : ∀ q edge,
+                  edge ∈ parentFragment.edges ∧
+                      edge.source = childState (index + 1) q ↔
+                    ∃ childEdge ∈ branchFragment.edges,
+                      childEdge.source = q ∧
+                        edge = childPendingEdge (index + 1) childEdge := by
+                intro q edge
+                exact buildExclusiveOfferAutomaton_outgoing_branch signature
+                  branches elseFragment branchAutomata index
+                    (action, branchFragment) hAutomatonEntry q edge
+              have hVanillaBranch : CompilationCompletingCorrect signature
+                  branchType := by
+                intro q childResidual hChild
+                have hParentIff := hVanilla (childState (index + 1) q)
+                  childResidual
+                  (TypeCompilationRelation.xoffer_branch elseType branchType
+                    childResidual branches action index q hEntry hChild)
+                rw [hParent] at hParentIff
+                rw [← hBranchStable]
+                exact (hBranchCompleting q).symm.trans hParentIff
+              have hChildMem := ih (sizeOf branchType) hBranchSize
+                (name := name) (value := value) (processType := branchType)
+                rfl hBranchTail hBranchSupports hBranchGuarded
+                  hBranchRecursive hBranchHygienic
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hBranchSize)) hVanillaBranch child residual
+                  hChildRelated hComplete
+              rw [← hBranchStable] at hChildMem
+              rw [hParent]
+              exact completingBackClosure_lift_taggedChild parentFragment
+                branchFragment (index + 1) name value hBranchOutgoing
+                  hBranchCompleting hChildMem
+          | xoffer_source =>
+              have hCompleteFields :
+                  PactType.canCompleteBeforeTockSubst name value elseType = true ∨
+                    PactType.branchCanCompleteBeforeTockSubst name value
+                      branches = true := by
+                simpa only [PactType.canCompleteBeforeTockSubst,
+                  Bool.or_eq_true] using hComplete
+              rw [hParent]
+              rcases hCompleteFields with hElseComplete | hBranchComplete
+              · have hElseMem := ih (sizeOf elseType) hElseSize
+                  (name := name) (value := value) (processType := elseType) rfl
+                  hTailFields.1 hSupportFields.1 hGuardFields.1
+                    hRecursiveFields.1 hHygienicFields.1
+                    (fun child hChildSize => hChildrenVanilla child
+                      (lt_trans hChildSize hElseSize)) hVanillaElse
+                    elseFragment.initial elseType
+                    (by
+                      rw [hElseStable]
+                      exact compileTypeFuel_initial_relation signature
+                        (typeCompilationFuel elseType) elseType
+                          (typeCompilationFuel_sufficient elseType))
+                    hElseComplete
+                rw [← hElseStable] at hElseMem
+                have hLifted := liftElse hElseMem
+                let elseEdge : PendingAutomatonEdge :=
+                  { source := TypeAutomatonState.root
+                    environment := TypeEnvironment.tock
+                    label := .visible TypeLabel.silent
+                    current := ∅
+                    future := .at (childState 0 elseFragment.initial) ∅
+                    target := childState 0 elseFragment.initial }
+                apply completingBackClosure_mem_of_nonClockEdge parentFragment _
+                  elseEdge
+                · simp [parentFragment, buildExclusiveOfferAutomaton,
+                    finishAutomatonFragment, elseEdge,
+                    TypeAlphabet.localEnvironments, TypeEnvironment.tock,
+                    typeBranchNeeds]
+                · simp [elseEdge, AutomatonConstructionLabel.semantic,
+                    TypeLabel.silent]
+                · exact hLifted
+              · rcases (branchCanCompleteBeforeTockSubst_eq_true_iff name value
+                    branches).mp hBranchComplete with
+                  ⟨branch, hBranchMember, hBranchComplete⟩
+                rcases branch with ⟨action, branchType⟩
+                rcases exists_getElem?_eq_some_of_mem hBranchMember with
+                  ⟨index, hEntry⟩
+                have hBranchSize : sizeOf branchType < n := by
+                  have hPair := List.sizeOf_lt_of_mem hBranchMember
+                  have hComponent : sizeOf branchType <
+                      sizeOf (action, branchType) := by simp_wf; omega
+                  rw [← hSize]
+                  simp_wf
+                  omega
+                have hBranchFuel : TypeCompilationFuelSufficient branchType
+                    fuel :=
+                  (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                    (action, branchType) hBranchMember).trans (by simp [fuel])
+                let branchFragment := compileTypeFuel signature fuel branchType
+                have hBranchStable : branchFragment = compileTypeFuel signature
+                    (typeCompilationFuel branchType) branchType :=
+                  compileTypeFuel_eq_of_sufficient signature branchType
+                    hBranchFuel (typeCompilationFuel_sufficient branchType)
+                have hAutomatonEntry : branchAutomata[index]? =
+                    some (action, branchFragment) := by
+                  simp [branchAutomata, branchFragment, hEntry]
+                have hBranchTail : branchType.TailOccurrences name True :=
+                  tailBranchOccurrences_mem name True branches
+                    (action, branchType) hTailFields.2 hBranchMember
+                have hBranchSupports : signature.Supports branchType :=
+                  supports_branch_of_mem signature branches (action, branchType)
+                    hSupportFields.2 hBranchMember
+                have hBranchGuarded : branchType.ClockGuarded :=
+                  clockGuarded_branch_of_mem branches (action, branchType)
+                    hGuardFields.2 hBranchMember
+                have hBranchRecursive : branchType.TailRecursive :=
+                  tailRecursive_branch_of_mem branches (action, branchType)
+                    hRecursiveFields.2 hBranchMember
+                have hBranchHygienic : branchType.BinderHygienic [name] :=
+                  binderHygienic_branch_of_mem [name] branches
+                    (action, branchType) hHygienicFields.2 hBranchMember
+                have hBranchCompleting : ∀ q,
+                    childState (index + 1) q ∈ parentFragment.completing ↔
+                      q ∈ branchFragment.completing := by
+                  intro q
+                  exact buildExclusiveOffer_branch_completing_iff signature
+                    branches elseFragment branchAutomata index
+                      (action, branchFragment) hAutomatonEntry q
+                have hBranchOutgoing : ∀ q edge,
+                    edge ∈ parentFragment.edges ∧
+                        edge.source = childState (index + 1) q ↔
+                      ∃ childEdge ∈ branchFragment.edges,
+                        childEdge.source = q ∧
+                          edge = childPendingEdge (index + 1) childEdge := by
+                  intro q edge
+                  exact buildExclusiveOfferAutomaton_outgoing_branch signature
+                    branches elseFragment branchAutomata index
+                      (action, branchFragment) hAutomatonEntry q edge
+                have hVanillaBranch : CompilationCompletingCorrect signature
+                    branchType := by
+                  intro q childResidual hChild
+                  have hParentIff := hVanilla (childState (index + 1) q)
+                    childResidual
+                    (TypeCompilationRelation.xoffer_branch elseType branchType
+                      childResidual branches action index q hEntry hChild)
+                  rw [hParent] at hParentIff
+                  rw [← hBranchStable]
+                  exact (hBranchCompleting q).symm.trans hParentIff
+                have hBranchMem := ih (sizeOf branchType) hBranchSize
+                  (name := name) (value := value) (processType := branchType)
+                  rfl hBranchTail hBranchSupports hBranchGuarded
+                    hBranchRecursive hBranchHygienic
+                    (fun child hChildSize => hChildrenVanilla child
+                      (lt_trans hChildSize hBranchSize)) hVanillaBranch
+                    branchFragment.initial branchType
+                    (by
+                      rw [hBranchStable]
+                      exact compileTypeFuel_initial_relation signature
+                        (typeCompilationFuel branchType) branchType
+                          (typeCompilationFuel_sufficient branchType))
+                    hBranchComplete
+                rw [← hBranchStable] at hBranchMem
+                have hLifted := completingBackClosure_lift_taggedChild
+                  parentFragment branchFragment (index + 1) name value
+                    hBranchOutgoing hBranchCompleting hBranchMem
+                let branchEnvironment : TypeEnvironment :=
+                  { immediate := {typeNeed (action, branchType).1}
+                    future := ∅
+                    clock := false }
+                let branchEdge : PendingAutomatonEdge :=
+                  { source := TypeAutomatonState.root
+                    environment := branchEnvironment
+                    label := .visible
+                      (TypeLabel.message (action, branchType).1.1
+                        (action, branchType).1.2)
+                    current := {(action, branchType).1}
+                    future := .at
+                      (childState (index + 1) branchFragment.initial) ∅
+                    target := childState (index + 1) branchFragment.initial }
+                have hAvailable : typeNeed (action, branchType).1 ∈
+                    signature.localEnvironmentActions :=
+                  supportedBranchNeed_mem_localEnvironmentActions signature
+                    branches hSupportFields.2 (action, branchType) hBranchMember
+                have hAutomatonBound : index < branchAutomata.length :=
+                  (List.getElem?_eq_some_iff.mp hAutomatonEntry).1
+                have hZipBound : index < branchAutomata.zipIdx.length := by
+                  simpa using hAutomatonBound
+                have hZipEntry : ((action, branchFragment), index) ∈
+                    branchAutomata.zipIdx := by
+                  have hMember := List.getElem_mem hZipBound
+                  have hAt := List.getElem_zipIdx (l := branchAutomata)
+                    (i := index) (j := 0) hZipBound
+                  simp only [zero_add] at hAt
+                  have hValue := (List.getElem?_eq_some_iff.mp
+                    hAutomatonEntry).2
+                  rw [hAt, hValue] at hMember
+                  exact hMember
+                have hEnvironment : branchEnvironment ∈
+                    signature.localEnvironments := by
+                  simp [branchEnvironment, TypeAlphabet.localEnvironments,
+                    hAvailable]
+                apply completingBackClosure_mem_of_nonClockEdge parentFragment _
+                  branchEdge
+                · simp only [parentFragment, buildExclusiveOfferAutomaton,
+                    finishAutomatonFragment, Finset.mem_union]
+                  left
+                  left
+                  right
+                  rw [mem_foldl_union_iff]
+                  right
+                  refine ⟨((action, branchFragment), index), hZipEntry, ?_⟩
+                  exact Finset.mem_image.mpr ⟨branchEnvironment,
+                    Finset.mem_filter.mpr ⟨hEnvironment, by
+                      simp [branchEnvironment]⟩, by
+                        simp [branchEdge, branchEnvironment]⟩
+                · simp [branchEdge, AutomatonConstructionLabel.semantic,
+                    TypeLabel.message]
+                · exact hLifted
+      | offer elseType branches =>
+          have hSupportFields : signature.Supports elseType ∧
+              signature.SupportsBranches branches := by
+            simpa only [TypeAlphabet.Supports] using hSupports
+          have hGuardFields : elseType.ClockGuarded ∧
+              PactType.ClockGuardedBranches branches := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          have hRecursiveFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hTailRecursive
+          have hHygienicFields : elseType.BinderHygienic [name] ∧
+              PactType.BinderHygienicBranches [name] branches := by
+            simpa only [PactType.BinderHygienic] using hHygienic
+          let fuel := max (typeCompilationFuel elseType)
+            (conjunctiveCompilationFuel branches)
+          let elseFragment := compileTypeFuel signature fuel elseType
+          let selectedConjunctions := branches.map fun selected =>
+            (selected.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting selected branches))
+          let parentFragment := buildSelectedConjunctiveOfferAutomaton
+            signature branches elseFragment selectedConjunctions
+          have hParent : compileTypeFuel signature
+              (typeCompilationFuel (.offer elseType branches))
+                (.offer elseType branches) = parentFragment := by
+            simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+            rfl
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hTailFields : elseType.TailOccurrences name True ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTailOccurrences
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, fuel]
+          have hElseStable : elseFragment = compileTypeFuel signature
+              (typeCompilationFuel elseType) elseType :=
+            compileTypeFuel_eq_of_sufficient signature elseType hElseFuel
+              (typeCompilationFuel_sufficient elseType)
+          have hElseCompleting : ∀ child,
+              childState 0 child ∈ parentFragment.completing ↔
+                child ∈ elseFragment.completing := by
+            intro child
+            simp only [parentFragment,
+              buildSelectedConjunctiveOfferAutomaton,
+              finishAutomatonFragment, Finset.mem_union]
+            constructor
+            · rintro ((hRoot | hElse) | hIndexed)
+              · split at hRoot <;> simp [childState] at hRoot
+              · simpa [childCompleting, childState] using hElse
+              · exact (child_zero_not_mem_indexedFragmentCompleting
+                  selectedConjunctions child hIndexed).elim
+            · intro hElse
+              exact Or.inl (Or.inr (by
+                simpa [childCompleting, childState] using hElse))
+          have hVanillaElse : CompilationCompletingCorrect signature elseType := by
+            intro child childResidual hChildRelated
+            have hParentIff := hVanilla (childState 0 child) childResidual
+              (TypeCompilationRelation.offer_else elseType childResidual
+                branches child hChildRelated)
+            rw [hParent] at hParentIff
+            have hCanonical : child ∈ (compileTypeFuel signature
+                  (typeCompilationFuel elseType) elseType).completing ↔
+                childResidual.CanCompleteBeforeTock = true := by
+              rw [← hElseStable]
+              exact (hElseCompleting child).symm.trans hParentIff
+            exact hCanonical
+          have hElseOutgoing : ∀ child edge,
+              edge ∈ parentFragment.edges ∧
+                  edge.source = childState 0 child ↔
+                ∃ childEdge ∈ elseFragment.edges,
+                  childEdge.source = child ∧
+                    edge = childPendingEdge 0 childEdge := by
+            intro child edge
+            simpa [parentFragment] using
+              (buildSelectedConjunctiveOfferAutomaton_outgoing_else signature
+                branches elseFragment selectedConjunctions child edge)
+          cases hRelated with
+          | offer_else _ _ _ child hChildRelated =>
+              have hChildMem := ih (sizeOf elseType) hElseSize
+                (name := name) (value := value) (processType := elseType) rfl
+                hTailFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hElseSize)) hVanillaElse child residual
+                  hChildRelated hComplete
+              rw [← hElseStable] at hChildMem
+              rw [hParent]
+              exact completingBackClosure_lift_taggedChild parentFragment
+                elseFragment 0 name value hElseOutgoing hElseCompleting
+                  hChildMem
+          | offer_branches _ _ _ selected index child hEntry
+              hChildRelated =>
+              have hSelectedTail :
+                  (parallelTypeBranchesSelecting selected branches).TailOccurrences
+                    name False :=
+                tailOccurrences_parallelTypeBranchesSelecting name selected
+                  branches hTailFields.2
+              have hResidualTail : residual.TailOccurrences name False :=
+                compilationRelation_tailOccurrences_false name hChildRelated
+                  hSelectedTail
+              exfalso
+              apply hPlain
+              simpa only [PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                name value residual hResidualTail] using hComplete
+          | offer_source =>
+              have hCompleteFields :
+                  PactType.canCompleteBeforeTockSubst name value elseType = true ∨
+                    PactType.branchCanCompleteBeforeTockSubst name value
+                      branches = true := by
+                simpa only [PactType.canCompleteBeforeTockSubst,
+                  Bool.or_eq_true] using hComplete
+              have hElseComplete :
+                  PactType.canCompleteBeforeTockSubst name value elseType =
+                    true := by
+                rcases hCompleteFields with hElse | hBranches
+                · exact hElse
+                · exfalso
+                  apply hPlain
+                  have hPlainBranches :
+                      PactType.BranchCanCompleteBeforeTock branches = true := by
+                    rw [← branchCanCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+                      name value branches hTailFields.2]
+                    exact hBranches
+                  simp [PactType.CanCompleteBeforeTock, hPlainBranches]
+              have hElseMem := ih (sizeOf elseType) hElseSize
+                (name := name) (value := value) (processType := elseType) rfl
+                hTailFields.1 hSupportFields.1 hGuardFields.1
+                  hRecursiveFields.1 hHygienicFields.1
+                  (fun child hChildSize => hChildrenVanilla child
+                    (lt_trans hChildSize hElseSize)) hVanillaElse
+                  elseFragment.initial elseType
+                (by
+                  rw [hElseStable]
+                  exact compileTypeFuel_initial_relation signature
+                    (typeCompilationFuel elseType) elseType
+                      (typeCompilationFuel_sufficient elseType))
+                hElseComplete
+              rw [← hElseStable] at hElseMem
+              have hLifted : childState 0 elseFragment.initial ∈
+                  completingBackClosure parentFragment
+                    ((if value then
+                        (parentFragment.edges.filter fun edge =>
+                          edge.label = .variable name).image fun edge => edge.source
+                      else ∅) ∪ parentFragment.completing) :=
+                completingBackClosure_lift_taggedChild parentFragment
+                  elseFragment 0 name value hElseOutgoing hElseCompleting hElseMem
+              rw [hParent]
+              let elseEdge : PendingAutomatonEdge :=
+                { source := TypeAutomatonState.root
+                  environment := TypeEnvironment.tock
+                  label := .visible TypeLabel.silent
+                  current := typeBranchActions branches
+                  future := .at (childState 0 elseFragment.initial) ∅
+                  target := childState 0 elseFragment.initial }
+              apply completingBackClosure_mem_of_nonClockEdge parentFragment _
+                elseEdge
+              · simp [parentFragment, buildSelectedConjunctiveOfferAutomaton,
+                  finishAutomatonFragment, elseEdge,
+                  TypeAlphabet.localEnvironments, TypeEnvironment.tock,
+                  typeBranchNeeds]
+              · simp [elseEdge, AutomatonConstructionLabel.semantic,
+                  TypeLabel.silent]
+              · exact hLifted
+
+/-- Reverse (`⊇`) half of `recursionBodyCompletingClosure_iff`.
+
+A state whose represented residual completes once `.var name` is scored as
+`body.CanCompleteBeforeTock` lies in the backward completion closure of the
+seed.  Unlike the forward half this is not an upper-bound argument: it must
+*construct* a silent path from the state either into `bodyFragment.completing`
+(when plain, unsubstituted completion already holds) or into a recursive-call
+source (when the substituted value is what makes the residual complete, which
+forces the residual to contain a reachable `.var name` in tail position, and
+therefore forces the body entry to be completing so that the conditional seed
+branch is the non-empty one).  The intended proof is a per-constructor closure
+decomposition over `body`, using the existing outgoing-edge classifiers
+`buildChoiceAutomaton_outgoing_left/right`,
+`buildSequenceAutomaton_outgoing_right` and
+`buildExclusiveOfferAutomaton_outgoing_*`. -/
+private theorem recursionBodyCompletingClosure_superset
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hGuardedOccurrences : PactType.GuardedOccurrences name False body)
+    (hTailOccurrences : PactType.TailOccurrences name True body)
+    (hBodyGuarded : PactType.ClockGuarded body)
+    (hBodyTail : PactType.TailRecursive body)
+    (hBodyHygienic : PactType.BinderHygienic [name] body)
+    (hBodySupports : signature.Supports body)
+    (hChildrenVanilla : ∀ child : PactType, sizeOf child < sizeOf body →
+      signature.Supports child → child.ClockGuarded → child.TailRecursive →
+      child.BinderHygienic [] →
+        CompilationCompletingCorrect signature child)
+    (hVanilla : CompilationCompletingCorrect signature body)
+    (state : TypeAutomatonState) (residual : PactType)
+    (hRelated : TypeCompilationRelation body state residual)
+    (hComplete : PactType.canCompleteBeforeTockSubst name
+      body.CanCompleteBeforeTock residual = true) :
+    state ∈ completingBackClosure
+        (compileTypeFuel signature (typeCompilationFuel body) body)
+        ((if (compileTypeFuel signature (typeCompilationFuel body) body).initial ∈
+              (compileTypeFuel signature (typeCompilationFuel body)
+                body).completing then
+            ((compileTypeFuel signature (typeCompilationFuel body)
+                body).edges.filter
+              fun edge => edge.label = .variable name).image
+                fun edge => edge.source
+          else ∅) ∪
+          (compileTypeFuel signature (typeCompilationFuel body)
+            body).completing) := by
+  classical
+  by_cases hValue : body.CanCompleteBeforeTock = true
+  · have hCompleteTrue : PactType.canCompleteBeforeTockSubst name true
+        residual = true := by rw [hValue] at hComplete; exact hComplete
+    have hResult := recursionBodyCompletingClosure_superset_aux signature name
+      true body hTailOccurrences hBodySupports hBodyGuarded hBodyTail
+        hBodyHygienic
+        (fun child hChildSize hChildSupports hChildGuarded hChildTail
+            hChildHygienic =>
+          hChildrenVanilla child hChildSize hChildSupports hChildGuarded
+            hChildTail (PactType.binderHygienic_mono
+              (by intro other hMember; simp at hMember) child
+                hChildHygienic))
+        hVanilla state residual hRelated hCompleteTrue
+    have hInitialIff : (compileTypeFuel signature (typeCompilationFuel body)
+        body).initial ∈ (compileTypeFuel signature (typeCompilationFuel body)
+          body).completing := by
+      apply (hVanilla _ _ (compileTypeFuel_initial_relation signature
+        (typeCompilationFuel body) body (typeCompilationFuel_sufficient
+          body))).mpr
+      exact hValue
+    rw [if_pos (rfl : (true = true))] at hResult
+    rwa [if_pos hInitialIff]
+  · have hFalse : body.CanCompleteBeforeTock = false := by
+      simpa using hValue
+    rw [hFalse, canCompleteBeforeTockSubst_false] at hComplete
+    have hInCompleting := (hVanilla state residual hRelated).mpr hComplete
+    exact completingBackClosure_superset_seed _ _
+      (Finset.mem_union_right _ hInCompleting)
+
+
+/-- The remaining graph content of the recursion completion leaf.
+
+The backward completion closure of the compiled body — seeded by the body's
+own `completing` states together with the recursive-call sources, the latter
+only when the binder itself completes — is exactly the set of states whose
+represented residual completes once a bare `.var name` is scored as
+`body.CanCompleteBeforeTock` instead of `false`.
+
+This is the one statement standing between the checked assembly below and a
+closed `compilationCompletingCorrect_recursion_regular_leaf`.  Both directions
+are graph/syntax correspondence, not bookkeeping:
+
+* `⊆` follows from `completingBackClosure_subset_of_predecessor_closed` with
+  ambient set `seed ∪ edges.image (·.source)` (deliberately not `states`, so
+  no carrier invariant is needed) filtered by `∀ r, TypeCompilationRelation
+  body q r → canCompleteBeforeTockSubst name _ r = true`; the `∀` avoids
+  needing state-totality, and `TypeCompilationRelation.residual_unique`
+  transfers the result to the given residual.  Seed inclusion uses `hVanilla`
+  with `PactType.canCompleteBeforeTock_le_subst`, and — for the recursive-call
+  sources — that under `hTailOccurrences` the source of a matching
+  `.variable name` edge represents exactly `.var name`.
+* `⊇` needs that substituted completion which is not plain completion forces a
+  silent path to such a source, by per-constructor closure decomposition over
+  `body` using the existing outgoing-edge classifiers. -/
+private theorem recursionBodyCompletingClosure_iff
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hGuardedOccurrences : PactType.GuardedOccurrences name False body)
+    (hTailOccurrences : PactType.TailOccurrences name True body)
+    (hBodyGuarded : PactType.ClockGuarded body)
+    (hBodyTail : PactType.TailRecursive body)
+    (hBodyHygienic : PactType.BinderHygienic [name] body)
+    (hBodySupports : signature.Supports body)
+    (hChildrenVanilla : ∀ child : PactType, sizeOf child < sizeOf body →
+      signature.Supports child → child.ClockGuarded → child.TailRecursive →
+      child.BinderHygienic [] →
+        CompilationCompletingCorrect signature child)
+    (hVanilla : CompilationCompletingCorrect signature body)
+    (state : TypeAutomatonState) (residual : PactType)
+    (hRelated : TypeCompilationRelation body state residual) :
+    (state ∈ completingBackClosure
+        (compileTypeFuel signature (typeCompilationFuel body) body)
+        ((if (compileTypeFuel signature (typeCompilationFuel body) body).initial ∈
+              (compileTypeFuel signature (typeCompilationFuel body)
+                body).completing then
+            ((compileTypeFuel signature (typeCompilationFuel body)
+                body).edges.filter
+              fun edge => edge.label = .variable name).image
+                fun edge => edge.source
+          else ∅) ∪
+          (compileTypeFuel signature (typeCompilationFuel body)
+            body).completing) ↔
+      PactType.canCompleteBeforeTockSubst name body.CanCompleteBeforeTock
+        residual = true) :=
+  ⟨fun hMem => recursionBodyCompletingClosure_subset signature name body
+      hTailOccurrences hBodyTail hBodyHygienic hVanilla state residual hRelated
+        hMem,
+    fun hComplete => recursionBodyCompletingClosure_superset signature name body
+      hGuardedOccurrences hTailOccurrences hBodyGuarded hBodyTail hBodyHygienic
+        hBodySupports hChildrenVanilla hVanilla state residual hRelated
+          hComplete⟩
+
+/-- Completion metadata for a guarded binder.  The fresh root is completing
+exactly when the body entry is, and a tagged body state is completing exactly
+when the backward closure says so — which
+`recursionBodyCompletingClosure_iff` identifies with the substituted syntax
+predicate, and `PactType.replaceVar_canCompleteBeforeTock` identifies that
+with the residual actually represented by `TypeCompilationRelation`. -/
 private theorem compilationCompletingCorrect_recursion_regular_leaf
     (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hSupports : signature.Supports (.recur name body))
     (hGuarded : PactType.ClockGuarded (.recur name body))
-    (hTail : PactType.TailRecursive (.recur name body)) :
+    (hTail : PactType.TailRecursive (.recur name body))
+    (hHygienic : PactType.BinderHygienic [] (.recur name body)) :
     CompilationCompletingCorrect signature (.recur name body) := by
-  sorry
+  classical
+  have hGuardedFields : PactType.GuardedOccurrences name False body ∧
+      PactType.ClockGuarded body := by
+    simpa only [PactType.ClockGuarded] using hGuarded
+  have hTailFields : PactType.TailOccurrences name True body ∧
+      PactType.TailRecursive body := by
+    simpa only [PactType.TailRecursive] using hTail
+  have hHygienicFields : name ∉ ([] : List String) ∧
+      body.BinderHygienic [name] := by
+    simpa only [PactType.BinderHygienic] using hHygienic
+  have hBodySupports : signature.Supports body := by
+    simpa only [TypeAlphabet.Supports] using hSupports
+  have hBodyHygienic : body.BinderHygienic [] :=
+    PactType.binderHygienic_mono
+      (by intro other hMem; simp at hMem) body hHygienicFields.2
+  have hBodySize : sizeOf body < sizeOf (PactType.recur name body) := by
+    simp_wf
+    omega
+  have hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
+      sizeOf (PactType.recur nestedName nestedBody) <
+          sizeOf (PactType.recur name body) →
+      signature.Supports (.recur nestedName nestedBody) →
+      PactType.ClockGuarded (.recur nestedName nestedBody) →
+      PactType.TailRecursive (.recur nestedName nestedBody) →
+      PactType.BinderHygienic [] (.recur nestedName nestedBody) →
+        CompilationCompletingCorrect signature
+          (.recur nestedName nestedBody) := by
+    intro nestedName nestedBody hNestedSize hNestedSupports hNestedGuarded
+      hNestedTail hNestedHygienic
+    exact compilationCompletingCorrect_recursion_regular_leaf signature
+      nestedName nestedBody hNestedSupports hNestedGuarded hNestedTail
+        hNestedHygienic
+  have hVanilla : CompilationCompletingCorrect signature body :=
+    recursionBodyCompletingCorrect_vanilla signature name body
+      hBodySupports hGuardedFields.2 hTailFields.2 hBodyHygienic
+      hNestedRecursion
+  have hChildrenVanilla : ∀ child : PactType, sizeOf child < sizeOf body →
+      signature.Supports child → child.ClockGuarded → child.TailRecursive →
+      child.BinderHygienic [] →
+        CompilationCompletingCorrect signature child := by
+    intro child hChildSize hChildSupports hChildGuarded hChildTail
+      hChildHygienic
+    exact compilationCompletingCorrect_of_nestedRecursion signature child
+      hChildSupports hChildGuarded hChildTail hChildHygienic
+      (fun nestedName nestedBody hNestedLe hNestedSupports hNestedGuarded
+          hNestedTail hNestedHygienic =>
+        hNestedRecursion nestedName nestedBody
+          (lt_of_le_of_lt hNestedLe (lt_trans hChildSize hBodySize))
+          hNestedSupports hNestedGuarded hNestedTail hNestedHygienic)
+  have hInitial := recursionBodyCompletingCorrect_vanilla_initial signature
+    name body hBodySupports hGuardedFields.2 hTailFields.2 hBodyHygienic
+    hNestedRecursion
+  have hFragment : compileTypeFuel signature
+      (typeCompilationFuel (PactType.recur name body)) (.recur name body) =
+      buildRecursionAutomaton signature name
+        (compileTypeFuel signature (typeCompilationFuel body) body) := by
+    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+  intro state residual hRelated
+  rw [hFragment, buildRecursionAutomaton_completing_eq signature name
+    (compileTypeFuel signature (typeCompilationFuel body) body)]
+  cases hRelated with
+  | recur_source =>
+      constructor
+      · intro hMem
+        simp only [Finset.mem_union, Finset.mem_image] at hMem
+        rcases hMem with hRoot | ⟨q, _, hEq⟩
+        · have hInit : (compileTypeFuel signature (typeCompilationFuel body)
+              body).initial ∈ (compileTypeFuel signature
+                (typeCompilationFuel body) body).completing := by
+            by_contra hNo
+            simp [hNo] at hRoot
+          simpa [PactType.CanCompleteBeforeTock] using hInitial.mp hInit
+        · exact absurd hEq (by simp [childState])
+      · intro hComplete
+        have hInit : (compileTypeFuel signature (typeCompilationFuel body)
+            body).initial ∈ (compileTypeFuel signature
+              (typeCompilationFuel body) body).completing :=
+          hInitial.mpr (by
+            simpa [PactType.CanCompleteBeforeTock] using hComplete)
+        simp [hInit]
+  | recur_body _ _ childResidual childQ hChild =>
+      have hRecurValue : (PactType.recur name body).CanCompleteBeforeTock =
+          body.CanCompleteBeforeTock := by
+        simp [PactType.CanCompleteBeforeTock]
+      rw [PactType.replaceVar_canCompleteBeforeTock, hRecurValue,
+        ← recursionBodyCompletingClosure_iff signature name body
+          hGuardedFields.1 hTailFields.1 hGuardedFields.2 hTailFields.2
+          hHygienicFields.2 hBodySupports hChildrenVanilla hVanilla childQ
+            childResidual hChild]
+      constructor
+      · intro hMem
+        simp only [Finset.mem_union, Finset.mem_image] at hMem
+        rcases hMem with hRoot | ⟨q, hq, hEq⟩
+        · exfalso
+          split at hRoot <;> simp [childState] at hRoot
+        · have hStateEq : q = childQ := by
+            simpa [childState] using hEq
+          exact hStateEq ▸ hq
+      · intro hMem
+        exact Finset.mem_union_right _
+          (Finset.mem_image.mpr ⟨childQ, hMem, rfl⟩)
+termination_by sizeOf (PactType.recur name body)
+decreasing_by all_goals assumption
 
 private theorem compilationScopedFragmentStepCorrect_recursion_regular_leaf
     (signature : TypeAlphabet) (name : String) (body : PactType)
     (hSignature : signature.WellFormed)
     (hSupports : signature.Supports (.recur name body))
     (hClosed : PactType.AllVariablesBound [] (.recur name body))
+    (hHygienic : PactType.BinderHygienic [] (.recur name body))
     (hGuarded : PactType.ClockGuarded (.recur name body))
     (hTail : PactType.TailRecursive (.recur name body))
     (hLinear : PactType.SameCycleMessageLinear (.recur name body))
@@ -10867,6 +17509,7 @@ private theorem compilationProofBundle_recursion_leaf
     (hSignature : signature.WellFormed)
     (hSupports : signature.Supports (.recur name body))
     (hClosed : PactType.AllVariablesBound [] (.recur name body))
+    (hHygienic : PactType.BinderHygienic [] (.recur name body))
     (hGuarded : PactType.ClockGuarded (.recur name body))
     (hTail : PactType.TailRecursive (.recur name body))
     (hLinear : PactType.SameCycleMessageLinear (.recur name body))
@@ -10874,7 +17517,7 @@ private theorem compilationProofBundle_recursion_leaf
     CompilationProofBundle signature (.recur name body) := by
   have hBodyPackage :=
     recursionBodyFutureAndExecutionCorrect_regular_leaf signature name body
-      hSignature hSupports hClosed hGuarded hTail hLinear
+      hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
   have hBodyFuture := hBodyPackage.1
   have hGuardedOccurrences : body.GuardedOccurrences name False := by
     have hFields : body.GuardedOccurrences name False ∧ body.ClockGuarded := by
@@ -10884,10 +17527,10 @@ private theorem compilationProofBundle_recursion_leaf
     { future := compilationFutureCorrect_recursion signature name body
         hGuardedOccurrences hBodyFuture
       completing := compilationCompletingCorrect_recursion_regular_leaf
-        signature name body hGuarded hTail
+        signature name body hSupports hGuarded hTail hHygienic
       scopedStep := compilationScopedFragmentStepCorrect_recursion_regular_leaf
-        signature name body hSignature hSupports hClosed hGuarded hTail hLinear
-          hScoped hBodyFuture
+        signature name body hSignature hSupports hClosed hHygienic hGuarded
+          hTail hLinear hScoped hBodyFuture
       execution := hBodyPackage.2 }
 
 /-- Exclusive-offer closure packages its indexed branch/else/wait
@@ -12923,6 +19566,7 @@ theorem compilationProofBundle_of_closedGuardedRegular
     signature.WellFormed →
     signature.Supports processType →
     PactType.AllVariablesBound [] processType →
+    PactType.BinderHygienic [] processType →
     PactType.ClockGuarded processType →
     PactType.TailRecursive processType →
     PactType.SameCycleMessageLinear processType →
@@ -12931,7 +19575,7 @@ theorem compilationProofBundle_of_closedGuardedRegular
   intro processType
   cases processType with
   | message msg dir =>
-      intro _ _ _ _ _ _ _
+      intro _ _ _ _ _ _ _ _
       exact
         { future := compilationFutureCorrect_message signature msg dir
           completing := compilationCompletingCorrect_message signature msg dir
@@ -12941,7 +19585,7 @@ theorem compilationProofBundle_of_closedGuardedRegular
           execution := compilationSequenceExecutionCorrect_message signature
             msg dir }
   | progress pid =>
-      intro _ _ _ _ _ _ _
+      intro _ _ _ _ _ _ _ _
       exact
         { future := compilationFutureCorrect_progress signature pid
           completing := compilationCompletingCorrect_progress signature pid
@@ -12951,7 +19595,7 @@ theorem compilationProofBundle_of_closedGuardedRegular
           execution := compilationSequenceExecutionCorrect_progress signature
             pid }
   | tock =>
-      intro _ _ _ _ _ _ _
+      intro _ _ _ _ _ _ _ _
       exact
         { future := compilationFutureCorrect_tock signature
           completing := compilationCompletingCorrect_tock signature
@@ -12960,7 +19604,7 @@ theorem compilationProofBundle_of_closedGuardedRegular
               (compilationFragmentStepCorrect_tock_leaf signature)
           execution := compilationSequenceExecutionCorrect_tock signature }
   | skip =>
-      intro _ _ _ _ _ _ _
+      intro _ _ _ _ _ _ _ _
       exact
         { future := compilationFutureCorrect_skip signature
           completing := compilationCompletingCorrect_skip signature
@@ -12969,26 +19613,29 @@ theorem compilationProofBundle_of_closedGuardedRegular
               (compilationFragmentStepCorrect_skip_leaf signature)
           execution := compilationSequenceExecutionCorrect_skip signature }
   | var name =>
-      intro _ _ hClosed _ _ _ _
+      intro _ _ hClosed _ _ _ _ _
       simp [PactType.AllVariablesBound] at hClosed
   | recur name body =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       exact compilationProofBundle_recursion_leaf signature name body
-        hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+        hSignature hSupports hClosed hHygienic hGuarded hTail hLinear hScoped
   | choice left right =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hLeft := compilationProofBundle_of_closedGuardedRegular signature
-        left hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1 hLinear.1
-          hScoped.1
+        left hSignature hSupports.1 hClosed.1 hHygienic.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.1
       have hRight := compilationProofBundle_of_closedGuardedRegular signature
-        right hSignature hSupports.2 hClosed.2 hGuarded.2 hTail.2 hLinear.2
-          hScoped.2
+        right hSignature hSupports.2 hClosed.2 hHygienic.2 hGuarded.2 hTail.2
+          hLinear.2 hScoped.2
       exact
         { future := compilationFutureCorrect_choice signature left right
             hLeft.future hRight.future
@@ -12999,19 +19646,21 @@ theorem compilationProofBundle_of_closedGuardedRegular
           execution := compilationSequenceExecutionCorrect_choice signature
             left right hLeft.execution hRight.execution }
   | fairChoice bid left right =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hLeft := compilationProofBundle_of_closedGuardedRegular signature
-        left hSignature hSupports.2.1 hClosed.1 hGuarded.1 hTail.1 hLinear.1
-          hScoped.1
+        left hSignature hSupports.2.1 hClosed.1 hHygienic.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.1
       have hRight := compilationProofBundle_of_closedGuardedRegular signature
-        right hSignature hSupports.2.2 hClosed.2 hGuarded.2 hTail.2 hLinear.2
-          hScoped.2
+        right hSignature hSupports.2.2 hClosed.2 hHygienic.2 hGuarded.2 hTail.2
+          hLinear.2 hScoped.2
       exact
         { future := compilationFutureCorrect_fairChoice signature bid left right
             hLeft.future hRight.future
@@ -13022,19 +19671,21 @@ theorem compilationProofBundle_of_closedGuardedRegular
           execution := compilationSequenceExecutionCorrect_fairChoice signature
             bid left right hLeft.execution hRight.execution }
   | seq left right =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hLeft := compilationProofBundle_of_closedGuardedRegular signature
-        left hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1 hLinear.1
-          hScoped.1
+        left hSignature hSupports.1 hClosed.1 hHygienic.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.1
       have hRight := compilationProofBundle_of_closedGuardedRegular signature
-        right hSignature hSupports.2 hClosed.2 hGuarded.2 hTail.2 hLinear.2.1
-          hScoped.2
+        right hSignature hSupports.2 hClosed.2 hHygienic.2 hGuarded.2 hTail.2
+          hLinear.2.1 hScoped.2
       have hFuture := compilationFutureCorrect_sequence signature left right
         hLeft hRight hLeft.execution
       exact
@@ -13046,23 +19697,25 @@ theorem compilationProofBundle_of_closedGuardedRegular
           execution := compilationSequenceExecutionCorrect_sequence signature
             left right hLeft.execution hRight.execution }
   | par left right interface =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       have hScopedWhole : PactType.InterfaceScoped (.par left right interface) :=
         hScoped
       have hClosedWhole : PactType.AllVariablesBound []
           (.par left right interface) := hClosed
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hLeft := compilationProofBundle_of_closedGuardedRegular signature
-        left hSignature hSupports.2.1 hClosed.1 hGuarded.1 hTail.1 hLinear.1
-          hScoped.2.1
+        left hSignature hSupports.2.1 hClosed.1 hHygienic.1 hGuarded.1 hTail.1
+          hLinear.1 hScoped.2.1
       have hRight := compilationProofBundle_of_closedGuardedRegular signature
-        right hSignature hSupports.2.2 hClosed.2 hGuarded.2 hTail.2 hLinear.2
-          hScoped.2.2
+        right hSignature hSupports.2.2 hClosed.2 hHygienic.2 hGuarded.2 hTail.2
+          hLinear.2 hScoped.2.2
       exact
         { future := compilationFutureCorrect_parallel signature left right
             interface hLeft.future hRight.future
@@ -13075,16 +19728,18 @@ theorem compilationProofBundle_of_closedGuardedRegular
             compilationSequenceExecutionCorrect_parallel_regular_leaf
               signature left right interface hClosed.1 hClosed.2 hLeft hRight }
   | xoffer elseType branches =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hElse := compilationProofBundle_of_closedGuardedRegular signature
-        elseType hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1
-          hLinear.1 hScoped.1
+        elseType hSignature hSupports.1 hClosed.1 hHygienic.1 hGuarded.1
+          hTail.1 hLinear.1 hScoped.1
       have hBranches : ∀ (action : BareMessage) (branchType : PactType)
           (index : Nat), branches[index]? = some (action, branchType) →
             CompilationProofBundle signature branchType := by
@@ -13111,6 +19766,8 @@ theorem compilationProofBundle_of_closedGuardedRegular
             hSupports.2 hMember)
           (allVariablesBound_branch_of_mem [] branches (action, branchType)
             hClosed.2 hMember)
+          (binderHygienic_branch_of_mem [] branches (action, branchType)
+            hHygienic.2 hMember)
           (clockGuarded_branch_of_mem branches (action, branchType)
             hGuarded.2 hMember)
           (tailRecursive_branch_of_mem branches (action, branchType)
@@ -13127,16 +19784,18 @@ theorem compilationProofBundle_of_closedGuardedRegular
         (by simpa [PactType.SameCycleMessageLinear] using hLinear)
         (by simpa [PactType.InterfaceScoped] using hScoped) hElse hBranches
   | offer elseType branches =>
-      intro hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+      intro hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+        hScoped
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.AllVariablesBound] at hClosed
+      simp only [PactType.BinderHygienic] at hHygienic
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.SameCycleMessageLinear] at hLinear
       simp only [PactType.InterfaceScoped] at hScoped
       have hElse := compilationProofBundle_of_closedGuardedRegular signature
-        elseType hSignature hSupports.1 hClosed.1 hGuarded.1 hTail.1
-          hLinear.1 hScoped.1
+        elseType hSignature hSupports.1 hClosed.1 hHygienic.1 hGuarded.1
+          hTail.1 hLinear.1 hScoped.1
       have hBranches : ∀ (action : BareMessage) (branchType : PactType)
           (index : Nat), branches[index]? = some (action, branchType) →
             CompilationProofBundle signature branchType := by
@@ -13163,6 +19822,8 @@ theorem compilationProofBundle_of_closedGuardedRegular
             hSupports.2 hMember)
           (allVariablesBound_branch_of_mem [] branches (action, branchType)
             hClosed.2 hMember)
+          (binderHygienic_branch_of_mem [] branches (action, branchType)
+            hHygienic.2 hMember)
           (clockGuarded_branch_of_mem branches (action, branchType)
             hGuarded.2 hMember)
           (tailRecursive_branch_of_mem branches (action, branchType)
@@ -13192,13 +19853,15 @@ theorem compilationStepCorrect_of_closedGuardedRegular
     (hSignature : signature.WellFormed)
     (hSupports : signature.Supports processType)
     (hClosed : PactType.AllVariablesBound [] processType)
+    (hHygienic : PactType.BinderHygienic [] processType)
     (hGuarded : PactType.ClockGuarded processType)
     (hTail : PactType.TailRecursive processType)
     (hLinear : PactType.SameCycleMessageLinear processType)
     (hScoped : PactType.InterfaceScoped processType) :
     CompilationStepCorrect signature processType := by
   have hBundle := compilationProofBundle_of_closedGuardedRegular signature
-    processType hSignature hSupports hClosed hGuarded hTail hLinear hScoped
+    processType hSignature hSupports hClosed hHygienic hGuarded hTail hLinear
+      hScoped
   intro residual residual' state env label offers hRelated hSymbol
   exact (compilationStepCorrect_of_scopedFragmentStepCorrect signature
     processType hSignature hSupports hBundle.scopedStep) hRelated hSymbol

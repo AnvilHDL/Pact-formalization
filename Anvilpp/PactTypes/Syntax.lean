@@ -77,6 +77,36 @@ namespace PactType
       omega
   end
 
+  /- Names in `forbidden` are never used by a recursion binder anywhere in
+  the syntax.  Unlike `BinderHygienic`, the set is not extended while
+  descending: this is the exact capture-avoidance invariant for substituting
+  a term whose free variables are contained in `forbidden`. -/
+  mutual
+    def BinderFreshFor (forbidden : List String) : PactType → Prop
+      | .recur name body =>
+          name ∉ forbidden ∧ BinderFreshFor forbidden body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          BinderFreshFor forbidden left ∧ BinderFreshFor forbidden right
+      | .xoffer elseType branches | .offer elseType branches =>
+          BinderFreshFor forbidden elseType ∧
+            BinderFreshForBranches forbidden branches
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+    termination_by processType => sizeOf processType
+
+    def BinderFreshForBranches (forbidden : List String) :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          BinderFreshFor forbidden processType ∧
+            BinderFreshForBranches forbidden rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
   mutual
     /-- Replacing a variable by its recursion binder never shrinks the type. -/
     theorem sizeOf_le_replaceVar_recur (processType : PactType)
@@ -269,6 +299,328 @@ namespace PactType
       omega
   end
 
+  /-!
+  ### Lexical recursion-binder hygiene
+
+  `replaceVar` stops at a binder of the substituted name.  To make textual
+  unfolding coincide with the constructor graph without quotienting types by
+  alpha-equivalence, a nested binder must therefore not reuse the name of an
+  enclosing binder.  Sibling binders may still use the same name: neither is
+  in the lexical scope of the other.
+  -/
+  mutual
+    def BinderHygienic (bound : List String) : PactType → Prop
+      | .recur name body =>
+          name ∉ bound ∧ BinderHygienic (name :: bound) body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          BinderHygienic bound left ∧ BinderHygienic bound right
+      | .xoffer elseType branches | .offer elseType branches =>
+          BinderHygienic bound elseType ∧
+            BinderHygienicBranches bound branches
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+    termination_by processType => sizeOf processType
+
+    def BinderHygienicBranches (bound : List String) :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          BinderHygienic bound processType ∧
+            BinderHygienicBranches bound rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /- Binder hygiene is contravariant in the list of already-active names:
+  removing active names only weakens the freshness obligations. -/
+  theorem binderHygienic_mono
+      {smaller larger : List String}
+      (hSubset : ∀ name, name ∈ smaller → name ∈ larger) :
+      ∀ processType,
+        BinderHygienic larger processType →
+          BinderHygienic smaller processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType smaller larger with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            BinderHygienicBranches larger branches →
+              BinderHygienicBranches smaller branches := by
+          intro branches hBranchesSize h
+          induction branches with
+          | nil => simp [BinderHygienicBranches]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              simp only [BinderHygienicBranches] at h ⊢
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                  simp_wf
+                  omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              exact ⟨ih (sizeOf branchType) hBranchSize hSubset branchType
+                  rfl h.1,
+                restIH hRestSize h.2⟩
+        cases processType with
+        | message msg dir => simp [BinderHygienic]
+        | progress pid => simp [BinderHygienic]
+        | tock => simp [BinderHygienic]
+        | skip => simp [BinderHygienic]
+        | var name => simp [BinderHygienic]
+        | recur name body =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            refine ⟨fun hMem => h.1 (hSubset name hMem), ?_⟩
+            have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+            exact ih (sizeOf body) hBodySize
+              (by
+                intro other hMem
+                simp only [List.mem_cons] at hMem ⊢
+                exact hMem.elim Or.inl (fun h => Or.inr (hSubset other h)))
+              body rfl h.2
+        | choice left right =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | fairChoice bid left right =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | seq left right =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | par left right interface =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | xoffer elseType branches =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize hSubset elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
+        | offer elseType branches =>
+            intro h
+            simp only [BinderHygienic] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize hSubset elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
+
+  /-- Enlarging the set of names regarded as bound preserves closedness. -/
+  theorem allVariablesBound_mono
+      {smaller larger : List String}
+      (hSubset : ∀ name, name ∈ smaller → name ∈ larger) :
+      ∀ processType,
+        AllVariablesBound smaller processType →
+          AllVariablesBound larger processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType smaller larger with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            AllBranchVariablesBound smaller branches →
+              AllBranchVariablesBound larger branches := by
+          intro branches hBranchesSize h
+          induction branches with
+          | nil => simp [AllBranchVariablesBound]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              simp only [AllBranchVariablesBound] at h ⊢
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                  simp_wf
+                  omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              exact ⟨ih (sizeOf branchType) hBranchSize hSubset branchType
+                  rfl h.1, restIH hRestSize h.2⟩
+        cases processType with
+        | message msg dir => simp [AllVariablesBound]
+        | progress pid => simp [AllVariablesBound]
+        | tock => simp [AllVariablesBound]
+        | skip => simp [AllVariablesBound]
+        | var name => simpa [AllVariablesBound] using hSubset name
+        | recur name body =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+            exact ih (sizeOf body) hBodySize
+              (by
+                intro other hMem
+                simp only [List.mem_cons] at hMem ⊢
+                exact hMem.elim Or.inl (fun h => Or.inr (hSubset other h)))
+              body rfl h
+        | choice left right =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | fairChoice bid left right =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | seq left right =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | par left right interface =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize hSubset left rfl h.1,
+              ih (sizeOf right) hRightSize hSubset right rfl h.2⟩
+        | xoffer elseType branches =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize hSubset elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
+        | offer elseType branches =>
+            intro h
+            simp only [AllVariablesBound] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize hSubset elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
+
+  theorem binderHygienic_binderFreshFor (bound : List String) :
+      ∀ processType,
+        BinderHygienic bound processType → BinderFreshFor bound processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType bound with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            BinderHygienicBranches bound branches →
+              BinderFreshForBranches bound branches := by
+          intro branches hBranchesSize h
+          induction branches with
+          | nil => simp [BinderFreshForBranches]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              simp only [BinderHygienicBranches, BinderFreshForBranches] at h ⊢
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                  simp_wf
+                  omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                omega
+              exact ⟨ih (sizeOf branchType) hBranchSize bound branchType rfl
+                  h.1, restIH hRestSize h.2⟩
+        cases processType with
+        | message msg dir => simp [BinderFreshFor]
+        | progress pid => simp [BinderFreshFor]
+        | tock => simp [BinderFreshFor]
+        | skip => simp [BinderFreshFor]
+        | var name => simp [BinderFreshFor]
+        | recur name body =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            refine ⟨h.1, ?_⟩
+            have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+            exact ih (sizeOf body) hBodySize bound body rfl
+              (PactType.binderHygienic_mono
+                (by intro x hx; exact List.mem_cons_of_mem name hx) body h.2)
+        | choice left right =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl h.1,
+              ih (sizeOf right) hRightSize bound right rfl h.2⟩
+        | fairChoice bid left right =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl h.1,
+              ih (sizeOf right) hRightSize bound right rfl h.2⟩
+        | seq left right =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl h.1,
+              ih (sizeOf right) hRightSize bound right rfl h.2⟩
+        | par left right interface =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl h.1,
+              ih (sizeOf right) hRightSize bound right rfl h.2⟩
+        | xoffer elseType branches =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
+        | offer elseType branches =>
+            intro h
+            simp only [BinderHygienic, BinderFreshFor] at h ⊢
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+            exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl h.1,
+              hBranches branches hBranchesSize h.2⟩
   /-! Every recursive backedge in a type is protected by a prior clock. -/
   mutual
     def ClockGuarded : PactType → Prop
@@ -1778,6 +2130,2081 @@ theorem typeFutureOffersFuel_eq_typeFutureOffers
   exact typeFutureOffersFuel_add_stable processType
     (sizeOf processType + 1) extra (by omega)
 
+mutual
+  /-- `CanCompleteBeforeTock`, but every occurrence of `.var name` contributes
+  `value` instead of the unconditional `false` used by `CanCompleteBeforeTock`
+  itself.  Respects the same capture-avoiding shadowing as `replaceVar`: a
+  nested `.recur name _` binder stops the substitution view of its own body,
+  matching `replaceVar`'s `if var = other then .recur other body else ...`
+  clause. -/
+  def PactType.canCompleteBeforeTockSubst
+      (name : String) (value : Bool) : PactType → Bool
+    | .message _ _ | .progress _ | .skip => true
+    | .tock => false
+    | .var other => if name = other then value else false
+    | .recur other body =>
+        if name = other then PactType.CanCompleteBeforeTock body
+        else canCompleteBeforeTockSubst name value body
+    | .choice left right | .fairChoice _ left right =>
+        canCompleteBeforeTockSubst name value left ||
+          canCompleteBeforeTockSubst name value right
+    | .seq left right | .par left right _ =>
+        canCompleteBeforeTockSubst name value left &&
+          canCompleteBeforeTockSubst name value right
+    | .xoffer elseType branches | .offer elseType branches =>
+        canCompleteBeforeTockSubst name value elseType ||
+          branchCanCompleteBeforeTockSubst name value branches
+  termination_by processType => sizeOf processType
+
+  def PactType.branchCanCompleteBeforeTockSubst
+      (name : String) (value : Bool) :
+      List (BareMessage × PactType) → Bool
+    | [] => false
+    | (_, processType) :: rest =>
+        canCompleteBeforeTockSubst name value processType ||
+          branchCanCompleteBeforeTockSubst name value rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+mutual
+  /-- Optimistic completion under a finite-control interpretation of the free
+  recursion variables.  Entering a binder shadows its own name with the
+  ordinary (unfolded-call-free) value `false`; an installed backedge is
+  represented separately by updating that name to the binder's completion
+  value when its body is analysed. -/
+  def PactType.completionEval (valuation : String → Bool) : PactType → Bool
+    | .message _ _ | .progress _ | .skip => true
+    | .tock => false
+    | .var name => valuation name
+    | .recur name body => completionEval (Function.update valuation name false) body
+    | .choice left right | .fairChoice _ left right =>
+        completionEval valuation left || completionEval valuation right
+    | .seq left right | .par left right _ =>
+        completionEval valuation left && completionEval valuation right
+    | .xoffer elseType branches | .offer elseType branches =>
+        completionEval valuation elseType ||
+          branchCompletionEval valuation branches
+  termination_by processType => sizeOf processType
+
+  def PactType.branchCompletionEval (valuation : String → Bool) :
+      List (BareMessage × PactType) → Bool
+    | [] => false
+    | (_, processType) :: rest =>
+        completionEval valuation processType || branchCompletionEval valuation rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/-- Completion evaluation depends only on the values of variables declared
+free in the supplied binding context. -/
+theorem PactType.completionEval_congr_of_allVariablesBound
+    (bound : List String) (left right : String → Bool)
+    (hAgree : ∀ name ∈ bound, left name = right name) :
+    ∀ processType : PactType,
+      PactType.AllVariablesBound bound processType →
+        completionEval left processType = completionEval right processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType bound left right with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.AllBranchVariablesBound bound branches →
+            branchCompletionEval left branches =
+              branchCompletionEval right branches := by
+        intro branches hBranchesSize hBound
+        induction branches with
+        | nil => simp [branchCompletionEval]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.AllBranchVariablesBound] at hBound
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [branchCompletionEval]
+            rw [ih (sizeOf branchType) hBranchSize bound left right hAgree
+                branchType rfl hBound.1,
+              restIH hRestSize hBound.2]
+      cases processType with
+      | message msg dir => simp [completionEval]
+      | progress pid => simp [completionEval]
+      | tock => simp [completionEval]
+      | skip => simp [completionEval]
+      | var name =>
+          intro hBound
+          simpa [completionEval] using
+            hAgree name (by simpa [PactType.AllVariablesBound] using hBound)
+      | recur name body =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp only [completionEval]
+          exact ih (sizeOf body) hBodySize (name :: bound)
+            (Function.update left name false)
+            (Function.update right name false)
+            (by
+              intro other hMem
+              simp only [List.mem_cons] at hMem
+              rcases hMem with rfl | hMem
+              · simp
+              · by_cases hEq : other = name
+                · subst other
+                  simp
+                · simpa [Function.update, hEq] using hAgree other hMem)
+            body rfl hBound
+      | choice leftType rightType =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hLeftSize : sizeOf leftType < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf rightType < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf leftType) hLeftSize bound left right hAgree leftType rfl
+              hBound.1,
+            ih (sizeOf rightType) hRightSize bound left right hAgree rightType
+              rfl hBound.2]
+      | fairChoice bid leftType rightType =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hLeftSize : sizeOf leftType < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf rightType < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf leftType) hLeftSize bound left right hAgree leftType rfl
+              hBound.1,
+            ih (sizeOf rightType) hRightSize bound left right hAgree rightType
+              rfl hBound.2]
+      | seq leftType rightType =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hLeftSize : sizeOf leftType < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf rightType < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf leftType) hLeftSize bound left right hAgree leftType rfl
+              hBound.1,
+            ih (sizeOf rightType) hRightSize bound left right hAgree rightType
+              rfl hBound.2]
+      | par leftType rightType interface =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hLeftSize : sizeOf leftType < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf rightType < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf leftType) hLeftSize bound left right hAgree leftType rfl
+              hBound.1,
+            ih (sizeOf rightType) hRightSize bound left right hAgree rightType
+              rfl hBound.2]
+      | xoffer elseType branches =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf elseType) hElseSize bound left right hAgree elseType rfl
+              hBound.1,
+            hBranches branches hBranchesSize hBound.2]
+      | offer elseType branches =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval,
+            ih (sizeOf elseType) hElseSize bound left right hAgree elseType rfl
+              hBound.1,
+            hBranches branches hBranchesSize hBound.2]
+
+/-- Hygienic substitution is interpreted by updating the completion
+valuation.  Every name outside `active` is already interpreted as `false`, so
+a nested binder fresh for `active` does not change the replacement's value;
+the replacement itself need not be closed. -/
+theorem PactType.completionEval_replaceVar_of_hygienic
+    (active : List String) (valuation : String → Bool) (name : String)
+    (replacement : PactType)
+    (hSupported : ∀ other, other ∉ active → valuation other = false) :
+    ∀ processType : PactType,
+      processType.BinderFreshFor (name :: active) →
+        completionEval valuation (processType.replaceVar name replacement) =
+          completionEval
+            (Function.update valuation name
+              (completionEval valuation replacement)) processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType active valuation with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches (name :: active) branches →
+          branchCompletionEval valuation
+              (PactType.replaceBranches branches name replacement) =
+            branchCompletionEval
+              (Function.update valuation name
+                (completionEval valuation replacement)) branches := by
+        intro branches hBranchesSize hHygienic
+        induction branches with
+        | nil => simp [PactType.replaceBranches, branchCompletionEval]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hHygienic
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [PactType.replaceBranches, branchCompletionEval]
+            rw [ih (sizeOf branchType) hBranchSize active valuation hSupported
+                branchType rfl hHygienic.1,
+              restIH hRestSize hHygienic.2]
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, completionEval]
+      | progress pid => simp [PactType.replaceVar, completionEval]
+      | tock => simp [PactType.replaceVar, completionEval]
+      | skip => simp [PactType.replaceVar, completionEval]
+      | var other =>
+          intro _
+          by_cases hEq : name = other
+          · subst other
+            simp [PactType.replaceVar, completionEval]
+          · simp [PactType.replaceVar, completionEval, hEq, Ne.symm hEq]
+      | recur other body =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hOtherName : other ≠ name := by
+            intro hEq
+            subst other
+            exact hHygienic.1 (by simp)
+          have hOtherActive : other ∉ active := by
+            intro hMem
+            exact hHygienic.1 (by simp [hMem])
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          have hSupported' : ∀ x, x ∉ active →
+              Function.update valuation other false x = false := by
+            intro x hx
+            by_cases hEq : x = other
+            · subst x
+              simp
+            · simpa [Function.update, hEq] using hSupported x hx
+          have hReplacementEval :
+              completionEval (Function.update valuation other false)
+                  replacement = completionEval valuation replacement := by
+            have hValuation : Function.update valuation other false =
+                valuation := by
+              funext x
+              by_cases hEq : x = other
+              · subst x
+                simp [hSupported other hOtherActive]
+              · simp [Function.update, hEq]
+            rw [hValuation]
+          simp only [PactType.replaceVar, if_neg hOtherName.symm,
+            completionEval]
+          rw [ih (sizeOf body) hBodySize active
+              (Function.update valuation other false) hSupported' body rfl
+                hHygienic.2,
+            hReplacementEval]
+          exact congrArg (fun f => completionEval f body)
+            (Function.update_comm hOtherName.symm
+              (completionEval valuation replacement) false valuation).symm
+      | choice left right =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf left) hLeftSize active valuation hSupported
+              left rfl hHygienic.1,
+            ih (sizeOf right) hRightSize active valuation hSupported
+              right rfl hHygienic.2]
+      | fairChoice bid left right =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf left) hLeftSize active valuation hSupported
+              left rfl hHygienic.1,
+            ih (sizeOf right) hRightSize active valuation hSupported
+              right rfl hHygienic.2]
+      | seq left right =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf left) hLeftSize active valuation hSupported
+              left rfl hHygienic.1,
+            ih (sizeOf right) hRightSize active valuation hSupported
+              right rfl hHygienic.2]
+      | par left right interface =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf left) hLeftSize active valuation hSupported
+              left rfl hHygienic.1,
+            ih (sizeOf right) hRightSize active valuation hSupported
+              right rfl hHygienic.2]
+      | xoffer elseType branches =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf elseType) hElseSize active valuation hSupported
+              elseType rfl hHygienic.1,
+            hBranches branches hBranchesSize hHygienic.2]
+      | offer elseType branches =>
+          intro hHygienic
+          simp only [PactType.BinderFreshFor] at hHygienic
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, completionEval,
+            ih (sizeOf elseType) hElseSize active valuation hSupported
+              elseType rfl hHygienic.1,
+            hBranches branches hBranchesSize hHygienic.2]
+
+/-- Substituting an `active`-closed replacement for `name` closes that name in
+the result. -/
+theorem PactType.replaceVar_allVariablesBound
+    (active : List String) (name : String) (replacement : PactType)
+    (hReplacement : replacement.AllVariablesBound active) :
+    ∀ processType : PactType,
+      processType.AllVariablesBound (name :: active) →
+        (processType.replaceVar name replacement).AllVariablesBound active := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType active with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.AllBranchVariablesBound (name :: active) branches →
+            PactType.AllBranchVariablesBound active
+              (PactType.replaceBranches branches name replacement) := by
+        intro branches hBranchesSize hBound
+        induction branches with
+        | nil => simp [PactType.replaceBranches,
+            PactType.AllBranchVariablesBound]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.AllBranchVariablesBound,
+              PactType.replaceBranches] at hBound ⊢
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            exact ⟨ih (sizeOf branchType) hBranchSize active hReplacement
+                branchType rfl hBound.1, restIH hRestSize hBound.2⟩
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, PactType.AllVariablesBound]
+      | progress pid => simp [PactType.replaceVar, PactType.AllVariablesBound]
+      | tock => simp [PactType.replaceVar, PactType.AllVariablesBound]
+      | skip => simp [PactType.replaceVar, PactType.AllVariablesBound]
+      | var other =>
+          intro hBound
+          by_cases hEq : name = other
+          · subst other
+            simpa [PactType.replaceVar] using hReplacement
+          · have hMem : other ∈ active := by
+              simp only [PactType.AllVariablesBound, List.mem_cons] at hBound
+              exact hBound.resolve_left (Ne.symm hEq)
+            simpa [PactType.replaceVar, PactType.AllVariablesBound, hEq,
+              Ne.symm hEq] using hMem
+      | recur other body =>
+          intro hBound
+          simp only [PactType.AllVariablesBound] at hBound ⊢
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          by_cases hEq : name = other
+          · subst other
+            simp [PactType.replaceVar, PactType.AllVariablesBound]
+            exact PactType.allVariablesBound_mono
+              (smaller := name :: name :: active)
+              (larger := name :: active)
+              (by
+                intro x hx
+                simp only [List.mem_cons] at hx ⊢
+                rcases hx with rfl | rfl | hx
+                · exact Or.inl rfl
+                · exact Or.inl rfl
+                · exact Or.inr hx)
+              body hBound
+          · simp only [PactType.replaceVar, if_neg hEq,
+              PactType.AllVariablesBound]
+            have hReordered :
+                body.AllVariablesBound (name :: other :: active) := by
+              exact PactType.allVariablesBound_mono
+                (smaller := other :: name :: active)
+                (larger := name :: other :: active)
+                (by
+                  intro x hx
+                  simp only [List.mem_cons] at hx ⊢
+                  rcases hx with rfl | rfl | hx
+                  · exact Or.inr (Or.inl rfl)
+                  · exact Or.inl rfl
+                  · exact Or.inr (Or.inr hx))
+                body hBound
+            have hReplacement' :
+                replacement.AllVariablesBound (other :: active) :=
+              PactType.allVariablesBound_mono
+                (by intro x hx; exact List.mem_cons_of_mem other hx)
+                replacement hReplacement
+            exact ih (sizeOf body) hBodySize (other :: active) hReplacement'
+              body rfl hReordered
+      | choice left right =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar]
+            at hBound ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hBound.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hBound.2⟩
+      | fairChoice bid left right =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar]
+            at hBound ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hBound.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hBound.2⟩
+      | seq left right =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar]
+            at hBound ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hBound.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hBound.2⟩
+      | par left right interface =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar]
+            at hBound ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hBound.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hBound.2⟩
+      | xoffer elseType branches =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar,
+            PactType.replaceBranches] at hBound ⊢
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf elseType) hElseSize active hReplacement elseType
+              rfl hBound.1, hBranches branches hBranchesSize hBound.2⟩
+      | offer elseType branches =>
+          intro hBound
+          simp only [PactType.AllVariablesBound, PactType.replaceVar,
+            PactType.replaceBranches] at hBound ⊢
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf elseType) hElseSize active hReplacement elseType
+              rfl hBound.1, hBranches branches hBranchesSize hBound.2⟩
+
+/-- Capture-freshness is preserved by substituting a replacement which is
+fresh for the active names. -/
+theorem PactType.replaceVar_binderFreshFor
+    (active : List String) (name : String) (replacement : PactType)
+    (hReplacement : replacement.BinderFreshFor active) :
+    ∀ processType : PactType,
+      processType.BinderFreshFor (name :: active) →
+        (processType.replaceVar name replacement).BinderFreshFor active := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType active with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches (name :: active) branches →
+            PactType.BinderFreshForBranches active
+              (PactType.replaceBranches branches name replacement) := by
+        intro branches hBranchesSize hFresh
+        induction branches with
+        | nil => simp [PactType.replaceBranches,
+            PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches,
+              PactType.replaceBranches] at hFresh ⊢
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            exact ⟨ih (sizeOf branchType) hBranchSize active hReplacement
+                branchType rfl hFresh.1, restIH hRestSize hFresh.2⟩
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | progress pid => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | tock => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | skip => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | var other =>
+          intro _
+          by_cases hEq : name = other
+          · subst other
+            simpa [PactType.replaceVar] using hReplacement
+          · simp [PactType.replaceVar, PactType.BinderFreshFor, hEq,
+              Ne.symm hEq]
+      | recur other body =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hOtherName : other ≠ name := by
+            intro hEq
+            subst other
+            exact hFresh.1 (by simp)
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar, if_neg hOtherName.symm,
+            PactType.BinderFreshFor]
+          exact ⟨fun hMem => hFresh.1 (by simp [hMem]),
+            ih (sizeOf body) hBodySize active hReplacement body rfl hFresh.2⟩
+      | choice left right =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hFresh.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hFresh.2⟩
+      | fairChoice bid left right =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hFresh.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hFresh.2⟩
+      | seq left right =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hFresh.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hFresh.2⟩
+      | par left right interface =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize active hReplacement left rfl hFresh.1,
+            ih (sizeOf right) hRightSize active hReplacement right rfl hFresh.2⟩
+      | xoffer elseType branches =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar] at hFresh ⊢
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf elseType) hElseSize active hReplacement elseType
+              rfl hFresh.1, hBranches branches hBranchesSize hFresh.2⟩
+      | offer elseType branches =>
+          intro hFresh
+          simp only [PactType.BinderFreshFor, PactType.replaceVar,
+            PactType.replaceBranches] at hFresh ⊢
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf elseType) hElseSize active hReplacement elseType
+              rfl hFresh.1, hBranches branches hBranchesSize hFresh.2⟩
+
+mutual
+  /-- `typeFutureOffers`, parameterized by the interpretation of one free
+  variable. A matching `.var name` contributes `replacementFuture`, while a
+  sequence consults the matching parametric completion analysis. This is the
+  syntax-side invariant used after an enclosing recursion binder installs its
+  backedges. -/
+  def PactType.futureOffersSubst
+      (name : String) (replacementCompleting : Bool)
+      (replacementFuture : Finset BareMessage) : PactType →
+        Finset BareMessage
+    | .message msg dir => {(msg, dir)}
+    | .progress _ | .tock | .skip => ∅
+    | .var other => if name = other then replacementFuture else ∅
+    | .recur other body =>
+        if name = other then typeFutureOffers body
+        else futureOffersSubst name replacementCompleting replacementFuture body
+    | .choice left right | .fairChoice _ left right =>
+        futureOffersSubst name replacementCompleting replacementFuture left ∪
+          futureOffersSubst name replacementCompleting replacementFuture right
+    | .seq left right =>
+        let leftFuture :=
+          futureOffersSubst name replacementCompleting replacementFuture left
+        if canCompleteBeforeTockSubst name replacementCompleting left then
+          leftFuture ∪
+            futureOffersSubst name replacementCompleting replacementFuture right
+        else leftFuture
+    | .par left right interface =>
+        hideTypeOffers interface
+          (futureOffersSubst name replacementCompleting replacementFuture left ∪
+            futureOffersSubst name replacementCompleting replacementFuture right)
+    | .xoffer elseType branches | .offer elseType branches =>
+        futureOffersSubst name replacementCompleting replacementFuture elseType ∪
+          branchFutureOffersSubst name replacementCompleting replacementFuture
+            branches
+  termination_by processType => sizeOf processType
+
+  /-- Branch-list component of `futureOffersSubst`: every branch contributes
+  its head action and the parametric future of its continuation. -/
+  def PactType.branchFutureOffersSubst
+      (name : String) (replacementCompleting : Bool)
+      (replacementFuture : Finset BareMessage) :
+      List (BareMessage × PactType) → Finset BareMessage
+    | [] => ∅
+    | (action, processType) :: rest =>
+        {action} ∪
+          futureOffersSubst name replacementCompleting replacementFuture
+            processType ∪
+          branchFutureOffersSubst name replacementCompleting replacementFuture
+            rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/-- Unconditional substitution equation for `CanCompleteBeforeTock`: no
+`GuardedOccurrences` hypothesis is needed, because `CanCompleteBeforeTock`
+never unfolds a `.recur` node more than once (it reads `body`'s own
+completion directly, per its `.recur _ body => CanCompleteBeforeTock body`
+clause) and `replaceVar` only ever substitutes literal `.var name` leaves. -/
+theorem PactType.replaceVar_canCompleteBeforeTock
+    (name : String) (replacement processType : PactType) :
+    (processType.replaceVar name replacement).CanCompleteBeforeTock =
+      canCompleteBeforeTockSubst name replacement.CanCompleteBeforeTock
+        processType := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      cases processType with
+      | message msg dir =>
+          simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst]
+      | progress pid =>
+          simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst]
+      | tock =>
+          simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst]
+      | skip =>
+          simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst]
+      | var other =>
+          by_cases hName : name = other
+          · simp [PactType.replaceVar, hName, PactType.CanCompleteBeforeTock,
+              canCompleteBeforeTockSubst]
+          · simp [PactType.replaceVar, hName, PactType.CanCompleteBeforeTock,
+              canCompleteBeforeTockSubst, Ne.symm hName]
+      | recur other body =>
+          by_cases hName : name = other
+          · simp [PactType.replaceVar, hName, PactType.CanCompleteBeforeTock,
+              canCompleteBeforeTockSubst]
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]; simp_wf; omega
+            simp [PactType.replaceVar, hName, PactType.CanCompleteBeforeTock,
+              canCompleteBeforeTockSubst, ih (sizeOf body) hBodySize body rfl]
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches : PactType.BranchCanCompleteBeforeTock
+              (PactType.replaceBranches branches name replacement) =
+              branchCanCompleteBeforeTockSubst name
+                replacement.CanCompleteBeforeTock branches := by
+            clear hElseSize hSize
+            induction branches with
+            | nil => simp [PactType.replaceBranches,
+                PactType.BranchCanCompleteBeforeTock,
+                branchCanCompleteBeforeTockSubst]
+            | cons branch rest ihRest =>
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hMem := List.sizeOf_lt_of_mem
+                    (List.mem_cons_self (a := branch) (l := rest))
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf
+                    omega
+                  have hHead : sizeOf branch < sizeOf (branch :: rest) := by
+                    simp_wf
+                    omega
+                  omega
+                have hRestSize : sizeOf rest < n := by
+                  have hHead : sizeOf rest < sizeOf (branch :: rest) := by
+                    simp_wf
+                    omega
+                  omega
+                unfold PactType.replaceBranches PactType.BranchCanCompleteBeforeTock
+                  branchCanCompleteBeforeTockSubst
+                rw [ih (sizeOf branch.2) hBranchSize branch.2 rfl,
+                  ihRest hRestSize]
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf elseType) hElseSize
+              elseType rfl, hBranches]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches : PactType.BranchCanCompleteBeforeTock
+              (PactType.replaceBranches branches name replacement) =
+              branchCanCompleteBeforeTockSubst name
+                replacement.CanCompleteBeforeTock branches := by
+            clear hElseSize hSize
+            induction branches with
+            | nil => simp [PactType.replaceBranches,
+                PactType.BranchCanCompleteBeforeTock,
+                branchCanCompleteBeforeTockSubst]
+            | cons branch rest ihRest =>
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hMem := List.sizeOf_lt_of_mem
+                    (List.mem_cons_self (a := branch) (l := rest))
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf
+                    omega
+                  have hHead : sizeOf branch < sizeOf (branch :: rest) := by
+                    simp_wf
+                    omega
+                  omega
+                have hRestSize : sizeOf rest < n := by
+                  have hHead : sizeOf rest < sizeOf (branch :: rest) := by
+                    simp_wf
+                    omega
+                  omega
+                unfold PactType.replaceBranches PactType.BranchCanCompleteBeforeTock
+                  branchCanCompleteBeforeTockSubst
+                rw [ih (sizeOf branch.2) hBranchSize branch.2 rfl,
+                  ihRest hRestSize]
+          simp only [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+            canCompleteBeforeTockSubst, ih (sizeOf elseType) hElseSize
+              elseType rfl, hBranches]
+
+/-- Substituting any value at `.var name` can only make same-cycle completion
+easier, since `CanCompleteBeforeTock` scores a bare variable as `false` and
+both `||` and `&&` are monotone.  This is the direction needed to place a
+fragment's own `completing` states into the substituted completion set. -/
+theorem PactType.canCompleteBeforeTock_le_subst
+    (name : String) (value : Bool) (processType : PactType)
+    (hComplete : processType.CanCompleteBeforeTock = true) :
+    canCompleteBeforeTockSubst name value processType = true := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      cases processType with
+      | message msg dir => simp [canCompleteBeforeTockSubst]
+      | progress pid => simp [canCompleteBeforeTockSubst]
+      | skip => simp [canCompleteBeforeTockSubst]
+      | tock => simp [PactType.CanCompleteBeforeTock] at hComplete
+      | var other => simp [PactType.CanCompleteBeforeTock] at hComplete
+      | recur other body =>
+          by_cases hName : name = other
+          · subst hName
+            simp only [canCompleteBeforeTockSubst, if_pos rfl]
+            simpa [PactType.CanCompleteBeforeTock] using hComplete
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]; simp_wf; omega
+            simp only [canCompleteBeforeTockSubst, hName, if_false]
+            exact ih (sizeOf body) hBodySize body
+              (by simpa [PactType.CanCompleteBeforeTock] using hComplete) rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.or_eq_true]
+          rcases hComplete with hLeft | hRight
+          · exact Or.inl (ih (sizeOf left) hLeftSize left hLeft rfl)
+          · exact Or.inr (ih (sizeOf right) hRightSize right hRight rfl)
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.or_eq_true]
+          rcases hComplete with hLeft | hRight
+          · exact Or.inl (ih (sizeOf left) hLeftSize left hLeft rfl)
+          · exact Or.inr (ih (sizeOf right) hRightSize right hRight rfl)
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.and_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.and_eq_true]
+          exact ⟨ih (sizeOf left) hLeftSize left hComplete.1 rfl,
+            ih (sizeOf right) hRightSize right hComplete.2 rfl⟩
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.and_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.and_eq_true]
+          exact ⟨ih (sizeOf left) hLeftSize left hComplete.1 rfl,
+            ih (sizeOf right) hRightSize right hComplete.2 rfl⟩
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches : ∀ rest : List (BareMessage × PactType),
+              sizeOf rest < n →
+              PactType.BranchCanCompleteBeforeTock rest = true →
+              branchCanCompleteBeforeTockSubst name value rest = true := by
+            intro rest
+            induction rest with
+            | nil => intro _ hNil
+                     simp [PactType.BranchCanCompleteBeforeTock] at hNil
+            | cons branch tail ihTail =>
+                intro hRestSize hCons
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf
+                    omega
+                  have hHead : sizeOf branch < sizeOf (branch :: tail) := by
+                    simp_wf
+                    omega
+                  omega
+                have hTailSize : sizeOf tail < n := by
+                  have hHead : sizeOf tail < sizeOf (branch :: tail) := by
+                    simp_wf
+                    omega
+                  omega
+                unfold PactType.BranchCanCompleteBeforeTock at hCons
+                unfold branchCanCompleteBeforeTockSubst
+                simp only [Bool.or_eq_true] at hCons ⊢
+                rcases hCons with hHead | hTail
+                · exact Or.inl (ih (sizeOf branch.2) hBranchSize branch.2
+                    hHead rfl)
+                · exact Or.inr (ihTail hTailSize hTail)
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.or_eq_true]
+          rcases hComplete with hElse | hBranch
+          · exact Or.inl (ih (sizeOf elseType) hElseSize elseType hElse rfl)
+          · exact Or.inr (hBranches branches hBranchesSize hBranch)
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranches : ∀ rest : List (BareMessage × PactType),
+              sizeOf rest < n →
+              PactType.BranchCanCompleteBeforeTock rest = true →
+              branchCanCompleteBeforeTockSubst name value rest = true := by
+            intro rest
+            induction rest with
+            | nil => intro _ hNil
+                     simp [PactType.BranchCanCompleteBeforeTock] at hNil
+            | cons branch tail ihTail =>
+                intro hRestSize hCons
+                have hBranchSize : sizeOf branch.2 < n := by
+                  have hPair : sizeOf branch.2 < sizeOf branch := by
+                    obtain ⟨action, processType⟩ := branch
+                    simp_wf
+                    omega
+                  have hHead : sizeOf branch < sizeOf (branch :: tail) := by
+                    simp_wf
+                    omega
+                  omega
+                have hTailSize : sizeOf tail < n := by
+                  have hHead : sizeOf tail < sizeOf (branch :: tail) := by
+                    simp_wf
+                    omega
+                  omega
+                unfold PactType.BranchCanCompleteBeforeTock at hCons
+                unfold branchCanCompleteBeforeTockSubst
+                simp only [Bool.or_eq_true] at hCons ⊢
+                rcases hCons with hHead | hTail
+                · exact Or.inl (ih (sizeOf branch.2) hBranchSize branch.2
+                    hHead rfl)
+                · exact Or.inr (ihTail hTailSize hTail)
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.CanCompleteBeforeTock, Bool.or_eq_true]
+            at hComplete
+          simp only [canCompleteBeforeTockSubst, Bool.or_eq_true]
+          rcases hComplete with hElse | hBranch
+          · exact Or.inl (ih (sizeOf elseType) hElseSize elseType hElse rfl)
+          · exact Or.inr (hBranches branches hBranchesSize hBranch)
+
+/- Interpreting the distinguished variable as non-completing is exactly the
+ordinary completion analysis, which already assigns `false` to every bare
+variable.  The branch-list statement is carried locally because exclusive and
+conjunctive offers fold the same Boolean disjunction over their branches. -/
+theorem PactType.canCompleteBeforeTockSubst_false (name : String) :
+    ∀ processType,
+      canCompleteBeforeTockSubst name false processType =
+        processType.CanCompleteBeforeTock := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          branchCanCompleteBeforeTockSubst name false branches =
+            PactType.BranchCanCompleteBeforeTock branches := by
+        intro branches hBranchesSize
+        induction branches with
+        | nil =>
+            simp [branchCanCompleteBeforeTockSubst,
+              PactType.BranchCanCompleteBeforeTock]
+        | cons branch rest restIH =>
+            have hBranchSize : sizeOf branch.2 < n := by
+              have hPair : sizeOf branch.2 < sizeOf branch := by
+                obtain ⟨action, branchType⟩ := branch
+                simp_wf
+                omega
+              have hHead : sizeOf branch < sizeOf (branch :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest < sizeOf (branch :: rest) := by
+                simp_wf
+                omega
+              omega
+            unfold branchCanCompleteBeforeTockSubst
+              PactType.BranchCanCompleteBeforeTock
+            rw [ih (sizeOf branch.2) hBranchSize branch.2 rfl,
+              restIH hRestSize]
+      cases processType with
+      | message msg dir =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | tock =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | skip =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | var other => simp [canCompleteBeforeTockSubst,
+          PactType.CanCompleteBeforeTock]
+      | recur other body =>
+          by_cases hName : name = other
+          · simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+              hName]
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]
+              simp_wf
+              omega
+            simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+              hName, ih (sizeOf body) hBodySize body rfl]
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl,
+            hBranches branches hBranchesSize]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl,
+            hBranches branches hBranchesSize]
+
+/-- The ordinary syntax predicate is `completionEval` in the everywhere-false
+variable environment. -/
+theorem PactType.completionEval_eq_canCompleteBeforeTock_of_all_false
+    (valuation : String → Bool) : ∀ processType,
+    (∀ name, valuation name = false) →
+      completionEval valuation processType = processType.CanCompleteBeforeTock := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType valuation with
+  | _ n ih =>
+      intro hFalse
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          branchCompletionEval valuation branches =
+            PactType.BranchCanCompleteBeforeTock branches := by
+        intro branches hBranchesSize
+        induction branches with
+        | nil => simp [branchCompletionEval,
+            PactType.BranchCanCompleteBeforeTock]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [branchCompletionEval,
+              PactType.BranchCanCompleteBeforeTock]
+            rw [ih (sizeOf branchType) hBranchSize valuation branchType rfl hFalse,
+              restIH hRestSize]
+      cases processType with
+      | message msg dir =>
+          simp [completionEval, PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [completionEval, PactType.CanCompleteBeforeTock]
+      | tock => simp [completionEval, PactType.CanCompleteBeforeTock]
+      | skip => simp [completionEval, PactType.CanCompleteBeforeTock]
+      | var name => simp [completionEval, PactType.CanCompleteBeforeTock, hFalse]
+      | recur name body =>
+          have hBodySize : sizeOf body < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          rw [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf body) hBodySize (Function.update valuation name false)
+              body rfl]
+          intro other
+          by_cases hEq : other = name
+          · subst other
+            simp
+          · simp [Function.update, hEq, hFalse]
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFalse,
+            ih (sizeOf right) hRightSize valuation right rfl hFalse]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFalse,
+            ih (sizeOf right) hRightSize valuation right rfl hFalse]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFalse,
+            ih (sizeOf right) hRightSize valuation right rfl hFalse]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize valuation left rfl hFalse,
+            ih (sizeOf right) hRightSize valuation right rfl hFalse]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize valuation elseType rfl hFalse,
+            hBranches branches hBranchesSize]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [completionEval, PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize valuation elseType rfl hFalse,
+            hBranches branches hBranchesSize]
+
+/-- The one-variable completion fold is the singleton specialization of the
+finite-control valuation semantics.  This is the bridge used when the old
+scalar recursion lemmas are lifted to the binder-context induction. -/
+theorem PactType.completionEval_singleton_eq_canCompleteBeforeTockSubst
+    (name : String) (value : Bool) : ∀ processType : PactType,
+    completionEval (Function.update (fun _ => false) name value) processType =
+      canCompleteBeforeTockSubst name value processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      let valuation : String → Bool :=
+        Function.update (fun _ => false) name value
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          branchCompletionEval valuation branches =
+            branchCanCompleteBeforeTockSubst name value branches := by
+        intro branches hBranchesSize
+        induction branches with
+        | nil => simp [branchCompletionEval,
+            branchCanCompleteBeforeTockSubst]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [branchCompletionEval,
+              branchCanCompleteBeforeTockSubst]
+            rw [show completionEval valuation branchType =
+                canCompleteBeforeTockSubst name value branchType by
+                  simpa [valuation] using
+                    ih (sizeOf branchType) hBranchSize branchType rfl,
+              restIH hRestSize]
+      cases processType with
+      | message msg dir =>
+          simp [valuation, completionEval, canCompleteBeforeTockSubst]
+      | progress pid =>
+          simp [valuation, completionEval, canCompleteBeforeTockSubst]
+      | tock =>
+          simp [valuation, completionEval, canCompleteBeforeTockSubst]
+      | skip =>
+          simp [valuation, completionEval, canCompleteBeforeTockSubst]
+      | var other =>
+          by_cases hName : other = name
+          · subst other
+            simp [valuation, completionEval, canCompleteBeforeTockSubst]
+          · simp [valuation, completionEval, canCompleteBeforeTockSubst,
+              hName, Ne.symm hName]
+      | recur other body =>
+          have hBodySize : sizeOf body < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          by_cases hName : name = other
+          · subst other
+            rw [completionEval, canCompleteBeforeTockSubst]
+            simp only [if_pos rfl]
+            apply completionEval_eq_canCompleteBeforeTock_of_all_false
+            intro variableName
+            by_cases hEq : variableName = name
+            · subst variableName
+              simp [valuation]
+            · simp [valuation, Function.update, hEq]
+          · rw [completionEval, canCompleteBeforeTockSubst, if_neg hName]
+            have hValuationEq : Function.update valuation other false =
+                valuation := by
+              funext variableName
+              by_cases hOther : variableName = other
+              · subst variableName
+                simp [valuation, Function.update, hName, Ne.symm hName]
+              · simp [Function.update, hOther]
+            rw [hValuationEq]
+            simpa [valuation] using
+              ih (sizeOf body) hBodySize body rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf elseType) hElseSize elseType rfl,
+            hBranches branches hBranchesSize]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          simp [valuation, completionEval, canCompleteBeforeTockSubst,
+            ih (sizeOf elseType) hElseSize elseType rfl,
+            hBranches branches hBranchesSize]
+
+/-- `completionEval` is monotone in the Boolean interpretation of free
+variables.  Binders preserve monotonicity by assigning `false` to the bound
+name in both environments. -/
+theorem PactType.completionEval_mono
+    (source target : String → Bool)
+    (hLe : ∀ name, source name = true → target name = true) :
+    ∀ processType,
+      completionEval source processType = true →
+        completionEval target processType = true := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType source target with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          branchCompletionEval source branches = true →
+            branchCompletionEval target branches = true := by
+        intro branches hBranchesSize
+        induction branches with
+        | nil => simp [branchCompletionEval]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [branchCompletionEval, Bool.or_eq_true]
+            intro h
+            rcases h with h | h
+            · exact Or.inl (ih (sizeOf branchType) hBranchSize source target
+                hLe branchType rfl h)
+            · exact Or.inr (restIH hRestSize h)
+      cases processType with
+      | message msg dir => simp [completionEval]
+      | progress pid => simp [completionEval]
+      | tock => simp [completionEval]
+      | skip => simp [completionEval]
+      | var name =>
+          simpa [completionEval] using hLe name
+      | recur name body =>
+          have hBodySize : sizeOf body < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp only [completionEval]
+          apply ih (sizeOf body) hBodySize
+              (Function.update source name false)
+              (Function.update target name false)
+          · intro other hTrue
+            by_cases hEq : other = name
+            · subst other
+              simp at hTrue
+            · have hSource : source other = true := by
+                simpa [Function.update, hEq] using hTrue
+              simpa [Function.update, hEq] using hLe other hSource
+          · rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.or_eq_true]
+          intro h
+          rcases h with h | h
+          · exact Or.inl (ih (sizeOf left) hLeftSize source target hLe left
+                rfl h)
+          · exact Or.inr (ih (sizeOf right) hRightSize source target hLe right
+                rfl h)
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.or_eq_true]
+          intro h
+          rcases h with h | h
+          · exact Or.inl (ih (sizeOf left) hLeftSize source target hLe left
+                rfl h)
+          · exact Or.inr (ih (sizeOf right) hRightSize source target hLe right
+                rfl h)
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.and_eq_true]
+          rintro ⟨hLeft, hRight⟩
+          exact ⟨ih (sizeOf left) hLeftSize source target hLe left rfl hLeft,
+            ih (sizeOf right) hRightSize source target hLe right rfl hRight⟩
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.and_eq_true]
+          rintro ⟨hLeft, hRight⟩
+          exact ⟨ih (sizeOf left) hLeftSize source target hLe left rfl hLeft,
+            ih (sizeOf right) hRightSize source target hLe right rfl hRight⟩
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.or_eq_true]
+          intro h
+          rcases h with h | h
+          · exact Or.inl (ih (sizeOf elseType) hElseSize source target hLe
+                elseType rfl h)
+          · exact Or.inr (hBranches branches hBranchesSize h)
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [completionEval, Bool.or_eq_true]
+          intro h
+          rcases h with h | h
+          · exact Or.inl (ih (sizeOf elseType) hElseSize source target hLe
+                elseType rfl h)
+          · exact Or.inr (hBranches branches hBranchesSize h)
+
+/-- The completion value of a recursive body is a Boolean fixed point when
+fed back to the corresponding variable. -/
+theorem PactType.completionEval_update_self
+    (valuation : String → Bool) (name : String) (processType : PactType) :
+    completionEval
+        (Function.update valuation name
+          (completionEval (Function.update valuation name false) processType))
+        processType =
+      completionEval (Function.update valuation name false) processType := by
+  let base := Function.update valuation name false
+  cases hValue : completionEval base processType with
+  | false => simp [base, hValue]
+  | true =>
+      have hMono := completionEval_mono base
+        (Function.update valuation name true) (processType := processType)
+          (by
+            intro other hTrue
+            by_cases hEq : other = name
+            · subst other
+              simp
+            · simpa [base, Function.update, hEq] using hTrue)
+      simpa [base, hValue] using hMono hValue
+
+/-- Interpreting a recursive-call variable by the completion value of its
+own body is a Boolean fixed point.  This is the syntax equation matched by a
+recursion backedge in the constructor graph. -/
+theorem PactType.canCompleteBeforeTockSubst_self
+    (name : String) (processType : PactType) :
+    canCompleteBeforeTockSubst name processType.CanCompleteBeforeTock
+        processType = processType.CanCompleteBeforeTock := by
+  cases hComplete : processType.CanCompleteBeforeTock with
+  | false =>
+      simpa [hComplete] using
+        PactType.canCompleteBeforeTockSubst_false name processType
+  | true =>
+      simpa [hComplete] using
+        PactType.canCompleteBeforeTock_le_subst name true processType hComplete
+
+/-- A variable forbidden from tail position cannot affect optimistic
+completion.  This is the exact elimination rule used in the recursion proof:
+sequence-left, parallel, and conjunctive-offer branch contexts all impose
+`TailOccurrences name False`, so their parametric completion reduces to the
+ordinary syntax predicate. -/
+theorem PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false
+    (name : String) (value : Bool) : ∀ processType,
+    processType.TailOccurrences name False →
+      canCompleteBeforeTockSubst name value processType =
+        processType.CanCompleteBeforeTock := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro hTail
+      cases processType with
+      | message msg dir =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | progress pid =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | tock =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | skip =>
+          simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+      | var other =>
+          have hNe : name ≠ other := by
+            intro hEq
+            have hImpossible : False := by
+              simp only [PactType.TailOccurrences] at hTail
+              apply hTail
+              exact hEq.symm
+            exact hImpossible.elim
+          simp [canCompleteBeforeTockSubst, hNe,
+            PactType.CanCompleteBeforeTock]
+      | recur other body =>
+          by_cases hName : name = other
+          · subst other
+            simp [canCompleteBeforeTockSubst, PactType.CanCompleteBeforeTock]
+          · have hBodyTail : body.TailOccurrences name False := by
+              simp only [PactType.TailOccurrences] at hTail
+              rw [if_neg (Ne.symm hName)] at hTail
+              exact hTail
+            have hBodySize : sizeOf body < n := by
+              rw [← hSize]
+              simp_wf
+              omega
+            simp only [canCompleteBeforeTockSubst, hName, if_false,
+              PactType.CanCompleteBeforeTock]
+            exact ih (sizeOf body) hBodySize body rfl hBodyTail
+      | choice left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | fairChoice bid left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | seq left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | par left right interface =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | xoffer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchEq : PactType.branchCanCompleteBeforeTockSubst name value
+                branches = PactType.BranchCanCompleteBeforeTock branches := by
+            have hList : ∀ rest : List (BareMessage × PactType),
+                sizeOf rest < n →
+                PactType.TailBranchOccurrences name False rest →
+                PactType.branchCanCompleteBeforeTockSubst name value rest =
+                  PactType.BranchCanCompleteBeforeTock rest := by
+              intro rest
+              induction rest with
+              | nil =>
+                  intro _ _
+                  simp [PactType.branchCanCompleteBeforeTockSubst,
+                    PactType.BranchCanCompleteBeforeTock]
+              | cons branch tail tailIH =>
+                  intro hRestSize hRestTail
+                  rcases branch with ⟨action, branchType⟩
+                  have hBranchFields :
+                      branchType.TailOccurrences name False ∧
+                        PactType.TailBranchOccurrences name False tail := by
+                    simpa only [PactType.TailBranchOccurrences] using
+                      hRestTail
+                  have hBranchSize : sizeOf branchType < n := by
+                    have hPair : sizeOf branchType <
+                        sizeOf (action, branchType) := by
+                      simp_wf
+                      omega
+                    have hHead : sizeOf (action, branchType) <
+                        sizeOf ((action, branchType) :: tail) := by
+                      simp_wf
+                      omega
+                    omega
+                  have hTailSize : sizeOf tail < n := by
+                    have hTail : sizeOf tail <
+                        sizeOf ((action, branchType) :: tail) := by
+                      simp_wf
+                      omega
+                    omega
+                  simp only [PactType.branchCanCompleteBeforeTockSubst,
+                    PactType.BranchCanCompleteBeforeTock,
+                    ih (sizeOf branchType) hBranchSize branchType rfl
+                      hBranchFields.1,
+                    tailIH hTailSize hBranchFields.2]
+            apply hList branches
+            · rw [← hSize]; simp_wf; omega
+            · exact hFields.2
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+            hBranchEq]
+      | offer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchEq : PactType.branchCanCompleteBeforeTockSubst name value
+                branches = PactType.BranchCanCompleteBeforeTock branches := by
+            have hList : ∀ rest : List (BareMessage × PactType),
+                sizeOf rest < n →
+                PactType.TailBranchOccurrences name False rest →
+                PactType.branchCanCompleteBeforeTockSubst name value rest =
+                  PactType.BranchCanCompleteBeforeTock rest := by
+              intro rest
+              induction rest with
+              | nil =>
+                  intro _ _
+                  simp [PactType.branchCanCompleteBeforeTockSubst,
+                    PactType.BranchCanCompleteBeforeTock]
+              | cons branch tail tailIH =>
+                  intro hRestSize hRestTail
+                  rcases branch with ⟨action, branchType⟩
+                  have hBranchFields :
+                      branchType.TailOccurrences name False ∧
+                        PactType.TailBranchOccurrences name False tail := by
+                    simpa only [PactType.TailBranchOccurrences] using
+                      hRestTail
+                  have hBranchSize : sizeOf branchType < n := by
+                    have hPair : sizeOf branchType <
+                        sizeOf (action, branchType) := by
+                      simp_wf
+                      omega
+                    have hHead : sizeOf (action, branchType) <
+                        sizeOf ((action, branchType) :: tail) := by
+                      simp_wf
+                      omega
+                    omega
+                  have hTailSize : sizeOf tail < n := by
+                    have hTail : sizeOf tail <
+                        sizeOf ((action, branchType) :: tail) := by
+                      simp_wf
+                      omega
+                    omega
+                  simp only [PactType.branchCanCompleteBeforeTockSubst,
+                    PactType.BranchCanCompleteBeforeTock,
+                    ih (sizeOf branchType) hBranchSize branchType rfl
+                      hBranchFields.1,
+                    tailIH hTailSize hBranchFields.2]
+            apply hList branches
+            · rw [← hSize]; simp_wf; omega
+            · exact hFields.2
+          simp only [canCompleteBeforeTockSubst,
+            PactType.CanCompleteBeforeTock,
+            ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+            hBranchEq]
+
+/- Substitution preserves the absence of a free tail occurrence when both
+the substituted syntax and the replacement have that property. -/
+theorem PactType.tailOccurrences_false_replaceVar
+    (name other : String) (replacement : PactType)
+    (hReplacement : replacement.TailOccurrences name False) :
+    ∀ processType : PactType,
+      processType.TailOccurrences name False →
+        (processType.replaceVar other replacement).TailOccurrences
+          name False := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro hProcess
+      have hOfferChildren : ∀ (elseType : PactType)
+          (branches : List (BareMessage × PactType)),
+          sizeOf elseType < n → sizeOf branches < n →
+          elseType.TailOccurrences name False ∧
+            PactType.TailBranchOccurrences name False branches →
+          (elseType.replaceVar other replacement).TailOccurrences name False ∧
+            PactType.TailBranchOccurrences name False
+              (PactType.replaceBranches branches other replacement) := by
+        intro elseType branches hElseSize hBranchesSize hFields
+        have hBranches : PactType.TailBranchOccurrences name False
+            (PactType.replaceBranches branches other replacement) := by
+          have hList : ∀ rest : List (BareMessage × PactType),
+              sizeOf rest < n →
+              PactType.TailBranchOccurrences name False rest →
+              PactType.TailBranchOccurrences name False
+                (PactType.replaceBranches rest other replacement) := by
+            intro rest
+            induction rest with
+            | nil =>
+                intro _ _
+                simp [PactType.replaceBranches,
+                  PactType.TailBranchOccurrences]
+            | cons branch rest ihRest =>
+                intro hRestSize hRestTail
+                rcases branch with ⟨action, branchType⟩
+                have hBranchFields :
+                    branchType.TailOccurrences name False ∧
+                      PactType.TailBranchOccurrences name False rest := by
+                  simpa only [PactType.TailBranchOccurrences] using hRestTail
+                have hBranchSize : sizeOf branchType < n := by
+                  have hPair : sizeOf branchType <
+                      sizeOf (action, branchType) := by simp_wf; omega
+                  have hHead : sizeOf (action, branchType) <
+                      sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                  omega
+                have hTailSize : sizeOf rest < n := by
+                  have hTail : sizeOf rest <
+                      sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                  omega
+                simpa only [PactType.replaceBranches,
+                  PactType.TailBranchOccurrences] using And.intro
+                    (ih (sizeOf branchType) hBranchSize branchType rfl
+                      hBranchFields.1)
+                    (ihRest hTailSize hBranchFields.2)
+          exact hList branches hBranchesSize hFields.2
+        exact ⟨ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+          hBranches⟩
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | progress pid => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | tock => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | skip => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | var current =>
+          by_cases hCurrent : other = current
+          · simpa [PactType.replaceVar, hCurrent] using hReplacement
+          · simpa [PactType.replaceVar, hCurrent,
+              PactType.TailOccurrences] using hProcess
+      | recur binder body =>
+          by_cases hShadow : other = binder
+          · simpa [PactType.replaceVar, hShadow] using hProcess
+          · by_cases hBinder : binder = name
+            · subst binder
+              simp [PactType.replaceVar, hShadow, PactType.TailOccurrences]
+            · have hBodyTail : body.TailOccurrences name False := by
+                simpa [PactType.TailOccurrences, hBinder] using hProcess
+              have hBodySize : sizeOf body < n := by
+                rw [← hSize]; simp_wf; omega
+              simpa [PactType.replaceVar, hShadow,
+                PactType.TailOccurrences, hBinder] using
+                  ih (sizeOf body) hBodySize body rfl hBodyTail
+      | choice left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl hFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFields.2)
+      | fairChoice bid left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl hFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFields.2)
+      | seq left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl hFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFields.2)
+      | par left right interface =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl hFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFields.2)
+      | xoffer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            hOfferChildren elseType branches hElseSize hBranchesSize hFields
+      | offer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hProcess
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            hOfferChildren elseType branches hElseSize hBranchesSize hFields
+
+/- A name forbidden from every free tail position does not occur freely at
+all, so capture-avoiding substitution for that name is inert.  This is the
+syntax bridge used by the recursion correspondence in every non-tail context
+(sequence-left, parallel children, and conjunctive-offer branches). -/
+theorem PactType.replaceVar_eq_self_of_tailOccurrences_false
+    (name : String) (replacement : PactType) :
+    ∀ processType : PactType,
+      processType.TailOccurrences name False →
+        processType.replaceVar name replacement = processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro hTail
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.TailBranchOccurrences name False branches →
+          PactType.replaceBranches branches name replacement = branches := by
+        intro branches hBranchesSize hBranchTail
+        induction branches with
+        | nil => simp [PactType.replaceBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.TailOccurrences name False ∧
+                PactType.TailBranchOccurrences name False rest := by
+              simpa only [PactType.TailBranchOccurrences] using hBranchTail
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.replaceBranches]
+            rw [ih (sizeOf branchType) hBranchSize branchType rfl hFields.1,
+              restIH hRestSize hFields.2]
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar]
+      | progress pid => simp [PactType.replaceVar]
+      | tock => simp [PactType.replaceVar]
+      | skip => simp [PactType.replaceVar]
+      | var other =>
+          have hAbsent : name ≠ other := by
+            intro hEq
+            simp only [PactType.TailOccurrences] at hTail
+            exact hTail hEq.symm
+          simp [PactType.replaceVar, hAbsent]
+      | recur binder body =>
+          by_cases hShadow : name = binder
+          · simp [PactType.replaceVar, hShadow]
+          · have hBodyTail : body.TailOccurrences name False := by
+              have hBinder : binder ≠ name := by exact Ne.symm hShadow
+              simpa only [PactType.TailOccurrences, if_neg hBinder] using hTail
+            have hBodySize : sizeOf body < n := by
+              rw [← hSize]; simp_wf; omega
+            simp [PactType.replaceVar, hShadow,
+              ih (sizeOf body) hBodySize body rfl hBodyTail]
+      | choice left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | fairChoice bid left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | seq left right =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | par left right interface =>
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf left) hLeftSize left rfl hFields.1,
+            ih (sizeOf right) hRightSize right rfl hFields.2]
+      | xoffer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+            hBranches branches hBranchesSize hFields.2]
+      | offer elseType branches =>
+          have hFields : elseType.TailOccurrences name False ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.replaceVar]
+          rw [ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+            hBranches branches hBranchesSize hFields.2]
+
+/- Replacing every free occurrence of a name by its own binder removes that
+name from all non-tail positions, independently of the original syntax. -/
+theorem PactType.tailOccurrences_false_replaceVar_self_recur
+    (name : String) (body : PactType) : ∀ processType : PactType,
+    (processType.replaceVar name (.recur name body)).TailOccurrences
+      name False := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hOfferChildren : ∀ (elseType : PactType)
+          (branches : List (BareMessage × PactType)),
+          sizeOf elseType < n → sizeOf branches < n →
+          (elseType.replaceVar name (.recur name body)).TailOccurrences
+              name False ∧
+            PactType.TailBranchOccurrences name False
+              (PactType.replaceBranches branches name (.recur name body)) := by
+        intro elseType branches hElseSize hBranchesSize
+        have hBranches : PactType.TailBranchOccurrences name False
+            (PactType.replaceBranches branches name (.recur name body)) := by
+          have hList : ∀ rest : List (BareMessage × PactType),
+              sizeOf rest < n →
+              PactType.TailBranchOccurrences name False
+                (PactType.replaceBranches rest name (.recur name body)) := by
+            intro rest
+            induction rest with
+            | nil =>
+                intro _
+                simp [PactType.replaceBranches,
+                  PactType.TailBranchOccurrences]
+            | cons branch rest ihRest =>
+                intro hRestSize
+                rcases branch with ⟨action, branchType⟩
+                have hBranchSize : sizeOf branchType < n := by
+                  have hPair : sizeOf branchType <
+                      sizeOf (action, branchType) := by simp_wf; omega
+                  have hHead : sizeOf (action, branchType) <
+                      sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                  omega
+                have hTailSize : sizeOf rest < n := by
+                  have hTail : sizeOf rest <
+                      sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                  omega
+                simpa only [PactType.replaceBranches,
+                  PactType.TailBranchOccurrences] using And.intro
+                    (ih (sizeOf branchType) hBranchSize branchType rfl)
+                    (ihRest hTailSize)
+          exact hList branches hBranchesSize
+        exact ⟨ih (sizeOf elseType) hElseSize elseType rfl, hBranches⟩
+      cases processType with
+      | message msg dir => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | progress pid => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | tock => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | skip => simp [PactType.replaceVar, PactType.TailOccurrences]
+      | var current =>
+          by_cases hCurrent : name = current
+          · simp [PactType.replaceVar, hCurrent, PactType.TailOccurrences]
+          · simp [PactType.replaceVar, hCurrent,
+              PactType.TailOccurrences, Ne.symm hCurrent]
+      | recur binder nestedBody =>
+          by_cases hShadow : name = binder
+          · simp [PactType.replaceVar, hShadow, PactType.TailOccurrences]
+          · have hBinder : binder ≠ name := Ne.symm hShadow
+            have hBodySize : sizeOf nestedBody < n := by
+              rw [← hSize]; simp_wf; omega
+            simpa [PactType.replaceVar, hShadow,
+              PactType.TailOccurrences, hBinder] using
+                ih (sizeOf nestedBody) hBodySize nestedBody rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl)
+              (ih (sizeOf right) hRightSize right rfl)
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl)
+              (ih (sizeOf right) hRightSize right rfl)
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl)
+              (ih (sizeOf right) hRightSize right rfl)
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl)
+              (ih (sizeOf right) hRightSize right rfl)
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            hOfferChildren elseType branches hElseSize hBranchesSize
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.TailOccurrences] using
+            hOfferChildren elseType branches hElseSize hBranchesSize
+
 /-- Replacing an occurrence protected by a clock does not change whether the
 surrounding syntax can finish in the current cycle. -/
 theorem PactType.guardedOccurrences_replace_canCompleteBeforeTock
@@ -1962,6 +4389,189 @@ theorem typeFutureOffers_recur (name : String) (body : PactType) :
       (PactType.recur name body) = _
   simp only [typeFutureOffersFuel]
   rw [typeFutureOffersFuel_eq_typeFutureOffers body _ hBodyFuel]
+
+/-- Substituting syntax and then computing its optimistic future menu is
+equivalent to interpreting the substituted variable directly in the
+parameterized syntax fold.  This is capture-avoiding: a nested binder with the
+same name stops the interpretation exactly where `replaceVar` stops. -/
+theorem PactType.replaceVar_typeFutureOffers
+    (name : String) (replacement processType : PactType) :
+    typeFutureOffers (processType.replaceVar name replacement) =
+      futureOffersSubst name replacement.CanCompleteBeforeTock
+        (typeFutureOffers replacement) processType := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | h n ih =>
+      cases processType with
+      | message msg dir =>
+          simp [PactType.replaceVar, futureOffersSubst, typeFutureOffers,
+            typeFutureOffersFuel]
+      | progress pid =>
+          simp [PactType.replaceVar, futureOffersSubst, typeFutureOffers,
+            typeFutureOffersFuel]
+      | tock =>
+          simp [PactType.replaceVar, futureOffersSubst, typeFutureOffers,
+            typeFutureOffersFuel]
+      | skip =>
+          simp [PactType.replaceVar, futureOffersSubst, typeFutureOffers,
+            typeFutureOffersFuel]
+      | var other =>
+          by_cases hName : name = other
+          · subst other
+            simp [PactType.replaceVar, futureOffersSubst]
+          · simp [PactType.replaceVar, futureOffersSubst, hName,
+              typeFutureOffers, typeFutureOffersFuel]
+      | recur other body =>
+          by_cases hName : name = other
+          · subst other
+            simp [PactType.replaceVar, futureOffersSubst,
+              typeFutureOffers_recur]
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]
+              simp_wf
+              omega
+            simp only [PactType.replaceVar, hName, if_false,
+              futureOffersSubst, typeFutureOffers_recur]
+            exact ih (sizeOf body) hBodySize body rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp only [PactType.replaceVar, typeFutureOffers_choice,
+            futureOffersSubst]
+          rw [ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp only [PactType.replaceVar, typeFutureOffers_fairChoice,
+            futureOffersSubst]
+          rw [ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp only [PactType.replaceVar, typeFutureOffers_sequence,
+            futureOffersSubst]
+          rw [PactType.replaceVar_canCompleteBeforeTock,
+            ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp only [PactType.replaceVar, typeFutureOffers_parallel,
+            futureOffersSubst]
+          rw [ih (sizeOf left) hLeftSize left rfl,
+            ih (sizeOf right) hRightSize right rfl]
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hFold : ∀ rest : List (BareMessage × PactType),
+              (∀ entry ∈ rest, entry ∈ branches) →
+              ∀ initial,
+                (PactType.replaceBranches rest name replacement).foldl
+                    (fun offers branch =>
+                      offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
+                    initial =
+                  initial ∪ branchFutureOffersSubst name
+                    replacement.CanCompleteBeforeTock
+                    (typeFutureOffers replacement) rest := by
+            intro rest hRest
+            induction rest with
+            | nil =>
+                intro initial
+                simp [PactType.replaceBranches, branchFutureOffersSubst]
+            | cons entry tail hTail =>
+                obtain ⟨action, branchType⟩ := entry
+                intro initial
+                have hMember : (action, branchType) ∈ branches :=
+                  hRest _ (by simp)
+                have hBranchSize : sizeOf branchType < n := by
+                  have hPair := List.sizeOf_lt_of_mem hMember
+                  have hComponent : sizeOf branchType <
+                      sizeOf (action, branchType) := by
+                    simp_wf
+                    omega
+                  rw [← hSize]
+                  simp_wf
+                  omega
+                simp only [PactType.replaceBranches, List.foldl_cons,
+                  branchFutureOffersSubst]
+                rw [ih (sizeOf branchType) hBranchSize branchType rfl,
+                  hTail (fun other hOther => hRest other (by simp [hOther]))]
+                simp only [Finset.union_assoc]
+          simp only [PactType.replaceVar, typeFutureOffers_xoffer,
+            futureOffersSubst]
+          rw [ih (sizeOf elseType) hElseSize elseType rfl,
+            hFold branches (by simp)]
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hFold : ∀ rest : List (BareMessage × PactType),
+              (∀ entry ∈ rest, entry ∈ branches) →
+              ∀ initial,
+                (PactType.replaceBranches rest name replacement).foldl
+                    (fun offers branch =>
+                      offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
+                    initial =
+                  initial ∪ branchFutureOffersSubst name
+                    replacement.CanCompleteBeforeTock
+                    (typeFutureOffers replacement) rest := by
+            intro rest hRest
+            induction rest with
+            | nil =>
+                intro initial
+                simp [PactType.replaceBranches, branchFutureOffersSubst]
+            | cons entry tail hTail =>
+                obtain ⟨action, branchType⟩ := entry
+                intro initial
+                have hMember : (action, branchType) ∈ branches :=
+                  hRest _ (by simp)
+                have hBranchSize : sizeOf branchType < n := by
+                  have hPair := List.sizeOf_lt_of_mem hMember
+                  have hComponent : sizeOf branchType <
+                      sizeOf (action, branchType) := by
+                    simp_wf
+                    omega
+                  rw [← hSize]
+                  simp_wf
+                  omega
+                simp only [PactType.replaceBranches, List.foldl_cons,
+                  branchFutureOffersSubst]
+                rw [ih (sizeOf branchType) hBranchSize branchType rfl,
+                  hTail (fun other hOther => hRest other (by simp [hOther]))]
+                simp only [Finset.union_assoc]
+          simp only [PactType.replaceVar, typeFutureOffers_offer,
+            futureOffersSubst]
+          rw [ih (sizeOf elseType) hElseSize elseType rfl,
+            hFold branches (by simp)]
 
 /-- Unfolding a clock-guarded recursive variable preserves the public
 same-cycle future-offer menu. -/

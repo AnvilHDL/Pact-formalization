@@ -311,6 +311,7 @@ conjunctive-offer context.
 -/
 def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
+    PactType.BinderHygienic [] processType ∧
     PactType.ClockGuarded processType ∧
     PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType ∧
@@ -355,12 +356,13 @@ theorem type_automaton_correspondence
       hAdmissible.2.2.1
     simp [PactType.AllVariablesBound] at hClosed
   rcases hAdmissible with
-    ⟨hSignature, hSupports, hClosed, hGuarded, hTail, hLinear, hScoped⟩
+    ⟨hSignature, hSupports, hClosed, hHygienic, hGuarded, hTail, hLinear,
+      hScoped⟩
   have hStep : CompilationStepCorrect signature processType := by
     intro residual residual' state env label offers hRelated hSymbol
     exact compilationStepCorrect_of_closedGuardedRegular signature processType
-      hSignature hSupports hClosed hGuarded hTail hLinear hScoped hRelated
-        hSymbol
+      hSignature hSupports hClosed hHygienic hGuarded hTail hLinear hScoped
+        hRelated hSymbol
   refine ⟨
     { relation := fun residual state =>
         TypeCompilationRelation processType state residual
