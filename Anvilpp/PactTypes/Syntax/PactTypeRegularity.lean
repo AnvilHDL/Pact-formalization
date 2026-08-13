@@ -84,6 +84,136 @@ namespace PactType
       omega
   end
 
+  /-- A variable outside the ambient bound-name list has no free occurrence
+  in a type whose variables are all bound by that list. -/
+  theorem tailOccurrences_false_of_allVariablesBound_not_mem
+      (name : String) (bound : List String) :
+      ∀ processType,
+        AllVariablesBound bound processType →
+        name ∉ bound →
+        TailOccurrences name False processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType bound with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            AllBranchVariablesBound bound branches →
+            name ∉ bound →
+            TailBranchOccurrences name False branches := by
+          intro branches hBranchesSize hBound hNotMem
+          induction branches with
+          | nil => simp [AllBranchVariablesBound, TailBranchOccurrences]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              have hFields : AllVariablesBound bound branchType ∧
+                  AllBranchVariablesBound bound rest := by
+                simpa only [AllBranchVariablesBound] using hBound
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType <
+                    sizeOf (action, branchType) := by simp_wf; omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              simp only [TailBranchOccurrences]
+              exact ⟨ih (sizeOf branchType) hBranchSize bound branchType rfl
+                  hFields.1 hNotMem,
+                restIH hRestSize hFields.2⟩
+        intro hBound hNotMem
+        cases processType with
+        | message _ _ | progress _ | tock | skip =>
+            simp [TailOccurrences]
+        | var other =>
+            simp only [AllVariablesBound] at hBound
+            simp only [TailOccurrences]
+            intro hEq
+            subst other
+            exact hNotMem hBound
+        | recur binder body =>
+            by_cases hBinder : binder = name
+            · simp [TailOccurrences, hBinder]
+            · have hBodySize : sizeOf body < n := by
+                rw [← hSize]; simp_wf; omega
+              have hBodyBound : AllVariablesBound (binder :: bound) body := by
+                simpa only [AllVariablesBound] using hBound
+              have hNameNotMem : name ∉ binder :: bound := by
+                simp [Ne.symm hBinder, hNotMem]
+              simpa only [TailOccurrences, if_neg hBinder] using
+                ih (sizeOf body) hBodySize (binder :: bound) body rfl
+                  hBodyBound hNameNotMem
+        | choice left right =>
+            have hLeftSize : sizeOf left < n := by
+              rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound left ∧
+                AllVariablesBound bound right := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
+              ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
+        | fairChoice _ left right =>
+            have hLeftSize : sizeOf left < n := by
+              rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound left ∧
+                AllVariablesBound bound right := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
+              ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
+        | seq left right =>
+            have hLeftSize : sizeOf left < n := by
+              rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound left ∧
+                AllVariablesBound bound right := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
+              ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
+        | par left right _ =>
+            have hLeftSize : sizeOf left < n := by
+              rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound left ∧
+                AllVariablesBound bound right := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
+              ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
+        | xoffer elseType branches =>
+            have hElseSize : sizeOf elseType < n := by
+              rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound elseType ∧
+                AllBranchVariablesBound bound branches := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl
+                hFields.1 hNotMem,
+              hBranches branches hBranchesSize hFields.2 hNotMem⟩
+        | offer elseType branches =>
+            have hElseSize : sizeOf elseType < n := by
+              rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields : AllVariablesBound bound elseType ∧
+                AllBranchVariablesBound bound branches := by
+              simpa only [AllVariablesBound] using hBound
+            simp only [TailOccurrences]
+            exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl
+                hFields.1 hNotMem,
+              hBranches branches hBranchesSize hFields.2 hNotMem⟩
+
   /- If `name` occurs nowhere in `processType` (in the unconditional,
   non-tail-restricted sense `TailOccurrences name False`), then `name` can be
   dropped from the bound-name list without affecting `AllVariablesBound`: every

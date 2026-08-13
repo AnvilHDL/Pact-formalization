@@ -350,7 +350,7 @@ private theorem compiledSelectedConjunction_zipIdx_cases
       simp only [hOriginal, Option.map_some, Option.some.injEq] at hAt
       exact ⟨selected, rfl, hAt.symm⟩
 
-private theorem sequenceExecution_buildSelectedConjunctiveOffer_root_shape
+private theorem sequenceExecution_buildSelectedConjunctiveOffer_root_shape_leaf
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
@@ -595,7 +595,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
       edge.label ≠ .future ∧
         ∃ removed, edge.future = .at edge.target removed := by
     intro edge hEdge hSource
-    exact sequenceExecution_buildSelectedConjunctiveOffer_root_shape signature
+    exact sequenceExecution_buildSelectedConjunctiveOffer_root_shape_leaf signature
       branches elseFragment selectedConjunctions edge hEdge hSource
   have hParent : compileTypeFuel signature
       (typeCompilationFuel (.offer elseType branches))

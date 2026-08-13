@@ -1156,6 +1156,25 @@ theorem PactType.replaceVar_eq_self_of_tailOccurrences_false
           rw [ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
             hBranches branches hBranchesSize hFields.2]
 
+/-- Branch-list form of `replaceVar_eq_self_of_tailOccurrences_false`. -/
+theorem PactType.replaceBranches_eq_self_of_tailBranchOccurrences_false
+    (name : String) (replacement : PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.TailBranchOccurrences name False branches →
+        PactType.replaceBranches branches name replacement = branches := by
+  intro branches hTail
+  induction branches with
+  | nil => simp [PactType.replaceBranches]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hFields : processType.TailOccurrences name False ∧
+          PactType.TailBranchOccurrences name False rest := by
+        simpa only [PactType.TailBranchOccurrences] using hTail
+      simp only [PactType.replaceBranches]
+      rw [PactType.replaceVar_eq_self_of_tailOccurrences_false name replacement
+          processType hFields.1,
+        ih hFields.2]
+
 /- Replacing every free occurrence of a name by its own binder removes that
 name from all non-tail positions, independently of the original syntax. -/
 theorem PactType.tailOccurrences_false_replaceVar_self_recur
@@ -1297,6 +1316,348 @@ theorem PactType.guardedOccurrences_replace_canCompleteBeforeTock
     _ = processType.CanCompleteBeforeTock :=
       typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
         fuel processType hProcessFuel
+
+/- `undoRecurSubstitution name body` is a left inverse of unfolding on syntax
+whose binders are fresh for `name`.  The freshness hypothesis rules out a
+genuine occurrence of the distinguished recursion binder, so that the only
+such subtree in the unfolded result is one inserted for `.var name`. -/
+mutual
+  private def undoRecurSubstitution (name : String) (body : PactType) :
+      PactType → PactType
+    | .message msg dir => .message msg dir
+    | .progress pid => .progress pid
+    | .tock => .tock
+    | .skip => .skip
+    | .var other => .var other
+    | .recur other nested =>
+        if other = name ∧ nested = body then .var name
+        else .recur other (undoRecurSubstitution name body nested)
+    | .choice left right =>
+        .choice (undoRecurSubstitution name body left)
+          (undoRecurSubstitution name body right)
+    | .fairChoice bid left right =>
+        .fairChoice bid (undoRecurSubstitution name body left)
+          (undoRecurSubstitution name body right)
+    | .seq left right =>
+        .seq (undoRecurSubstitution name body left)
+          (undoRecurSubstitution name body right)
+    | .par left right interface =>
+        .par (undoRecurSubstitution name body left)
+          (undoRecurSubstitution name body right) interface
+    | .xoffer elseType branches =>
+        .xoffer (undoRecurSubstitution name body elseType)
+          (undoRecurSubstitutionBranches name body branches)
+    | .offer elseType branches =>
+        .offer (undoRecurSubstitution name body elseType)
+          (undoRecurSubstitutionBranches name body branches)
+
+  private def undoRecurSubstitutionBranches (name : String)
+      (body : PactType) : List (BareMessage × PactType) →
+        List (BareMessage × PactType)
+    | [] => []
+    | (action, processType) :: rest =>
+        (action, undoRecurSubstitution name body processType) ::
+          undoRecurSubstitutionBranches name body rest
+end
+
+private theorem undoRecurSubstitution_replaceVar
+    (name : String) (body : PactType) :
+    ∀ processType : PactType,
+      processType.BinderFreshFor [name] →
+        undoRecurSubstitution name body
+          (processType.replaceVar name (.recur name body)) = processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches [name] branches →
+          undoRecurSubstitutionBranches name body
+              (PactType.replaceBranches branches name (.recur name body)) =
+            branches := by
+        intro branches hBranchesSize hFresh
+        induction branches with
+        | nil =>
+            simp [PactType.replaceBranches,
+              undoRecurSubstitutionBranches]
+        | cons entry rest restIH =>
+            rcases entry with ⟨action, branchType⟩
+            have hFreshFields : branchType.BinderFreshFor [name] ∧
+                PactType.BinderFreshForBranches [name] rest := by
+              simpa only [PactType.BinderFreshForBranches] using hFresh
+            have hBranchSize : sizeOf branchType < n := by
+              have hLt : sizeOf branchType <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              exact lt_trans hLt hBranchesSize
+            have hRestSize : sizeOf rest < n := by
+              have hLt : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              exact lt_trans hLt hBranchesSize
+            simp only [PactType.replaceBranches,
+              undoRecurSubstitutionBranches]
+            rw [ih (sizeOf branchType) hBranchSize branchType rfl
+              hFreshFields.1]
+            rw [restIH hRestSize hFreshFields.2]
+      intro hFresh
+      cases processType with
+      | message msg dir =>
+          simp [PactType.replaceVar, undoRecurSubstitution]
+      | progress pid =>
+          simp [PactType.replaceVar, undoRecurSubstitution]
+      | tock =>
+          simp [PactType.replaceVar, undoRecurSubstitution]
+      | skip =>
+          simp [PactType.replaceVar, undoRecurSubstitution]
+      | var other =>
+          by_cases hName : name = other
+          · subst other
+            simp [PactType.replaceVar, undoRecurSubstitution]
+          · simp [PactType.replaceVar, undoRecurSubstitution, hName]
+      | recur other nested =>
+          have hFreshFields : other ∉ [name] ∧
+              nested.BinderFreshFor [name] := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hOther : ¬ other = name := by
+            simpa using hFreshFields.1
+          have hShadow : ¬ name = other := Ne.symm hOther
+          have hNestedSize : sizeOf nested < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          simp [PactType.replaceVar, undoRecurSubstitution, hShadow, hOther,
+            ih (sizeOf nested) hNestedSize nested rfl hFreshFields.2]
+      | choice left right =>
+          have hFreshFields : left.BinderFreshFor [name] ∧
+              right.BinderFreshFor [name] := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf left) hLeftSize left rfl hFreshFields.1,
+            ih (sizeOf right) hRightSize right rfl hFreshFields.2]
+      | fairChoice bid left right =>
+          have hFreshFields : left.BinderFreshFor [name] ∧
+              right.BinderFreshFor [name] := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf left) hLeftSize left rfl hFreshFields.1,
+            ih (sizeOf right) hRightSize right rfl hFreshFields.2]
+      | seq left right =>
+          have hFreshFields : left.BinderFreshFor [name] ∧
+              right.BinderFreshFor [name] := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf left) hLeftSize left rfl hFreshFields.1,
+            ih (sizeOf right) hRightSize right rfl hFreshFields.2]
+      | par left right interface =>
+          have hFreshFields : left.BinderFreshFor [name] ∧
+              right.BinderFreshFor [name] := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf left) hLeftSize left rfl hFreshFields.1,
+            ih (sizeOf right) hRightSize right rfl hFreshFields.2]
+      | xoffer elseType branches =>
+          have hFreshFields : elseType.BinderFreshFor [name] ∧
+              PactType.BinderFreshForBranches [name] branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf elseType) hElseSize elseType rfl hFreshFields.1,
+            hBranches branches hBranchesSize hFreshFields.2]
+      | offer elseType branches =>
+          have hFreshFields : elseType.BinderFreshFor [name] ∧
+              PactType.BinderFreshForBranches [name] branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.replaceVar, undoRecurSubstitution,
+            ih (sizeOf elseType) hElseSize elseType rfl hFreshFields.1,
+            hBranches branches hBranchesSize hFreshFields.2]
+
+/-- Unfolding a recursion variable is injective on syntax whose binders are
+fresh for that variable. -/
+theorem PactType.replaceVar_recur_injective_of_binderFreshFor
+    (name : String) (body left right : PactType)
+    (hLeft : left.BinderFreshFor [name])
+    (hRight : right.BinderFreshFor [name])
+    (hEqual : left.replaceVar name (.recur name body) =
+      right.replaceVar name (.recur name body)) :
+    left = right := by
+  calc
+    left = undoRecurSubstitution name body
+        (left.replaceVar name (.recur name body)) :=
+      (undoRecurSubstitution_replaceVar name body left hLeft).symm
+    _ = undoRecurSubstitution name body
+        (right.replaceVar name (.recur name body)) := congrArg _ hEqual
+    _ = right := undoRecurSubstitution_replaceVar name body right hRight
+
+/-- Substitution cannot introduce a forbidden binder when neither its source
+nor its replacement contains one. -/
+theorem PactType.replaceVar_binderFreshFor_same
+    (forbidden : List String) (name : String) (replacement : PactType)
+    (hReplacement : replacement.BinderFreshFor forbidden) :
+    ∀ processType : PactType,
+      processType.BinderFreshFor forbidden →
+        (processType.replaceVar name replacement).BinderFreshFor forbidden := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches forbidden branches →
+          PactType.BinderFreshForBranches forbidden
+            (PactType.replaceBranches branches name replacement) := by
+        intro branches hBranchesSize hFresh
+        induction branches with
+        | nil =>
+            simp [PactType.replaceBranches,
+              PactType.BinderFreshForBranches]
+        | cons entry rest restIH =>
+            rcases entry with ⟨action, branchType⟩
+            have hFreshFields : branchType.BinderFreshFor forbidden ∧
+                PactType.BinderFreshForBranches forbidden rest := by
+              simpa only [PactType.BinderFreshForBranches] using hFresh
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hLt : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            simp only [PactType.replaceBranches,
+              PactType.BinderFreshForBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl
+                hFreshFields.1, restIH hRestSize hFreshFields.2⟩
+      intro hFresh
+      cases processType with
+      | message msg dir =>
+          simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | progress pid =>
+          simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | tock => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | skip => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | var other =>
+          by_cases hName : name = other
+          · simpa [PactType.replaceVar, hName] using hReplacement
+          · simp [PactType.replaceVar, PactType.BinderFreshFor, hName]
+      | recur other nested =>
+          have hFreshFields : other ∉ forbidden ∧
+              nested.BinderFreshFor forbidden := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          by_cases hName : name = other
+          · simpa [PactType.replaceVar, hName,
+              PactType.BinderFreshFor] using hFreshFields
+          · have hNestedSize : sizeOf nested < n := by
+              rw [← hSize]; simp_wf; omega
+            simp only [PactType.replaceVar, if_neg hName,
+              PactType.BinderFreshFor]
+            exact ⟨hFreshFields.1,
+              ih (sizeOf nested) hNestedSize nested rfl hFreshFields.2⟩
+      | choice left right =>
+          have hFreshFields : left.BinderFreshFor forbidden ∧
+              right.BinderFreshFor forbidden := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf left) hLeftSize left rfl hFreshFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFreshFields.2)
+      | fairChoice bid left right =>
+          have hFreshFields : left.BinderFreshFor forbidden ∧
+              right.BinderFreshFor forbidden := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf left) hLeftSize left rfl hFreshFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFreshFields.2)
+      | seq left right =>
+          have hFreshFields : left.BinderFreshFor forbidden ∧
+              right.BinderFreshFor forbidden := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf left) hLeftSize left rfl hFreshFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFreshFields.2)
+      | par left right interface =>
+          have hFreshFields : left.BinderFreshFor forbidden ∧
+              right.BinderFreshFor forbidden := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hLeftSize : sizeOf left < n := by
+            rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf left) hLeftSize left rfl hFreshFields.1)
+              (ih (sizeOf right) hRightSize right rfl hFreshFields.2)
+      | xoffer elseType branches =>
+          have hFreshFields : elseType.BinderFreshFor forbidden ∧
+              PactType.BinderFreshForBranches forbidden branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf elseType) hElseSize elseType rfl hFreshFields.1)
+              (hBranches branches hBranchesSize hFreshFields.2)
+      | offer elseType branches =>
+          have hFreshFields : elseType.BinderFreshFor forbidden ∧
+              PactType.BinderFreshForBranches forbidden branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simpa only [PactType.replaceVar, PactType.BinderFreshFor] using
+            And.intro
+              (ih (sizeOf elseType) hElseSize elseType rfl hFreshFields.1)
+              (hBranches branches hBranchesSize hFreshFields.2)
 
 end
 

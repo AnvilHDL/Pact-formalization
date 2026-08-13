@@ -188,6 +188,22 @@ def sequenceExecutionFragment
     completing := child.completing
     edges := (sequenceExecutionAutomaton child).edges }
 
+theorem sequenceExecutionFragment_markerSource
+    (fragment : AutomatonFragment) (name : String)
+    (state : TypeAutomatonState) :
+    MarkerSource (sequenceExecutionFragment fragment) name state ↔
+      MarkerSource fragment name state := by
+  classical
+  constructor
+  · rintro ⟨edge, hEdge, hSource, hLabel⟩
+    simp only [sequenceExecutionFragment, sequenceExecutionAutomaton,
+      Finset.mem_image] at hEdge
+    rcases hEdge with ⟨raw, hRaw, rfl⟩
+    exact ⟨raw, hRaw, by simpa using hSource, by simpa using hLabel⟩
+  · rintro ⟨raw, hRaw, hSource, hLabel⟩
+    refine ⟨sequenceExecutionEdge raw, ?_, by simpa, by simpa⟩
+    exact Finset.mem_image.mpr ⟨raw, hRaw, rfl⟩
+
 @[simp] private theorem sequenceExecutionEdge_idempotent
     (edge : PendingAutomatonEdge) :
     sequenceExecutionEdge (sequenceExecutionEdge edge) =
@@ -235,6 +251,7 @@ theorem sequenceExecutionFragment_futureTargetsInStates
       subst target
       exact Finset.mem_union_right _
         (Finset.mem_image.mpr ⟨childEdge, hChildEdge, rfl⟩)
+
   | «variable» name =>
       have hTarget : target = childEdge.target := by
         have hFields : childEdge.target = target ∧
@@ -258,6 +275,68 @@ theorem sequenceExecution_buildSequence_edges
     childPendingEdge, childFutureSpec, childStates, childState,
     sequenceExecutionEdge, Finset.image_union, Function.comp_def]
   grind
+
+/-- Executing an installed recursion is edge-for-edge the recursion
+constructor applied to the body's execution view after its still-symbolic
+calls of the installed binder have been stopped.  Those calls are immediately
+rewritten as backedges, so their temporary execution targets are irrelevant. -/
+theorem sequenceExecution_buildRecursion_edges
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment) :
+    (sequenceExecutionAutomaton
+        (buildRecursionAutomaton signature name body)).edges =
+      (buildRecursionAutomaton signature name
+        (markerStoppedFragment (sequenceExecutionFragment body) name)).edges := by
+  classical
+  let header : Finset PendingAutomatonEdge :=
+    signature.localEnvironments.image fun environment =>
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := AutomatonConstructionLabel.visible TypeLabel.silent
+        current := ∅
+        future := .at (childState 0 body.initial) ∅
+        target := childState 0 body.initial }
+  let backedge : PendingAutomatonEdge → PendingAutomatonEdge := fun edge =>
+    { source := childState 0 edge.source
+      environment := edge.environment
+      label := AutomatonConstructionLabel.visible TypeLabel.silent
+      current := ∅
+      future := .at (childState 0 body.initial) ∅
+      target := childState 0 body.initial }
+  let install : PendingAutomatonEdge → PendingAutomatonEdge := fun edge =>
+    if edge.label = AutomatonConstructionLabel.variable name then
+      backedge edge
+    else childPendingEdge 0 edge
+  let stop : PendingAutomatonEdge → PendingAutomatonEdge := fun edge =>
+    if edge.label = AutomatonConstructionLabel.variable name then
+      { edge with current := ∅, future := .explicit ∅ }
+    else edge
+  have hPoint : ∀ edge,
+      sequenceExecutionEdge (install edge) =
+        install (stop (sequenceExecutionEdge edge)) := by
+    intro edge
+    cases hLabel : edge.label <;> cases hFuture : edge.future <;>
+      simp [install, stop, backedge, sequenceExecutionEdge,
+        childPendingEdge, childFutureSpec, childState, hLabel, hFuture]
+    case variable.explicit marker offers =>
+      by_cases hName : marker = name <;>
+        simp_all [install, stop, backedge, sequenceExecutionEdge,
+          childPendingEdge, childFutureSpec, childState, hName]
+    case variable.at marker target removed =>
+      by_cases hName : marker = name <;>
+        simp_all [install, stop, backedge, sequenceExecutionEdge,
+          childPendingEdge, childFutureSpec, childState, hName]
+  have hHeader : header.image sequenceExecutionEdge = header := by
+    ext edge
+    simp [header, sequenceExecutionEdge, TypeLabel.silent]
+  change (header ∪ body.edges.image install).image sequenceExecutionEdge =
+    header ∪ ((body.edges.image sequenceExecutionEdge).image stop).image
+      install
+  rw [Finset.image_union, hHeader, Finset.image_image, Finset.image_image,
+    Finset.image_image]
+  congr 1
+  apply congrArg (Finset.image · body.edges)
+  funext edge
+  exact hPoint edge
 
 private theorem sequenceExecution_buildChoice_outgoing_left
     (signature : TypeAlphabet) (left right : AutomatonFragment)
@@ -855,6 +934,49 @@ theorem sequenceExecution_taggedChild_futureReachable
       (sequenceExecution_taggedChild_referencedStates parent child index
         hOutgoing) hClosed state hChildState hCard
 
+/-- Marker reachability follows the same tagged-child embedding as ordinary
+execution reachability. -/
+theorem sequenceExecution_taggedChild_markerReachable
+    (parent child : AutomatonFragment) (index : Nat) (name : String)
+    (hOutgoing : ∀ state edge,
+      edge ∈ parent.edges ∧ edge.source = childState index state ↔
+        ∃ childEdge ∈ child.edges,
+          childEdge.source = state ∧
+            edge = childPendingEdge index childEdge)
+    (hStates : child.states.image (childState index) ⊆ parent.states)
+    (hTargets : child.FutureTargetsInStates)
+    (state : TypeAutomatonState) (hState : state ∈ child.states) :
+    MarkerReachable (sequenceExecutionFragment parent) name
+        (childState index state) ↔
+      MarkerReachable (sequenceExecutionFragment child) name state := by
+  classical
+  have hReach := sequenceExecution_taggedChild_futureReachable parent child
+    index hOutgoing hStates hTargets state hState
+  have hMarkerSource : ∀ q,
+      MarkerSource (sequenceExecutionFragment parent) name
+          (childState index q) ↔
+        MarkerSource (sequenceExecutionFragment child) name q := by
+    intro q
+    apply markerSource_of_outgoing_childPendingEdge
+      (sequenceExecutionFragment parent) (sequenceExecutionFragment child)
+      index name q
+    intro edge
+    simpa [sequenceExecutionFragment] using
+      (sequenceExecution_taggedChild_outgoing parent child index hOutgoing q
+        edge)
+  simp only [MarkerReachable]
+  change (∃ reached ∈ (sequenceExecutionAutomaton parent).futureReachable
+      (childState index state),
+        MarkerSource (sequenceExecutionFragment parent) name reached) ↔ _
+  rw [hReach]
+  simp only [Finset.mem_image]
+  constructor
+  · rintro ⟨_, ⟨reached, hReached, rfl⟩, hMarker⟩
+    exact ⟨reached, hReached, (hMarkerSource reached).mp hMarker⟩
+  · rintro ⟨reached, hReached, hMarker⟩
+    exact ⟨childState index reached, ⟨reached, hReached, rfl⟩,
+      (hMarkerSource reached).mpr hMarker⟩
+
 theorem sequenceExecution_taggedChild_computeFuture
     (parent child : AutomatonFragment) (index : Nat)
     (hOutgoing : ∀ state edge,
@@ -1079,6 +1201,37 @@ theorem sequenceExecution_futureReachable_root
   · simpa [hReferences] using hUpper
   · simpa [hReferences] using hEntries
 
+theorem sequenceExecution_markerReachable_root_of_entries
+    (fragment : AutomatonFragment) (name : String)
+    (entries : Finset TypeAutomatonState)
+    (hTargets : fragment.FutureTargetsInStates)
+    (hRoot : (.root : TypeAutomatonState) ∈ fragment.states)
+    (hShape : ∀ edge ∈ fragment.edges, edge.source = .root →
+      edge.label ≠ .future ∧
+        ∃ removed, edge.future = .at edge.target removed)
+    (hUpper : fragment.toPending.referencedStates .root ⊆
+      insert .root entries)
+    (hEntries : entries ⊆ fragment.toPending.referencedStates .root) :
+    MarkerReachable (sequenceExecutionFragment fragment) name .root ↔
+      MarkerSource (sequenceExecutionFragment fragment) name .root ∨
+        ∃ entry ∈ entries,
+          MarkerReachable (sequenceExecutionFragment fragment) name entry := by
+  classical
+  have hReach := sequenceExecution_futureReachable_root fragment entries
+    hTargets hRoot hShape hUpper hEntries
+  simp only [MarkerReachable]
+  change (∃ reached ∈ (sequenceExecutionAutomaton fragment).futureReachable
+      .root, MarkerSource (sequenceExecutionFragment fragment) name reached) ↔ _
+  rw [hReach]
+  simp only [Finset.mem_union, Finset.mem_singleton, Finset.mem_biUnion]
+  constructor
+  · rintro ⟨reached, rfl | ⟨entry, hEntry, hReached⟩, hMarker⟩
+    · exact Or.inl hMarker
+    · exact Or.inr ⟨entry, hEntry, reached, hReached, hMarker⟩
+  · rintro (hMarker | ⟨entry, hEntry, reached, hReached, hMarker⟩)
+    · exact ⟨.root, Or.inl rfl, hMarker⟩
+    · exact ⟨reached, Or.inr ⟨entry, hEntry, hReached⟩, hMarker⟩
+
 theorem sequenceExecution_buildExclusiveOffer_root_shape
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -1143,6 +1296,42 @@ theorem sequenceExecution_buildConjunctiveOffer_root_shape
     exact ⟨by simp, _, rfl⟩
   · simp only [Finset.mem_image, Finset.mem_filter] at hElse
     rcases hElse with ⟨environment, _, rfl⟩
+    exact ⟨by simp, ∅, rfl⟩
+
+theorem sequenceExecution_buildSelectedConjunctiveOffer_root_shape
+    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildSelectedConjunctiveOfferAutomaton signature branches
+      elseAutomaton selectedConjunctions).edges)
+    (hSource : edge.source = .root) :
+    edge.label ≠ .future ∧
+      ∃ removed, edge.future = .at edge.target removed := by
+  classical
+  simp only [buildSelectedConjunctiveOfferAutomaton,
+    finishAutomatonFragment, Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
+  · simp only [childPendingEdges, Finset.mem_image] at hElse
+    rcases hElse with ⟨childEdge, _, rfl⟩
+    simp [childPendingEdge, childState] at hSource
+  · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+    rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+    · simp at hEmpty
+    · simp only [childPendingEdges, Finset.mem_image] at hChild
+      rcases hChild with ⟨childEdge, _, rfl⟩
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hEnabled
+    rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
+    · simp at hEmpty
+    · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      rcases hNewEdge with ⟨environment, _, rfl⟩
+      exact ⟨by simp, ∅, rfl⟩
+  · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    rcases hWait with ⟨environment, _, rfl⟩
+    exact ⟨by simp, _, rfl⟩
+  · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    rcases hResolved with ⟨environment, _, rfl⟩
     exact ⟨by simp, ∅, rfl⟩
 
 theorem buildExclusiveOffer_child0_skipping_iff
@@ -1700,6 +1889,87 @@ private theorem sequenceExecution_buildChoice_futureReachable_root
     simpa using hRightEmbedding
   rw [hRightSingleton]
   simp [Finset.union_assoc]
+
+theorem sequenceExecution_buildChoice_markerReachable_root
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (name : String)
+    (hSelectionLeft : selectionLeft ≠ TypeLabel.tock)
+    (hSelectionRight : selectionRight ≠ TypeLabel.tock)
+    (hLeftTargets : left.FutureTargetsInStates)
+    (hRightTargets : right.FutureTargetsInStates)
+    (hLeftInitial : left.initial ∈ left.states)
+    (hRightInitial : right.initial ∈ right.states) :
+    MarkerReachable
+        (sequenceExecutionFragment (buildChoiceAutomaton signature left right
+          selectionLeft selectionRight)) name .root ↔
+      MarkerReachable (sequenceExecutionFragment left) name left.initial ∨
+        MarkerReachable (sequenceExecutionFragment right) name right.initial := by
+  classical
+  let parentFragment := buildChoiceAutomaton signature left right
+    selectionLeft selectionRight
+  have hReach := sequenceExecution_buildChoice_futureReachable_root signature
+    left right selectionLeft selectionRight hSelectionLeft hSelectionRight
+      hLeftTargets hRightTargets hLeftInitial hRightInitial
+  have hRootNo : ¬ MarkerSource (sequenceExecutionFragment parentFragment)
+      name .root := by
+    rintro ⟨edge, hEdge, hSource, hLabel⟩
+    simp only [sequenceExecutionFragment, sequenceExecutionAutomaton,
+      Finset.mem_image] at hEdge
+    rcases hEdge with ⟨raw, hRaw, rfl⟩
+    simp only [parentFragment, buildChoiceAutomaton,
+      finishAutomatonFragment, childPendingEdges, Finset.mem_union,
+      Finset.mem_image, Finset.mem_biUnion] at hRaw
+    rcases hRaw with (⟨childEdge, _, rfl⟩ | ⟨childEdge, _, rfl⟩) |
+      ⟨environment, _, hSelection⟩
+    · simp [childPendingEdge, childState] at hSource
+    · simp [childPendingEdge, childState] at hSource
+    · simp only [Finset.mem_insert, Finset.mem_singleton] at hSelection
+      rcases hSelection with hSelection | hSelection <;>
+        rw [hSelection] at hLabel <;> simp at hLabel
+  have hLeftSource : ∀ q,
+      MarkerSource (sequenceExecutionFragment parentFragment) name (.child 0 q) ↔
+        MarkerSource (sequenceExecutionFragment left) name q := by
+    intro q
+    apply markerSource_of_outgoing_childPendingEdge
+    intro edge
+    simpa [parentFragment, sequenceExecutionFragment] using
+      (sequenceExecution_buildChoice_outgoing_left signature left right
+        selectionLeft selectionRight q edge)
+  have hRightSource : ∀ q,
+      MarkerSource (sequenceExecutionFragment parentFragment) name (.child 1 q) ↔
+        MarkerSource (sequenceExecutionFragment right) name q := by
+    intro q
+    apply markerSource_of_outgoing_childPendingEdge
+    intro edge
+    simpa [parentFragment, sequenceExecutionFragment] using
+      (sequenceExecution_buildChoice_outgoing_right signature left right
+        selectionLeft selectionRight q edge)
+  simp only [MarkerReachable]
+  change (∃ reached ∈ (sequenceExecutionAutomaton parentFragment).futureReachable
+      .root, MarkerSource (sequenceExecutionFragment parentFragment) name reached) ↔ _
+  constructor
+  · rintro ⟨reached, hReached, hMarker⟩
+    rw [hReach] at hReached
+    rcases Finset.mem_union.mp hReached with hRootOrLeft | hRight
+    · rcases Finset.mem_union.mp hRootOrLeft with hRoot | hLeft
+      · have : reached = .root := Finset.mem_singleton.mp hRoot
+        subst reached
+        exact absurd hMarker hRootNo
+      · rcases Finset.mem_image.mp hLeft with ⟨q, hq, hqEq⟩
+        subst reached
+        exact Or.inl ⟨q, hq, (hLeftSource q).mp hMarker⟩
+    · rcases Finset.mem_image.mp hRight with ⟨q, hq, hqEq⟩
+      subst reached
+      exact Or.inr ⟨q, hq, (hRightSource q).mp hMarker⟩
+  · rintro (⟨q, hq, hMarker⟩ | ⟨q, hq, hMarker⟩)
+    · refine ⟨.child 0 q, ?_, (hLeftSource q).mpr hMarker⟩
+      rw [hReach]
+      exact Finset.mem_union.mpr <| Or.inl <| Finset.mem_union.mpr <|
+        Or.inr <| Finset.mem_image.mpr ⟨q, hq, rfl⟩
+    · refine ⟨.child 1 q, ?_, (hRightSource q).mpr hMarker⟩
+      rw [hReach]
+      exact Finset.mem_union.mpr <| Or.inr <|
+        Finset.mem_image.mpr ⟨q, hq, rfl⟩
 
 theorem buildChoiceAutomaton_completionWitness_left_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment)

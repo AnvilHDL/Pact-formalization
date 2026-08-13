@@ -8,6 +8,11 @@ namespace Pact
 
 noncomputable section
 
+/-- Forget fragment metadata and retain the pending graph. -/
+def AutomatonFragment.toPending (fragment : AutomatonFragment) :
+    PendingAutomaton :=
+  { states := fragment.states, edges := fragment.edges }
+
 /-! ### Marker-augmented future resolution
 
 A `.variable name` marker edge produced by the compiler carries no offers of
@@ -40,6 +45,112 @@ def MarkerEdgesInert (fragment : AutomatonFragment) (name : String) : Prop :=
   ∀ edge ∈ fragment.edges,
     edge.label = AutomatonConstructionLabel.variable name →
       edge.current = ∅ ∧ edge.future = FutureSpec.explicit ∅
+
+/-- Stop unresolved calls of one name without changing the carrier or any
+other edge.  This is useful when an execution view has followed a temporary
+variable edge to its bookkeeping target, while an enclosing recursion
+constructor is about to replace that edge by a backedge. -/
+def markerStoppedFragment (fragment : AutomatonFragment) (name : String) :
+    AutomatonFragment :=
+  { states := fragment.states
+    initial := fragment.initial
+    accepting := fragment.accepting
+    skipping := fragment.skipping
+    completing := fragment.completing
+    edges := fragment.edges.image fun edge =>
+      if edge.label = AutomatonConstructionLabel.variable name then
+        { edge with current := ∅, future := .explicit ∅ }
+      else edge }
+
+theorem markerStoppedFragment_markerEdgesInert
+    (fragment : AutomatonFragment) (name : String) :
+    MarkerEdgesInert (markerStoppedFragment fragment name) name := by
+  classical
+  intro edge hEdge hLabel
+  simp only [markerStoppedFragment, Finset.mem_image] at hEdge
+  rcases hEdge with ⟨original, hOriginal, rfl⟩
+  by_cases hMarker : original.label =
+      AutomatonConstructionLabel.variable name
+  · simp [hMarker]
+  · simp [hMarker] at hLabel
+
+theorem markerStoppedFragment_futureTargetsInStates
+    (fragment : AutomatonFragment) (name : String)
+    (hTargets : fragment.FutureTargetsInStates) :
+    (markerStoppedFragment fragment name).FutureTargetsInStates := by
+  classical
+  intro edge hEdge target removed hFuture
+  simp only [markerStoppedFragment, Finset.mem_image] at hEdge
+  rcases hEdge with ⟨original, hOriginal, rfl⟩
+  by_cases hMarker : original.label =
+      AutomatonConstructionLabel.variable name
+  · simp [hMarker] at hFuture
+  · simp only [if_neg hMarker] at hFuture
+    exact hTargets original hOriginal target removed hFuture
+
+theorem markerStoppedFragment_markerSource
+    (fragment : AutomatonFragment) (stopped query : String)
+    (state : TypeAutomatonState) :
+    MarkerSource (markerStoppedFragment fragment stopped) query state ↔
+      MarkerSource fragment query state := by
+  classical
+  constructor
+  · rintro ⟨edge, hEdge, hSource, hLabel⟩
+    simp only [markerStoppedFragment, Finset.mem_image] at hEdge
+    rcases hEdge with ⟨original, hOriginal, rfl⟩
+    refine ⟨original, hOriginal, ?_, ?_⟩
+    · split at hSource <;> simpa using hSource
+    · split at hLabel <;> simpa using hLabel
+  · rintro ⟨edge, hEdge, hSource, hLabel⟩
+    refine ⟨if edge.label = AutomatonConstructionLabel.variable stopped then
+        { edge with current := ∅, future := .explicit ∅ }
+      else edge, ?_, ?_, ?_⟩
+    · exact Finset.mem_image.mpr ⟨edge, hEdge, rfl⟩
+    · split <;> simpa using hSource
+    · split <;> simpa using hLabel
+
+theorem markerStoppedFragment_referencedStates_subset
+    (fragment : AutomatonFragment) (name : String)
+    (state : TypeAutomatonState) :
+    (markerStoppedFragment fragment name : AutomatonFragment).toPending.referencedStates
+        state ⊆
+      (fragment : AutomatonFragment).toPending.referencedStates state := by
+  classical
+  intro target hTarget
+  simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
+    markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
+    Finset.mem_image] at hTarget ⊢
+  rcases hTarget with
+    ⟨edge, ⟨⟨original, hOriginal, hEdge⟩, hSource⟩, hReference⟩
+  rw [← hEdge] at hSource hReference
+  by_cases hMarker : original.label =
+      AutomatonConstructionLabel.variable name
+  · simp [hMarker] at hReference
+  · simp only [if_neg hMarker] at hSource hReference
+    exact ⟨original, ⟨hOriginal, hSource⟩, hReference⟩
+
+theorem markerStoppedFragment_referencedStates_eq_of_not_markerSource
+    (fragment : AutomatonFragment) (name : String)
+    (state : TypeAutomatonState)
+    (hNoMarker : ¬ MarkerSource fragment name state) :
+    (markerStoppedFragment fragment name).toPending.referencedStates state =
+      fragment.toPending.referencedStates state := by
+  classical
+  apply Finset.Subset.antisymm
+  · exact markerStoppedFragment_referencedStates_subset fragment name state
+  · intro target hTarget
+    simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
+      Finset.mem_biUnion, Finset.mem_filter] at hTarget
+    rcases hTarget with ⟨edge, ⟨hEdge, hSource⟩, hReference⟩
+    have hNotMarker : edge.label ≠
+        AutomatonConstructionLabel.variable name := by
+      intro hLabel
+      exact hNoMarker ⟨edge, hEdge, hSource, hLabel⟩
+    simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
+      markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
+      Finset.mem_image]
+    exact ⟨edge, ⟨⟨edge, hEdge, by simp [hNotMarker]⟩,
+      by simp [hNotMarker, hSource]⟩, by simpa [hNotMarker] using hReference⟩
 
 /-- Activating markers does not change the same-cycle reference structure. -/
 theorem markerAugmentedPending_referencedStates
@@ -178,6 +289,395 @@ def MarkerReachable (fragment : AutomatonFragment) (name : String)
   ∃ reached ∈ (⟨fragment.states, fragment.edges⟩ :
       PendingAutomaton).futureReachable state,
     MarkerSource fragment name reached
+
+/-- Removing the temporary execution reference leaving a marker cannot alter
+whether that same marker is reachable.  If a path first tries to use a removed
+reference, its source is already the required marker witness. -/
+theorem markerStoppedFragment_markerReachable_self
+    (fragment : AutomatonFragment) (name : String)
+    (hClosed : fragment.toPending.ReferencesClosed)
+    (state : TypeAutomatonState) (hState : state ∈ fragment.states) :
+    MarkerReachable (markerStoppedFragment fragment name) name state ↔
+      MarkerReachable fragment name state := by
+  classical
+  let stopped := markerStoppedFragment fragment name
+  have hStoppedClosed : stopped.toPending.ReferencesClosed := by
+    intro source hSource target hReference
+    exact hClosed source (by simpa [stopped, markerStoppedFragment] using hSource)
+      (markerStoppedFragment_referencedStates_subset fragment name source
+        hReference)
+  have hStoppedState : state ∈ stopped.states := by
+    simpa [stopped, markerStoppedFragment] using hState
+  have hSources : ∀ q,
+      MarkerSource stopped name q ↔ MarkerSource fragment name q :=
+    markerStoppedFragment_markerSource fragment name name
+  constructor
+  · rintro ⟨reached, hReached, hMarker⟩
+    let allowed := fragment.toPending.futureReachable state
+    have hInitial : state ∈ allowed :=
+      fragment.toPending.mem_futureReachable_self state
+    have hAllowedClosed : ∀ source ∈ allowed,
+        stopped.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      have hSourceInStates :=
+        fragment.toPending.futureReachable_subset_of_reference_closed state
+          fragment.states hState hClosed hSource
+      exact (fragment.toPending.futureReachable_subset_of_mem hClosed hState
+        hSource)
+        (fragment.toPending.referencedStates_subset_futureReachable source
+          hClosed hSourceInStates
+          (markerStoppedFragment_referencedStates_subset fragment name source
+            hReference))
+    have hSubset := stopped.toPending.futureReachable_subset_of_reference_closed
+      state allowed hInitial hAllowedClosed hReached
+    exact ⟨reached, hSubset, (hSources reached).mp hMarker⟩
+  · intro hOriginal
+    by_contra hStopped
+    let allowed := stopped.toPending.futureReachable state
+    have hInitial : state ∈ allowed :=
+      stopped.toPending.mem_futureReachable_self state
+    have hAllowedClosed : ∀ source ∈ allowed,
+        fragment.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      have hNoSource : ¬ MarkerSource fragment name source := by
+        intro hMarker
+        exact hStopped ⟨source, hSource, (hSources source).mpr hMarker⟩
+      rw [← markerStoppedFragment_referencedStates_eq_of_not_markerSource
+        fragment name source hNoSource] at hReference
+      have hSourceInStates :=
+        stopped.toPending.futureReachable_subset_of_reference_closed state
+          stopped.states hStoppedState hStoppedClosed hSource
+      exact (stopped.toPending.futureReachable_subset_of_mem hStoppedClosed
+        hStoppedState hSource)
+        (stopped.toPending.referencedStates_subset_futureReachable source
+          hStoppedClosed hSourceInStates hReference)
+    rcases hOriginal with ⟨reached, hReached, hMarker⟩
+    have hSubset := fragment.toPending.futureReachable_subset_of_reference_closed
+      state allowed hInitial hAllowedClosed hReached
+    exact hStopped ⟨reached, hSubset, (hSources reached).mpr hMarker⟩
+
+/-- Stopping one marker also preserves reachability of every other marker when
+the removed references point to sink bookkeeping states. -/
+theorem markerStoppedFragment_markerReachable_of_target_sinks
+    (fragment : AutomatonFragment) (stoppedName query : String)
+    (hClosed : fragment.toPending.ReferencesClosed)
+    (hReferencesTarget : ∀ marker ∈ fragment.edges,
+      marker.label = AutomatonConstructionLabel.variable stoppedName →
+      ∀ target removed, marker.future = .at target removed →
+        target = marker.target)
+    (hSinks : ∀ marker ∈ fragment.edges,
+      marker.label = AutomatonConstructionLabel.variable stoppedName →
+      ∀ edge ∈ fragment.edges, edge.source ≠ marker.target)
+    (state : TypeAutomatonState) (hState : state ∈ fragment.states) :
+    MarkerReachable (markerStoppedFragment fragment stoppedName) query state ↔
+      MarkerReachable fragment query state := by
+  classical
+  let stopped := markerStoppedFragment fragment stoppedName
+  let sinkTargets := (fragment.edges.filter fun edge =>
+    edge.label = AutomatonConstructionLabel.variable stoppedName).image
+      PendingAutomatonEdge.target
+  have hStoppedClosed : stopped.toPending.ReferencesClosed := by
+    intro source hSource target hReference
+    exact hClosed source (by simpa [stopped, markerStoppedFragment] using hSource)
+      (markerStoppedFragment_referencedStates_subset fragment stoppedName source
+        hReference)
+  have hStoppedState : state ∈ stopped.states := by
+    simpa [stopped, markerStoppedFragment] using hState
+  have hSources : ∀ q,
+      MarkerSource stopped query q ↔ MarkerSource fragment query q :=
+    markerStoppedFragment_markerSource fragment stoppedName query
+  constructor
+  · rintro ⟨reached, hReached, hMarker⟩
+    let allowed := fragment.toPending.futureReachable state
+    have hInitial : state ∈ allowed :=
+      fragment.toPending.mem_futureReachable_self state
+    have hAllowedClosed : ∀ source ∈ allowed,
+        stopped.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      have hSourceInStates :=
+        fragment.toPending.futureReachable_subset_of_reference_closed state
+          fragment.states hState hClosed hSource
+      exact (fragment.toPending.futureReachable_subset_of_mem hClosed hState
+        hSource)
+        (fragment.toPending.referencedStates_subset_futureReachable source
+          hClosed hSourceInStates
+          (markerStoppedFragment_referencedStates_subset fragment stoppedName
+            source hReference))
+    have hSubset := stopped.toPending.futureReachable_subset_of_reference_closed
+      state allowed hInitial hAllowedClosed hReached
+    exact ⟨reached, hSubset, (hSources reached).mp hMarker⟩
+  · rintro ⟨reached, hReached, hMarker⟩
+    let allowed := stopped.toPending.futureReachable state ∪ sinkTargets
+    have hInitial : state ∈ allowed := Finset.mem_union_left _
+      (stopped.toPending.mem_futureReachable_self state)
+    have hAllowedClosed : ∀ source ∈ allowed,
+        fragment.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      rcases Finset.mem_union.mp hSource with hStoppedReach | hSink
+      · simp only [PendingAutomaton.referencedStates,
+          AutomatonFragment.toPending, Finset.mem_biUnion,
+          Finset.mem_filter] at hReference
+        rcases hReference with
+          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩,
+            hReferenceTarget⟩
+        by_cases hMarkerEdge : referenceEdge.label =
+            AutomatonConstructionLabel.variable stoppedName
+        · apply Finset.mem_union_right
+          by_cases hClock : referenceEdge.label.semantic = TypeLabel.tock
+          · simp [hClock] at hReferenceTarget
+          · simp only [hClock, if_false] at hReferenceTarget
+            cases hFuture : referenceEdge.future with
+            | explicit offers => simp [hFuture] at hReferenceTarget
+            | «at» referenced removed =>
+                have hTarget : target = referenced := by
+                  simpa [hFuture] using hReferenceTarget
+                subst target
+                rw [hReferencesTarget referenceEdge hReferenceEdge hMarkerEdge
+                  referenced removed hFuture]
+                exact Finset.mem_image.mpr ⟨referenceEdge,
+                  Finset.mem_filter.mpr ⟨hReferenceEdge, hMarkerEdge⟩, rfl⟩
+        · apply Finset.mem_union_left
+          have hStoppedReference : target ∈
+              stopped.toPending.referencedStates source := by
+            simp only [PendingAutomaton.referencedStates,
+              AutomatonFragment.toPending, stopped, markerStoppedFragment,
+              Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
+            exact ⟨referenceEdge,
+              ⟨⟨referenceEdge, hReferenceEdge, by simp [hMarkerEdge]⟩,
+                by simp [hMarkerEdge, hReferenceSource]⟩,
+              by simpa [hMarkerEdge] using hReferenceTarget⟩
+          have hSourceInStates :=
+            stopped.toPending.futureReachable_subset_of_reference_closed state
+              stopped.states hStoppedState hStoppedClosed hStoppedReach
+          exact (stopped.toPending.futureReachable_subset_of_mem hStoppedClosed
+            hStoppedState hStoppedReach)
+            (stopped.toPending.referencedStates_subset_futureReachable source
+              hStoppedClosed hSourceInStates hStoppedReference)
+      · rcases Finset.mem_image.mp hSink with
+          ⟨marker, hMarkerFiltered, hMarkerTarget⟩
+        have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
+        simp only [PendingAutomaton.referencedStates,
+          AutomatonFragment.toPending, Finset.mem_biUnion,
+          Finset.mem_filter] at hReference
+        rcases hReference with
+          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩, _⟩
+        exfalso
+        apply hSinks marker hMarkerFields.1 hMarkerFields.2 referenceEdge
+          hReferenceEdge
+        exact hReferenceSource.trans hMarkerTarget.symm
+    have hReachedAllowed :=
+      fragment.toPending.futureReachable_subset_of_reference_closed state
+        allowed hInitial hAllowedClosed hReached
+    rcases Finset.mem_union.mp hReachedAllowed with hStoppedReach | hSink
+    · exact ⟨reached, hStoppedReach, (hSources reached).mpr hMarker⟩
+    · rcases Finset.mem_image.mp hSink with
+        ⟨marker, hMarkerFiltered, hMarkerTarget⟩
+      have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
+      rcases hMarker with ⟨edge, hEdge, hEdgeSource, _⟩
+      exfalso
+      apply hSinks marker hMarkerFields.1 hMarkerFields.2 edge hEdge
+      exact hEdgeSource.trans hMarkerTarget.symm
+
+/-- Stopping marker references to sink bookkeeping states also preserves the
+computed offer menu.  The matching marker edge itself contributes no offers;
+the only states removed from the reference closure are its offerless sinks. -/
+theorem markerStoppedFragment_computeFuture_of_target_sinks
+    (fragment : AutomatonFragment) (name : String)
+    (hClosed : fragment.toPending.ReferencesClosed)
+    (hMarkerShape : ∀ marker ∈ fragment.edges,
+      marker.label = AutomatonConstructionLabel.variable name →
+        marker.current = ∅ ∧ marker.future = .at marker.target ∅)
+    (hSinks : ∀ marker ∈ fragment.edges,
+      marker.label = AutomatonConstructionLabel.variable name →
+      ∀ edge ∈ fragment.edges, edge.source ≠ marker.target)
+    (state : TypeAutomatonState) (hState : state ∈ fragment.states) :
+    computeFuture (markerStoppedFragment fragment name).toPending state =
+      computeFuture fragment.toPending state := by
+  classical
+  let stopped := markerStoppedFragment fragment name
+  let sinkTargets := (fragment.edges.filter fun edge =>
+    edge.label = AutomatonConstructionLabel.variable name).image
+      PendingAutomatonEdge.target
+  have hStoppedClosed : stopped.toPending.ReferencesClosed := by
+    intro source hSource target hReference
+    exact hClosed source (by simpa [stopped, markerStoppedFragment] using hSource)
+      (markerStoppedFragment_referencedStates_subset fragment name source
+        hReference)
+  have hStoppedState : state ∈ stopped.states := by
+    simpa [stopped, markerStoppedFragment] using hState
+  have hOffers : ∀ source,
+      stopped.toPending.offersAt source = fragment.toPending.offersAt source := by
+    intro source
+    ext action
+    simp only [PendingAutomaton.offersAt, AutomatonFragment.toPending,
+      stopped, markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
+      Finset.mem_image]
+    constructor
+    · rintro ⟨edge, ⟨⟨original, hOriginal, hEdge⟩, hSource⟩, hAction⟩
+      rw [← hEdge] at hSource hAction
+      by_cases hMarker : original.label =
+          AutomatonConstructionLabel.variable name
+      · have hShape := hMarkerShape original hOriginal hMarker
+        simp [hMarker, hShape.1] at hAction
+      · exact ⟨original, ⟨hOriginal, by simpa [hMarker] using hSource⟩,
+          by simpa [hMarker] using hAction⟩
+    · rintro ⟨original, ⟨hOriginal, hSource⟩, hAction⟩
+      by_cases hMarker : original.label =
+          AutomatonConstructionLabel.variable name
+      · have hShape := hMarkerShape original hOriginal hMarker
+        rw [hMarker, hShape.1, hShape.2] at hAction
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hAction
+      · refine ⟨original, ⟨⟨original, hOriginal, by simp [hMarker]⟩, ?_⟩, ?_⟩
+        · simpa [hMarker] using hSource
+        · simpa [hMarker] using hAction
+  have hStoppedSubset : stopped.toPending.futureReachable state ⊆
+      fragment.toPending.futureReachable state := by
+    let allowed := fragment.toPending.futureReachable state
+    have hInitial : state ∈ allowed :=
+      fragment.toPending.mem_futureReachable_self state
+    have hAllowedClosed : ∀ source ∈ allowed,
+        stopped.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      have hSourceInStates :=
+        fragment.toPending.futureReachable_subset_of_reference_closed state
+          fragment.states hState hClosed hSource
+      exact (fragment.toPending.futureReachable_subset_of_mem hClosed hState
+        hSource)
+        (fragment.toPending.referencedStates_subset_futureReachable source
+          hClosed hSourceInStates
+          (markerStoppedFragment_referencedStates_subset fragment name source
+            hReference))
+    exact stopped.toPending.futureReachable_subset_of_reference_closed state
+      allowed hInitial hAllowedClosed
+  have hOriginalSubset : fragment.toPending.futureReachable state ⊆
+      stopped.toPending.futureReachable state ∪ sinkTargets := by
+    let allowed := stopped.toPending.futureReachable state ∪ sinkTargets
+    have hInitial : state ∈ allowed := Finset.mem_union_left _
+      (stopped.toPending.mem_futureReachable_self state)
+    have hAllowedClosed : ∀ source ∈ allowed,
+        fragment.toPending.referencedStates source ⊆ allowed := by
+      intro source hSource target hReference
+      rcases Finset.mem_union.mp hSource with hStoppedReach | hSink
+      · simp only [PendingAutomaton.referencedStates,
+          AutomatonFragment.toPending, Finset.mem_biUnion,
+          Finset.mem_filter] at hReference
+        rcases hReference with
+          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩,
+            hReferenceTarget⟩
+        by_cases hMarkerEdge : referenceEdge.label =
+            AutomatonConstructionLabel.variable name
+        · apply Finset.mem_union_right
+          have hShape := hMarkerShape referenceEdge hReferenceEdge hMarkerEdge
+          have hTarget : target = referenceEdge.target := by
+            simpa [hMarkerEdge, hShape.2,
+              AutomatonConstructionLabel.semantic, TypeLabel.silent] using
+                hReferenceTarget
+          subst target
+          exact Finset.mem_image.mpr ⟨referenceEdge,
+            Finset.mem_filter.mpr ⟨hReferenceEdge, hMarkerEdge⟩, rfl⟩
+        · apply Finset.mem_union_left
+          have hStoppedReference : target ∈
+              stopped.toPending.referencedStates source := by
+            simp only [PendingAutomaton.referencedStates,
+              AutomatonFragment.toPending, stopped, markerStoppedFragment,
+              Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
+            exact ⟨referenceEdge,
+              ⟨⟨referenceEdge, hReferenceEdge, by simp [hMarkerEdge]⟩,
+                by simp [hMarkerEdge, hReferenceSource]⟩,
+              by simpa [hMarkerEdge] using hReferenceTarget⟩
+          have hSourceInStates :=
+            stopped.toPending.futureReachable_subset_of_reference_closed state
+              stopped.states hStoppedState hStoppedClosed hStoppedReach
+          exact (stopped.toPending.futureReachable_subset_of_mem hStoppedClosed
+            hStoppedState hStoppedReach)
+            (stopped.toPending.referencedStates_subset_futureReachable source
+              hStoppedClosed hSourceInStates hStoppedReference)
+      · rcases Finset.mem_image.mp hSink with
+          ⟨marker, hMarkerFiltered, hMarkerTarget⟩
+        have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
+        simp only [PendingAutomaton.referencedStates,
+          AutomatonFragment.toPending, Finset.mem_biUnion,
+          Finset.mem_filter] at hReference
+        rcases hReference with
+          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩, _⟩
+        exfalso
+        apply hSinks marker hMarkerFields.1 hMarkerFields.2 referenceEdge
+          hReferenceEdge
+        exact hReferenceSource.trans hMarkerTarget.symm
+    exact fragment.toPending.futureReachable_subset_of_reference_closed state
+      allowed hInitial hAllowedClosed
+  ext action
+  simp only [computeFuture, Finset.mem_biUnion]
+  constructor
+  · rintro ⟨reached, hReached, hAction⟩
+    refine ⟨reached, hStoppedSubset hReached, ?_⟩
+    rw [hOffers reached] at hAction
+    exact hAction
+  · rintro ⟨reached, hReached, hAction⟩
+    rcases Finset.mem_union.mp (hOriginalSubset hReached) with
+        hStoppedReach | hSink
+    · refine ⟨reached, hStoppedReach, ?_⟩
+      rw [hOffers reached]
+      exact hAction
+    · rcases Finset.mem_image.mp hSink with
+        ⟨marker, hMarkerFiltered, hMarkerTarget⟩
+      have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
+      simp only [PendingAutomaton.offersAt, AutomatonFragment.toPending,
+        Finset.mem_biUnion, Finset.mem_filter] at hAction
+      rcases hAction with ⟨edge, ⟨hEdge, hSource⟩, _⟩
+      exfalso
+      apply hSinks marker hMarkerFields.1 hMarkerFields.2 edge hEdge
+      exact hSource.trans hMarkerTarget.symm
+
+/-- Marker reachability depends only on a closed graph's edge set; additional
+bookkeeping states merely add redundant saturation rounds. -/
+theorem markerReachable_iff_of_same_edges
+    (first second : AutomatonFragment) (name : String)
+    (hEdges : first.edges = second.edges)
+    (hFirstClosed : first.toPending.ReferencesClosed)
+    (hSecondClosed : second.toPending.ReferencesClosed)
+    (state : TypeAutomatonState)
+    (hFirstState : state ∈ first.states)
+    (hSecondState : state ∈ second.states) :
+    MarkerReachable first name state ↔ MarkerReachable second name state := by
+  have hReach := PendingAutomaton.futureReachable_eq_of_same_edges
+    first.toPending second.toPending hEdges hFirstClosed hSecondClosed state
+      hFirstState hSecondState
+  have hSource : ∀ q,
+      MarkerSource first name q ↔ MarkerSource second name q := by
+    intro q
+    simp only [MarkerSource]
+    rw [hEdges]
+  simp only [MarkerReachable]
+  change (∃ reached ∈ first.toPending.futureReachable state,
+      MarkerSource first name reached) ↔
+    ∃ reached ∈ second.toPending.futureReachable state,
+      MarkerSource second name reached
+  rw [hReach]
+  constructor
+  · rintro ⟨reached, hReached, hMarker⟩
+    exact ⟨reached, hReached, (hSource reached).mp hMarker⟩
+  · rintro ⟨reached, hReached, hMarker⟩
+    exact ⟨reached, hReached, (hSource reached).mpr hMarker⟩
+
+/-- Marker reachability propagates backwards across one same-cycle
+reference. -/
+theorem markerReachable_of_referencedState
+    (fragment : AutomatonFragment) (name : String)
+    (hClosed : fragment.toPending.ReferencesClosed)
+    {source target : TypeAutomatonState}
+    (hSource : source ∈ fragment.states)
+    (hReference : target ∈ fragment.toPending.referencedStates source)
+    (hTarget : MarkerReachable fragment name target) :
+    MarkerReachable fragment name source := by
+  rcases hTarget with ⟨reached, hReached, hMarker⟩
+  have hTargetReached : target ∈ fragment.toPending.futureReachable source :=
+    fragment.toPending.referencedStates_subset_futureReachable source hClosed
+      hSource hReference
+  exact ⟨reached,
+    fragment.toPending.futureReachable_subset_of_mem hClosed hSource
+      hTargetReached hReached,
+    hMarker⟩
 
 /-- A fragment with no marker edges at all reaches no marker. -/
 theorem not_markerReachable_of_no_marker_edges

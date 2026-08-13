@@ -306,7 +306,7 @@ def RecursionBodyFutureCorrect
 
 /-- The fresh recursion header contributes no offers of its own and has one
 same-cycle reference, to the tagged body entry. -/
-private theorem buildRecursionAutomaton_computeFuture_root
+theorem buildRecursionAutomaton_computeFuture_root
     (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
     (hBodyTargets : body.FutureTargetsInStates)
     (hBodyInitial : body.initial ∈ body.states) :

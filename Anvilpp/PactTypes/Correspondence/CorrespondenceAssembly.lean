@@ -145,9 +145,20 @@ theorem compilationProofBundle_of_boundedRegular
             hSignature hChildSupports (by intro m hm; simp at hm) hChildClosed
               hChildHygienic hChildGuarded hChildTail hChildLinear
                 hChildScoped)
+      have hExecutionMarker :=
+        compilationSequenceExecutionMarkerReachable_iff signature
+          (binder :: bound) binder body List.mem_cons_self hAllTailBody
+            hSignature hSupportBody hBoundBody hHygienicFields.2
+              hGuardedFields.2 hTailFields.2 hLinearFields.1 hScopedBody
+          (fun child hChildSize hChildSupports hChildClosed hChildHygienic
+              hChildGuarded hChildTail hChildLinear hChildScoped =>
+            compilationProofBundle_of_boundedRegular signature child []
+              hSignature hChildSupports (by intro m hm; simp at hm)
+                hChildClosed hChildHygienic hChildGuarded hChildTail
+                  hChildLinear hChildScoped)
       exact compilationProofBundle_recursion_bounded_leaf signature bound
-        binder body hSignature hSupports hHygienic hGuarded hTail hLinear
-          hScoped hBodyBundle hMarker
+        binder body hSignature hSupports hBoundBody hHygienic hGuarded hTail
+          hLinear hScoped hBodyBundle hMarker hExecutionMarker
   | choice left right =>
       intro hSignature hSupports hAllTail hClosed hHygienic hGuarded hTail
         hLinear hScoped

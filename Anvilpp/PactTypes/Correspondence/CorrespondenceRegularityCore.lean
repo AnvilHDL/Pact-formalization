@@ -416,7 +416,7 @@ theorem binderHygienic_parallelTypeBranchesSelecting
               PactType.BinderHygienicBranches, hFields.1, ih hFields.2]
 
 /- Binder-context preservation for represented residuals. -/
-private theorem compilationRelation_allVariablesBound
+theorem compilationRelation_allVariablesBound
     {bound : List String} {original residual : PactType}
     {state : TypeAutomatonState}
     (hRelated : TypeCompilationRelation original state residual) :
