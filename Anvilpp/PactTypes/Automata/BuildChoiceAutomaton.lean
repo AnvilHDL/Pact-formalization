@@ -1,0 +1,373 @@
+import Anvilpp.PactTypes.Automata.BuildRecursionAutomaton
+
+/-!
+# buildChoiceAutomaton
+-/
+
+namespace Pact
+
+noncomputable section
+
+/--
+Build a binary choice.
+
+`Q` contains a fresh root and tagged copies of both child state sets. Selection
+edges leave the root, and the accepting states are the union of both children.
+The supplied labels distinguish ordinary epsilon choice from fair choice.
+-/
+def buildChoiceAutomaton (signature : TypeAlphabet)
+    (left right : AutomatonFragment) (selectionLeft selectionRight : TypeLabel) :
+    AutomatonFragment :=
+  let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
+  let accepting := childAccepting 0 left ∪ childAccepting 1 right
+  let skipping := childSkipping 0 left ∪ childSkipping 1 right
+  let completing :=
+    (if left.initial ∈ left.completing ∨ right.initial ∈ right.completing then
+      {TypeAutomatonState.root}
+    else ∅) ∪ childCompleting 0 left ∪ childCompleting 1 right
+  let selections := signature.localEnvironments.biUnion fun environment =>
+    { { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible selectionLeft
+        current := ∅
+        future := .at (childState 0 left.initial) ∅
+        target := childState 0 left.initial },
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible selectionRight
+        current := ∅
+        future := .at (childState 1 right.initial) ∅
+        target := childState 1 right.initial } }
+  finishAutomatonFragment states .root accepting skipping completing
+    (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
+
+theorem buildChoiceAutomaton_outgoing_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    edge ∈ choice.edges ∧ edge.source = .child 0 state ↔
+      ∃ childEdge ∈ left.edges,
+        childEdge.source = state ∧ edge = childPendingEdge 0 childEdge := by
+  classical
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildChoiceAutomaton, finishAutomatonFragment,
+      childPendingEdges, Finset.mem_union, Finset.mem_image,
+      Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+    rcases hEdge with (hLeft | hRight) | hSelection
+    · rcases hLeft with ⟨childEdge, hChildEdge, hEdge⟩
+      have hChildSource := hSource
+      rw [← hEdge] at hChildSource
+      simp [childPendingEdge, childState] at hChildSource
+      exact ⟨childEdge, hChildEdge, hChildSource, hEdge.symm⟩
+    · rcases hRight with ⟨childEdge, _, hEdge⟩
+      rw [← hEdge] at hSource
+      simp [childPendingEdge, childState] at hSource
+    · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
+      · rw [hEdge] at hSource
+        simp at hSource
+      · rw [hEdge] at hSource
+        simp at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildChoiceAutomaton, finishAutomatonFragment,
+        childPendingEdges, Finset.mem_union, Finset.mem_image,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inl (Or.inl ⟨childEdge, hChildEdge, rfl⟩)
+    · simp [childPendingEdge, childState, hChildSource]
+
+theorem buildChoiceAutomaton_outgoing_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    edge ∈ choice.edges ∧ edge.source = .child 1 state ↔
+      ∃ childEdge ∈ right.edges,
+        childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
+  classical
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildChoiceAutomaton, finishAutomatonFragment,
+      childPendingEdges, Finset.mem_union, Finset.mem_image,
+      Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+    rcases hEdge with (hLeft | hRight) | hSelection
+    · rcases hLeft with ⟨childEdge, _, hEdge⟩
+      rw [← hEdge] at hSource
+      simp [childPendingEdge, childState] at hSource
+    · rcases hRight with ⟨childEdge, hChildEdge, hEdge⟩
+      have hChildSource := hSource
+      rw [← hEdge] at hChildSource
+      simp [childPendingEdge, childState] at hChildSource
+      exact ⟨childEdge, hChildEdge, hChildSource, hEdge.symm⟩
+    · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
+      · rw [hEdge] at hSource
+        simp at hSource
+      · rw [hEdge] at hSource
+        simp at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildChoiceAutomaton, finishAutomatonFragment,
+        childPendingEdges, Finset.mem_union, Finset.mem_image,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩)
+    · simp [childPendingEdge, childState, hChildSource]
+
+private theorem buildChoiceAutomaton_referencedStates_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := left.states, edges := left.edges }
+    parent.referencedStates (.child 0 state) =
+      (child.referencedStates state).image (.child 0) := by
+  classical
+  ext target
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter, Finset.mem_image]
+  simp_rw [buildChoiceAutomaton_outgoing_left signature left right
+    selectionLeft selectionRight]
+  simp [childPendingEdge, childFutureSpec, childState]
+  grind
+
+private theorem buildChoiceAutomaton_referencedStates_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := right.states, edges := right.edges }
+    parent.referencedStates (.child 1 state) =
+      (child.referencedStates state).image (.child 1) := by
+  classical
+  ext target
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter, Finset.mem_image]
+  simp_rw [buildChoiceAutomaton_outgoing_right signature left right
+    selectionLeft selectionRight]
+  simp [childPendingEdge, childFutureSpec, childState]
+  grind
+
+private theorem buildChoiceAutomaton_offersAt_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := left.states, edges := left.edges }
+    parent.offersAt (.child 0 state) = child.offersAt state := by
+  classical
+  ext action
+  simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+    Finset.mem_filter]
+  simp_rw [buildChoiceAutomaton_outgoing_left signature left right
+    selectionLeft selectionRight]
+  simp [childPendingEdge, childFutureSpec, childState]
+  grind
+
+private theorem buildChoiceAutomaton_offersAt_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := right.states, edges := right.edges }
+    parent.offersAt (.child 1 state) = child.offersAt state := by
+  classical
+  ext action
+  simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+    Finset.mem_filter]
+  simp_rw [buildChoiceAutomaton_outgoing_right signature left right
+    selectionLeft selectionRight]
+  simp [childPendingEdge, childFutureSpec, childState]
+  grind
+
+/-- Future resolution inside the left tagged child of a choice is exactly the
+child fragment's own future resolution. -/
+theorem buildChoiceAutomaton_computeFuture_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState)
+    (hClosed : ({ states := left.states, edges := left.edges } :
+      PendingAutomaton).ReferencesClosed)
+    (hState : state ∈ left.states)
+    (hCard : left.states.card ≤
+      (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight).states.card) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := left.states, edges := left.edges }
+    computeFuture parent (.child 0 state) = computeFuture child state := by
+  let choice := buildChoiceAutomaton signature left right
+    selectionLeft selectionRight
+  let parent : PendingAutomaton :=
+    { states := choice.states, edges := choice.edges }
+  let child : PendingAutomaton :=
+    { states := left.states, edges := left.edges }
+  apply computeFuture_eq_of_embedding child parent (.child 0)
+  · exact buildChoiceAutomaton_referencedStates_left signature left right
+      selectionLeft selectionRight
+  · exact buildChoiceAutomaton_offersAt_left signature left right
+      selectionLeft selectionRight
+  · exact hClosed
+  · exact hState
+  · exact hCard
+
+/-- Future resolution inside the right tagged child of a choice is exactly the
+child fragment's own future resolution. -/
+theorem buildChoiceAutomaton_computeFuture_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (state : TypeAutomatonState)
+    (hClosed : ({ states := right.states, edges := right.edges } :
+      PendingAutomaton).ReferencesClosed)
+    (hState : state ∈ right.states)
+    (hCard : right.states.card ≤
+      (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight).states.card) :
+    let choice := buildChoiceAutomaton signature left right
+      selectionLeft selectionRight
+    let parent : PendingAutomaton :=
+      { states := choice.states, edges := choice.edges }
+    let child : PendingAutomaton :=
+      { states := right.states, edges := right.edges }
+    computeFuture parent (.child 1 state) = computeFuture child state := by
+  let choice := buildChoiceAutomaton signature left right
+    selectionLeft selectionRight
+  let parent : PendingAutomaton :=
+    { states := choice.states, edges := choice.edges }
+  let child : PendingAutomaton :=
+    { states := right.states, edges := right.edges }
+  apply computeFuture_eq_of_embedding child parent (.child 1)
+  · exact buildChoiceAutomaton_referencedStates_right signature left right
+      selectionLeft selectionRight
+  · exact buildChoiceAutomaton_offersAt_right signature left right
+      selectionLeft selectionRight
+  · exact hClosed
+  · exact hState
+  · exact hCard
+
+/-- Marker reachability inside the left tagged child of a choice is exactly the
+child fragment's own marker reachability. -/
+theorem buildChoiceAutomaton_markerReachable_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (name : String)
+    (state : TypeAutomatonState)
+    (hClosed : ({ states := left.states, edges := left.edges } :
+      PendingAutomaton).ReferencesClosed)
+    (hState : state ∈ left.states)
+    (hCard : left.states.card ≤
+      (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight).states.card) :
+    MarkerReachable (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight) name (.child 0 state) ↔
+      MarkerReachable left name state := by
+  have hResult := markerReachable_of_embedding left
+    (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+    name (childState 0)
+    (fun current => buildChoiceAutomaton_referencedStates_left signature left
+      right selectionLeft selectionRight current)
+    hClosed hCard
+    (fun current _ => markerSource_of_outgoing_childPendingEdge _ left 0 name
+      current (fun edge => buildChoiceAutomaton_outgoing_left signature left
+        right selectionLeft selectionRight current edge))
+    state hState
+  simpa [childState] using hResult
+
+/-- Marker reachability inside the right tagged child of a choice is exactly
+the child fragment's own marker reachability. -/
+theorem buildChoiceAutomaton_markerReachable_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (name : String)
+    (state : TypeAutomatonState)
+    (hClosed : ({ states := right.states, edges := right.edges } :
+      PendingAutomaton).ReferencesClosed)
+    (hState : state ∈ right.states)
+    (hCard : right.states.card ≤
+      (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight).states.card) :
+    MarkerReachable (buildChoiceAutomaton signature left right
+        selectionLeft selectionRight) name (.child 1 state) ↔
+      MarkerReachable right name state := by
+  have hResult := markerReachable_of_embedding right
+    (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+    name (childState 1)
+    (fun current => buildChoiceAutomaton_referencedStates_right signature left
+      right selectionLeft selectionRight current)
+    hClosed hCard
+    (fun current _ => markerSource_of_outgoing_childPendingEdge _ right 1 name
+      current (fun edge => buildChoiceAutomaton_outgoing_right signature left
+        right selectionLeft selectionRight current edge))
+    state hState
+  simpa [childState] using hResult
+
+theorem buildChoiceAutomaton_futureTargetsInStates
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hLeftTargets : left.FutureTargetsInStates)
+    (hRightTargets : right.FutureTargetsInStates)
+    (hLeftInitial : left.initial ∈ left.states)
+    (hRightInitial : right.initial ∈ right.states) :
+    (buildChoiceAutomaton signature left right
+      selectionLeft selectionRight).FutureTargetsInStates := by
+  classical
+  intro edge hEdge target removed hFuture
+  simp only [buildChoiceAutomaton, finishAutomatonFragment,
+    childPendingEdges, Finset.mem_union, Finset.mem_image,
+    Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+  rcases hEdge with (hLeft | hRight) | hSelection
+  · rcases hLeft with ⟨childEdge, hChildEdge, rfl⟩
+    cases hSpec : childEdge.future with
+    | explicit offers =>
+        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+    | «at» childTarget removed =>
+        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        cases hFuture
+        have hChildTarget := hLeftTargets childEdge hChildEdge
+          childTarget removed hSpec
+        simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+          childState, hChildTarget]
+  · rcases hRight with ⟨childEdge, hChildEdge, rfl⟩
+    cases hSpec : childEdge.future with
+    | explicit offers =>
+        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+    | «at» childTarget removed =>
+        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        cases hFuture
+        have hChildTarget := hRightTargets childEdge hChildEdge
+          childTarget removed hSpec
+        simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+          childState, hChildTarget]
+  · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
+    · rw [hEdge] at hFuture
+      simp only at hFuture
+      cases hFuture
+      simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+        childState, hLeftInitial]
+    · rw [hEdge] at hFuture
+      simp only at hFuture
+      cases hFuture
+      simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+        childState, hRightInitial]
+
+end
+
+end Pact

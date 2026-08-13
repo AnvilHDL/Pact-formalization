@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.CorrespondenceCore
+import Anvilpp.PactTypes.Correspondence.CorrespondenceCore
 
 /-!
 # Compiler-label visibility

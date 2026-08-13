@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.CorrespondenceCore
+import Anvilpp.PactTypes.Correspondence.CorrespondenceCore
 
 /-!
 # Exclusive and conjunctive offer correspondence

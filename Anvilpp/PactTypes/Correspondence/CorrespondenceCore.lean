@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Automata
+import Anvilpp.PactTypes.Automata.CompileType
 
 /-!
 # Core and atomic type-automaton correspondence

@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.CorrespondenceVisibility
+import Anvilpp.PactTypes.Correspondence.CorrespondenceVisibility
 
 /-!
 # Parallel-product correspondence
@@ -50,6 +50,7 @@ private theorem mem_resolvedAutomatonEdges_visible_iff
     refine ⟨edge, hEdge, ?_⟩
     cases edge
     simp_all
+    exact hFuture
 
 /-- Offer derivations carry the matching undecorated transition.  This is used
 for the independent sibling-offer witnesses in the parallel product. -/
