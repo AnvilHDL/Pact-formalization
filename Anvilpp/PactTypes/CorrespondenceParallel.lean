@@ -53,7 +53,7 @@ private theorem mem_resolvedAutomatonEdges_visible_iff
 
 /-- Offer derivations carry the matching undecorated transition.  This is used
 for the independent sibling-offer witnesses in the parallel product. -/
-private theorem TypeOffers.to_transition
+theorem TypeOffers.to_transition
     {environment : TypeEnvironment} {source target : PactType}
     {label : TypeLabel} {current future : Finset BareMessage}
     (hOffers : TypeOffers environment source label target current future) :

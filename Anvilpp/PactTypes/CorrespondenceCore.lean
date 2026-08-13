@@ -1542,6 +1542,25 @@ def CompilationScopedFragmentStepCorrect
         fragment.HasResolvedEdge state environment label offers target ∧
         TypeCompilationRelation processType target residual')
 
+/-- A free-variable marker has neither a semantic transition nor a resolved
+edge: `TypeTransition` has no `.var` case, and every compiled `.var` edge is
+labelled `.variable name`, never `.visible _`. -/
+theorem compilationScopedFragmentStepCorrect_var
+    (signature : TypeAlphabet) (name : String) :
+    CompilationScopedFragmentStepCorrect signature (.var name) := by
+  intro residual residual' state environment label offers hRelated hLocal
+    hAvoids
+  cases hRelated
+  constructor
+  · intro hStep
+    cases hStep.1
+  · rintro ⟨target, hEdge, _⟩
+    exfalso
+    simp only [AutomatonFragment.HasResolvedEdge, typeCompilationFuel,
+      compileTypeFuel, finishAutomatonFragment, Finset.mem_image] at hEdge
+    obtain ⟨edge, ⟨environment', _, rfl⟩, _, _, hLabel, _⟩ := hEdge
+    simp at hLabel
+
 /-- A synchronization witness selected independently of the product's actual
 child target is represented by a semantic offer derivation at the same related
 source. -/
