@@ -339,10 +339,17 @@ inductive ProcessTransition : Environment → Proc → Label → Proc → Prop w
       ProcessTransition env left
       label
       left' →
+      left' ≠ Proc.skip →
       --
       ProcessTransition env (Proc.seq left right)
       label
       (Proc.seq left' right)
+  | seq_fuse (env : Environment) (left right : Proc) (label : Label) :
+      ProcessTransition env left label Proc.skip →
+      --
+      ProcessTransition env (Proc.seq left right)
+      label
+      right
   | letp (env : Environment) (var : String) (expr : Expr) (process : Proc) (value : Bool) :
       env.WellFormed ∧
       Semantics.ExprEval expr value →
@@ -454,6 +461,7 @@ inductive ProcessTransition : Environment → Proc → Label → Proc → Prop w
   | par (outer leftEnv rightEnv : Environment) (interface : MsgIdSet) (left left' right right' : Proc) (leftLabel rightLabel : Label) :
       ProcessTransition leftEnv left leftLabel left' →
       ProcessTransition rightEnv right rightLabel right' →
+      ¬ (left' = Proc.skip ∧ right' = Proc.skip) →
       (outer.WellFormed ∧
         LocalEnvironment outer interface right rightLabel leftEnv ∧
         LocalEnvironment outer interface left leftLabel rightEnv ∧
@@ -462,6 +470,17 @@ inductive ProcessTransition : Environment → Proc → Label → Proc → Prop w
       ProcessTransition outer (Proc.par left right interface)
       (Label.combine interface leftLabel rightLabel)
       (Proc.par left' right' interface)
+  | par_fuse (outer leftEnv rightEnv : Environment) (interface : MsgIdSet) (left right : Proc) (leftLabel rightLabel : Label) :
+      ProcessTransition leftEnv left leftLabel Proc.skip →
+      ProcessTransition rightEnv right rightLabel Proc.skip →
+      (outer.WellFormed ∧
+        LocalEnvironment outer interface right rightLabel leftEnv ∧
+        LocalEnvironment outer interface left leftLabel rightEnv ∧
+        Label.Sync interface leftLabel rightLabel) →
+      --
+      ProcessTransition outer (Proc.par left right interface)
+      (Label.combine interface leftLabel rightLabel)
+      Proc.skip
 end
 
 end Pact

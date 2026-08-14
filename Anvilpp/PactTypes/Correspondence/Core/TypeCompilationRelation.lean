@@ -59,9 +59,19 @@ inductive TypeCompilationRelation :
       (state : TypeAutomatonState) :
       TypeCompilationRelation right state residual →
       TypeCompilationRelation (.fairChoice bid left right) (.child 1 state) residual
-  | sequence_left (left right residual : PactType)
+  | sequence_left_entry (left right : PactType)
       (state : TypeAutomatonState) :
+      -- `state` is left's own designated initial/entry position: it
+      -- represents `left` itself, unstepped.  Kept by `buildSequenceAutomaton`
+      -- regardless of whether `left` happens to be accepting (e.g. `.skip`).
+      TypeCompilationRelation left state left →
+      TypeCompilationRelation (.seq left right) (.child 0 state)
+        (.seq left right)
+  | sequence_left_progressed (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      -- Every non-accepting left state survives the redirect unconditionally.
       TypeCompilationRelation left state residual →
+      residual ≠ .skip →
       TypeCompilationRelation (.seq left right) (.child 0 state)
         (.seq residual right)
   | sequence_right (left right residual : PactType)
@@ -70,6 +80,16 @@ inductive TypeCompilationRelation :
       TypeCompilationRelation (.seq left right) (.child 1 state) residual
   | parallel (left right leftResidual rightResidual : PactType)
       (interface : Interface) (leftState rightState : TypeAutomatonState) :
+      -- Deliberately unconditional, unlike `TypeTransition.par`/`par_fuse`.
+      -- This relation is a static description of what a *state* represents,
+      -- not a semantic step, so it stays a plain structural recursion on
+      -- `state`'s shape. When both `leftResidual`/`rightResidual` turn out to
+      -- be `.skip` (exactly when both components are accepting, by
+      -- `CompilationAcceptingCorrect`, proved separately by induction rather
+      -- than folded into this definition), `par_fuse` supplies the one-hop
+      -- `TypeTransition _ (.par .skip .skip interface) _ .skip` witness that
+      -- `buildSequenceAutomaton`'s redirect needs directly from those two
+      -- syntactic facts — no extra relation clause required.
       TypeCompilationRelation left leftState leftResidual →
       TypeCompilationRelation right rightState rightResidual →
       TypeCompilationRelation (.par left right interface)
@@ -148,7 +168,7 @@ theorem compileTypeFuel_initial_relation (signature : TypeAlphabet) :
       | fairChoice bid left right =>
           exact TypeCompilationRelation.fair_source bid left right
       | seq left right =>
-          apply TypeCompilationRelation.sequence_left
+          apply TypeCompilationRelation.sequence_left_entry
           apply ih left
           simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
           omega

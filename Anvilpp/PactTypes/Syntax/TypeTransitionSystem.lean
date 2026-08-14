@@ -80,6 +80,12 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition env (.seq .skip processType)
       TypeLabel.silent
       processType
+  | seq_fuse (env : TypeEnvironment) (left right : PactType) (label : TypeLabel) :
+      TypeTransition env left label .skip →
+      --
+      TypeTransition env (.seq left right)
+      label
+      right
   | progress (env : TypeEnvironment) (pid : ProcId) :
       env.WellFormed →
       --
@@ -94,6 +100,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (body.replaceVar var (.recur var body))
   | seq (env : TypeEnvironment) (left left' right : PactType) (label : TypeLabel) :
       TypeTransition env left label left' →
+      left' ≠ .skip →
       --
       TypeTransition env (.seq left right)
       label
@@ -160,6 +167,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (left left' right right' : PactType) (leftLabel rightLabel : TypeLabel) :
       TypeTransition leftEnv left leftLabel left' →
       TypeTransition rightEnv right rightLabel right' →
+      ¬ (left' = .skip ∧ right' = .skip) →
       (outer.WellFormed ∧
         LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv ∧
         LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv ∧
@@ -168,6 +176,18 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition outer (.par left right interface)
       (TypeLabel.combine interface leftLabel rightLabel)
       (.par left' right' interface)
+  | par_fuse (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
+      (left right : PactType) (leftLabel rightLabel : TypeLabel) :
+      TypeTransition leftEnv left leftLabel .skip →
+      TypeTransition rightEnv right rightLabel .skip →
+      (outer.WellFormed ∧
+        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv ∧
+        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv ∧
+        TypeLabel.Sync interface leftLabel rightLabel) →
+      --
+      TypeTransition outer (.par left right interface)
+      (TypeLabel.combine interface leftLabel rightLabel)
+      .skip
 
 /-- Administrative-`ε` weak closure used by conformance and refinement. -/
 def TypeWeakTransition :

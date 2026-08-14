@@ -459,7 +459,7 @@ theorem completingBackClosure_union_isolated_target
     · exact completingBackClosure_mono body Finset.subset_union_right
 
 /-- A carrier whose states and edges are `body`'s own states/edges, each
-tagged by `childState index`, but whose completing/skipping/accepting/initial
+tagged by `childState index`, but whose completing/accepting/initial
 bookkeeping is irrelevant to backward closure and is therefore left blank.
 This is definitionally the state/edge shape shared by `buildRecursionAutomaton`'s
 `taggedCarrier` (at `index = 0`) and by any other constructor that lifts a
@@ -469,7 +469,6 @@ def taggedFragment (index : Nat) (body : AutomatonFragment) :
   { states := childStates index body
     initial := childState index body.initial
     accepting := ∅
-    skipping := ∅
     completing := ∅
     edges := body.edges.image fun edge =>
       { source := childState index edge.source

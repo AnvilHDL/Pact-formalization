@@ -48,17 +48,11 @@ def indexedFragmentStates
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childStates (indexed.2 + 1) indexed.1.2) ∅
 
-private def indexedFragmentAccepting
+def indexedFragmentAccepting
     (automata : List (BareMessage × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childAccepting (indexed.2 + 1) indexed.1.2) ∅
-
-def indexedFragmentSkipping
-    (automata : List (BareMessage × AutomatonFragment)) :
-    Finset TypeAutomatonState :=
-  automata.zipIdx.foldl (fun states indexed =>
-    states ∪ childSkipping (indexed.2 + 1) indexed.1.2) ∅
 
 def indexedFragmentCompleting
     (automata : List (BareMessage × AutomatonFragment)) :
@@ -121,8 +115,6 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
     indexedFragmentStates branchAutomata
   let accepting := childAccepting 0 elseAutomaton ∪
     indexedFragmentAccepting branchAutomata
-  let skipping := childSkipping 0 elseAutomaton ∪
-    indexedFragmentSkipping branchAutomata
   let completing :=
     (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
         branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
@@ -171,7 +163,7 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 0 elseAutomaton.initial) ∅
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting skipping completing
+  exact finishAutomatonFragment states .root accepting completing
     (childPendingEdges 0 elseAutomaton ∪ indexedFragmentEdges branchAutomata ∪
       branchEdges ∪ waitEdges ∪ elseEdges)
 
@@ -243,7 +235,6 @@ def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
   let states := {TypeAutomatonState.root} ∪ childStates 0 conjunction ∪
     childStates 1 elseAutomaton
   let accepting := childAccepting 0 conjunction ∪ childAccepting 1 elseAutomaton
-  let skipping := childSkipping 0 conjunction ∪ childSkipping 1 elseAutomaton
   let completing :=
     (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
         branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
@@ -286,7 +277,7 @@ def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
         current := actions
         future := .at (childState 1 elseAutomaton.initial) ∅
         target := childState 1 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting skipping completing
+  exact finishAutomatonFragment states .root accepting completing
     (childPendingEdges 0 conjunction ∪ childPendingEdges 1 elseAutomaton ∪
       enabledEdges ∪ waitEdges ∪ elseEdges)
 
@@ -342,8 +333,6 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
     indexedFragmentStates selectedConjunctions
   let accepting := childAccepting 0 elseAutomaton ∪
     indexedFragmentAccepting selectedConjunctions
-  let skipping := childSkipping 0 elseAutomaton ∪
-    indexedFragmentSkipping selectedConjunctions
   let completing :=
     (if elseAutomaton.initial ∈ elseAutomaton.completing ∨
         branches.any (fun branch => branch.2.CanCompleteBeforeTock) then
@@ -390,7 +379,7 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
         current := actions
         future := .at (childState 0 elseAutomaton.initial) ∅
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting skipping completing
+  exact finishAutomatonFragment states .root accepting completing
     (childPendingEdges 0 elseAutomaton ∪
       indexedFragmentEdges selectedConjunctions ∪ enabledEdges ∪
         waitEdges ∪ elseEdges)

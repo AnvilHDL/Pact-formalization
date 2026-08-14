@@ -74,9 +74,10 @@ actually needs decorated edges, and once more for the final automaton.
 structure AutomatonFragment : Type where
   states : Finset TypeAutomatonState
   initial : TypeAutomatonState
+  /-- States whose represented semantic residual is literally `skip` (or, for
+  `par`, steps to `skip` via `par_fuse` in one hop — see
+  `CompilationAcceptingCorrect`). -/
   accepting : Finset TypeAutomatonState
-  /-- States whose represented semantic residual is literally `skip`. -/
-  skipping : Finset TypeAutomatonState
   /-- States whose represented residual may optimistically finish before the
   next clock.  Unlike `skipping`, this is analysis metadata rather than a
   source of semantic administrative transitions. -/

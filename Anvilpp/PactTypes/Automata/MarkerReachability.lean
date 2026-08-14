@@ -55,7 +55,6 @@ def markerStoppedFragment (fragment : AutomatonFragment) (name : String) :
   { states := fragment.states
     initial := fragment.initial
     accepting := fragment.accepting
-    skipping := fragment.skipping
     completing := fragment.completing
     edges := fragment.edges.image fun edge =>
       if edge.label = AutomatonConstructionLabel.variable name then
@@ -827,12 +826,11 @@ theorem computeFuture_changes_when_recursion_backedge_is_installed :
 /-- Package a constructor graph without resolving its future references. -/
 def finishAutomatonFragment
     (states : Finset TypeAutomatonState) (initial : TypeAutomatonState)
-    (accepting skipping completing : Finset TypeAutomatonState)
+    (accepting completing : Finset TypeAutomatonState)
     (edges : Finset PendingAutomatonEdge) : AutomatonFragment :=
   { states := states
     initial := initial
     accepting := accepting
-    skipping := skipping
     completing := completing
     edges := edges }
 
@@ -909,10 +907,6 @@ def childStates (index : Nat) (automaton : AutomatonFragment) :
 def childAccepting (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=
   automaton.accepting.image (childState index)
-
-def childSkipping (index : Nat) (automaton : AutomatonFragment) :
-    Finset TypeAutomatonState :=
-  automaton.skipping.image (childState index)
 
 def childCompleting (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=

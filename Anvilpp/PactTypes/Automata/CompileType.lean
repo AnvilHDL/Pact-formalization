@@ -175,7 +175,6 @@ def compileTypeFuel (signature : TypeAlphabet) :
       { states := {.root}
         initial := .root
         accepting := ∅
-        skipping := ∅
         completing := ∅
         edges := ∅ }
   | fuel + 1, processType => by
@@ -185,7 +184,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       | .skip =>
           let idleEnvironments := signature.localEnvironments.filter fun environment =>
             environment.clock = false ∧ environment.immediate = ∅
-          exact finishAutomatonFragment {.root} .root {.root} {.root} {.root} <|
+          exact finishAutomatonFragment {.root} .root {.root} {.root} <|
             idleEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -227,7 +226,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .explicit ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+          exact finishAutomatonFragment {.root, .final} .root {.final}
             {.root, .final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
@@ -260,7 +259,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .explicit ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+          exact finishAutomatonFragment {.root, .final} .root {.final}
             {.final}
             (actionEdges ∪ finalEdges)
 
@@ -285,13 +284,13 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 current := ∅
                 future := .explicit ∅
                 target := .final }
-          exact finishAutomatonFragment {.root, .final} .root {.final} {.final}
+          exact finishAutomatonFragment {.root, .final} .root {.final}
             {.root, .final}
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
       | .var name =>
-          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ ∅ <|
+          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ <|
             signature.localEnvironments.image fun environment =>
               { source := .root
                 environment := environment

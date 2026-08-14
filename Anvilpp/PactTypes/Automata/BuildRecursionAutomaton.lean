@@ -19,7 +19,6 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
     (body : AutomatonFragment) : AutomatonFragment :=
   let states := {TypeAutomatonState.root} ∪ childStates 0 body
   let accepting := childAccepting 0 body
-  let skipping := childSkipping 0 body
   let recursiveCallSources :=
     (body.edges.filter fun edge => edge.label = .variable name).image
       fun edge => childState 0 edge.source
@@ -45,7 +44,6 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
     { states := states
       initial := TypeAutomatonState.root
       accepting := accepting
-      skipping := skipping
       completing := ∅
       edges := taggedBodyEdges }
   let completing := completingBackClosure taggedCarrier seedCompleting
@@ -72,7 +70,7 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
         current := edge.current
         future := childFutureSpec 0 edge.future
         target := childState 0 edge.target }
-  finishAutomatonFragment states .root accepting skipping completing
+  finishAutomatonFragment states .root accepting completing
     (headerEdges ∪ bodyEdges)
 
 /-- Installing backedges does not change the offers directly visible at a
@@ -847,7 +845,7 @@ theorem buildRecursionAutomaton_completing_eq
       completingBackClosure
         { states := {TypeAutomatonState.root} ∪ childStates 0 body
           initial := TypeAutomatonState.root, accepting := childAccepting 0 body
-          skipping := childSkipping 0 body, completing := ∅
+          completing := ∅
           edges := taggedCarrierEdges }
         ((if body.initial ∈ body.completing then
             {TypeAutomatonState.root} ∪
@@ -889,7 +887,7 @@ theorem buildRecursionAutomaton_completing_eq
   have hEdgesEq : completingBackClosure
       { states := {TypeAutomatonState.root} ∪ childStates 0 body
         initial := TypeAutomatonState.root, accepting := childAccepting 0 body
-        skipping := childSkipping 0 body, completing := ∅
+        completing := ∅
         edges := taggedCarrierEdges }
       (untaggedSeed.image (childState 0)) =
       (completingBackClosure body untaggedSeed).image (childState 0) := by
@@ -943,7 +941,7 @@ theorem buildRecursionAutomaton_not_mem_completing_of_no_nonClock_escape
       completingBackClosure
         { states := {TypeAutomatonState.root} ∪ childStates 0 body
           initial := TypeAutomatonState.root, accepting := childAccepting 0 body
-          skipping := childSkipping 0 body, completing := ∅
+          completing := ∅
           edges := taggedCarrierEdges }
         seedCompleting := by
     simp only [buildRecursionAutomaton, finishAutomatonFragment,
@@ -982,7 +980,7 @@ theorem buildRecursionAutomaton_not_mem_completing_of_no_nonClock_escape
   have hSubset : completingBackClosure
       { states := {TypeAutomatonState.root} ∪ childStates 0 body
         initial := TypeAutomatonState.root, accepting := childAccepting 0 body
-        skipping := childSkipping 0 body, completing := ∅
+        completing := ∅
         edges := taggedCarrierEdges }
       seedCompleting ⊆
       ((taggedCarrierEdges.image fun edge => edge.source) ∪

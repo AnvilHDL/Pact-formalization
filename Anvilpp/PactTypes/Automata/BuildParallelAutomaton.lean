@@ -38,7 +38,6 @@ private def restrictReachableFragment (automaton : AutomatonFragment) :
   { states := automaton.states.filter fun state => state ∈ reachable
     initial := automaton.initial
     accepting := automaton.accepting.filter fun state => state ∈ reachable
-    skipping := automaton.skipping.filter fun state => state ∈ reachable
     completing := automaton.completing.filter fun state => state ∈ reachable
     edges := automaton.edges.filter fun edge =>
       edge.source ∈ reachable ∧ edge.target ∈ reachable }
@@ -114,7 +113,7 @@ def buildParallelAutomaton (interface : Interface)
           future := .explicit ∅
           target := .pair leftState rightState }
   let product := finishAutomatonFragment
-    states (.pair left.initial right.initial) accepting ∅ completing
+    states (.pair left.initial right.initial) accepting completing
       (transitionEdges ∪ (leftFutureEdges ∪ rightFutureEdges))
   exact product
 

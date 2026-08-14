@@ -8,6 +8,129 @@ namespace Pact
 
 noncomputable section
 
+open Classical
+
+/-!
+### The static "entry" classifier
+
+`TypeEntry processType state` holds exactly when `state` is
+`processType`'s own compiled fragment's `initial` field, characterized
+structurally (mirroring each `build*Automaton`'s own `initial :=` choice)
+rather than through `TypeCompilationRelation`'s residual. This is needed
+because `TypeCompilationRelation processType state processType` (residual
+equals the whole, unstepped type) is not on its own enough to pin down
+`state = initial`: a degenerate self-referential recursion such as
+`.recur "x" (.var "x")` also relates its *body*'s entry state,
+`.child 0 .root`, to the same residual `.recur "x" (.var "x")` (since
+substituting `.var "x"` back in reproduces the original term exactly), and
+`.child 0 .root ≠ .root = (.recur "x" (.var "x")).initial`. That collision is
+harmless for `TypeAccepting`-based reasoning alone (the colliding state
+there is never itself accepting), but `sequence_left_entry` below needs
+"is the state actually kept regardless of accepting-ness" to mean "is the
+literal initial tag", not merely "represents the unstepped type" — so it
+pins that down with this separate, purely structural characterization.
+`TypeEntry_relation`/`TypeEntry_unique` establish it matches
+`(compileTypeFuel _ _ processType).initial` and is the unique state with
+that property.
+-/
+inductive TypeEntry : PactType → TypeAutomatonState → Prop where
+  | skip : TypeEntry .skip .root
+  | message (msg : MessageId) (dir : MessageDir) :
+      TypeEntry (.message msg dir) .root
+  | cycle : TypeEntry .tock .root
+  | progress (pid : ProcId) : TypeEntry (.progress pid) .root
+  | var (name : String) : TypeEntry (.var name) .root
+  | recur (name : String) (body : PactType) : TypeEntry (.recur name body) .root
+  | choice (left right : PactType) : TypeEntry (.choice left right) .root
+  | fair (bid : BranchId) (left right : PactType) :
+      TypeEntry (.fairChoice bid left right) .root
+  | seq (left right : PactType) (state : TypeAutomatonState) :
+      TypeEntry left state →
+      TypeEntry (.seq left right) (.child 0 state)
+  | par (left right : PactType) (interface : Interface)
+      (leftState rightState : TypeAutomatonState) :
+      TypeEntry left leftState →
+      TypeEntry right rightState →
+      TypeEntry (.par left right interface) (.pair leftState rightState)
+  | xoffer (elseType : PactType) (branches : List (BareMessage × PactType)) :
+      TypeEntry (.xoffer elseType branches) .root
+  | offer (elseType : PactType) (branches : List (BareMessage × PactType)) :
+      TypeEntry (.offer elseType branches) .root
+
+/-!
+### The static "accepting" classifier
+
+`TypeAccepting processType state` holds exactly when `state` lands in the
+`accepting` field of `processType`'s own compiled fragment, characterized
+structurally (mirroring each `build*Automaton`'s own `accepting :=` formula)
+rather than through `TypeCompilationRelation`'s residual. The two questions
+are genuinely different: `TypeCompilationRelation.parallel` (below) is
+deliberately unconditional, so a `.par`-shaped state's *residual* is never
+literally `.skip` (it stays `.par leftResidual rightResidual interface`)
+even when the state is accepting. `buildSequenceAutomaton`'s redirect,
+though, deletes states by the *concrete* `accepting` field, so
+`TypeCompilationRelation.sequence_left_progressed`'s "survives the redirect"
+exclusion has to key off this predicate, not off `residual ≠ .skip`.
+`TypeAccepting_iff_mem_accepting` proves the two coincide with the real
+compiled field; `par`'s own semantic one-hop collapse to `.skip` still goes
+through `TypeTransition.par_fuse` directly on whatever residual `.parallel`
+actually hands back (`.par .skip .skip interface`, not requiring
+`TypeCompilationRelation` to call it `.skip`).
+-/
+inductive TypeAccepting : PactType → TypeAutomatonState → Prop where
+  | skip : TypeAccepting .skip .root
+  | message_final (msg : MessageId) (dir : MessageDir) :
+      TypeAccepting (.message msg dir) .final
+  | cycle_final : TypeAccepting .tock .final
+  | progress_final (pid : ProcId) : TypeAccepting (.progress pid) .final
+  | recur_body (name : String) (body : PactType) (state : TypeAutomatonState) :
+      TypeAccepting body state →
+      TypeAccepting (.recur name body) (.child 0 state)
+  | choice_left (left right : PactType) (state : TypeAutomatonState) :
+      TypeAccepting left state →
+      TypeAccepting (.choice left right) (.child 0 state)
+  | choice_right (left right : PactType) (state : TypeAutomatonState) :
+      TypeAccepting right state →
+      TypeAccepting (.choice left right) (.child 1 state)
+  | fair_left (bid : BranchId) (left right : PactType)
+      (state : TypeAutomatonState) :
+      TypeAccepting left state →
+      TypeAccepting (.fairChoice bid left right) (.child 0 state)
+  | fair_right (bid : BranchId) (left right : PactType)
+      (state : TypeAutomatonState) :
+      TypeAccepting right state →
+      TypeAccepting (.fairChoice bid left right) (.child 1 state)
+  | sequence_right (left right : PactType) (state : TypeAutomatonState) :
+      -- No `sequence_left` case: `F_tau = F_2` only, by `buildSequenceAutomaton`.
+      TypeAccepting right state →
+      TypeAccepting (.seq left right) (.child 1 state)
+  | parallel (left right : PactType) (interface : Interface)
+      (leftState rightState : TypeAutomatonState) :
+      TypeAccepting left leftState →
+      TypeAccepting right rightState →
+      TypeAccepting (.par left right interface) (.pair leftState rightState)
+  | xoffer_else (elseType : PactType)
+      (branches : List (BareMessage × PactType)) (state : TypeAutomatonState) :
+      TypeAccepting elseType state →
+      TypeAccepting (.xoffer elseType branches) (.child 0 state)
+  | xoffer_branch (elseType branchType : PactType)
+      (branches : List (BareMessage × PactType)) (action : BareMessage)
+      (index : Nat) (state : TypeAutomatonState) :
+      branches[index]? = some (action, branchType) →
+      TypeAccepting branchType state →
+      TypeAccepting (.xoffer elseType branches) (.child (index + 1) state)
+  | offer_else (elseType : PactType)
+      (branches : List (BareMessage × PactType)) (state : TypeAutomatonState) :
+      TypeAccepting elseType state →
+      TypeAccepting (.offer elseType branches) (.child 0 state)
+  | offer_branches (elseType : PactType)
+      (branches : List (BareMessage × PactType))
+      (selected : BareMessage × PactType) (index : Nat)
+      (state : TypeAutomatonState) :
+      branches[index]? = some selected →
+      TypeAccepting (parallelTypeBranchesSelecting selected branches) state →
+      TypeAccepting (.offer elseType branches) (.child (index + 1) state)
+
 /-!
 ### Semantic residuals represented by constructor states
 
@@ -59,9 +182,30 @@ inductive TypeCompilationRelation :
       (state : TypeAutomatonState) :
       TypeCompilationRelation right state residual →
       TypeCompilationRelation (.fairChoice bid left right) (.child 1 state) residual
-  | sequence_left (left right residual : PactType)
+  | sequence_left_entry (left right residual : PactType)
       (state : TypeAutomatonState) :
+      -- `state` is left's own designated initial/entry position, kept by
+      -- `buildSequenceAutomaton` regardless of whether it happens to be
+      -- accepting (e.g. `left = .skip`). `residual` is deliberately *not*
+      -- pinned to `left` itself: for a `CollapsesToSkip`-shaped `left`
+      -- (nested `.par` built from `.skip`), the entry position already
+      -- represents literal `.skip`, not `left` as written — same
+      -- degenerate case `compileTypeFuel_initial_relation` has to account
+      -- for. `TypeEntry` (not just "some residual") is required so this
+      -- stays the literal `.initial` tag even for degenerate,
+      -- self-referential recursions — see `TypeEntry`'s doc comment.
+      TypeEntry left state →
       TypeCompilationRelation left state residual →
+      TypeCompilationRelation (.seq left right) (.child 0 state)
+        (.seq residual right)
+  | sequence_left_progressed (left right residual : PactType)
+      (state : TypeAutomatonState) :
+      -- Every non-accepting left state survives the redirect unconditionally.
+      -- The exclusion is `¬ TypeAccepting`, not `residual ≠ .skip`: those
+      -- diverge exactly at `.par`, whose residual is never literally `.skip`
+      -- even when the state is accepting (see `TypeAccepting`, below).
+      TypeCompilationRelation left state residual →
+      ¬ TypeAccepting left state →
       TypeCompilationRelation (.seq left right) (.child 0 state)
         (.seq residual right)
   | sequence_right (left right residual : PactType)
@@ -70,11 +214,27 @@ inductive TypeCompilationRelation :
       TypeCompilationRelation (.seq left right) (.child 1 state) residual
   | parallel (left right leftResidual rightResidual : PactType)
       (interface : Interface) (leftState rightState : TypeAutomatonState) :
+      -- Mirrors `TypeTransition.par`/`par_fuse`'s split: without this
+      -- exclusion, a pair state whose both components are accepting would
+      -- need to relate to *both* `.par .skip .skip interface` (via this
+      -- clause) and `.skip` (via `parallel_fuse`), breaking
+      -- `residual_unique`. Needed for `stepIff`/`CompilationStepCorrect` to
+      -- hold at `.par` itself: after a real synchronized step lands both
+      -- sides on `.skip`, the only available continuation is `par_fuse`,
+      -- targeting literal `.skip` — so the automaton state it lands on must
+      -- be *able* to represent literal `.skip`, not just the compound form.
       TypeCompilationRelation left leftState leftResidual →
       TypeCompilationRelation right rightState rightResidual →
+      ¬ (leftResidual = .skip ∧ rightResidual = .skip) →
       TypeCompilationRelation (.par left right interface)
         (.pair leftState rightState)
         (.par leftResidual rightResidual interface)
+  | parallel_fuse (left right : PactType)
+      (interface : Interface) (leftState rightState : TypeAutomatonState) :
+      TypeCompilationRelation left leftState .skip →
+      TypeCompilationRelation right rightState .skip →
+      TypeCompilationRelation (.par left right interface)
+        (.pair leftState rightState) .skip
   | xoffer_source (elseType : PactType)
       (branches : List (BareMessage × PactType)) :
       TypeCompilationRelation (.xoffer elseType branches) .root
@@ -122,13 +282,28 @@ theorem TypeCompilationRelation.residual_unique
     | solve_by_elim
     | (congr 1; solve_by_elim)
     | (constructor <;> solve_by_elim)
+    | (exfalso
+       apply_assumption
+       all_goals (symm; solve_by_elim))
 
-/-- Sufficiently fuelled compilation starts in the state representing its input. -/
-theorem compileTypeFuel_initial_relation (signature : TypeAlphabet) :
+/-- A type has at most one entry state. -/
+theorem TypeEntry.unique
+    {processType : PactType} {left right : TypeAutomatonState}
+    (hLeft : TypeEntry processType left)
+    (hRight : TypeEntry processType right) : left = right := by
+  induction hLeft generalizing right <;> cases hRight <;>
+    try simp_all
+  all_goals
+    first
+    | solve_by_elim
+    | (congr 1; solve_by_elim)
+    | (constructor <;> solve_by_elim)
+
+/-- The compiled fragment's `initial` field always satisfies `TypeEntry`. -/
+theorem compileTypeFuel_initial_entry (signature : TypeAlphabet) :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →
-      TypeCompilationRelation processType
-        (compileTypeFuel signature fuel processType).initial processType := by
+      TypeEntry processType (compileTypeFuel signature fuel processType).initial := by
   intro fuel
   induction fuel with
   | zero =>
@@ -138,40 +313,154 @@ theorem compileTypeFuel_initial_relation (signature : TypeAlphabet) :
   | succ fuel ih =>
       intro processType hFuel
       cases processType with
-      | message msg dir => exact TypeCompilationRelation.message_source msg dir
-      | progress pid => exact TypeCompilationRelation.progress_source pid
-      | tock => exact TypeCompilationRelation.cycle_source
-      | skip => exact TypeCompilationRelation.skip
-      | var name => exact TypeCompilationRelation.variable name
-      | recur name body => exact TypeCompilationRelation.recur_source name body
-      | choice left right => exact TypeCompilationRelation.choice_source left right
-      | fairChoice bid left right =>
-          exact TypeCompilationRelation.fair_source bid left right
+      | message msg dir => exact TypeEntry.message msg dir
+      | progress pid => exact TypeEntry.progress pid
+      | tock => exact TypeEntry.cycle
+      | skip => exact TypeEntry.skip
+      | var name => exact TypeEntry.var name
+      | recur name body => exact TypeEntry.recur name body
+      | choice left right => exact TypeEntry.choice left right
+      | fairChoice bid left right => exact TypeEntry.fair bid left right
       | seq left right =>
-          apply TypeCompilationRelation.sequence_left
+          apply TypeEntry.seq
           apply ih left
           simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
           omega
       | par left right interface =>
-          apply TypeCompilationRelation.parallel
+          apply TypeEntry.par
           · apply ih left
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           · apply ih right
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+      | xoffer elseType branches => exact TypeEntry.xoffer elseType branches
+      | offer elseType branches => exact TypeEntry.offer elseType branches
+
+/-- What a type's own automaton-*entry* state represents, structurally.
+Most constructors install a fresh `.root`/entry position (per `TypeEntry`)
+that never depends on any child's own entry, so their entry represents the
+type itself, unchanged. Two constructors are different, both because
+`buildSequenceAutomaton`/`buildParallelAutomaton` route the entry *through*
+a child's own entry rather than installing a fresh one: `.seq left right`'s
+entry is `buildSequenceAutomaton`'s unconditionally-kept
+`.child 0 left.initial` (never redirected/deleted, regardless of
+accepting-ness — see `sequence_left_entry`), so it recursively represents
+whatever `left`'s own entry represents, embedded under the same `.seq`.
+`.par left right interface`'s entry is the pair of both sides' own entries,
+which collapses to literal `.skip` exactly when *both* sides' entries
+already do (the same collision that makes `stepIff` need `parallel_fuse`
+after a real step, here for a type that is *already* at that collapsed
+shape from the start — see the `parallel`/`parallel_fuse` split above). -/
+def PactType.canonicalEntryResidual : PactType → PactType
+  | .seq left right => .seq left.canonicalEntryResidual right
+  | .par left right interface =>
+      let leftResidual := left.canonicalEntryResidual
+      let rightResidual := right.canonicalEntryResidual
+      if leftResidual = .skip ∧ rightResidual = .skip then .skip
+      else .par leftResidual rightResidual interface
+  | processType => processType
+
+/-- Sufficiently fuelled compilation starts in the state representing its
+input's `canonicalEntryResidual` (which is the input itself, except for the
+`.seq`/`.par` propagation described there). -/
+theorem compileTypeFuel_initial_relation (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      TypeCompilationRelation processType
+        (compileTypeFuel signature fuel processType).initial
+        processType.canonicalEntryResidual := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir =>
+          exact TypeCompilationRelation.message_source msg dir
+      | progress pid =>
+          exact TypeCompilationRelation.progress_source pid
+      | tock =>
+          exact TypeCompilationRelation.cycle_source
+      | skip =>
+          exact TypeCompilationRelation.skip
+      | var name =>
+          exact TypeCompilationRelation.variable name
+      | recur name body =>
+          exact TypeCompilationRelation.recur_source name body
+      | choice left right =>
+          exact TypeCompilationRelation.choice_source left right
+      | fairChoice bid left right =>
+          exact TypeCompilationRelation.fair_source bid left right
+      | seq left right =>
+          apply TypeCompilationRelation.sequence_left_entry
+          · apply compileTypeFuel_initial_entry
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          · apply ih left
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+      | par left right interface =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          simp only [PactType.canonicalEntryResidual]
+          by_cases hCollapses :
+              left.canonicalEntryResidual = .skip ∧
+                right.canonicalEntryResidual = .skip
+          · simp only [hCollapses, if_true]
+            refine TypeCompilationRelation.parallel_fuse left right interface _ _
+              ?_ ?_
+            · rw [← hCollapses.1]; exact ih left hLeftFuel
+            · rw [← hCollapses.2]; exact ih right hRightFuel
+          · simp only [hCollapses, if_false]
+            exact TypeCompilationRelation.parallel left right _ _ interface _ _
+              (ih left hLeftFuel) (ih right hRightFuel) hCollapses
       | xoffer elseType branches =>
           exact TypeCompilationRelation.xoffer_source elseType branches
       | offer elseType branches =>
           exact TypeCompilationRelation.offer_source elseType branches
 
+/-- Common-case corollary of `compileTypeFuel_initial_relation`, at a fixed
+fuel rather than through the `compileType` wrapper — the shape most call
+sites inside other fuel-indexed inductions need directly. -/
+theorem compileTypeFuel_initial_relation_of_canonical
+    (signature : TypeAlphabet) (fuel : Nat) (processType : PactType)
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hCanonical : processType.canonicalEntryResidual = processType) :
+    TypeCompilationRelation processType
+      (compileTypeFuel signature fuel processType).initial processType := by
+  have h := compileTypeFuel_initial_relation signature fuel processType hFuel
+  rwa [hCanonical] at h
+
 /-- The public compiler's initial state represents the original type. -/
 theorem compileType_initial_relation
     (signature : TypeAlphabet) (processType : PactType) :
     TypeCompilationRelation processType
-      (compileType signature processType).initial processType := by
+      (compileType signature processType).initial
+      processType.canonicalEntryResidual := by
   apply compileTypeFuel_initial_relation signature
   exact typeCompilationFuel_sufficient processType
+
+/-- Common-case corollary of `compileType_initial_relation`: for any type
+that isn't itself already sitting at a collapsed `.par`-of-`.skip` position
+(the overwhelming majority — anything not built from `.seq`/`.par` reduces
+trivially, and `.seq`/`.par` reduce as long as their embedded `.par`
+children aren't themselves fully collapsed), the initial state represents
+the type exactly as written. -/
+theorem compileType_initial_relation_of_canonical
+    (signature : TypeAlphabet) (processType : PactType)
+    (hCanonical : processType.canonicalEntryResidual = processType) :
+    TypeCompilationRelation processType
+      (compileType signature processType).initial processType := by
+  have h := compileType_initial_relation signature processType
+  rwa [hCanonical] at h
 
 /-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
 theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
@@ -449,6 +738,583 @@ theorem compileType_initial_mem
 /-- State-carrier side of the compiler relation.  Future embeddings need this
 independently of the semantic equality: saturation stability is stated for a
 declared child state. -/
+theorem childState_mem_indexedFragmentAccepting_iff
+    (automata : List (BareMessage × AutomatonFragment))
+    (index : Nat) (entry : BareMessage × AutomatonFragment)
+    (hEntry : automata[index]? = some entry)
+    (state : TypeAutomatonState) :
+    childState (index + 1) state ∈ indexedFragmentAccepting automata ↔
+      state ∈ entry.2.accepting := by
+  classical
+  rw [indexedFragmentAccepting, mem_foldl_union_iff]
+  constructor
+  · rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+    · simp at hEmpty
+    simp only [childAccepting, Finset.mem_image] at hChild
+    rcases hChild with ⟨child, hChildAccepting, hState⟩
+    have hIndex : indexed.2 = index := by
+      injection hState with hTag _
+      omega
+    have hInner : child = state := by
+      injection hState
+    subst child
+    have hIndexedFields := List.mem_zipIdx hIndexed
+    simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+      at hIndexedFields
+    rcases hIndexedFields with ⟨hBound, hValue⟩
+    have hIndexedEntry : automata[indexed.2]? = some indexed.1 := by
+      rw [List.getElem?_eq_getElem hBound, ← hValue]
+    have hEntryEq : indexed.1 = entry := by
+      have hOptions := congrArg (fun position => automata[position]?) hIndex
+      change automata[indexed.2]? = automata[index]? at hOptions
+      rw [hIndexedEntry, hEntry] at hOptions
+      exact Option.some.inj hOptions
+    simpa [hEntryEq] using hChildAccepting
+  · intro hAccepting
+    rcases List.getElem?_eq_some_iff.mp hEntry with
+      ⟨hBound, hValue⟩
+    have hZipBound : index < automata.zipIdx.length := by
+      simpa using hBound
+    have hIndexed : (entry, index) ∈ automata.zipIdx := by
+      have hMember := List.getElem_mem hZipBound
+      have hAt := List.getElem_zipIdx (l := automata) (i := index)
+        (j := 0) hZipBound
+      simp only [zero_add] at hAt
+      rw [hAt, hValue] at hMember
+      exact hMember
+    right
+    refine ⟨(entry, index), hIndexed, ?_⟩
+    simp [childAccepting, childState, hAccepting]
+
+theorem root_not_mem_indexedFragmentAccepting
+    (automata : List (BareMessage × AutomatonFragment)) :
+    TypeAutomatonState.root ∉ indexedFragmentAccepting automata := by
+  rw [indexedFragmentAccepting, mem_foldl_union_iff]
+  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+  · simp at hEmpty
+  · simp only [childAccepting, Finset.mem_image] at hChild
+    rcases hChild with ⟨state, hState, hImpossible⟩
+    cases hImpossible
+
+theorem child_zero_not_mem_indexedFragmentAccepting
+    (automata : List (BareMessage × AutomatonFragment))
+    (state : TypeAutomatonState) :
+    childState 0 state ∉ indexedFragmentAccepting automata := by
+  rw [indexedFragmentAccepting, mem_foldl_union_iff]
+  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+  · simp at hEmpty
+  · simp only [childAccepting, Finset.mem_image] at hChild
+    rcases hChild with ⟨other, hOther, hEquality⟩
+    have hIndex : indexed.2 + 1 = 0 := by
+      injection hEquality
+    omega
+
+theorem childState_mem_indexedFragmentCompleting_iff
+    (automata : List (BareMessage × AutomatonFragment))
+    (index : Nat) (entry : BareMessage × AutomatonFragment)
+    (hEntry : automata[index]? = some entry)
+    (state : TypeAutomatonState) :
+    childState (index + 1) state ∈ indexedFragmentCompleting automata ↔
+      state ∈ entry.2.completing := by
+  classical
+  rw [indexedFragmentCompleting, mem_foldl_union_iff]
+  constructor
+  · rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+    · simp at hEmpty
+    simp only [childCompleting, Finset.mem_image] at hChild
+    rcases hChild with ⟨child, hChildCompleting, hState⟩
+    have hIndex : indexed.2 = index := by
+      injection hState with hTag _
+      omega
+    have hInner : child = state := by
+      injection hState
+    subst child
+    have hIndexedFields := List.mem_zipIdx hIndexed
+    simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
+      at hIndexedFields
+    rcases hIndexedFields with ⟨hBound, hValue⟩
+    have hIndexedEntry : automata[indexed.2]? = some indexed.1 := by
+      rw [List.getElem?_eq_getElem hBound, ← hValue]
+    have hEntryEq : indexed.1 = entry := by
+      have hOptions := congrArg (fun position => automata[position]?) hIndex
+      change automata[indexed.2]? = automata[index]? at hOptions
+      rw [hIndexedEntry, hEntry] at hOptions
+      exact Option.some.inj hOptions
+    simpa [hEntryEq] using hChildCompleting
+  · intro hCompleting
+    rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
+    have hZipBound : index < automata.zipIdx.length := by
+      simpa using hBound
+    have hIndexed : (entry, index) ∈ automata.zipIdx := by
+      have hMember := List.getElem_mem hZipBound
+      have hAt := List.getElem_zipIdx (l := automata) (i := index)
+        (j := 0) hZipBound
+      simp only [zero_add] at hAt
+      rw [hAt, hValue] at hMember
+      exact hMember
+    right
+    refine ⟨(entry, index), hIndexed, ?_⟩
+    simp [childCompleting, childState, hCompleting]
+
+theorem root_not_mem_indexedFragmentCompleting
+    (automata : List (BareMessage × AutomatonFragment)) :
+    TypeAutomatonState.root ∉ indexedFragmentCompleting automata := by
+  rw [indexedFragmentCompleting, mem_foldl_union_iff]
+  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+  · simp at hEmpty
+  · simp only [childCompleting, Finset.mem_image] at hChild
+    rcases hChild with ⟨state, hState, hImpossible⟩
+    cases hImpossible
+
+theorem child_zero_not_mem_indexedFragmentCompleting
+    (automata : List (BareMessage × AutomatonFragment))
+    (state : TypeAutomatonState) :
+    childState 0 state ∉ indexedFragmentCompleting automata := by
+  rw [indexedFragmentCompleting, mem_foldl_union_iff]
+  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
+  · simp at hEmpty
+  · simp only [childCompleting, Finset.mem_image] at hChild
+    rcases hChild with ⟨other, hOther, hEquality⟩
+    have hIndex : indexed.2 + 1 = 0 := by
+      injection hEquality
+    omega
+
+/-- At every state represented by a sufficiently fuelled constructor
+fragment, the compiler's `accepting` marker is exact: it holds precisely
+when the state is structurally `TypeAccepting`. -/
+theorem compileTypeFuel_accepting_iff
+    (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      ∀ state residual,
+        TypeCompilationRelation processType state residual →
+        (state ∈ (compileTypeFuel signature fuel processType).accepting ↔
+          TypeAccepting processType state) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel state residual hRelated
+      cases hRelated with
+      | skip =>
+          constructor
+          · intro _; exact TypeAccepting.skip
+          · intro _; simp [compileTypeFuel, finishAutomatonFragment]
+      | message_source msg dir =>
+          constructor
+          · intro hMem; simp [compileTypeFuel, finishAutomatonFragment] at hMem
+          · intro hAcc; cases hAcc
+      | message_final msg dir =>
+          constructor
+          · intro _; exact TypeAccepting.message_final msg dir
+          · intro _; simp [compileTypeFuel, finishAutomatonFragment]
+      | cycle_source =>
+          constructor
+          · intro hMem; simp [compileTypeFuel, finishAutomatonFragment] at hMem
+          · intro hAcc; cases hAcc
+      | cycle_final =>
+          constructor
+          · intro _; exact TypeAccepting.cycle_final
+          · intro _; simp [compileTypeFuel, finishAutomatonFragment]
+      | progress_source pid =>
+          constructor
+          · intro hMem; simp [compileTypeFuel, finishAutomatonFragment] at hMem
+          · intro hAcc; cases hAcc
+      | progress_final pid =>
+          constructor
+          · intro _; exact TypeAccepting.progress_final pid
+          · intro _; simp [compileTypeFuel, finishAutomatonFragment]
+      | «variable» name =>
+          constructor
+          · intro hMem; simp [compileTypeFuel, finishAutomatonFragment] at hMem
+          · intro hAcc; cases hAcc
+      | recur_source name body =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildRecursionAutomaton,
+              finishAutomatonFragment, childAccepting, childState] at hMem
+          · intro hAcc; cases hAcc
+      | recur_body name body childResidual childQ hChildRelated =>
+          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih body hBodyFuel childQ childResidual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel body).accepting := by
+              simpa [compileTypeFuel, buildRecursionAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.recur_body name body childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | recur_body _ _ _ hInner =>
+                simpa [compileTypeFuel, buildRecursionAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | choice_source left right =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildChoiceAutomaton,
+              finishAutomatonFragment, childAccepting, childState] at hMem
+          · intro hAcc; cases hAcc
+      | choice_left left right _ childQ hChildRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel childQ residual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel left).accepting := by
+              simpa [compileTypeFuel, buildChoiceAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.choice_left left right childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | choice_left _ _ _ hInner =>
+                simpa [compileTypeFuel, buildChoiceAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | choice_right left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel right).accepting := by
+              simpa [compileTypeFuel, buildChoiceAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.choice_right left right childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | choice_right _ _ _ hInner =>
+                simpa [compileTypeFuel, buildChoiceAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | fair_source bid left right =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildChoiceAutomaton,
+              finishAutomatonFragment, childAccepting, childState] at hMem
+          · intro hAcc; cases hAcc
+      | fair_left bid left right _ childQ hChildRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel childQ residual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel left).accepting := by
+              simpa [compileTypeFuel, buildChoiceAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.fair_left bid left right childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | fair_left _ _ _ _ hInner =>
+                simpa [compileTypeFuel, buildChoiceAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | fair_right bid left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel right).accepting := by
+              simpa [compileTypeFuel, buildChoiceAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.fair_right bid left right childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | fair_right _ _ _ _ hInner =>
+                simpa [compileTypeFuel, buildChoiceAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | sequence_left_entry left right _ stateL hEntry hSelfRelated =>
+          -- No `sequence_left`/`.child 0` case in `TypeAccepting` at all
+          -- (`F_tau = F_2` only), so this direction never holds regardless
+          -- of whether `left` itself happens to be accepting.
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildSequenceAutomaton,
+              finishAutomatonFragment, childAccepting, childState] at hMem
+          · intro hAcc; cases hAcc
+      | sequence_left_progressed left right childResidual childQ hChildRelated
+          hNotAccepting =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildSequenceAutomaton,
+              finishAutomatonFragment, childAccepting, childState] at hMem
+          · intro hAcc; cases hAcc
+      | sequence_right left right _ childQ hChildRelated =>
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih right hRightFuel childQ residual
+            hChildRelated
+          constructor
+          · intro hMem
+            have hMem' : childQ ∈ (compileTypeFuel signature fuel right).accepting := by
+              simpa [compileTypeFuel, buildSequenceAutomaton,
+                finishAutomatonFragment, childAccepting, childState] using hMem
+            exact TypeAccepting.sequence_right left right childQ (hChild.mp hMem')
+          · intro hAcc
+            cases hAcc with
+            | sequence_right _ _ _ hInner =>
+                simpa [compileTypeFuel, buildSequenceAutomaton,
+                  finishAutomatonFragment, childAccepting, childState]
+                  using hChild.mpr hInner
+      | parallel left right leftResidual rightResidual interface leftState
+          rightState hLeftRelated hRightRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeftChild := ih left hLeftFuel leftState leftResidual hLeftRelated
+          have hRightChild := ih right hRightFuel rightState rightResidual hRightRelated
+          constructor
+          · intro hMem
+            simp only [compileTypeFuel, buildParallelAutomaton,
+              finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_image] at hMem
+            obtain ⟨ls, hls, rs, hrs, hEq⟩ := hMem
+            injection hEq with hEqL hEqR
+            subst hEqL; subst hEqR
+            exact TypeAccepting.parallel left right interface ls rs
+              (hLeftChild.mp hls) (hRightChild.mp hrs)
+          · intro hAcc
+            cases hAcc with
+            | parallel _ _ _ _ _ hInnerL hInnerR =>
+                simp only [compileTypeFuel, buildParallelAutomaton,
+                  finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_image]
+                exact ⟨_, hLeftChild.mpr hInnerL, _, hRightChild.mpr hInnerR, rfl⟩
+      | parallel_fuse left right interface leftState rightState hLeftRelated
+          hRightRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeftChild := ih left hLeftFuel leftState .skip hLeftRelated
+          have hRightChild := ih right hRightFuel rightState .skip hRightRelated
+          constructor
+          · intro hMem
+            simp only [compileTypeFuel, buildParallelAutomaton,
+              finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_image] at hMem
+            obtain ⟨ls, hls, rs, hrs, hEq⟩ := hMem
+            injection hEq with hEqL hEqR
+            subst hEqL; subst hEqR
+            exact TypeAccepting.parallel left right interface ls rs
+              (hLeftChild.mp hls) (hRightChild.mp hrs)
+          · intro hAcc
+            cases hAcc with
+            | parallel _ _ _ _ _ hInnerL hInnerR =>
+                simp only [compileTypeFuel, buildParallelAutomaton,
+                  finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_image]
+                exact ⟨_, hLeftChild.mpr hInnerL, _, hRightChild.mpr hInnerR, rfl⟩
+      | xoffer_source elseType branches =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildExclusiveOfferAutomaton,
+              finishAutomatonFragment, childAccepting, childState,
+              root_not_mem_indexedFragmentAccepting] at hMem
+          · intro hAcc; cases hAcc
+      | xoffer_else elseType _ branches childQ hChildRelated =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih elseType hElseFuel childQ residual
+            hChildRelated
+          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+          simp only [Finset.mem_union]
+          have hElseTag : childState 0 childQ ∈
+                childAccepting 0 (compileTypeFuel signature fuel elseType) ↔
+              childQ ∈
+                (compileTypeFuel signature fuel elseType).accepting := by
+            simp [childAccepting, childState]
+          have hNotIndexed : childState 0 childQ ∉
+              indexedFragmentAccepting
+                (branches.map fun branch =>
+                  (branch.1, compileTypeFuel signature fuel branch.2)) :=
+            child_zero_not_mem_indexedFragmentAccepting _ childQ
+          constructor
+          · rintro (hElse | hIndexed)
+            · exact TypeAccepting.xoffer_else elseType branches childQ
+                (hChild.mp (hElseTag.mp hElse))
+            · exact (hNotIndexed hIndexed).elim
+          · intro hAcc
+            cases hAcc with
+            | xoffer_else _ _ _ hInner =>
+                left
+                exact hElseTag.mpr (hChild.mpr hInner)
+      | xoffer_branch elseType branchType _ branches action index
+          childQ hEntry hChildRelated =>
+          have hBranchesFuel : typeBranchCompilationFuel branches ≤ fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hBranchFuel : TypeCompilationFuelSufficient branchType fuel := by
+            rcases List.getElem?_eq_some_iff.mp hEntry with
+              ⟨hIndexBound, hIndexValue⟩
+            have hBranchMem : (action, branchType) ∈ branches := by
+              have hMember := List.getElem_mem hIndexBound
+              simpa [hIndexValue] using hMember
+            exact le_trans
+              (typeCompilationFuel_le_typeBranchCompilationFuel branches
+                (action, branchType) hBranchMem)
+              hBranchesFuel
+          have hChild := ih branchType hBranchFuel childQ residual
+            hChildRelated
+          let branchAutomata := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel branch.2)
+          have hAutomatonEntry : branchAutomata[index]? =
+              some (action, compileTypeFuel signature fuel branchType) := by
+            simp [branchAutomata, hEntry]
+          have hIndexed := childState_mem_indexedFragmentAccepting_iff
+            branchAutomata index
+              (action, compileTypeFuel signature fuel branchType)
+              hAutomatonEntry childQ
+          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+          simp only [Finset.mem_union]
+          have hNotElse : childState (index + 1) childQ ∉
+              childAccepting 0 (compileTypeFuel signature fuel elseType) := by
+            simp [childAccepting, childState]
+          constructor
+          · rintro (hElse | hBranch)
+            · exact (hNotElse hElse).elim
+            · exact TypeAccepting.xoffer_branch elseType branchType branches
+                action index childQ hEntry (hChild.mp (hIndexed.mp hBranch))
+          · intro hAcc
+            cases hAcc with
+            | xoffer_branch _ branchType' _ action' _ _ hEntry' hInner =>
+                have hSame : (action, branchType) = (action', branchType') := by
+                  rw [hEntry] at hEntry'
+                  exact Option.some.inj hEntry'
+                have hBranchTypeEq : branchType' = branchType :=
+                  (congrArg Prod.snd hSame).symm
+                subst hBranchTypeEq
+                right
+                exact hIndexed.mpr (hChild.mpr hInner)
+      | offer_source elseType branches =>
+          constructor
+          · intro hMem
+            simp [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+              finishAutomatonFragment, childAccepting, childState,
+              root_not_mem_indexedFragmentAccepting] at hMem
+          · intro hAcc; cases hAcc
+      | offer_branches elseType _ branches selected index childQ hEntry
+          hChildRelated =>
+          have hConjunctionFuel : TypeCompilationFuelSufficient
+              (parallelTypeBranchesSelecting selected branches) fuel := by
+            rw [TypeCompilationFuelSufficient,
+              typeCompilationFuel_parallelTypeBranchesSelecting]
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          have hChild := ih
+            (parallelTypeBranchesSelecting selected branches) hConjunctionFuel
+              childQ residual hChildRelated
+          let selectedConjunctions := branches.map fun branch =>
+            (branch.1, compileTypeFuel signature fuel
+              (parallelTypeBranchesSelecting branch branches))
+          have hAutomatonEntry : selectedConjunctions[index]? = some
+              (selected.1, compileTypeFuel signature fuel
+                (parallelTypeBranchesSelecting selected branches)) := by
+            simp [selectedConjunctions, hEntry]
+          have hIndexed := childState_mem_indexedFragmentAccepting_iff
+            selectedConjunctions index
+              (selected.1, compileTypeFuel signature fuel
+                (parallelTypeBranchesSelecting selected branches))
+              hAutomatonEntry childQ
+          rw [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment]
+          simp only [Finset.mem_union]
+          have hNotElse : childState (index + 1) childQ ∉
+              childAccepting 0 (compileTypeFuel signature fuel elseType) := by
+            simp [childAccepting, childState]
+          constructor
+          · rintro (hElse | hBranch)
+            · exact (hNotElse hElse).elim
+            · exact TypeAccepting.offer_branches elseType branches selected
+                index childQ hEntry (hChild.mp (hIndexed.mp hBranch))
+          · intro hAcc
+            cases hAcc with
+            | offer_branches _ _ selected' _ _ hEntry' hInner =>
+                have hSame : selected = selected' := by
+                  rw [hEntry] at hEntry'
+                  exact Option.some.inj hEntry'
+                subst hSame
+                right
+                exact hIndexed.mpr (hChild.mpr hInner)
+      | offer_else elseType _ branches childQ hChildRelated =>
+          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih elseType hElseFuel childQ residual
+            hChildRelated
+          rw [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment]
+          simp only [Finset.mem_union]
+          have hNotIndexed : childState 0 childQ ∉
+              indexedFragmentAccepting
+                (branches.map fun selected =>
+                  (selected.1, compileTypeFuel signature fuel
+                    (parallelTypeBranchesSelecting selected branches))) := by
+            rw [indexedFragmentAccepting, mem_foldl_union_iff]
+            rintro (hEmpty | ⟨indexed, _, hMember⟩)
+            · simp at hEmpty
+            · simp [childAccepting, childState] at hMember
+          constructor
+          · rintro (hElse | hIndexed)
+            · exact TypeAccepting.offer_else elseType branches childQ
+                (hChild.mp (by simpa [childAccepting, childState] using hElse))
+            · exact (hNotIndexed hIndexed).elim
+          · intro hAcc
+            cases hAcc with
+            | offer_else _ _ _ hInner =>
+                left
+                simpa [childAccepting, childState] using hChild.mpr hInner
+
+/-- The compiler's `accepting`-state marker agrees with `TypeAccepting` at
+every state represented by the compilation relation. -/
+def CompilationAcceptingCorrect
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  ∀ state residual,
+    TypeCompilationRelation processType state residual →
+      (state ∈ (compileTypeFuel signature
+          (typeCompilationFuel processType) processType).accepting ↔
+        TypeAccepting processType state)
+
+theorem compilationAcceptingCorrect_of_compilation
+    (signature : TypeAlphabet) (processType : PactType) :
+    CompilationAcceptingCorrect signature processType := by
+  exact compileTypeFuel_accepting_iff signature
+    (typeCompilationFuel processType) processType
+    (typeCompilationFuel_sufficient processType)
+
 def CompilationStateCorrect
     (signature : TypeAlphabet) (processType : PactType) : Prop :=
   ∀ state residual,
@@ -568,25 +1434,40 @@ private theorem compileTypeFuel_relation_state_mem
             hChildRelated
           simpa [compileTypeFuel, buildChoiceAutomaton,
             finishAutomatonFragment, childStates, childState] using hChild
-      | sequence_left left right childResidual childQ hChildRelated =>
+      | sequence_left_entry left right residual stateL hEntry hSelfRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hChild := ih left hLeftFuel stateL residual hSelfRelated
+          have hStateEq : stateL =
+              (compileTypeFuel signature fuel left).initial :=
+            TypeEntry.unique hEntry
+              (compileTypeFuel_initial_entry signature fuel left hLeftFuel)
+          subst hStateEq
+          rw [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment]
+          simp only [Finset.mem_union, Finset.mem_image, Finset.mem_sdiff]
+          exact Or.inl (Or.inl ⟨_, ⟨hChild, by simp⟩, rfl⟩)
+      | sequence_left_progressed left right childResidual childQ
+          hChildRelated hNotAccepting =>
           have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
               at hFuel ⊢
             omega
           have hChild := ih left hLeftFuel childQ childResidual
             hChildRelated
-          have hTagged : childState 0 childQ ∈
-              childStates 0 (compileTypeFuel signature fuel left) := by
-            exact Finset.mem_image.mpr ⟨childQ, hChild, rfl⟩
+          have hNotAcceptingConcrete : childQ ∉
+              (compileTypeFuel signature fuel left).accepting := by
+            rw [compileTypeFuel_accepting_iff signature fuel left hLeftFuel
+              childQ childResidual hChildRelated]
+            exact hNotAccepting
           rw [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment]
-          change childState 0 childQ ∈
-            (childStates 0 (compileTypeFuel signature fuel left) ∪
-              (compileTypeFuel signature fuel left).edges.image
-                (fun edge => childState 0 edge.target)) ∪
-              childStates 1 (compileTypeFuel signature fuel right)
-          simp only [Finset.mem_union]
-          exact Or.inl (Or.inl hTagged)
+          simp only [Finset.mem_union, Finset.mem_image, Finset.mem_sdiff]
+          refine Or.inl (Or.inl ⟨childQ, ⟨hChild, ?_⟩, rfl⟩)
+          intro hMem
+          exact hNotAcceptingConcrete hMem.1
       | sequence_right left right _ childQ hChildRelated =>
           have hRightFuel : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -609,6 +1490,20 @@ private theorem compileTypeFuel_relation_state_mem
           have hLeft := ih left hLeftFuel leftState leftResidual hLeftRelated
           have hRight := ih right hRightFuel rightState rightResidual
             hRightRelated
+          simp [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, hLeft, hRight]
+      | parallel_fuse left right interface leftState rightState hLeftRelated
+          hRightRelated =>
+          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+              at hFuel ⊢
+            omega
+          have hLeft := ih left hLeftFuel leftState .skip hLeftRelated
+          have hRight := ih right hRightFuel rightState .skip hRightRelated
           simp [compileTypeFuel, buildParallelAutomaton,
             finishAutomatonFragment, hLeft, hRight]
       | xoffer_source elseType branches =>
@@ -783,407 +1678,6 @@ theorem PactType.replaceVar_recur_eq_skip_iff
     try simp
   all_goals split <;> simp_all
 
-theorem childState_mem_indexedFragmentSkipping_iff
-    (automata : List (BareMessage × AutomatonFragment))
-    (index : Nat) (entry : BareMessage × AutomatonFragment)
-    (hEntry : automata[index]? = some entry)
-    (state : TypeAutomatonState) :
-    childState (index + 1) state ∈ indexedFragmentSkipping automata ↔
-      state ∈ entry.2.skipping := by
-  classical
-  rw [indexedFragmentSkipping, mem_foldl_union_iff]
-  constructor
-  · rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-    · simp at hEmpty
-    simp only [childSkipping, Finset.mem_image] at hChild
-    rcases hChild with ⟨child, hChildSkipping, hState⟩
-    have hIndex : indexed.2 = index := by
-      injection hState with hTag _
-      omega
-    have hInner : child = state := by
-      injection hState
-    subst child
-    have hIndexedFields := List.mem_zipIdx hIndexed
-    simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
-      at hIndexedFields
-    rcases hIndexedFields with ⟨hBound, hValue⟩
-    have hIndexedEntry : automata[indexed.2]? = some indexed.1 := by
-      rw [List.getElem?_eq_getElem hBound, ← hValue]
-    have hEntryEq : indexed.1 = entry := by
-      have hOptions := congrArg (fun position => automata[position]?) hIndex
-      change automata[indexed.2]? = automata[index]? at hOptions
-      rw [hIndexedEntry, hEntry] at hOptions
-      exact Option.some.inj hOptions
-    simpa [hEntryEq] using hChildSkipping
-  · intro hSkipping
-    rcases List.getElem?_eq_some_iff.mp hEntry with
-      ⟨hBound, hValue⟩
-    have hZipBound : index < automata.zipIdx.length := by
-      simpa using hBound
-    have hIndexed : (entry, index) ∈ automata.zipIdx := by
-      have hMember := List.getElem_mem hZipBound
-      have hAt := List.getElem_zipIdx (l := automata) (i := index)
-        (j := 0) hZipBound
-      simp only [zero_add] at hAt
-      rw [hAt, hValue] at hMember
-      exact hMember
-    right
-    refine ⟨(entry, index), hIndexed, ?_⟩
-    simp [childSkipping, childState, hSkipping]
-
-theorem root_not_mem_indexedFragmentSkipping
-    (automata : List (BareMessage × AutomatonFragment)) :
-    TypeAutomatonState.root ∉ indexedFragmentSkipping automata := by
-  rw [indexedFragmentSkipping, mem_foldl_union_iff]
-  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-  · simp at hEmpty
-  · simp only [childSkipping, Finset.mem_image] at hChild
-    rcases hChild with ⟨state, hState, hImpossible⟩
-    cases hImpossible
-
-theorem child_zero_not_mem_indexedFragmentSkipping
-    (automata : List (BareMessage × AutomatonFragment))
-    (state : TypeAutomatonState) :
-    childState 0 state ∉ indexedFragmentSkipping automata := by
-  rw [indexedFragmentSkipping, mem_foldl_union_iff]
-  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-  · simp at hEmpty
-  · simp only [childSkipping, Finset.mem_image] at hChild
-    rcases hChild with ⟨other, hOther, hEquality⟩
-    have hIndex : indexed.2 + 1 = 0 := by
-      injection hEquality
-    omega
-
-theorem childState_mem_indexedFragmentCompleting_iff
-    (automata : List (BareMessage × AutomatonFragment))
-    (index : Nat) (entry : BareMessage × AutomatonFragment)
-    (hEntry : automata[index]? = some entry)
-    (state : TypeAutomatonState) :
-    childState (index + 1) state ∈ indexedFragmentCompleting automata ↔
-      state ∈ entry.2.completing := by
-  classical
-  rw [indexedFragmentCompleting, mem_foldl_union_iff]
-  constructor
-  · rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-    · simp at hEmpty
-    simp only [childCompleting, Finset.mem_image] at hChild
-    rcases hChild with ⟨child, hChildCompleting, hState⟩
-    have hIndex : indexed.2 = index := by
-      injection hState with hTag _
-      omega
-    have hInner : child = state := by
-      injection hState
-    subst child
-    have hIndexedFields := List.mem_zipIdx hIndexed
-    simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
-      at hIndexedFields
-    rcases hIndexedFields with ⟨hBound, hValue⟩
-    have hIndexedEntry : automata[indexed.2]? = some indexed.1 := by
-      rw [List.getElem?_eq_getElem hBound, ← hValue]
-    have hEntryEq : indexed.1 = entry := by
-      have hOptions := congrArg (fun position => automata[position]?) hIndex
-      change automata[indexed.2]? = automata[index]? at hOptions
-      rw [hIndexedEntry, hEntry] at hOptions
-      exact Option.some.inj hOptions
-    simpa [hEntryEq] using hChildCompleting
-  · intro hCompleting
-    rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
-    have hZipBound : index < automata.zipIdx.length := by
-      simpa using hBound
-    have hIndexed : (entry, index) ∈ automata.zipIdx := by
-      have hMember := List.getElem_mem hZipBound
-      have hAt := List.getElem_zipIdx (l := automata) (i := index)
-        (j := 0) hZipBound
-      simp only [zero_add] at hAt
-      rw [hAt, hValue] at hMember
-      exact hMember
-    right
-    refine ⟨(entry, index), hIndexed, ?_⟩
-    simp [childCompleting, childState, hCompleting]
-
-theorem root_not_mem_indexedFragmentCompleting
-    (automata : List (BareMessage × AutomatonFragment)) :
-    TypeAutomatonState.root ∉ indexedFragmentCompleting automata := by
-  rw [indexedFragmentCompleting, mem_foldl_union_iff]
-  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-  · simp at hEmpty
-  · simp only [childCompleting, Finset.mem_image] at hChild
-    rcases hChild with ⟨state, hState, hImpossible⟩
-    cases hImpossible
-
-theorem child_zero_not_mem_indexedFragmentCompleting
-    (automata : List (BareMessage × AutomatonFragment))
-    (state : TypeAutomatonState) :
-    childState 0 state ∉ indexedFragmentCompleting automata := by
-  rw [indexedFragmentCompleting, mem_foldl_union_iff]
-  rintro (hEmpty | ⟨indexed, hIndexed, hChild⟩)
-  · simp at hEmpty
-  · simp only [childCompleting, Finset.mem_image] at hChild
-    rcases hChild with ⟨other, hOther, hEquality⟩
-    have hIndex : indexed.2 + 1 = 0 := by
-      injection hEquality
-    omega
-
-/-- At every state represented by a sufficiently fuelled constructor
-fragment, the compiler's syntactic `skipping` marker is exact: it holds
-precisely when the represented operational residual is literal `skip`. -/
-theorem compileTypeFuel_skipping_iff
-    (signature : TypeAlphabet) :
-    ∀ fuel processType,
-      TypeCompilationFuelSufficient processType fuel →
-      ∀ state residual,
-        TypeCompilationRelation processType state residual →
-        (state ∈ (compileTypeFuel signature fuel processType).skipping ↔
-          residual = .skip) := by
-  intro fuel
-  induction fuel with
-  | zero =>
-      intro processType hFuel
-      exact (Nat.not_lt_zero _
-        (TypeCompilationFuelSufficient.positive hFuel)).elim
-  | succ fuel ih =>
-      intro processType hFuel state residual hRelated
-      cases hRelated with
-      | skip =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | message_source msg dir =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | message_final msg dir =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | cycle_source =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | cycle_final =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | progress_source pid =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | progress_final pid =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | «variable» name =>
-          simp [compileTypeFuel, finishAutomatonFragment]
-      | recur_source name body =>
-          simp [compileTypeFuel, buildRecursionAutomaton,
-            finishAutomatonFragment, childSkipping, childState]
-      | recur_body name body childResidual childQ hChildRelated =>
-          have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih body hBodyFuel childQ childResidual
-            hChildRelated
-          rw [PactType.replaceVar_recur_eq_skip_iff]
-          simpa [compileTypeFuel, buildRecursionAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | choice_source left right =>
-          simp [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState]
-      | choice_left left right _ childQ hChildRelated =>
-          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih left hLeftFuel childQ residual
-            hChildRelated
-          simpa [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | choice_right left right _ childQ hChildRelated =>
-          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih right hRightFuel childQ residual
-            hChildRelated
-          simpa [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | fair_source bid left right =>
-          simp [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState]
-      | fair_left bid left right _ childQ hChildRelated =>
-          have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih left hLeftFuel childQ residual
-            hChildRelated
-          simpa [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | fair_right bid left right _ childQ hChildRelated =>
-          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih right hRightFuel childQ residual
-            hChildRelated
-          simpa [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | sequence_left left right childResidual childQ hChildRelated =>
-          simp [compileTypeFuel, buildSequenceAutomaton,
-            finishAutomatonFragment, childSkipping, childState]
-      | sequence_right left right _ childQ hChildRelated =>
-          have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih right hRightFuel childQ residual
-            hChildRelated
-          simpa [compileTypeFuel, buildSequenceAutomaton,
-            finishAutomatonFragment, childSkipping, childState] using hChild
-      | parallel left right leftResidual rightResidual interface leftState
-          rightState hLeftRelated hRightRelated =>
-          simp [compileTypeFuel, buildParallelAutomaton,
-            finishAutomatonFragment]
-      | xoffer_source elseType branches =>
-          simp [compileTypeFuel, buildExclusiveOfferAutomaton,
-            finishAutomatonFragment, childSkipping, childState,
-            root_not_mem_indexedFragmentSkipping]
-      | xoffer_else elseType _ branches childQ hChildRelated =>
-          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih elseType hElseFuel childQ residual
-            hChildRelated
-          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
-            finishAutomatonFragment]
-          simp only [Finset.mem_union]
-          have hElseTag : childState 0 childQ ∈
-                childSkipping 0 (compileTypeFuel signature fuel elseType) ↔
-              childQ ∈
-                (compileTypeFuel signature fuel elseType).skipping := by
-            simp [childSkipping, childState]
-          have hNotIndexed : childState 0 childQ ∉
-              indexedFragmentSkipping
-                (branches.map fun branch =>
-                  (branch.1, compileTypeFuel signature fuel branch.2)) :=
-            child_zero_not_mem_indexedFragmentSkipping _ childQ
-          constructor
-          · rintro (hElse | hIndexed)
-            · exact hChild.mp (hElseTag.mp hElse)
-            · exact (hNotIndexed hIndexed).elim
-          · intro hSkip
-            left
-            exact hElseTag.mpr (hChild.mpr hSkip)
-      | xoffer_branch elseType branchType _ branches action index
-          childQ hEntry hChildRelated =>
-          have hBranchesFuel : typeBranchCompilationFuel branches ≤ fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
-            omega
-          have hBranchFuel : TypeCompilationFuelSufficient branchType fuel := by
-            rcases List.getElem?_eq_some_iff.mp hEntry with
-              ⟨hIndexBound, hIndexValue⟩
-            have hBranchMem : (action, branchType) ∈ branches := by
-              have hMember := List.getElem_mem hIndexBound
-              simpa [hIndexValue] using hMember
-            exact le_trans
-              (typeCompilationFuel_le_typeBranchCompilationFuel branches
-                (action, branchType) hBranchMem)
-              hBranchesFuel
-          have hChild := ih branchType hBranchFuel childQ residual
-            hChildRelated
-          let branchAutomata := branches.map fun branch =>
-            (branch.1, compileTypeFuel signature fuel branch.2)
-          have hAutomatonEntry : branchAutomata[index]? =
-              some (action, compileTypeFuel signature fuel branchType) := by
-            simp [branchAutomata, hEntry]
-          have hIndexed := childState_mem_indexedFragmentSkipping_iff
-            branchAutomata index
-              (action, compileTypeFuel signature fuel branchType)
-              hAutomatonEntry childQ
-          rw [compileTypeFuel, buildExclusiveOfferAutomaton,
-            finishAutomatonFragment]
-          simp only [Finset.mem_union]
-          have hNotElse : childState (index + 1) childQ ∉
-              childSkipping 0 (compileTypeFuel signature fuel elseType) := by
-            simp [childSkipping, childState]
-          constructor
-          · rintro (hElse | hBranch)
-            · exact (hNotElse hElse).elim
-            · exact hChild.mp (hIndexed.mp hBranch)
-          · intro hSkip
-            right
-            exact hIndexed.mpr (hChild.mpr hSkip)
-      | offer_source elseType branches =>
-          simp [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
-            finishAutomatonFragment, childSkipping, childState,
-            root_not_mem_indexedFragmentSkipping]
-      | offer_branches elseType _ branches selected index childQ hEntry
-          hChildRelated =>
-          have hConjunctionFuel : TypeCompilationFuelSufficient
-              (parallelTypeBranchesSelecting selected branches) fuel := by
-            rw [TypeCompilationFuelSufficient,
-              typeCompilationFuel_parallelTypeBranchesSelecting]
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
-            omega
-          have hChild := ih
-            (parallelTypeBranchesSelecting selected branches) hConjunctionFuel
-              childQ residual hChildRelated
-          let selectedConjunctions := branches.map fun branch =>
-            (branch.1, compileTypeFuel signature fuel
-              (parallelTypeBranchesSelecting branch branches))
-          have hAutomatonEntry : selectedConjunctions[index]? = some
-              (selected.1, compileTypeFuel signature fuel
-                (parallelTypeBranchesSelecting selected branches)) := by
-            simp [selectedConjunctions, hEntry]
-          have hIndexed := childState_mem_indexedFragmentSkipping_iff
-            selectedConjunctions index
-              (selected.1, compileTypeFuel signature fuel
-                (parallelTypeBranchesSelecting selected branches))
-              hAutomatonEntry childQ
-          rw [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
-            finishAutomatonFragment]
-          simp only [Finset.mem_union]
-          have hNotElse : childState (index + 1) childQ ∉
-              childSkipping 0 (compileTypeFuel signature fuel elseType) := by
-            simp [childSkipping, childState]
-          constructor
-          · rintro (hElse | hBranch)
-            · exact (hNotElse hElse).elim
-            · exact hChild.mp (hIndexed.mp hBranch)
-          · intro hSkip
-            right
-            exact hIndexed.mpr (hChild.mpr hSkip)
-      | offer_else elseType _ branches childQ hChildRelated =>
-          have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
-            simp [TypeCompilationFuelSufficient, typeCompilationFuel]
-              at hFuel ⊢
-            omega
-          have hChild := ih elseType hElseFuel childQ residual
-            hChildRelated
-          rw [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
-            finishAutomatonFragment]
-          simp only [Finset.mem_union]
-          have hNotIndexed : childState 0 childQ ∉
-              indexedFragmentSkipping
-                (branches.map fun selected =>
-                  (selected.1, compileTypeFuel signature fuel
-                    (parallelTypeBranchesSelecting selected branches))) := by
-            rw [indexedFragmentSkipping, mem_foldl_union_iff]
-            rintro (hEmpty | ⟨indexed, _, hMember⟩)
-            · simp at hEmpty
-            · simp [childSkipping, childState] at hMember
-          constructor
-          · rintro (hElse | hIndexed)
-            · exact hChild.mp (by simpa [childSkipping, childState] using hElse)
-            · exact (hNotIndexed hIndexed).elim
-          · intro hSkip
-            left
-            simpa [childSkipping, childState] using hChild.mpr hSkip
-
-/-- The compiler's skipping-state marker agrees with literal `skip` at every
-state represented by the compilation relation. -/
-def CompilationSkippingCorrect
-    (signature : TypeAlphabet) (processType : PactType) : Prop :=
-  ∀ state residual,
-    TypeCompilationRelation processType state residual →
-      (state ∈ (compileTypeFuel signature
-          (typeCompilationFuel processType) processType).skipping ↔
-        residual = .skip)
-
-theorem compilationSkippingCorrect_of_compilation
-    (signature : TypeAlphabet) (processType : PactType) :
-    CompilationSkippingCorrect signature processType := by
-  exact compileTypeFuel_skipping_iff signature
-    (typeCompilationFuel processType) processType
-    (typeCompilationFuel_sufficient processType)
 
 /-- The constructor metadata used only for optimistic future propagation is
 exactly the syntax predicate saying that the represented residual may finish
@@ -2037,6 +2531,32 @@ theorem TypeOffers.current_union_future_eq_targetFuture :
                     rcases Finset.mem_union.mp hMember with hCurrent | hFuture
                     · exact Or.inl ⟨Or.inr hCurrent, hOutside⟩
                     · exact Or.inr ⟨Or.inr hFuture, hOutside⟩
+          | par_fuse outer leftEnvironment rightEnvironment interface left
+              right leftLabel rightLabel leftCurrent leftFuture rightCurrent
+              rightFuture hLeftOffers hRightOffers _ =>
+              have hLeft := ih (sizeOf left) (by
+                rw [← hSize]
+                simp_wf
+                omega) left rfl _ _ _ _ _ hLeftOffers
+              have hRight := ih (sizeOf right) (by
+                rw [← hSize]
+                simp_wf
+                omega) right rfl _ _ _ _ _ hRightOffers
+              simp only [typeFutureOffers, typeFutureOffersFuel,
+                Finset.union_empty] at hLeft hRight ⊢
+              have hLeftSub : leftFuture ⊆ leftCurrent := by
+                intro a ha
+                rw [← hLeft]
+                exact Finset.mem_union_right _ ha
+              have hRightSub : rightFuture ⊆ rightCurrent := by
+                intro a ha
+                rw [← hRight]
+                exact Finset.mem_union_right _ ha
+              have hSub : hideTypeOffers interface (leftFuture ∪ rightFuture) ⊆
+                  hideTypeOffers interface (leftCurrent ∪ rightCurrent) := by
+                apply Finset.filter_subset_filter
+                exact Finset.union_subset_union hLeftSub hRightSub
+              exact Finset.union_eq_left.mpr hSub
       | message msg dir =>
           cases hOffers <;> simp [typeFutureOffers, typeFutureOffersFuel]
       | progress pid =>

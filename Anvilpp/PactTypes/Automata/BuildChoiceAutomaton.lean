@@ -20,7 +20,6 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
     AutomatonFragment :=
   let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 0 left ∪ childAccepting 1 right
-  let skipping := childSkipping 0 left ∪ childSkipping 1 right
   let completing :=
     (if left.initial ∈ left.completing ∨ right.initial ∈ right.completing then
       {TypeAutomatonState.root}
@@ -38,7 +37,7 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
         current := ∅
         future := .at (childState 1 right.initial) ∅
         target := childState 1 right.initial } }
-  finishAutomatonFragment states .root accepting skipping completing
+  finishAutomatonFragment states .root accepting completing
     (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
 
 theorem buildChoiceAutomaton_outgoing_left

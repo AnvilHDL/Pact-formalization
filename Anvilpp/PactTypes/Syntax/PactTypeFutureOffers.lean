@@ -1623,8 +1623,14 @@ mutual
     | seq (env : TypeEnvironment) (left left' right : PactType)
         (label : TypeLabel) (current childFuture : Finset BareMessage) :
         TypeOffers env left label left' current childFuture →
+        left' ≠ .skip →
         TypeOffers env (.seq left right) label (.seq left' right) current
           (typeFutureOffers (.seq left' right) \ current)
+    | seq_fuse (env : TypeEnvironment) (left right : PactType)
+        (label : TypeLabel) (current childFuture : Finset BareMessage) :
+        TypeOffers env left label .skip current childFuture →
+        TypeOffers env (.seq left right) label right current
+          (typeFutureOffers right \ current)
     | xoffer_branch (env : TypeEnvironment) (elseType : PactType)
         (branches : List (BareMessage × PactType))
         (action : BareMessage) (processType : PactType) :
@@ -1674,12 +1680,26 @@ mutual
         (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
         TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
+        ¬ (left' = .skip ∧ right' = .skip) →
         LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv →
         LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par left right interface)
           (TypeLabel.combine interface leftLabel rightLabel)
           (.par left' right' interface)
+          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+          (hideTypeOffers interface (leftFuture ∪ rightFuture))
+    | par_fuse (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
+        (left right : PactType) (leftLabel rightLabel : TypeLabel)
+        (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+        TypeOffers leftEnv left leftLabel .skip leftCurrent leftFuture →
+        TypeOffers rightEnv right rightLabel .skip rightCurrent rightFuture →
+        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv →
+        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv →
+        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        TypeOffers outer (.par left right interface)
+          (TypeLabel.combine interface leftLabel rightLabel)
+          .skip
           (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
           (hideTypeOffers interface (leftFuture ∪ rightFuture))
 

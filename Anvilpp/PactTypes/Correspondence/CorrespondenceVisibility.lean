@@ -203,7 +203,7 @@ theorem compileTypeFuel_variable_label_mem_bound
           simp only [PactType.AllVariablesBound] at hBound
           simp only [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, Finset.mem_union] at hEdge
-          rcases hEdge with ((hLeft | hRight) | hBridge) | hFutureBridge
+          rcases hEdge with hLeft | hRight
           · simp only [Finset.mem_image] at hLeft
             rcases hLeft with ⟨child, hChild, hEq⟩
             exact ih left bound hBound.1 child hChild name (by
@@ -214,14 +214,6 @@ theorem compileTypeFuel_variable_label_mem_bound
             exact ih right bound hBound.2 child hChild name (by
               rw [← hEq] at hLabel
               simpa [childPendingEdge] using hLabel)
-          · simp only [Finset.mem_biUnion, Finset.mem_image] at hBridge
-            rcases hBridge with ⟨_, _, _, _, hEq⟩
-            rw [← hEq] at hLabel
-            cases hLabel
-          · simp only [Finset.mem_image] at hFutureBridge
-            rcases hFutureBridge with ⟨_, _, hEq⟩
-            rw [← hEq] at hLabel
-            cases hLabel
       | par left right interface =>
           simp only [PactType.AllVariablesBound] at hBound
           have hLeftVariable : ∀ resolved ∈ resolvedAutomatonEdges
