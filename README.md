@@ -1,124 +1,96 @@
 # Pact Theory
 
-## New Extensions Task
+Lean formalization of the Pact process/type theory, including the operational
+type semantics, the finite constructor-automaton compiler, and the type-level
+step correspondence from Lemma 4.5 of the paper.
 
-- [x] Match the syntax to the paper
-- [x] Scaffold the updated environment-indexed process semantics from the paper
-- [x] Scaffold the updated type grammar and value erasure
-- [x] Scaffold the environment-indexed type semantics
-- [x] Scaffold finite semantic automata and correspondence witnesses
-- [x] Define process communication safety and type compatibility
-- [x] State type compatibility implies process compatibility
-- [x] Define process-type conformance and type refinement
-- [x] State the paper's inference, checking, game, soundness, and optimality results
-- [ ] Discharge the new `sorry` proof and construction obligations
+## Proof status
 
+- [x] Pact type syntax, regularity conditions, completion, future offers, and
+  decorated type transitions.
+- [x] Finite constructor automata and the canonical `compileType` compiler.
+- [x] A state/residual relation for every type constructor.
+- [x] Initial-state representation and membership in the compiled automaton.
+- [x] Future-offer, completing-state, scoped-step, and sequence-execution
+  correctness for every constructor.
+- [x] Atomic, choice, fair-choice, sequence, parallel, exclusive-offer,
+  conjunctive-offer, and guarded-recursion correspondence leaves.
+- [x] The complete type/compiled-automaton correspondence theorem
+  `type_automaton_correspondence` (Lemma 4.5).
+- [ ] The process-to-type-automaton simulation
+  `process_automaton_correspondence` (Lemma 4.6).
+- [ ] Other paper-level results that are currently stated with admitted proofs
+  in `Proc.lean`, `PactSemantics.lean`, `TypeTransitionSystem.lean`, or
+  `PactSafety.lean`.
 
-### Remaining proof obligations
+The completed type correspondence is assembled structurally through
+`CompilationProofBundle`. Its four fields prove that compilation preserves:
 
-- [x] Define the state/residual relation for every type constructor.
-- [x] Prove that sufficient compilation fuel is positive.
-- [x] Prove that the initial state represents the original type.
-- [x] Prove that the initial state belongs to the compiled state set, including
-  after parallel reachability restriction.
-- [x] Prove the complete `skip` correspondence case.
-- [x] Enforce the paper's boundary/internal separation in `AdmissibleType`:
-  a boundary action's message identifier cannot also occur in the interface.
-- [x] Prove that compiled parallel edges hide immediate interface actions.
-- [x] Define `ClosedGuardedRegular`: all variables are bound, every recursive
-  backedge crosses a clock, recursive calls are tail terminating, and a message
-  identifier is exchanged at most once per clock cycle. Parallel interfaces
-  are also lexically scoped, excluding ancestor/descendant reuse while still
-  allowing reuse between siblings.
-- [x] Prove that a mandatory clock prevents same-cycle completion, semantic
-  completion/future-offer fuel stabilizes, and unfolding a clock-guarded
-  recursion preserves the public `typeFutureOffers` menu.
-- [x] Prove the complete atomic-message correspondence in both directions,
-  including an inversion theorem classifying every compiled message edge as
-  fire, wait, or completed-idle.
-- [x] Prove compiler fuel irrelevance: two sufficient fuel values produce the
-  same constructor fragment, so parent-compiled children can be rewritten to
-  their standalone compilations.
-- [ ] Prove future-offer correctness: resolving `FutureSpec.at q removed` with
-  `computeFuture` gives the semantic `typeFutureOffers` set for the residual
-  represented by `q`, minus `removed`.
-  Atomic types, ordinary choice, fair choice, and parallel composition are
-  complete; recursion reduces to an explicit closed-body package.  Parallel
-  products now contain non-exported future-observation edges, and
-  `buildParallelAutomaton_computeFuture` proves that every product state has
-  exactly the hidden union of its two component menus.  Thus the intended
-  optimistic result for `skip |[{a}]| (a! ; b!)` includes `{b!}` even when the
-  current internal `a!` cannot synchronize.  Sequence execution transport and
-  the guarded recursion body package remain the main future obligations.
-- [x] Prove the remaining closed atomic cases: clock action/wait and progress.
-  Unresolved variables remain an internal fragment case consumed by recursion.
-- [x] Prove ordinary and fair choice preservation, including selection edges
-  and child-state tagging.
-- [x] Prove sequence step preservation, including exact left/right edge
-  classifiers, literal-`skip` bridge edges, switching to the right child, and
-  re-decoration from the syntax future of the residual.  The constructor
-  theorem consumes the global future-correctness invariant listed above.
-- [ ] Prove recursion preservation: the unfolding epsilon edge, substitution
-  in `TypeCompilationRelation.recur_body`, matching-variable back-edges, and
-  preservation of future references after the back-edge is installed. Header,
-  back-edge/non-matching-edge classification, raw/public composition, and the
-  whole-binder future theorem are complete; deriving the two closed-body
-  packages from guarded and tail-regular syntax remains.
-- [ ] Prove parallel preservation in both directions: reconstruct the two
-  local environments, match sibling current/future interface offers, combine
-  labels, hide interface offers, and show reachable-product restriction does
-  not remove a required edge.
-- [ ] Prove exclusive-offer branch, else, and wait edges, including the
-  correspondence between `List.zipIdx` child tags and branch membership.
-- [ ] Prove conjunctive-offer enabled, else, and wait edges and connect child
-  `0` to `parallelTypeBranches`.
-- [x] Assemble the constructor lemmas into the general `stepIff` hierarchy and
-  remove the direct `sorry` from `type_automaton_correspondence`.  The theorem
-  now consumes `CompilationProofBundle`, built by a terminating structural
-  recursion over closed/guarded/regular types.
-- [ ] Discharge the named temporary leaves used by that hierarchy: raw atomic
-  and choice/fair wrappers, the sequence-future upper bound, synchronized
-  parallel raw steps, guarded recursion-body closure, and the exclusive and
-  conjunctive offer bundles.
+1. same-cycle future offers;
+2. completion before the next `tock`;
+3. decorated operational steps in interface-scoped local environments; and
+4. the non-clock execution closure needed when a type occurs to the left of a
+   sequence.
 
-## Structure
+An axiom audit of `Pact.type_automaton_correspondence` reports only Lean's
+standard `propext`, `Classical.choice`, and `Quot.sound`; it does not depend on
+`sorryAx`. This does **not** mean the entire repository is free of `sorry`,
+because the separate process-level and other paper results above remain open.
 
-- [Anvilpp/Base.lean](Anvilpp/Base.lean): Some basic definitions/abbreviations
-- [Anvilpp/Proc.lean](Anvilpp/Proc.lean): Pact process syntax
-- [Anvilpp/PactSemantics.lean](Anvilpp/PactSemantics.lean): Pact Semantics
-- [Anvilpp/PactTypes.lean](Anvilpp/PactTypes.lean): Compatibility façade for
-  the complete Pact type development
-- [Anvilpp/PactTypes/Syntax.lean](Anvilpp/PactTypes/Syntax.lean): Type syntax,
-  erasure, operational semantics, and syntax-derived future offers
-- [Anvilpp/PactTypes/Automata.lean](Anvilpp/PactTypes/Automata.lean): Finite
-  constructor automata and the type compiler
-- [Anvilpp/PactTypes/CorrespondenceCore.lean](Anvilpp/PactTypes/CorrespondenceCore.lean):
-  State/residual invariants and atomic correspondence cases
-- [Anvilpp/PactTypes/CorrespondenceCombinators.lean](Anvilpp/PactTypes/CorrespondenceCombinators.lean):
-  Choice, fair-choice, sequence, and recursion correspondence lemmas
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean): Safety and Compatibility Theorems
+## Documentation
 
-## Main Theorems
+- [Pact type development](Anvilpp/PactTypes/README.md) describes the module
+  layout and proof architecture.
+- [Correspondence theorem reference](Anvilpp/PactTypes/CORRESPONDENCE_THEOREMS.md)
+  lists the principal definitions and theorems in top-down proof order, with
+  English statements and their role in the proof.
+- [AGENT.md](AGENT.md) is the chronological proof-engineering log, including
+  failed approaches, counterexamples, and the final recursion proof.
+- `pact.pdf` is the paper; `Pact.pdf` contains the accompanying notes.
 
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L232): `strategy_transfer`
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L247): `inferred_type_soundness`
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L333): `compatibility_game_correct`
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L344): `type_compatibility_soundness`
-- [Anvilpp/PactSafety.lean](Anvilpp/PactSafety.lean#L383): `inferred_types_optimal`
+## Main entry points
 
-## Checking Proofs
+- [`Anvilpp/PactTypes.lean`](Anvilpp/PactTypes.lean) is the public import façade
+  for the Pact type development.
+- [`Anvilpp/PactSafety.lean`](Anvilpp/PactSafety.lean) contains the paper-level
+  theorem statements, including `type_automaton_correspondence`.
+- [`CorrespondenceAssembly.lean`](Anvilpp/PactTypes/Correspondence/CorrespondenceAssembly.lean)
+  performs the terminating constructor-by-constructor bundle assembly.
+- [`CorrespondenceRecursionLeaf.lean`](Anvilpp/PactTypes/Correspondence/CorrespondenceRecursionLeaf.lean)
+  closes the guarded-recursion bundle, including the two former proof leaves.
 
-- Ensure the Lean toolchain from `lean-toolchain` is installed (via `elan`).
-- From the repository root, check all proofs:
+## Repository structure
+
+- [`Anvilpp/Base.lean`](Anvilpp/Base.lean): basic definitions and abbreviations.
+- [`Anvilpp/Proc.lean`](Anvilpp/Proc.lean): Pact process syntax.
+- [`Anvilpp/PactSemantics.lean`](Anvilpp/PactSemantics.lean): process semantics.
+- [`Anvilpp/PactTypes/Syntax/`](Anvilpp/PactTypes/Syntax/): type syntax,
+  substitution, regularity, operational semantics, completion, and future
+  offers.
+- [`Anvilpp/PactTypes/Automata/`](Anvilpp/PactTypes/Automata/): finite
+  automaton fragments, constructor builders, future resolution, and compiler.
+- [`Anvilpp/PactTypes/Correspondence/`](Anvilpp/PactTypes/Correspondence/):
+  compiler/semantics correspondence proof.
+- [`Anvilpp/PactSafety.lean`](Anvilpp/PactSafety.lean): safety, compatibility,
+  and paper-level theorem statements.
+
+## Checking the development
+
+Install the Lean toolchain specified by `lean-toolchain`, then from the
+repository root run:
 
 ```bash
-lake build
+lake build Anvilpp
 ```
 
-- To check a single module while iterating:
+For a single public module:
 
 ```bash
 lake build Anvilpp.PactSafety
 ```
 
-- In VS Code, open a `.lean` file and use `Restart File` if diagnostics become stale after large refactors.
+To locate remaining admitted declarations independently of a successful build:
+
+```bash
+rg -n '\bsorry\b' Anvilpp
+```

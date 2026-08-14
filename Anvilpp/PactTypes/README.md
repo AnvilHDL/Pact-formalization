@@ -1,153 +1,211 @@
 # Anvilpp.PactTypes
 
-Formalization of the Pact type system (paper §4): the type grammar and its
-operational semantics, the constructor-automaton compiler, and the
-correspondence proof between the two. `Anvilpp/PactTypes.lean` is the import
-façade for the whole development — external code should `import
-Anvilpp.PactTypes` and not reach into individual submodules.
+Formalization of the Pact type system from paper §4: type syntax and
+operational semantics, the constructor-automaton compiler, and the proof that
+the operational type and compiled automaton take exactly the same decorated
+steps. External modules should normally import the façade:
+
+```lean
+import Anvilpp.PactTypes
+```
+
+## Current result
+
+The type-level correspondence is complete. For every `AdmissibleType
+signature processType`, theorem `type_automaton_correspondence` constructs a
+`TypeAutomatonCorrespondence processType (compileType signature processType)`.
+The relation used by that witness is `TypeCompilationRelation`.
+
+The proof is not merely a top-level step induction. It builds a reusable
+`CompilationProofBundle` for every bounded regular syntax tree. The bundle
+contains:
+
+| Field | Meaning |
+|---|---|
+| `future` | `computeFuture` at a compiled state equals the syntax-derived `typeFutureOffers` of its represented residual. |
+| `completing` | Compiled completing metadata agrees with `CanCompleteBeforeTock`. |
+| `scopedStep` | Decorated semantic steps are equivalent to resolved fragment edges in local environments that avoid nested parallel interfaces. |
+| `execution` | The non-clock execution view has the right future menu and reaches a skipping/completing state exactly when the residual can complete this cycle. |
+
+`compilationProofBundle_of_boundedRegular` constructs these fields together by
+well-founded recursion on syntax size. The closed specialization
+`compilationProofBundle_of_closedGuardedRegular` feeds
+`compilationStepCorrect_of_closedGuardedRegular`, which supplies the `stepIff`
+field of the final correspondence witness.
+
+The separate `process_automaton_correspondence` theorem is still admitted; its
+status must not be conflated with the completed type-level theorem.
+
+For a top-down list of the important declarations and English statements, see
+[`CORRESPONDENCE_THEOREMS.md`](CORRESPONDENCE_THEOREMS.md). For the chronological
+proof-engineering record and failed approaches, see [`AGENT.md`](../../AGENT.md).
+
+Each implementation directory also has a per-file summary:
+
+- [`Syntax/README.md`](Syntax/README.md)
+- [`Automata/README.md`](Automata/README.md)
+- [`Correspondence/README.md`](Correspondence/README.md)
+- [`Correspondence/Core/README.md`](Correspondence/Core/README.md)
+- [`Correspondence/Offers/README.md`](Correspondence/Offers/README.md)
 
 ## Layout
 
-```
-Anvilpp/PactTypes.lean          facade — imports Correspondence.CorrespondenceAssembly
+```text
+Anvilpp/PactTypes.lean          public façade; imports final assembly
 
 Anvilpp/PactTypes/
-├── Syntax/                     type grammar, substitution, operational semantics
-├── Automata/                   constructor-automaton compiler
-├── Correspondence/             compiler ↔ operational-semantics correspondence proof
-└── README.md                   this file
+├── Syntax/                    type language and operational semantics
+├── Automata/                  graph representation and compiler
+├── Correspondence/            compiler/semantics proof
+│   ├── Core/                  finer-grained core extraction modules
+│   └── Offers/                finer-grained offer extraction modules
+├── CORRESPONDENCE_THEOREMS.md theorem-oriented proof guide
+└── README.md                  this structural overview
 ```
 
-Each subdirectory is one namespace's worth of Lean modules, split by proof
-concern rather than kept as a single file. Every declaration lives in exactly
-one file; nothing is duplicated across the split.
+The live public assembly path currently ends at
+`Correspondence/CorrespondenceAssembly.lean`. The flat
+`CorrespondenceCore.lean` and `CorrespondenceOffers.lean` modules remain on
+that path. The `Correspondence/Core/` and `Correspondence/Offers/` trees are
+the finer-grained extraction of those large proof concerns and build as
+separate module chains. Until the public assembly is migrated to those chains,
+do not import an aggregate module and its extracted mirror into the same Lean
+module: they expose the same Pact declarations under different module names.
 
-## Dependency order
+## Syntax layer
 
-Imports form a single linear chain across all three directories:
+| Module | Main responsibility |
+|---|---|
+| `PactTypeSyntax` | `PactType`, `replaceVar`, branch substitution, `AllVariablesBound`, `BinderHygienic`, `BinderFreshFor`, and capture-safe substitution laws such as `replaceVar_comm`. |
+| `PactTypeRegularity` | `ClockGuarded`, `TailRecursive`, `SameCycleMessageLinear`, `ParallelInterfaces`, and `InterfaceScoped`. |
+| `TypeErasure` | Type observations, labels, environments, and process-to-type erasure. |
+| `TypeDynamicsCore` | Branch enabling, offer summaries, parallel branch types, and interface restriction/hiding. |
+| `TypeCompletionFuel` | Fuel-bounded implementation of completion before `tock`. |
+| `TypeFutureOffersFuel` | Fuel-bounded implementation of same-cycle future offers. |
+| `PactTypeCompletionEval` | Valuation-parametric completion evaluation used under open recursion binders. |
+| `PactTypeSubstitutionLemmas` | Completion and tail-occurrence transport through substitution. |
+| `PactTypeFutureOffers` | Constructor equations for `typeFutureOffers`, marker analysis, and recursion substitution equations. |
+| `TypeTransitionSystem` | `TypeTransition`, `DecoratedTypeTransition`, conformance, and refinement definitions. |
 
+The capture-safety predicates are proof-relevant. In particular,
+`BinderHygienic` is transported through `TypeCompilationRelation` to obtain
+`BinderFreshFor`, which is the premise needed to commute substitutions through
+nested recursion binders.
+
+## Automata layer
+
+| Module | Main responsibility |
+|---|---|
+| `TypeAlphabet` | Finite type environments, labels, offer summaries, and `TypeAutomatonSymbol`. |
+| `AutomatonFragment` | Construction states, pending edges, `FutureSpec`, fragments, and finished edges. |
+| `PendingAutomatonFuture` | `futureReachable`, `computeFuture`, same-edge and embedding invariance. |
+| `MarkerReachability` | Temporary recursion markers, marker-stopped fragments, and marker reachability. |
+| `SyncEdges` | Interface hiding and synchronized parallel edges. |
+| `CompletingBackClosure` | Finite non-clock predecessor closure used for recursion completion. |
+| `BuildRecursionAutomaton` | Installs recursive backedges and proves their future/completing equations. |
+| `BuildChoiceAutomaton` | Ordinary and fair-choice constructor graphs. |
+| `BuildSequenceAutomaton` | Sequence constructor graph and bridge edges. |
+| `BuildParallelAutomaton` | Reachable synchronized product and future-observation edges. |
+| `BuildOfferAutomata` | Exclusive and conjunctive offer graphs. |
+| `CompileType` | `typeCompilationFuel`, `compileTypeFuel`, fuel irrelevance, `compileType`, and public resolved edges. |
+
+`FutureSpec.at q removed` is resolved as `computeFuture q \ removed`.
+Construction-only `.future` edges participate in optimistic future
+computation but do not become public semantic steps.
+
+## Correspondence layer
+
+The aggregate public dependency path is:
+
+```text
+CorrespondenceCore
+  → CorrespondenceVisibility
+  → CorrespondenceParallel
+  → CorrespondenceOffers
+  → CorrespondenceChoice
+  → CorrespondenceSequenceGraph
+  → CorrespondenceSequence
+  → CorrespondenceCompleting
+  → CorrespondenceRecursionHeader
+  → CorrespondenceBundle
+  → CorrespondenceSequenceExecutionLeaves
+  → CorrespondenceFragmentStepLeaves
+  → CorrespondenceSequenceAssembly
+  → CorrespondenceRegularityCore
+  → CorrespondenceMarkerSkipping
+  → CorrespondenceCompletingRepresented
+  → CorrespondenceRecursionClosureCore
+  → CorrespondenceRecursionClosureLift
+  → CorrespondenceRecursionClosureSuperset
+  → CorrespondenceRecursionClosure
+  → CorrespondenceMarkerReachability
+  → CorrespondenceRecursionLeaf
+  → CorrespondenceXOfferLeaf
+  → CorrespondenceOfferBranchLeaf
+  → CorrespondenceOfferLeaf
+  → CorrespondenceAssembly
 ```
-Syntax/PactTypeSyntax
-  → Syntax/PactTypeRegularity → Syntax/TypeErasure → Syntax/TypeDynamicsCore
-  → Syntax/TypeCompletionFuel → Syntax/TypeFutureOffersFuel
-  → Syntax/PactTypeCompletionEval → Syntax/PactTypeSubstitutionLemmas
-  → Syntax/PactTypeFutureOffers → Syntax/TypeTransitionSystem
-  → Automata/TypeAlphabet → Automata/AutomatonFragment
-  → Automata/PendingAutomatonFuture → Automata/MarkerReachability
-  → Automata/SyncEdges → Automata/CompletingBackClosure
-  → Automata/BuildRecursionAutomaton → Automata/BuildChoiceAutomaton
-  → Automata/BuildSequenceAutomaton → Automata/BuildParallelAutomaton
-  → Automata/BuildOfferAutomata → Automata/CompileType
-  → Correspondence/CorrespondenceCore → Correspondence/CorrespondenceVisibility
-  → Correspondence/CorrespondenceParallel → Correspondence/CorrespondenceOffers
-  → Correspondence/CorrespondenceChoice → Correspondence/CorrespondenceSequenceGraph
-  → Correspondence/CorrespondenceSequence → Correspondence/CorrespondenceCompleting
-  → Correspondence/CorrespondenceRecursionHeader → Correspondence/CorrespondenceBundle
-  → Correspondence/CorrespondenceSequenceExecutionLeaves
-  → Correspondence/CorrespondenceFragmentStepLeaves
-  → Correspondence/CorrespondenceSequenceAssembly
-  → Correspondence/CorrespondenceRegularityCore
-  → Correspondence/CorrespondenceMarkerSkipping
-  → Correspondence/CorrespondenceCompletingRepresented
-  → Correspondence/CorrespondenceRecursionClosureCore
-  → Correspondence/CorrespondenceRecursionClosureLift
-  → Correspondence/CorrespondenceRecursionClosureSuperset
-  → Correspondence/CorrespondenceRecursionClosure
-  → Correspondence/CorrespondenceMarkerReachability
-  → Correspondence/CorrespondenceRecursionLeaf
-  → Correspondence/CorrespondenceXOfferLeaf
-  → Correspondence/CorrespondenceOfferBranchLeaf
-  → Correspondence/CorrespondenceOfferLeaf
-  → Correspondence/CorrespondenceAssembly
+
+`CorrespondenceChoice.lean` also imports `CorrespondenceParallel.lean`; the
+diagram records dependency order, not a claim that every file has exactly one
+import.
+
+| Concern | Principal modules |
+|---|---|
+| State/residual representation, atomic cases, public correspondence record | `CorrespondenceCore` |
+| Parallel local-environment reconstruction and synchronization | `CorrespondenceVisibility`, `CorrespondenceParallel` |
+| Exclusive/conjunctive offer graph and step correctness | `CorrespondenceOffers`, `CorrespondenceXOfferLeaf`, `CorrespondenceOfferBranchLeaf`, `CorrespondenceOfferLeaf` |
+| Choice and fair choice | `CorrespondenceChoice`, `CorrespondenceFragmentStepLeaves` |
+| Sequence graph, future, step, completion, execution view | `CorrespondenceSequenceGraph`, `CorrespondenceSequence`, `CorrespondenceSequenceExecutionLeaves`, `CorrespondenceSequenceAssembly` |
+| Recursion header, marker reachability, completion closure, scoped body step, execution view | `CorrespondenceRecursionHeader`, `CorrespondenceRegularityCore`, `CorrespondenceMarkerSkipping`, `CorrespondenceCompletingRepresented`, `CorrespondenceRecursionClosure*`, `CorrespondenceMarkerReachability`, `CorrespondenceRecursionLeaf` |
+| Structural bundle and public step assembly | `CorrespondenceBundle`, `CorrespondenceAssembly` |
+
+## Recursion proof in one page
+
+The recursion constructor is the only branch where all four bundle fields must
+be solved simultaneously.
+
+1. The body is compiled open under `name :: bound`; it is not incorrectly
+   treated as a closed type.
+2. `compilationMarkerReachable_iff` relates raw-graph marker reachability to
+   `markerReachableSubst`. The execution analogue
+   `compilationSequenceExecutionMarkerReachable_iff` proves the same fact for
+   the sequence-execution view.
+3. `recursionBodyFutureCorrect_of_bundle` combines marker reachability with
+   `futureOffersSubst_eq_union_marker`: if the marker is reachable, the
+   recursion-entry menu is unioned into the residual menu.
+4. `recursionBodyScopedStep_marker` handles the bare recursive call and its
+   installed silent backedge. `recursionBodyScopedStep_nonMarker` transports
+   all other steps through capture-safe substitution and matches the exact
+   compiler future policy.
+5. `compilationCompletingCorrect_recursion_regular_leaf` identifies the
+   constructor's backward non-clock completion closure with substituted
+   semantic completion.
+6. The execution proof compares the installed execution graph with a shadow
+   recursion graph built over a marker-stopped execution body. Same edges give
+   the same `computeFuture`; marker/no-marker fixed-point equations then match
+   the syntax equation. Completion reachability is propagated backward with
+   `compiledFragmentNonClockPredecessor_eval`.
+7. `compilationProofBundle_recursion_bounded_leaf` packages the four results.
+
+The successful non-marker step proof uses an explicit semantic future policy:
+either a future is explicit, or it is the target menu minus the exact semantic
+removed set. This avoids the invalid shortcut that attempted to derive a
+general disjointness fact from `SameCycleMessageLinear`; the current
+`SuffixMessageIds` definition is too weak for that shortcut.
+
+## Verification
+
+From the repository root:
+
+```bash
+lake build Anvilpp
+git diff --check
 ```
 
-Each file imports only its immediate predecessor, which transitively imports
-everything before it. This means, in every file, "what's available" is
-exactly "everything defined earlier in this list" — reading the reference
-tables below top to bottom is reading the development in dependency order.
-
-The one structural exception: `Correspondence/CorrespondenceCompletingRepresented.lean`
-holds a `mutual` block (`compiledFragmentNonClockPredecessor_eval` together
-with `compiledFragmentCompleting_represented`) — Lean requires mutually
-recursive declarations to stay in one file, so this is the one file in the
-chain that cannot be split further along its current proof structure.
-
-## `Syntax/` — type grammar and operational semantics
-
-| Module | Contents |
-|---|---|
-| `PactTypeSyntax` | The `PactType` grammar (§4.1); capture-avoiding substitution (`replaceVar`, `replaceBranches`); `BinderFreshFor`; `MustTockBeforeCompletion`; `GuardedOccurrences`; `AllVariablesBound`; `BinderHygienic`; and their transport lemmas (`binderHygienic_mono`, `replaceVar_comm`, `binderFreshFor_mono`, ...). |
-| `PactTypeRegularity` | The regularity predicates the correspondence proof's leaf theorems assume: `ClockGuarded`, `TailOccurrences`/`AllTailOccurrences`, `TailRecursive`, `CanCompleteBeforeTock`, `Prefix`/`SuffixMessageIds`, `SameCycleMessageLinear`, `ParallelInterfaces`, `InterfaceScoped`. |
-| `TypeErasure` | `TypeObservation`, `TypeLabel`, erasure of process-level `Observation`/`Label` to their type-level counterparts, `TypeEnvironment` and its erasure. |
-| `TypeDynamicsCore` | Offer/branch helpers: `typeNeed`, `typeBranchNeeds`, `TypeResolved`, `TypeNoImmediateBranch`, `TypeBranchEnabled`, `singletonTypeXOffer`, `selectedTypeBranch`, `parallelTypeBranches(Selecting)`, `typeBranchActions`, interface restriction/hiding. |
-| `TypeCompletionFuel` | `typeCanCompleteThisCycleFuel`, the fuel-bounded implementation behind `CanCompleteBeforeTock`, and its stability/substitution lemmas. |
-| `TypeFutureOffersFuel` | `typeFutureOffersFuel` and its stability lemmas; `typeFutureOffers`, the fuel-independent closure. |
-| `PactTypeCompletionEval` | The valuation-polymorphic `completionEval` (needed because `TypeCompilationRelation`'s recursion case cannot fix the motive to one bound name) and its congruence/substitution/hygiene transport. |
-| `PactTypeSubstitutionLemmas` | How substitution and tail-occurrence facts interact with `CanCompleteBeforeTock`/`completionEval`. |
-| `PactTypeFutureOffers` | Per-constructor `typeFutureOffers_*` equations; `replaceVar_typeFutureOffers`; `futureOffersSubst_eq_union_marker`; `markerReachableSubst_replaceVar`. |
-| `TypeTransitionSystem` | The operational judgment `TypeTransition`, `DecoratedTypeTransition`, `Conforms`/`Refines`/`DataObliviousChecks`. |
-
-## `Automata/` — constructor automaton compiler
-
-| Module | Contents |
-|---|---|
-| `TypeAlphabet` | The fixed finite alphabet `TypeAlphabet` and the transition-symbol encoding `TypeAutomatonSymbol`. |
-| `AutomatonFragment` | Core representation: `TypeAutomatonState`, `AutomatonConstructionLabel`, `FutureSpec`, `PendingAutomatonEdge`, `AutomatonFragment`, `AutomatonFragmentEdge`, `PendingAutomaton`. |
-| `PendingAutomatonFuture` | `computeFuture`: the finite future-offer closure over a `PendingAutomaton`, and its stability/embedding lemmas. |
-| `MarkerReachability` | Marker-augmented future resolution (`markerAugmentedPending`, `MarkerSource`, `MarkerEdgesInert`) and same-cycle marker reachability (`MarkerReachable`); the indexed child-fragment helpers (`childState`, `childPendingEdge`, ...). |
-| `SyncEdges` | Interface hiding and synchronized-edge construction for parallel products (`hideOffers`, `syncAutomatonEdges`). |
-| `CompletingBackClosure` | Backward completion closure (`completingBackClosure` and its fixed-point/monotonicity lemmas) used to seed recursion-body completing sets; `taggedFragment`. |
-| `BuildRecursionAutomaton` | `buildRecursionAutomaton` and its future/marker/completing correspondence lemmas. |
-| `BuildChoiceAutomaton` | `buildChoiceAutomaton`. |
-| `BuildSequenceAutomaton` | `buildSequenceAutomaton`. |
-| `BuildParallelAutomaton` | Reachable-fragment restriction and `buildParallelAutomaton`. |
-| `BuildOfferAutomata` | Indexed branch-fragment helpers and `buildExclusiveOfferAutomaton`/`buildConjunctiveOfferAutomaton`/`buildSelectedConjunctiveOfferAutomaton`. |
-| `CompileType` | The constructor compiler proper: `typeCompilationFuel`, `compileTypeFuel`, `compileType`, `AutomatonFragment.HasResolvedEdge`, and resolved-edge helpers. |
-
-## `Correspondence/` — compiler ↔ operational-semantics correspondence
-
-| Module | Contents |
-|---|---|
-| `CorrespondenceCore` | `TypeCompilationRelation` (state ↔ residual), `CompilationStateCorrect`, `CompilationFutureCorrect`, `CompilationStepCorrect`, and the atomic-constructor base cases. |
-| `CorrespondenceVisibility` | Visibility/alphabet-filtering lemmas for compiled edges. |
-| `CorrespondenceParallel` | Resolved product-edge classifiers and synchronization reconstruction. |
-| `CorrespondenceOffers` | Correspondence for the exclusive/conjunctive offer constructors. |
-| `CorrespondenceChoice` | Ordinary and fair-choice future/step correspondence. |
-| `CorrespondenceSequenceGraph` | `sequenceExecutionEdge`/`Automaton`/`Fragment` and the graph-reachability scaffolding (`sequenceExecution_*`, `buildSequenceAutomaton_*`) sequence completion is built on. |
-| `CorrespondenceSequence` | Sequence correspondence: future, step, and completing correctness. |
-| `CorrespondenceCompleting` | Completing correctness for choice/fairChoice/parallel/xoffer/parallelTypeBranches/offer, and the parallel future-correspondence theorem. |
-| `CorrespondenceRecursionHeader` | The recursion header edge and closed recursion-fragment correspondence: `RecursionHeaderFutureCorrect`, `RecursionBodyFutureCorrect`, `RecursionBodyStepCorrect`, `compilationStepCorrect_recursion`. |
-| `CorrespondenceBundle` | `CompilationSequenceExecutionCorrect`, the `CompilationProofBundle` structure, branch-regularity transport lemmas, and vanilla (unsubstituted) nested-recursion completing correctness. |
-| `CorrespondenceSequenceExecutionLeaves` | `CompilationSequenceExecutionCorrect` leaves: skip/progress/var/tock/message/choice/fairChoice/sequence. |
-| `CorrespondenceFragmentStepLeaves` | `CompilationFragmentStepCorrect` leaves: skip/message/tock/progress/choice/fairChoice. |
-| `CorrespondenceSequenceAssembly` | `compilationFutureCorrect_sequence`, the `compilationResolvedEdgeTargetsRelated_*` family, and the parallel leaf assembly. |
-| `CorrespondenceRegularityCore` | Regularity transport: `compileTypeFuel_skipping_subset_completing`, `compilationRelation_allVariablesBound`/`binderFreshFor`/`tailOccurrences_false`, `compileTypeFuel_variableEdge_source_var`, `compileTypeFuel_markerEdgesInert`. |
-| `CorrespondenceMarkerSkipping` | First-wave marker reachability vs. the syntactic marker analysis, and `compiledFragmentSkipping_represented`. |
-| `CorrespondenceCompletingRepresented` | `compiledFragmentCompleting_represented`, proved by mutual induction with `compiledFragmentNonClockPredecessor_eval`. |
-| `CorrespondenceRecursionClosureCore` | Substituted-completion regularity lemmas feeding the recursion completing-closure argument (`canCompleteBeforeTockSubst_false`, `completionEval_eq_canCompleteBeforeTock_of_tailFalse`, `compilationRelation_tailOccurrences_true`, ...). |
-| `CorrespondenceRecursionClosureLift` | The completing-back-closure lifting lemmas (`completingBackClosure_lift_*`). |
-| `CorrespondenceRecursionClosureSuperset` | `recursionBodyCompletingClosure_superset_aux`. |
-| `CorrespondenceRecursionClosure` | `recursionBodyCompletingClosure_iff` and `compilationCompletingCorrect_recursion_regular_leaf`. |
-| `CorrespondenceMarkerReachability` | Marker reachability vs. the syntactic marker analysis for the remaining constructors, and the main induction `compilationMarkerReachable_iff`. |
-| `CorrespondenceRecursionLeaf` | `compileTypeFuel_futureReferencesTarget`, `RecursionBodyScopedStepCorrect`, and the bounded (open-body) recursion leaf assembly. |
-| `CorrespondenceXOfferLeaf` | The `xoffer` regular leaf. |
-| `CorrespondenceOfferBranchLeaf` | `parallelTypeBranches`/`parallelTypeBranchesSelecting` leaves shared by `xoffer` and `offer`. |
-| `CorrespondenceOfferLeaf` | The `offer` regular leaf. |
-| `CorrespondenceAssembly` | Top-level assembly: `compilationProofBundle_of_boundedRegular`, `compilationProofBundle_of_closedGuardedRegular`, `compilationStepCorrect_of_closedGuardedRegular`, `ProcessAutomatonCorrespondence`. |
-
-## Conventions
-
-- **One file per proof concern**, not per fixed line budget. A module
-  boundary always falls between complete declarations (and outside every
-  `mutual` block), never mid-theorem.
-- **Import order is dependency order.** A module imports exactly its
-  predecessor in the chain above; there is no back-referencing or forward
-  declaration anywhere in the development.
-- **Visibility.** A declaration is `private` unless something outside its
-  own file needs it. When in doubt, check the importing file rather than
-  assuming — `private` here always means "used only within this module."
-- **Proof status.** The live account of what's proved, what's open, and why
-  — including the two outstanding `sorry`s, both in
-  `Correspondence/CorrespondenceRecursionLeaf.lean` — is `AGENT.md` at the
-  repository root. This README describes structure, not proof state; it does
-  not go stale as the proof progresses.
+The completed type-correspondence modules, including
+`CorrespondenceRecursionLeaf.lean`, contain no remaining `sorry`. A successful
+whole-project build still reports admitted declarations elsewhere, most
+notably `process_automaton_correspondence`; consult the root README for the
+repository-wide status. `#print axioms Pact.type_automaton_correspondence`
+reports `[propext, Classical.choice, Quot.sound]` and no `sorryAx`.
