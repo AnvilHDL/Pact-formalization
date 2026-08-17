@@ -2250,7 +2250,7 @@ private theorem compilationRelation_futureSpecMatchesPolicy
       rcases (buildSequenceAutomaton_outgoing_left signature leftFragment
         rightFragment childQ edge).mp ⟨hEdge, hSource⟩ with
         ⟨childEdge, hChildEdge, hChildSource, hEq⟩ |
-        ⟨hSkipping, environment, hEnvironment, hEq⟩ |
+        ⟨hAccepting, environment, hEnvironment, hEq⟩ |
         ⟨hCompleting, hEq⟩
       · subst edge
         simp only [hLabel, futureSpecMatchesPolicy]
@@ -3671,12 +3671,12 @@ private theorem compilationSequenceExecutionCorrect_recursion_bounded_leaf
         TypeCompilationRelation processType candidate candidateResidual ∧
           PactType.completionEval (fun _ => false) candidateResidual = true
     have hWitnessCompletes : ∀ completed,
-        completed ∈ fragment.skipping ∨ completed ∈ fragment.completing →
+        completed ∈ fragment.accepting ∨ completed ∈ fragment.completing →
           completes completed := by
       intro completed hCompleted
-      rcases hCompleted with hSkipping | hCompletingState
-      · have hSkip := compiledFragmentSkipping_represented signature fuel
-          processType hFuel completed hSkipping
+      rcases hCompleted with hAccepting | hCompletingState
+      · have hSkip := compiledFragmentAccepting_represented signature fuel
+          processType hFuel completed hAccepting
         exact ⟨.skip, hSkip, by simp [PactType.completionEval]⟩
       · obtain ⟨completedResidual, hCompletedRelated, hCanComplete⟩ :=
           compiledFragmentCompleting_represented signature [] fuel processType

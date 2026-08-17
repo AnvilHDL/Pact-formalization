@@ -137,7 +137,7 @@ private theorem buildSequenceAutomaton_markerReachable_left
     (MarkerReachable (buildSequenceAutomaton signature left right) name
         (.child 0 state) ↔
       ((∃ completed ∈ (sequenceExecutionAutomaton left).futureReachable state,
-          completed ∈ left.skipping ∨ completed ∈ left.completing) ∧
+          completed ∈ left.accepting ∨ completed ∈ left.completing) ∧
         MarkerReachable right name right.initial)) := by
   classical
   have hReach := buildSequenceAutomaton_futureReachable_left signature left
@@ -157,14 +157,14 @@ private theorem buildSequenceAutomaton_markerReachable_left
           (childState 0) ∪
         (if ∃ completed ∈
               (sequenceExecutionAutomaton left).futureReachable state,
-            completed ∈ left.skipping ∨ completed ∈ left.completing then
+            completed ∈ left.accepting ∨ completed ∈ left.completing then
           ((⟨right.states, right.edges⟩ :
             PendingAutomaton).futureReachable right.initial).image
               (childState 1)
         else ∅) from hReach]
   by_cases hBridge : ∃ completed ∈
       (sequenceExecutionAutomaton left).futureReachable state,
-      completed ∈ left.skipping ∨ completed ∈ left.completing
+      completed ∈ left.accepting ∨ completed ∈ left.completing
   · rw [if_pos hBridge]
     simp only [Finset.mem_union, Finset.mem_image]
     constructor
@@ -401,7 +401,7 @@ private theorem buildSequenceAutomaton_markerReachable_classified
     simpa [hLeftStable] using hCanonical
   have hBridge : (∃ completed ∈
         (sequenceExecutionAutomaton leftFragment).futureReachable q,
-      completed ∈ leftFragment.skipping ∨
+      completed ∈ leftFragment.accepting ∨
         completed ∈ leftFragment.completing) ↔
       r.CanCompleteBeforeTock = true := by
     have hCanonical := hLeftExecution q r hr
@@ -411,7 +411,7 @@ private theorem buildSequenceAutomaton_markerReachable_classified
   have hLeftIffRaw : MarkerReachable fragment name (childState 0 q) ↔
       ((∃ completed ∈
           (sequenceExecutionAutomaton leftFragment).futureReachable q,
-          completed ∈ leftFragment.skipping ∨
+          completed ∈ leftFragment.accepting ∨
             completed ∈ leftFragment.completing) ∧
         MarkerReachable rightFragment name rightFragment.initial) :=
     buildSequenceAutomaton_markerReachable_left signature leftFragment
@@ -2467,7 +2467,7 @@ private theorem buildSequenceAutomaton_sequenceExecutionMarkerReachable_classifi
       exact Or.inl (Or.inl ⟨q, hState, rfl⟩)
     have hBridge : (∃ completed ∈
           (sequenceExecutionAutomaton leftFragment).futureReachable q,
-        completed ∈ leftFragment.skipping ∨
+        completed ∈ leftFragment.accepting ∨
           completed ∈ leftFragment.completing) ↔
         r.CanCompleteBeforeTock = true := by
       have hCanonical := hLeftExecution q r hr

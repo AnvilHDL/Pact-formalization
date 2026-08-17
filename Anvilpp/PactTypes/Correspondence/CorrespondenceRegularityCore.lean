@@ -13,11 +13,11 @@ compiler invariant, not a semantic assumption: every constructor transports
 child `skipping` states into its `completing` metadata, and recursion includes
 the body's completing states in the seed of its non-clock predecessor
 closure. -/
-private theorem compileTypeFuel_skipping_subset_completing
+private theorem compileTypeFuel_accepting_subset_completing
     (signature : TypeAlphabet) :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →
-        (compileTypeFuel signature fuel processType).skipping ⊆
+        (compileTypeFuel signature fuel processType).accepting ⊆
           (compileTypeFuel signature fuel processType).completing := by
   classical
   intro fuel
@@ -27,20 +27,20 @@ private theorem compileTypeFuel_skipping_subset_completing
       exact (Nat.not_lt_zero _
         (TypeCompilationFuelSufficient.positive hFuel)).elim
   | succ fuel ih =>
-      intro processType hFuel state hSkipping
+      intro processType hFuel state hAccepting
       cases processType with
       | message msg dir =>
           simpa [compileTypeFuel, finishAutomatonFragment] using
-            (Or.inr hSkipping)
+            (Or.inr hAccepting)
       | progress pid =>
           simpa [compileTypeFuel, finishAutomatonFragment] using
-            (Or.inr hSkipping)
+            (Or.inr hAccepting)
       | tock =>
-          simpa [compileTypeFuel, finishAutomatonFragment] using hSkipping
+          simpa [compileTypeFuel, finishAutomatonFragment] using hAccepting
       | skip =>
-          simpa [compileTypeFuel, finishAutomatonFragment] using hSkipping
+          simpa [compileTypeFuel, finishAutomatonFragment] using hAccepting
       | var name =>
-          simp [compileTypeFuel, finishAutomatonFragment] at hSkipping
+          simp [compileTypeFuel, finishAutomatonFragment] at hAccepting
       | recur name body =>
           have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -50,18 +50,18 @@ private theorem compileTypeFuel_skipping_subset_completing
           let bodyFragment := compileTypeFuel signature fuel body
           have hCompletion := buildRecursionAutomaton_completing_eq signature
             name bodyFragment
-          simp only [compileTypeFuel] at hSkipping ⊢
+          simp only [compileTypeFuel] at hAccepting ⊢
           rw [hCompletion]
-          have hChild : ∃ child ∈ bodyFragment.skipping,
+          have hChild : ∃ child ∈ bodyFragment.accepting,
               childState 0 child = state := by
             simpa [bodyFragment, buildRecursionAutomaton,
-              finishAutomatonFragment, childSkipping] using hSkipping
-          rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              finishAutomatonFragment, childAccepting] using hAccepting
+          rcases hChild with ⟨child, hChildAccepting, rfl⟩
           apply Finset.mem_union_right
           apply Finset.mem_image.mpr
           refine ⟨child, completingBackClosure_superset_seed bodyFragment _ ?_,
             rfl⟩
-          exact Finset.mem_union_right _ (hBody hChildSkipping)
+          exact Finset.mem_union_right _ (hBody hChildAccepting)
       | choice left right =>
           have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -74,15 +74,15 @@ private theorem compileTypeFuel_skipping_subset_completing
           have hLeft := ih left hLeftFuel
           have hRight := ih right hRightFuel
           simp only [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
-          rcases hSkipping with hLeftSkipping | hRightSkipping
-          · simp only [childSkipping, Finset.mem_image] at hLeftSkipping
-            rcases hLeftSkipping with ⟨child, hChild, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting ⊢
+          rcases hAccepting with hLeftAccepting | hRightAccepting
+          · simp only [childAccepting, Finset.mem_image] at hLeftAccepting
+            rcases hLeftAccepting with ⟨child, hChild, rfl⟩
             exact Or.inl (Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hLeft hChild, rfl⟩))
-          · simp only [childSkipping, Finset.mem_image] at hRightSkipping
-            rcases hRightSkipping with ⟨child, hChild, rfl⟩
+          · simp only [childAccepting, Finset.mem_image] at hRightAccepting
+            rcases hRightAccepting with ⟨child, hChild, rfl⟩
             exact Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hRight hChild, rfl⟩)
@@ -98,15 +98,15 @@ private theorem compileTypeFuel_skipping_subset_completing
           have hLeft := ih left hLeftFuel
           have hRight := ih right hRightFuel
           simp only [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
-          rcases hSkipping with hLeftSkipping | hRightSkipping
-          · simp only [childSkipping, Finset.mem_image] at hLeftSkipping
-            rcases hLeftSkipping with ⟨child, hChild, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting ⊢
+          rcases hAccepting with hLeftAccepting | hRightAccepting
+          · simp only [childAccepting, Finset.mem_image] at hLeftAccepting
+            rcases hLeftAccepting with ⟨child, hChild, rfl⟩
             exact Or.inl (Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hLeft hChild, rfl⟩))
-          · simp only [childSkipping, Finset.mem_image] at hRightSkipping
-            rcases hRightSkipping with ⟨child, hChild, rfl⟩
+          · simp only [childAccepting, Finset.mem_image] at hRightAccepting
+            rcases hRightAccepting with ⟨child, hChild, rfl⟩
             exact Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hRight hChild, rfl⟩)
@@ -117,15 +117,15 @@ private theorem compileTypeFuel_skipping_subset_completing
             omega
           have hRight := ih right hRightFuel
           simp only [compileTypeFuel, buildSequenceAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
-          simp only [childSkipping, Finset.mem_image] at hSkipping
-          rcases hSkipping with ⟨child, hChild, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting ⊢
+          simp only [childAccepting, Finset.mem_image] at hAccepting
+          rcases hAccepting with ⟨child, hChild, rfl⟩
           exact Or.inr (by
             simp only [childCompleting, Finset.mem_image]
             exact ⟨child, hRight hChild, rfl⟩)
       | par left right interface =>
           simp [compileTypeFuel, buildParallelAutomaton,
-            finishAutomatonFragment] at hSkipping
+            finishAutomatonFragment] at hAccepting
       | xoffer elseType branches =>
           let branchAutomata := branches.map fun branch =>
             (branch.1, compileTypeFuel signature fuel branch.2)
@@ -140,23 +140,23 @@ private theorem compileTypeFuel_skipping_subset_completing
             (branch.1, compileTypeFuel signature fuel branch.2)
           have hElse := ih elseType hElseFuel
           simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
-          rcases hSkipping with hElseSkipping | hIndexedSkipping
-          · simp only [childSkipping, Finset.mem_image] at hElseSkipping
-            rcases hElseSkipping with ⟨child, hChild, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting ⊢
+          rcases hAccepting with hElseAccepting | hIndexedAccepting
+          · simp only [childAccepting, Finset.mem_image] at hElseAccepting
+            rcases hElseAccepting with ⟨child, hChild, rfl⟩
             exact Or.inl (Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hElse hChild, rfl⟩))
           ·
-            rw [indexedFragmentSkipping, mem_foldl_union_iff] at hIndexedSkipping
+            rw [indexedFragmentAccepting, mem_foldl_union_iff] at hIndexedAccepting
             rw [indexedFragmentCompleting, mem_foldl_union_iff]
-            rcases hIndexedSkipping with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            rcases hIndexedAccepting with hEmpty | ⟨indexed, hIndexed, hChild⟩
             · simp at hEmpty
             · right
               right
               refine ⟨indexed, hIndexed, ?_⟩
-              simp only [automata, childSkipping, Finset.mem_image] at hChild
-              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              simp only [automata, childAccepting, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildAccepting, rfl⟩
               simp only [childCompleting, Finset.mem_image]
               refine ⟨child, ?_, rfl⟩
               have hEntryMem : indexed.1 ∈ branches.map fun branch =>
@@ -168,11 +168,11 @@ private theorem compileTypeFuel_skipping_subset_completing
               have hFragment : indexed.1.2 =
                   compileTypeFuel signature fuel branch.2 := by
                 exact (congrArg Prod.snd hEntry).symm
-              rw [hFragment] at hChildSkipping ⊢
+              rw [hFragment] at hChildAccepting ⊢
               exact ih branch.2
                 (le_trans
                   (typeCompilationFuel_le_typeBranchCompilationFuel branches
-                    branch hBranch) hBranchFuel) hChildSkipping
+                    branch hBranch) hBranchFuel) hChildAccepting
       | offer elseType branches =>
           have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -186,23 +186,23 @@ private theorem compileTypeFuel_skipping_subset_completing
               (parallelTypeBranchesSelecting selected branches))
           have hElse := ih elseType hElseFuel
           simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping ⊢
-          rcases hSkipping with hElseSkipping | hIndexedSkipping
-          · simp only [childSkipping, Finset.mem_image] at hElseSkipping
-            rcases hElseSkipping with ⟨child, hChild, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting ⊢
+          rcases hAccepting with hElseAccepting | hIndexedAccepting
+          · simp only [childAccepting, Finset.mem_image] at hElseAccepting
+            rcases hElseAccepting with ⟨child, hChild, rfl⟩
             exact Or.inl (Or.inr (by
               simp only [childCompleting, Finset.mem_image]
               exact ⟨child, hElse hChild, rfl⟩))
           ·
-            rw [indexedFragmentSkipping, mem_foldl_union_iff] at hIndexedSkipping
+            rw [indexedFragmentAccepting, mem_foldl_union_iff] at hIndexedAccepting
             rw [indexedFragmentCompleting, mem_foldl_union_iff]
-            rcases hIndexedSkipping with hEmpty | ⟨indexed, hIndexed, hChild⟩
+            rcases hIndexedAccepting with hEmpty | ⟨indexed, hIndexed, hChild⟩
             · simp at hEmpty
             · right
               right
               refine ⟨indexed, hIndexed, ?_⟩
-              simp only [automata, childSkipping, Finset.mem_image] at hChild
-              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+              simp only [automata, childAccepting, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildAccepting, rfl⟩
               simp only [childCompleting, Finset.mem_image]
               refine ⟨child, ?_, rfl⟩
               have hEntryMem : indexed.1 ∈ branches.map fun selected =>
@@ -215,9 +215,9 @@ private theorem compileTypeFuel_skipping_subset_completing
               have hFragment : indexed.1.2 = compileTypeFuel signature fuel
                   (parallelTypeBranchesSelecting selected branches) := by
                 exact (congrArg Prod.snd hEntry).symm
-              rw [hFragment] at hChildSkipping ⊢
+              rw [hFragment] at hChildAccepting ⊢
               apply ih (parallelTypeBranchesSelecting selected branches)
-                _ hChildSkipping
+                _ hChildAccepting
               rw [TypeCompilationFuelSufficient,
                 typeCompilationFuel_parallelTypeBranchesSelecting]
               exact hConjunctionFuel

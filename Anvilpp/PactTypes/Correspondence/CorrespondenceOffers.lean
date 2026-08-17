@@ -2980,7 +2980,16 @@ theorem compilationFragmentStepCorrect_xoffer
       (.xoffer elseType branches) = fragment := by
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
-  intro residual residual' state env label offers hRelated hLocalEnvironment
+  intro hCanonical residual residual' state env label offers hRelated
+    hLocalEnvironment
+  have hElseCanonical : elseType.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hBranchesCanonical : PactType.EntryCanonicalBranches branches := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   rcases offers with ⟨current, future⟩
   cases hRelated with
   | xoffer_source =>
@@ -3000,17 +3009,21 @@ theorem compilationFragmentStepCorrect_xoffer
                   (action, residual') hBranchMember)
                 (by simp [fuel])
             let branchFragment := compileTypeFuel signature fuel residual'
+            have hResidualCanonical : residual'.EntryCanonical :=
+              PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
             have hInitial : TypeCompilationRelation residual'
                 branchFragment.initial residual' :=
-              compileTypeFuel_initial_relation signature fuel residual'
-                hBranchFuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
+                residual' hBranchFuel
+                (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                  hResidualCanonical)
             have hTarget : TypeCompilationRelation
                 (.xoffer elseType branches)
                 (childState (index + 1) branchFragment.initial) residual' :=
               TypeCompilationRelation.xoffer_branch elseType residual'
                 residual' branches action index branchFragment.initial
                 hEntry hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             have hAutomatonEntry : branchAutomata[index]? =
                 some (action, branchFragment) := by
@@ -3046,14 +3059,16 @@ theorem compilationFragmentStepCorrect_xoffer
               simp [TypeCompilationFuelSufficient, fuel]
             have hInitial : TypeCompilationRelation elseType
                 elseFragment.initial elseType :=
-              compileTypeFuel_initial_relation signature fuel elseType
-                hElseFuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
+                elseType hElseFuel
+                (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                  hElseCanonical)
             have hTarget : TypeCompilationRelation
                 (.xoffer elseType branches) (childState 0 elseFragment.initial)
                 elseType :=
               TypeCompilationRelation.xoffer_else elseType elseType branches
                 elseFragment.initial hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             refine ⟨childState 0 elseFragment.initial, ?_, hTarget⟩
             rw [hFragment]
@@ -3073,7 +3088,7 @@ theorem compilationFragmentStepCorrect_xoffer
                 (.xoffer elseType branches) .root
                 (.xoffer elseType branches) :=
               TypeCompilationRelation.xoffer_source elseType branches
-            have hComputed := hFuture _ _ hSourceRelation
+            have hComputed := hFuture hCanonical _ _ hSourceRelation
             rw [hFragment] at hComputed
             have hRemoved := congrArg
               (fun available => available \ typeWaitingOffers env branches)
@@ -3120,10 +3135,14 @@ theorem compilationFragmentStepCorrect_xoffer
               (typeCompilationFuel_le_typeBranchCompilationFuel branches
                 branch hBranchMember)
               (by simp [fuel])
+          have hBranchCanonical : branch.2.EntryCanonical :=
+            PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
           have hInitial : TypeCompilationRelation branch.2
               (compileTypeFuel signature fuel branch.2).initial branch.2 :=
-            compileTypeFuel_initial_relation signature fuel branch.2
-              hBranchFuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
+              branch.2 hBranchFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hBranchCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.xoffer elseType branches)
               (childState (indexed.2 + 1)
@@ -3134,7 +3153,7 @@ theorem compilationFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future =
               typeFutureOffers branch.2 := hEdgeFuture.symm.trans hComputed
@@ -3160,7 +3179,7 @@ theorem compilationFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hSourceRelation
           subst residual'
-          have hComputed := hFuture _ _ hSourceRelation
+          have hComputed := hFuture hCanonical _ _ hSourceRelation
           rw [hFragment] at hComputed
           have hRemoved := congrArg
             (fun available => available \ typeWaitingOffers env branches)
@@ -3188,7 +3207,10 @@ theorem compilationFragmentStepCorrect_xoffer
             simp [TypeCompilationFuelSufficient, fuel]
           have hInitial : TypeCompilationRelation elseType
               elseFragment.initial elseType :=
-            compileTypeFuel_initial_relation signature fuel elseType hElseFuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
+              elseType hElseFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hElseCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.xoffer elseType branches) (childState 0 elseFragment.initial)
               elseType :=
@@ -3197,7 +3219,7 @@ theorem compilationFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future = typeFutureOffers elseType :=
             hEdgeFuture.symm.trans hComputed
@@ -3216,7 +3238,8 @@ theorem compilationFragmentStepCorrect_xoffer
   | xoffer_else _ childResidual _ childQ hChildRelated =>
       constructor
       · intro hStep
-        rcases (hElseStep hChildRelated hLocalEnvironment).mp hStep with
+        rcases (hElseStep hElseCanonical hChildRelated
+            hLocalEnvironment).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState 0 childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_xoffer_else_child_edge_iff signature
@@ -3230,15 +3253,19 @@ theorem compilationFragmentStepCorrect_xoffer
           elseType branches hEdge with ⟨childTarget, rfl, hChildEdge⟩
         cases hTarget with
         | xoffer_else _ _ _ _ hChildTarget =>
-            exact (hElseStep hChildRelated hLocalEnvironment).mpr
+            exact (hElseStep hElseCanonical hChildRelated
+              hLocalEnvironment).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
   | xoffer_branch _ branchType _ _ action index childQ hEntry
       hChildRelated =>
       have hStep : CompilationFragmentStepCorrect signature branchType :=
         hBranchStep action branchType index hEntry
+      have hBranchTypeCanonical : branchType.EntryCanonical :=
+        PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
       constructor
       · intro hSemanticStep
-        rcases (hStep hChildRelated hLocalEnvironment).mp hSemanticStep with
+        rcases (hStep hBranchTypeCanonical hChildRelated
+            hLocalEnvironment).mp hSemanticStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState (index + 1) childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_xoffer_branch_child_edge_iff signature
@@ -3257,7 +3284,8 @@ theorem compilationFragmentStepCorrect_xoffer
                 (targetAction, targetBranchType) :=
               Option.some.inj (hEntry.symm.trans hTargetEntry)
             cases hEntryEquality
-            exact (hStep hChildRelated hLocalEnvironment).mpr
+            exact (hStep hBranchTypeCanonical hChildRelated
+              hLocalEnvironment).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
 
 /-- Exclusive offers preserve scoped pending-fragment step correspondence. -/
@@ -3285,8 +3313,16 @@ theorem compilationScopedFragmentStepCorrect_xoffer
       (.xoffer elseType branches) = fragment := by
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
-  intro residual residual' state env label offers hRelated hLocalEnvironment
-    hAvoids
+  intro hCanonical residual residual' state env label offers hRelated
+    hLocalEnvironment hAvoids
+  have hElseCanonical : elseType.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hBranchesCanonical : PactType.EntryCanonicalBranches branches := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   have hAvoidsElse : env.AvoidsInterface elseType.ParallelInterfaces :=
     hAvoids.mono (by
       intro message hMessage
@@ -3310,17 +3346,21 @@ theorem compilationScopedFragmentStepCorrect_xoffer
                   (action, residual') hBranchMember)
                 (by simp [fuel])
             let branchFragment := compileTypeFuel signature fuel residual'
+            have hResidualCanonical : residual'.EntryCanonical :=
+              PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
             have hInitial : TypeCompilationRelation residual'
                 branchFragment.initial residual' :=
-              compileTypeFuel_initial_relation signature fuel residual'
-                hBranchFuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
+                residual' hBranchFuel
+                (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                  hResidualCanonical)
             have hTarget : TypeCompilationRelation
                 (.xoffer elseType branches)
                 (childState (index + 1) branchFragment.initial) residual' :=
               TypeCompilationRelation.xoffer_branch elseType residual'
                 residual' branches action index branchFragment.initial
                 hEntry hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             have hAutomatonEntry : branchAutomata[index]? =
                 some (action, branchFragment) := by
@@ -3356,14 +3396,16 @@ theorem compilationScopedFragmentStepCorrect_xoffer
               simp [TypeCompilationFuelSufficient, fuel]
             have hInitial : TypeCompilationRelation elseType
                 elseFragment.initial elseType :=
-              compileTypeFuel_initial_relation signature fuel elseType
-                hElseFuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
+                elseType hElseFuel
+                (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                  hElseCanonical)
             have hTarget : TypeCompilationRelation
                 (.xoffer elseType branches) (childState 0 elseFragment.initial)
                 elseType :=
               TypeCompilationRelation.xoffer_else elseType elseType branches
                 elseFragment.initial hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             refine ⟨childState 0 elseFragment.initial, ?_, hTarget⟩
             rw [hFragment]
@@ -3383,7 +3425,7 @@ theorem compilationScopedFragmentStepCorrect_xoffer
                 (.xoffer elseType branches) .root
                 (.xoffer elseType branches) :=
               TypeCompilationRelation.xoffer_source elseType branches
-            have hComputed := hFuture _ _ hSourceRelation
+            have hComputed := hFuture hCanonical _ _ hSourceRelation
             rw [hFragment] at hComputed
             have hRemoved := congrArg
               (fun available => available \ typeWaitingOffers env branches)
@@ -3430,10 +3472,14 @@ theorem compilationScopedFragmentStepCorrect_xoffer
               (typeCompilationFuel_le_typeBranchCompilationFuel branches
                 branch hBranchMember)
               (by simp [fuel])
+          have hBranchCanonical : branch.2.EntryCanonical :=
+            PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
           have hInitial : TypeCompilationRelation branch.2
               (compileTypeFuel signature fuel branch.2).initial branch.2 :=
-            compileTypeFuel_initial_relation signature fuel branch.2
-              hBranchFuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
+              branch.2 hBranchFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hBranchCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.xoffer elseType branches)
               (childState (indexed.2 + 1)
@@ -3444,7 +3490,7 @@ theorem compilationScopedFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future =
               typeFutureOffers branch.2 := hEdgeFuture.symm.trans hComputed
@@ -3470,7 +3516,7 @@ theorem compilationScopedFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hSourceRelation
           subst residual'
-          have hComputed := hFuture _ _ hSourceRelation
+          have hComputed := hFuture hCanonical _ _ hSourceRelation
           rw [hFragment] at hComputed
           have hRemoved := congrArg
             (fun available => available \ typeWaitingOffers env branches)
@@ -3498,7 +3544,10 @@ theorem compilationScopedFragmentStepCorrect_xoffer
             simp [TypeCompilationFuelSufficient, fuel]
           have hInitial : TypeCompilationRelation elseType
               elseFragment.initial elseType :=
-            compileTypeFuel_initial_relation signature fuel elseType hElseFuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
+              elseType hElseFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hElseCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.xoffer elseType branches) (childState 0 elseFragment.initial)
               elseType :=
@@ -3507,7 +3556,7 @@ theorem compilationScopedFragmentStepCorrect_xoffer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future = typeFutureOffers elseType :=
             hEdgeFuture.symm.trans hComputed
@@ -3526,7 +3575,8 @@ theorem compilationScopedFragmentStepCorrect_xoffer
   | xoffer_else _ childResidual _ childQ hChildRelated =>
       constructor
       · intro hStep
-        rcases (hElseStep hChildRelated hLocalEnvironment hAvoidsElse).mp hStep with
+        rcases (hElseStep hElseCanonical hChildRelated hLocalEnvironment
+            hAvoidsElse).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState 0 childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_xoffer_else_child_edge_iff signature
@@ -3540,12 +3590,15 @@ theorem compilationScopedFragmentStepCorrect_xoffer
           elseType branches hEdge with ⟨childTarget, rfl, hChildEdge⟩
         cases hTarget with
         | xoffer_else _ _ _ _ hChildTarget =>
-            exact (hElseStep hChildRelated hLocalEnvironment hAvoidsElse).mpr
+            exact (hElseStep hElseCanonical hChildRelated hLocalEnvironment
+              hAvoidsElse).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
   | xoffer_branch _ branchType _ _ action index childQ hEntry
       hChildRelated =>
       have hStep : CompilationScopedFragmentStepCorrect signature branchType :=
         hBranchStep action branchType index hEntry
+      have hBranchTypeCanonical : branchType.EntryCanonical :=
+        PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
       have hMember : (action, branchType) ∈ branches := by
         rcases List.getElem?_eq_some_iff.mp hEntry with ⟨hBound, hValue⟩
         have hAt := List.getElem_mem hBound
@@ -3560,7 +3613,8 @@ theorem compilationScopedFragmentStepCorrect_xoffer
             hMember hMessage)
       constructor
       · intro hSemanticStep
-        rcases (hStep hChildRelated hLocalEnvironment hAvoidsBranch).mp hSemanticStep with
+        rcases (hStep hBranchTypeCanonical hChildRelated hLocalEnvironment
+            hAvoidsBranch).mp hSemanticStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState (index + 1) childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_xoffer_branch_child_edge_iff signature
@@ -3579,7 +3633,8 @@ theorem compilationScopedFragmentStepCorrect_xoffer
                 (targetAction, targetBranchType) :=
               Option.some.inj (hEntry.symm.trans hTargetEntry)
             cases hEntryEquality
-            exact (hStep hChildRelated hLocalEnvironment hAvoidsBranch).mpr
+            exact (hStep hBranchTypeCanonical hChildRelated hLocalEnvironment
+              hAvoidsBranch).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
 
 /-- Public exclusive-offer correspondence follows by alphabet export. -/
@@ -3592,7 +3647,8 @@ theorem compilationStepCorrect_xoffer
       branches[index]? = some (action, branchType) →
         CompilationFragmentStepCorrect signature branchType)
     (hFuture : CompilationFutureCorrect signature
-      (.xoffer elseType branches)) :
+      (.xoffer elseType branches))
+    (hCanonical : (PactType.xoffer elseType branches).EntryCanonical) :
     CompilationStepCorrect signature (.xoffer elseType branches) := by
   intro residual residual' state env label offers hRelated hSymbol
   have hSignatureSymbol : TypeAutomatonSymbol.mk env label offers ∈
@@ -3604,7 +3660,7 @@ theorem compilationStepCorrect_xoffer
       simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
     exact signature.environments_subset_localEnvironments hFields.1
   have hRaw := compilationFragmentStepCorrect_xoffer signature elseType
-    branches hElseStep hBranchStep hFuture (residual := residual)
+    branches hElseStep hBranchStep hFuture hCanonical (residual := residual)
     (residual' := residual') (state := state) (env := env) (label := label)
     (offers := offers) hRelated hLocalEnvironment
   constructor
@@ -3634,7 +3690,15 @@ theorem compilationFutureCorrect_xoffer_of_children
         CompilationFutureCorrect signature branchType) :
     CompilationFutureCorrect signature (.xoffer elseType branches) := by
   classical
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hElseCanonical : elseType.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hBranchesCanonical : PactType.EntryCanonicalBranches branches := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   let fuel := max (typeCompilationFuel elseType)
     (typeBranchCompilationFuel branches)
   let elseFragment := compileTypeFuel signature fuel elseType
@@ -3732,9 +3796,11 @@ theorem compilationFutureCorrect_xoffer_of_children
       have hElseRelation : TypeCompilationRelation elseType
           elseFragment.initial elseType := by
         simpa [elseFragment, hElseStable] using
-          compileType_initial_relation signature elseType
-      have hElseSemantic := hElseFuture elseFragment.initial elseType
-        hElseRelation
+          compileType_initial_relation_of_canonical signature elseType
+            (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+              hElseCanonical)
+      have hElseSemantic := hElseFuture hElseCanonical elseFragment.initial
+        elseType hElseRelation
       have hElseMenu : computeFuture pending
           (childState 0 elseFragment.initial) =
           typeFutureOffers elseType := by
@@ -3809,12 +3875,17 @@ theorem compilationFutureCorrect_xoffer_of_children
           signature branches elseFragment branchAutomata index
             (branch.1, branchFragment) hExpectedEntry branchFragment.initial
               hBranchTargets' hBranchInitial' hCard
+        have hBranchCanonical : branch.2.EntryCanonical :=
+          PactType.EntryCanonicalBranches.get hBranchesCanonical hBranchEntry
         have hBranchRelation : TypeCompilationRelation branch.2
             branchFragment.initial branch.2 := by
           simpa [branchFragment, hBranchStable] using
-            compileType_initial_relation signature branch.2
+            compileType_initial_relation_of_canonical signature branch.2
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hBranchCanonical)
         have hSemantic := hBranchFuture branch.1 branch.2 index
-          hBranchEntry branchFragment.initial branch.2 hBranchRelation
+          hBranchEntry hBranchCanonical branchFragment.initial branch.2
+          hBranchRelation
         have hStandalone : computeFuture
             { states := branchFragment.states, edges := branchFragment.edges }
             branchFragment.initial = typeFutureOffers branch.2 := by
@@ -3945,7 +4016,8 @@ theorem compilationFutureCorrect_xoffer_of_children
       have hEmbedding := buildExclusiveOfferAutomaton_computeFuture_else
         signature branches elseFragment branchAutomata childState hElseTargets
           hChildState hCard
-      have hSemantic := hElseFuture childState residual hChildRelated
+      have hSemantic := hElseFuture hElseCanonical childState residual
+        hChildRelated
       have hSemanticShared : computeFuture
           { states := elseFragment.states, edges := elseFragment.edges }
           childState = typeFutureOffers residual := by
@@ -4015,8 +4087,10 @@ theorem compilationFutureCorrect_xoffer_of_children
         signature branches elseFragment branchAutomata index
           (action, branchFragment) hAutomatonEntry childState hTargets
             hChildState hCard
+      have hBranchTypeCanonical : branchType.EntryCanonical :=
+        PactType.EntryCanonicalBranches.get hBranchesCanonical hEntry
       have hSemantic := hBranchFuture action branchType index hEntry
-        childState residual hChildRelated
+        hBranchTypeCanonical childState residual hChildRelated
       have hSemanticShared : computeFuture
           { states := branchFragment.states, edges := branchFragment.edges }
           childState = typeFutureOffers residual := by
@@ -4024,6 +4098,120 @@ theorem compilationFutureCorrect_xoffer_of_children
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel,
         fragment, pending, elseFragment, branchAutomata, branchFragment,
         fuel] using hEmbedding.trans hSemanticShared
+
+/-- `parallelTypeBranches`'s output is never a degenerate `.par`, provided
+every branch continuation is itself canonical: every node it builds is either
+`singletonTypeXOffer` (`.xoffer`-rooted — canonical exactly when its one
+branch's continuation is, and never `.skip` regardless) or a `.par` of two
+such non-collapsing pieces. -/
+private theorem parallelTypeBranches_entryCanonical_and_ne_skip :
+    ∀ branches : List (BareMessage × PactType), branches ≠ [] →
+      PactType.EntryCanonicalBranches branches →
+      (parallelTypeBranches branches).EntryCanonical ∧
+        parallelTypeBranches branches ≠ .skip
+  | [], hNonempty, _ => absurd rfl hNonempty
+  | [branch], _, hBranchesCanonical => by
+      have hBranchCanonical : branch.2.EntryCanonical :=
+        PactType.EntryCanonicalBranches.head hBranchesCanonical
+      refine ⟨?_, by simp [parallelTypeBranches, singletonTypeXOffer]⟩
+      simp only [parallelTypeBranches, singletonTypeXOffer,
+        PactType.EntryCanonical]
+      exact ⟨trivial, PactType.EntryCanonicalBranches.singleton
+        hBranchCanonical⟩
+  | branch :: b2 :: rest, _, hBranchesCanonical => by
+      have hBranchCanonical : branch.2.EntryCanonical :=
+        PactType.EntryCanonicalBranches.head hBranchesCanonical
+      have hRestCanonical : PactType.EntryCanonicalBranches (b2 :: rest) :=
+        PactType.EntryCanonicalBranches.tail hBranchesCanonical
+      obtain ⟨hTailCanonical, hTailNeSkip⟩ :=
+        parallelTypeBranches_entryCanonical_and_ne_skip (b2 :: rest) (by simp)
+          hRestCanonical
+      have hTailFixed :=
+        PactType.canonicalEntryResidual_eq_self_of_entryCanonical hTailCanonical
+      refine ⟨?_, by simp [parallelTypeBranches]⟩
+      have hGoal : (PactType.par (singletonTypeXOffer branch)
+          (parallelTypeBranches (b2 :: rest)) ∅).EntryCanonical := by
+        simp only [PactType.EntryCanonical]
+        refine ⟨?_, ?_, hTailCanonical⟩
+        · simp only [PactType.canonicalEntryResidual, singletonTypeXOffer,
+            hTailFixed]
+          rintro ⟨_, hEq⟩
+          exact hTailNeSkip hEq
+        · simp only [singletonTypeXOffer, PactType.EntryCanonical]
+          exact ⟨trivial, PactType.EntryCanonicalBranches.singleton
+            hBranchCanonical⟩
+      simpa [parallelTypeBranches] using hGoal
+
+/-- `parallelTypeBranchesSelecting`'s output is likewise never a degenerate
+`.par` once every branch continuation is canonical: it differs from
+`parallelTypeBranches` only by substituting `selectedTypeBranch` (`.seq`-
+rooted, canonical exactly when its continuation is, and also never `.skip`)
+for one singleton, so the same non-collapsing argument applies at every
+recursive step. -/
+private theorem parallelTypeBranchesSelecting_entryCanonical_and_ne_skip
+    (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType), branches ≠ [] →
+      PactType.EntryCanonicalBranches branches →
+      (parallelTypeBranchesSelecting selected branches).EntryCanonical ∧
+        parallelTypeBranchesSelecting selected branches ≠ .skip
+  | [], hNonempty, _ => absurd rfl hNonempty
+  | [branch], _, hBranchesCanonical => by
+      have hBranchCanonical : branch.2.EntryCanonical :=
+        PactType.EntryCanonicalBranches.head hBranchesCanonical
+      unfold parallelTypeBranchesSelecting
+      split
+      · refine ⟨?_, by simp [selectedTypeBranch]⟩
+        simp only [selectedTypeBranch, PactType.EntryCanonical]
+        exact ⟨trivial, hBranchCanonical⟩
+      · refine ⟨?_, by simp [singletonTypeXOffer]⟩
+        simp only [singletonTypeXOffer, PactType.EntryCanonical]
+        exact ⟨trivial, PactType.EntryCanonicalBranches.singleton
+          hBranchCanonical⟩
+  | branch :: b2 :: rest, _, hBranchesCanonical => by
+      have hBranchCanonical : branch.2.EntryCanonical :=
+        PactType.EntryCanonicalBranches.head hBranchesCanonical
+      have hRestCanonical : PactType.EntryCanonicalBranches (b2 :: rest) :=
+        PactType.EntryCanonicalBranches.tail hBranchesCanonical
+      unfold parallelTypeBranchesSelecting
+      split
+      · obtain ⟨hTailCanonical, hTailNeSkip⟩ :=
+          parallelTypeBranches_entryCanonical_and_ne_skip (b2 :: rest)
+            (by simp) hRestCanonical
+        have hTailFixed :=
+          PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hTailCanonical
+        refine ⟨?_, by simp [selectedTypeBranch]⟩
+        have hGoal : (PactType.par (selectedTypeBranch branch)
+            (parallelTypeBranches (b2 :: rest)) ∅).EntryCanonical := by
+          simp only [PactType.EntryCanonical]
+          refine ⟨?_, ?_, hTailCanonical⟩
+          · simp only [PactType.canonicalEntryResidual, selectedTypeBranch,
+              hTailFixed]
+            rintro ⟨_, hEq⟩
+            exact hTailNeSkip hEq
+          · simp only [selectedTypeBranch, PactType.EntryCanonical]
+            exact ⟨trivial, hBranchCanonical⟩
+        exact hGoal
+      · obtain ⟨hTailCanonical, hTailNeSkip⟩ :=
+          parallelTypeBranchesSelecting_entryCanonical_and_ne_skip selected
+            (b2 :: rest) (by simp) hRestCanonical
+        have hTailFixed :=
+          PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hTailCanonical
+        refine ⟨?_, by simp [singletonTypeXOffer]⟩
+        have hGoal : PactType.EntryCanonical (PactType.par
+            (singletonTypeXOffer branch)
+            (parallelTypeBranchesSelecting selected (b2 :: rest)) ∅) := by
+          simp only [PactType.EntryCanonical]
+          refine ⟨?_, ?_, hTailCanonical⟩
+          · simp only [PactType.canonicalEntryResidual, singletonTypeXOffer,
+              hTailFixed]
+            rintro ⟨_, hEq⟩
+            exact hTailNeSkip hEq
+          · simp only [singletonTypeXOffer, PactType.EntryCanonical]
+            exact ⟨trivial, PactType.EntryCanonicalBranches.singleton
+              hBranchCanonical⟩
+        exact hGoal
 
 /-- Whole-fragment future correctness for conjunctive offers.  Each enabled
 witness's selected conjunction is treated as an indexed child and the else
@@ -4041,7 +4229,15 @@ theorem compilationFutureCorrect_offer_of_children
           (parallelTypeBranchesSelecting selected branches)) :
     CompilationFutureCorrect signature (.offer elseType branches) := by
   classical
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hElseCanonical : elseType.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hBranchesCanonical : PactType.EntryCanonicalBranches branches := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   let fuel := max (typeCompilationFuel elseType)
     (conjunctiveCompilationFuel branches)
   let elseFragment := compileTypeFuel signature fuel elseType
@@ -4139,9 +4335,11 @@ theorem compilationFutureCorrect_offer_of_children
       have hElseRelation : TypeCompilationRelation elseType
           elseFragment.initial elseType := by
         simpa [elseFragment, hElseStable] using
-          compileType_initial_relation signature elseType
-      have hElseSemantic := hElseFuture elseFragment.initial elseType
-        hElseRelation
+          compileType_initial_relation_of_canonical signature elseType
+            (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+              hElseCanonical)
+      have hElseSemantic := hElseFuture hElseCanonical elseFragment.initial
+        elseType hElseRelation
       have hElseMenu : computeFuture pending
           (childState 0 elseFragment.initial) = typeFutureOffers elseType := by
         have hStandalone : computeFuture
@@ -4225,15 +4423,23 @@ theorem compilationFutureCorrect_offer_of_children
           exact compileTypeFuel_eq_of_sufficient signature
             (parallelTypeBranchesSelecting branch branches)
             (hEntryFuel branch hBranchMem) (typeCompilationFuel_sufficient _)
+        have hBranchesNonempty : branches ≠ [] := fun h => by
+          simp [h] at hBranchMem
+        have hSelectedCanonical :
+            (parallelTypeBranchesSelecting branch branches).EntryCanonical :=
+          (parallelTypeBranchesSelecting_entryCanonical_and_ne_skip branch
+            branches hBranchesNonempty hBranchesCanonical).1
         have hSelectedRelation : TypeCompilationRelation
             (parallelTypeBranchesSelecting branch branches)
             entry.2.initial (parallelTypeBranchesSelecting branch branches) := by
           simpa [hStable] using
-            compileType_initial_relation signature
+            compileType_initial_relation_of_canonical signature
               (parallelTypeBranchesSelecting branch branches)
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hSelectedCanonical)
         have hSemantic := hConjunctionFuture branch index hBranchEntry
-          entry.2.initial (parallelTypeBranchesSelecting branch branches)
-          hSelectedRelation
+          hSelectedCanonical entry.2.initial
+          (parallelTypeBranchesSelecting branch branches) hSelectedRelation
         have hSemanticShared : computeFuture
             { states := entry.2.states, edges := entry.2.edges } entry.2.initial =
               typeFutureOffers (parallelTypeBranchesSelecting branch branches) := by
@@ -4415,8 +4621,12 @@ theorem compilationFutureCorrect_offer_of_children
                 (parallelTypeBranchesSelecting selected branches)
                 hSelectedFuel))
           state' hChildState hCard
-      have hSemantic := hConjunctionFuture selected index hEntry state'
-        residual hChildRelated
+      have hSelectedCanonical :
+          (parallelTypeBranchesSelecting selected branches).EntryCanonical :=
+        (parallelTypeBranchesSelecting_entryCanonical_and_ne_skip selected
+          branches (fun h => by simp [h] at hEntry) hBranchesCanonical).1
+      have hSemantic := hConjunctionFuture selected index hEntry
+        hSelectedCanonical state' residual hChildRelated
       have hSemanticShared : computeFuture
           { states := selectedFragment.states, edges := selectedFragment.edges }
           state' = typeFutureOffers residual := by
@@ -4452,7 +4662,7 @@ theorem compilationFutureCorrect_offer_of_children
           (PendingAutomaton.referencesClosed_of_futureTargetsInStates
             elseFragment hElseTargets)
           state' hChildState hCard
-      have hSemantic := hElseFuture state' residual hChildRelated
+      have hSemantic := hElseFuture hElseCanonical state' residual hChildRelated
       have hSemanticShared : computeFuture
           { states := elseFragment.states, edges := elseFragment.edges }
           state' = typeFutureOffers residual := by
@@ -5011,8 +5221,16 @@ theorem compilationScopedFragmentStepCorrect_offer
       (.offer elseType branches) = fragment := by
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
-  intro residual residual' state env label offers hRelated hLocalEnvironment
-    hAvoids
+  intro hCanonical residual residual' state env label offers hRelated
+    hLocalEnvironment hAvoids
+  have hElseCanonical : elseType.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hBranchesCanonical : PactType.EntryCanonicalBranches branches := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   have hAvoidsElse : env.AvoidsInterface elseType.ParallelInterfaces :=
     hAvoids.mono (by
       intro message hMessage
@@ -5040,12 +5258,19 @@ theorem compilationScopedFragmentStepCorrect_offer
               exact le_max_right _ _
             let selectedFragment := compileTypeFuel signature fuel
               (parallelTypeBranchesSelecting enabled branches)
+            have hEnabledCanonical : PactType.EntryCanonical
+                (parallelTypeBranchesSelecting enabled branches) :=
+              (parallelTypeBranchesSelecting_entryCanonical_and_ne_skip
+                enabled branches (fun h => by simp [h] at hBranchMember)
+                hBranchesCanonical).1
             have hInitial : TypeCompilationRelation
                 (parallelTypeBranchesSelecting enabled branches)
                 selectedFragment.initial
                 (parallelTypeBranchesSelecting enabled branches) :=
-              compileTypeFuel_initial_relation signature fuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
                 (parallelTypeBranchesSelecting enabled branches) hBranchFuel
+                (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                  hEnabledCanonical)
             have hTarget : TypeCompilationRelation
                 (.offer elseType branches)
                 (childState (index + 1) selectedFragment.initial)
@@ -5053,7 +5278,7 @@ theorem compilationScopedFragmentStepCorrect_offer
               TypeCompilationRelation.offer_branches elseType
                 (parallelTypeBranchesSelecting enabled branches) branches
                 enabled index selectedFragment.initial hEntry hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             refine ⟨childState (index + 1) selectedFragment.initial, ?_,
               hTarget⟩
@@ -5089,14 +5314,16 @@ theorem compilationScopedFragmentStepCorrect_offer
               simp [TypeCompilationFuelSufficient, fuel]
             have hInitial : TypeCompilationRelation elseType
                 elseFragment.initial elseType :=
-              compileTypeFuel_initial_relation signature fuel elseType
-                hElseFuel
+              compileTypeFuel_initial_relation_of_canonical signature fuel
+              elseType hElseFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hElseCanonical)
             have hTarget : TypeCompilationRelation
                 (.offer elseType branches)
                 (childState 0 elseFragment.initial) elseType :=
               TypeCompilationRelation.offer_else elseType elseType branches
                 elseFragment.initial hInitial
-            have hComputed := hFuture _ _ hTarget
+            have hComputed := hFuture hCanonical _ _ hTarget
             rw [hFragment] at hComputed
             refine ⟨childState 0 elseFragment.initial, ?_, hTarget⟩
             rw [hFragment]
@@ -5117,7 +5344,7 @@ theorem compilationScopedFragmentStepCorrect_offer
                 (.offer elseType branches) .root
                 (.offer elseType branches) :=
               TypeCompilationRelation.offer_source elseType branches
-            have hComputed := hFuture _ _ hSourceRelation
+            have hComputed := hFuture hCanonical _ _ hSourceRelation
             rw [hFragment] at hComputed
             have hRemoved := congrArg
               (fun available => available \ typeWaitingOffers env branches)
@@ -5167,13 +5394,20 @@ theorem compilationScopedFragmentStepCorrect_offer
             simp only [TypeCompilationFuelSufficient,
               typeCompilationFuel_parallelTypeBranchesSelecting, fuel]
             exact le_max_right _ _
+          have hBranchCanonical : PactType.EntryCanonical
+              (parallelTypeBranchesSelecting branch branches) :=
+            (parallelTypeBranchesSelecting_entryCanonical_and_ne_skip branch
+              branches (fun h => by simp [h] at hBranchMember)
+              hBranchesCanonical).1
           have hInitial : TypeCompilationRelation
               (parallelTypeBranchesSelecting branch branches)
               (compileTypeFuel signature fuel
                 (parallelTypeBranchesSelecting branch branches)).initial
               (parallelTypeBranchesSelecting branch branches) :=
-            compileTypeFuel_initial_relation signature fuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
               (parallelTypeBranchesSelecting branch branches) hBranchFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hBranchCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.offer elseType branches)
               (childState (indexed.2 + 1)
@@ -5186,7 +5420,7 @@ theorem compilationScopedFragmentStepCorrect_offer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future =
               typeFutureOffers (parallelTypeBranchesSelecting branch branches) :=
@@ -5211,7 +5445,7 @@ theorem compilationScopedFragmentStepCorrect_offer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hSourceRelation
           subst residual'
-          have hComputed := hFuture _ _ hSourceRelation
+          have hComputed := hFuture hCanonical _ _ hSourceRelation
           rw [hFragment] at hComputed
           have hRemoved := congrArg
             (fun available => available \ typeWaitingOffers env branches)
@@ -5239,7 +5473,10 @@ theorem compilationScopedFragmentStepCorrect_offer
             simp [TypeCompilationFuelSufficient, fuel]
           have hInitial : TypeCompilationRelation elseType
               elseFragment.initial elseType :=
-            compileTypeFuel_initial_relation signature fuel elseType hElseFuel
+            compileTypeFuel_initial_relation_of_canonical signature fuel
+              elseType hElseFuel
+              (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                hElseCanonical)
           have hExpectedTarget : TypeCompilationRelation
               (.offer elseType branches)
               (childState 0 elseFragment.initial) elseType :=
@@ -5248,7 +5485,7 @@ theorem compilationScopedFragmentStepCorrect_offer
           have hResidual := TypeCompilationRelation.residual_unique hTarget
             hExpectedTarget
           subst residual'
-          have hComputed := hFuture _ _ hExpectedTarget
+          have hComputed := hFuture hCanonical _ _ hExpectedTarget
           rw [hFragment] at hComputed
           have hOfferFuture : future = typeFutureOffers elseType :=
             hEdgeFuture.symm.trans hComputed
@@ -5272,10 +5509,14 @@ theorem compilationScopedFragmentStepCorrect_offer
           right
           exact parallelTypeBranchesSelecting_parallelInterfaces_subset
             selected branches hMessage)
+      have hSelectedCanonical :
+          (parallelTypeBranchesSelecting selected branches).EntryCanonical :=
+        (parallelTypeBranchesSelecting_entryCanonical_and_ne_skip selected
+          branches (fun h => by simp [h] at hEntry) hBranchesCanonical).1
       constructor
       · intro hSemanticStep
-        rcases (hConjunctionStep selected index hEntry hChildRelated
-          hLocalEnvironment hAvoidsSelected).mp
+        rcases (hConjunctionStep selected index hEntry hSelectedCanonical
+          hChildRelated hLocalEnvironment hAvoidsSelected).mp
           hSemanticStep with ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState (index + 1) childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_offer_conjunction_child_edge_iff signature
@@ -5292,13 +5533,14 @@ theorem compilationScopedFragmentStepCorrect_offer
             have hSelectedEq : selected = selected' := by
               rw [hEntry] at hEntry'
               exact Option.some.inj hEntry'
-            exact (hConjunctionStep selected index hEntry hChildRelated
-              hLocalEnvironment hAvoidsSelected).mpr
+            exact (hConjunctionStep selected index hEntry hSelectedCanonical
+              hChildRelated hLocalEnvironment hAvoidsSelected).mpr
               ⟨childTarget, hChildEdge, hSelectedEq ▸ hChildTarget⟩
   | offer_else _ childResidual _ childQ hChildRelated =>
       constructor
       · intro hSemanticStep
-        rcases (hElseStep hChildRelated hLocalEnvironment hAvoidsElse).mp hSemanticStep
+        rcases (hElseStep hElseCanonical hChildRelated hLocalEnvironment
+          hAvoidsElse).mp hSemanticStep
           with ⟨childTarget, hChildEdge, hChildTarget⟩
         refine ⟨childState 0 childTarget, ?_, ?_⟩
         · exact (compileTypeFuel_offer_else_child_edge_iff signature
@@ -5311,8 +5553,8 @@ theorem compilationScopedFragmentStepCorrect_offer
           elseType branches hEdge with ⟨childTarget, rfl, hChildEdge⟩
         cases hTarget with
         | offer_else _ _ _ _ hChildTarget =>
-            exact (hElseStep hChildRelated hLocalEnvironment hAvoidsElse).mpr
-              ⟨childTarget, hChildEdge, hChildTarget⟩
+            exact (hElseStep hElseCanonical hChildRelated hLocalEnvironment
+              hAvoidsElse).mpr ⟨childTarget, hChildEdge, hChildTarget⟩
 /-
   classical
   let conjunctionType := parallelTypeBranches branches
@@ -5628,10 +5870,11 @@ theorem compilationResolvedEdgeTargetsRelated_xoffer
               hBranchMember)
             (by simp [fuel])
         have hInitial : TypeCompilationRelation branch.2
-            (compileTypeFuel signature fuel branch.2).initial branch.2 :=
+            (compileTypeFuel signature fuel branch.2).initial
+            (PactType.canonicalEntryResidual branch.2) :=
           compileTypeFuel_initial_relation signature fuel branch.2 hBranchFuel
-        exact ⟨branch.2,
-          TypeCompilationRelation.xoffer_branch elseType branch.2 branch.2
+        exact ⟨PactType.canonicalEntryResidual branch.2,
+          TypeCompilationRelation.xoffer_branch elseType branch.2 _
             branches branch.1 indexed.2 _ hEntry hInitial⟩
       · rcases hWait with ⟨_, _, _, _, _, _, hTarget⟩
         subst target
@@ -5642,10 +5885,10 @@ theorem compilationResolvedEdgeTargetsRelated_xoffer
         have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
           simp [TypeCompilationFuelSufficient, fuel]
         have hInitial : TypeCompilationRelation elseType
-            elseFragment.initial elseType :=
+            elseFragment.initial (PactType.canonicalEntryResidual elseType) :=
           compileTypeFuel_initial_relation signature fuel elseType hElseFuel
-        exact ⟨elseType,
-          TypeCompilationRelation.xoffer_else elseType elseType branches
+        exact ⟨PactType.canonicalEntryResidual elseType,
+          TypeCompilationRelation.xoffer_else elseType _ branches
             elseFragment.initial hInitial⟩
   | xoffer_else _ childResidual _ childQ hChildRelated =>
       rcases compileTypeFuel_xoffer_else_child_edge_cases signature elseType
@@ -5742,12 +5985,13 @@ theorem compilationResolvedEdgeTargetsRelated_offer
               (parallelTypeBranchesSelecting branch branches)
               (compileTypeFuel signature fuel
                 (parallelTypeBranchesSelecting branch branches)).initial
-              (parallelTypeBranchesSelecting branch branches) :=
+              (PactType.canonicalEntryResidual
+                (parallelTypeBranchesSelecting branch branches)) :=
             compileTypeFuel_initial_relation signature fuel
               (parallelTypeBranchesSelecting branch branches) hBranchFuel
-          exact ⟨parallelTypeBranchesSelecting branch branches,
-            TypeCompilationRelation.offer_branches elseType
-              (parallelTypeBranchesSelecting branch branches) branches branch
+          exact ⟨PactType.canonicalEntryResidual
+              (parallelTypeBranchesSelecting branch branches),
+            TypeCompilationRelation.offer_branches elseType _ branches branch
               indexed.2 _ hEntry hInitial⟩
       · simp only [Finset.mem_image, Finset.mem_filter] at hWait
         rcases hWait with ⟨edgeEnvironment, _, rfl⟩
@@ -5762,10 +6006,10 @@ theorem compilationResolvedEdgeTargetsRelated_offer
         have hElseFuel : TypeCompilationFuelSufficient elseType fuel := by
           simp [TypeCompilationFuelSufficient, fuel]
         have hInitial : TypeCompilationRelation elseType
-            elseFragment.initial elseType :=
+            elseFragment.initial (PactType.canonicalEntryResidual elseType) :=
           compileTypeFuel_initial_relation signature fuel elseType hElseFuel
-        exact ⟨elseType,
-          TypeCompilationRelation.offer_else elseType elseType branches
+        exact ⟨PactType.canonicalEntryResidual elseType,
+          TypeCompilationRelation.offer_else elseType _ branches
             elseFragment.initial hInitial⟩
   | offer_branches _ childResidual _ selected index childQ hEntry
       hChildRelated =>

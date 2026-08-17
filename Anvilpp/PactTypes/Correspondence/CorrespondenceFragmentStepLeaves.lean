@@ -14,7 +14,7 @@ already proved above; these leaves only remove the public alphabet filter. -/
 theorem compilationFragmentStepCorrect_skip_leaf
     (signature : TypeAlphabet) :
     CompilationFragmentStepCorrect signature .skip := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
+  intro _ residual residual' state env label offers hRelated hLocalEnvironment
   cases hRelated
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   rcases offers with ⟨current, future⟩
@@ -33,27 +33,27 @@ theorem compilationFragmentStepCorrect_skip_leaf
             future := .explicit ∅
             target := .root }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
         simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-          hLocalEnvironment, conditions.2.1, conditions.2.2]
+          hLocalEnvironment, conditions.2]
   · rintro ⟨state', hEdge, hTarget⟩
     cases hTarget
     rcases hEdge with ⟨edge, hEdge, hSource, hEnv, hLabel, hCurrent, hFuture,
       hTarget⟩
     simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
       at hEdge
-    obtain ⟨edgeEnv, ⟨hLocalMem, hClock, hImmediate⟩, rfl⟩ := hEdge
+    obtain ⟨edgeEnv, ⟨hLocalMem, hClock⟩, rfl⟩ := hEdge
     simp only at hEnv hLabel hCurrent hFuture
     subst hEnv
     injection hLabel with hLabel
     subst hLabel
     subst hCurrent
     subst hFuture
-    exact ⟨TypeTransition.skip edgeEnv ⟨hWellFormed, hClock, hImmediate⟩,
-      TypeOffers.skip edgeEnv ⟨hWellFormed, hClock, hImmediate⟩⟩
+    exact ⟨TypeTransition.skip edgeEnv ⟨hWellFormed, hClock⟩,
+      TypeOffers.skip edgeEnv ⟨hWellFormed, hClock⟩⟩
 
 theorem compilationFragmentStepCorrect_message_leaf
     (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
     CompilationFragmentStepCorrect signature (.message msg dir) := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
+  intro _ residual residual' state env label offers hRelated hLocalEnvironment
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   rcases offers with ⟨current, future⟩
   cases hRelated with
@@ -127,7 +127,7 @@ theorem compilationFragmentStepCorrect_message_leaf
             by simpa [typeFutureOffers, typeFutureOffersFuel] using
               TypeOffers.action_wait edgeEnv msg dir
                 ⟨hWellFormed, hNoNeed, hClock⟩⟩
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource
           simp at hSource
   | message_final =>
@@ -146,7 +146,7 @@ theorem compilationFragmentStepCorrect_message_leaf
                 future := .explicit ∅
                 target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
             simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-              hLocalEnvironment, conditions.2.1, conditions.2.2]
+              hLocalEnvironment, conditions.2]
       · rintro ⟨state', hEdge, hTarget⟩
         rcases hEdge with ⟨edge, hEdge, hSource, hEnv, hLabel, hCurrent, hFuture,
           hTargetField⟩
@@ -159,7 +159,7 @@ theorem compilationFragmentStepCorrect_message_leaf
         · obtain ⟨edgeEnv, ⟨_, hClock, hNoNeed⟩, rfl⟩ := hWaiting
           simp only at hSource
           simp at hSource
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource hEnv hLabel hCurrent hFuture hTargetField
           subst hEnv
           injection hLabel with hLabel
@@ -169,13 +169,13 @@ theorem compilationFragmentStepCorrect_message_leaf
           subst hTargetField
           cases hTarget
           exact ⟨TypeTransition.skip edgeEnv
-              ⟨hWellFormed, hClock, hImmediate⟩,
-            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock, hImmediate⟩⟩
+              ⟨hWellFormed, hClock⟩,
+            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock⟩⟩
 
 theorem compilationFragmentStepCorrect_tock_leaf
     (signature : TypeAlphabet) :
     CompilationFragmentStepCorrect signature .tock := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
+  intro _ residual residual' state env label offers hRelated hLocalEnvironment
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   rcases offers with ⟨current, future⟩
   cases hRelated with
@@ -250,7 +250,7 @@ theorem compilationFragmentStepCorrect_tock_leaf
             exact ⟨TypeTransition.cycle_wait edgeEnv
                 ⟨hWellFormed, by simpa using hClock⟩,
               TypeOffers.cycle_wait edgeEnv ⟨hWellFormed, by simpa using hClock⟩⟩
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource
           simp at hSource
   | cycle_final =>
@@ -271,7 +271,7 @@ theorem compilationFragmentStepCorrect_tock_leaf
                 future := .explicit ∅
                 target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
             simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-              hLocalEnvironment, conditions.2.1, conditions.2.2]
+              hLocalEnvironment, conditions.2]
       · rintro ⟨state', hEdge, hTarget⟩
         rcases hEdge with ⟨edge, hEdge, hSource, hEnv, hLabel, hCurrent, hFuture,
           hTargetField⟩
@@ -286,7 +286,7 @@ theorem compilationFragmentStepCorrect_tock_leaf
           · rw [if_neg hClock] at hEdgeEq
             rw [← hEdgeEq] at hSource
             simp at hSource
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource hEnv hLabel hCurrent hFuture hTargetField
           subst hEnv
           injection hLabel with hLabel
@@ -296,13 +296,13 @@ theorem compilationFragmentStepCorrect_tock_leaf
           subst hTargetField
           cases hTarget
           exact ⟨TypeTransition.skip edgeEnv
-              ⟨hWellFormed, hClock, hImmediate⟩,
-            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock, hImmediate⟩⟩
+              ⟨hWellFormed, hClock⟩,
+            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock⟩⟩
 
 theorem compilationFragmentStepCorrect_progress_leaf
     (signature : TypeAlphabet) (pid : ProcId) :
     CompilationFragmentStepCorrect signature (.progress pid) := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
+  intro _ residual residual' state env label offers hRelated hLocalEnvironment
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   rcases offers with ⟨current, future⟩
   cases hRelated with
@@ -343,7 +343,7 @@ theorem compilationFragmentStepCorrect_progress_leaf
           cases hTarget
           exact ⟨TypeTransition.progress edgeEnv pid hWellFormed,
             TypeOffers.progress edgeEnv pid hWellFormed⟩
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource
           simp at hSource
   | progress_final =>
@@ -364,7 +364,7 @@ theorem compilationFragmentStepCorrect_progress_leaf
                 future := .explicit ∅
                 target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
             simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-              hLocalEnvironment, conditions.2.1, conditions.2.2]
+              hLocalEnvironment, conditions.2]
       · rintro ⟨state', hEdge, hTarget⟩
         rcases hEdge with ⟨edge, hEdge, hSource, hEnv, hLabel, hCurrent, hFuture,
           hTargetField⟩
@@ -374,7 +374,7 @@ theorem compilationFragmentStepCorrect_progress_leaf
         · obtain ⟨edgeEnv, hLocalMem, rfl⟩ := hAction
           simp only at hSource
           simp at hSource
-        · obtain ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩ := hFinal
+        · obtain ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩ := hFinal
           simp only at hSource hEnv hLabel hCurrent hFuture hTargetField
           subst hEnv
           injection hLabel with hLabel
@@ -384,8 +384,8 @@ theorem compilationFragmentStepCorrect_progress_leaf
           subst hTargetField
           cases hTarget
           exact ⟨TypeTransition.skip edgeEnv
-              ⟨hWellFormed, hClock, hImmediate⟩,
-            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock, hImmediate⟩⟩
+              ⟨hWellFormed, hClock⟩,
+            TypeOffers.skip edgeEnv ⟨hWellFormed, hClock⟩⟩
 
 theorem compileTypeFuel_choiceLike_root_target_cases
     (signature : TypeAlphabet) (left right : PactType)
@@ -544,8 +544,10 @@ theorem compilationFragmentStepCorrect_choice_leaf
     (hLeft : CompilationProofBundle signature left)
     (hRight : CompilationProofBundle signature right) :
     CompilationScopedFragmentStepCorrect signature (.choice left right) := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
-    hAvoids
+  intro hCanonical residual residual' state env label offers hRelated
+    hLocalEnvironment hAvoids
+  have hLeftCanonical : left.EntryCanonical ∧ right.EntryCanonical := by
+    simpa only [PactType.EntryCanonical] using hCanonical
   have hAvoidsLeft : env.AvoidsInterface left.ParallelInterfaces :=
     hAvoids.mono (by simp [PactType.ParallelInterfaces])
   have hAvoidsRight : env.AvoidsInterface right.ParallelInterfaces :=
@@ -553,7 +555,7 @@ theorem compilationFragmentStepCorrect_choice_leaf
   rcases offers with ⟨current, future⟩
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   have hChoiceFuture := choiceFutureCorrect_of_compilation signature left right
-    hLeft.future hRight.future
+    hLeft.future hRight.future hLeftCanonical.1 hLeftCanonical.2
   have hFragmentEq :
       compileTypeFuel signature (typeCompilationFuel (.choice left right))
           (.choice left right) =
@@ -597,7 +599,9 @@ theorem compilationFragmentStepCorrect_choice_leaf
                 hFuel (typeCompilationFuel_sufficient left)
               exact ⟨hLocalEnvironment, rfl, rfl, hChoiceFuture.1, by rw [hStable]⟩
             · exact TypeCompilationRelation.choice_left left right left _
-                (compileType_initial_relation signature left)
+                (compileType_initial_relation_of_canonical signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.1))
         | choice_right =>
             obtain ⟨rfl, rfl⟩ := TypeOffers.choice_right_fields hOffers
             refine ⟨.child 1 (compileTypeFuel signature
@@ -626,7 +630,9 @@ theorem compilationFragmentStepCorrect_choice_leaf
                 hFuel (typeCompilationFuel_sufficient right)
               exact ⟨hLocalEnvironment, rfl, rfl, hChoiceFuture.2, by rw [hStable]⟩
             · exact TypeCompilationRelation.choice_right left right right _
-                (compileType_initial_relation signature right)
+                (compileType_initial_relation_of_canonical signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.2))
       · rintro ⟨target, hEdge, hTarget⟩
         have hEdge' : AutomatonFragment.HasResolvedEdge
             (buildChoiceAutomaton signature
@@ -663,7 +669,10 @@ theorem compilationFragmentStepCorrect_choice_leaf
           cases hTarget with
           | choice_left _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature left)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.1))
               cases hResidual
               exact ⟨TypeTransition.choice_left env left right hWellFormed,
                 TypeOffers.choice_left env left right hWellFormed⟩
@@ -684,14 +693,18 @@ theorem compilationFragmentStepCorrect_choice_leaf
           cases hTarget with
           | choice_right _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature right)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.2))
               cases hResidual
               exact ⟨TypeTransition.choice_right env left right hWellFormed,
                 TypeOffers.choice_right env left right hWellFormed⟩
   | choice_left _ _ childResidual childState hChildRelated =>
       constructor
       · intro hStep
-        rcases (hLeft.scopedStep (residual' := residual') (label := label)
+        rcases (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
+            (label := label)
             (offers := { current := current, future := future })
             hChildRelated hLocalEnvironment hAvoidsLeft).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
@@ -735,14 +748,16 @@ theorem compilationFragmentStepCorrect_choice_leaf
             TypeLabel.silent TypeLabel.silent hEdge'
         cases hTarget with
         | choice_left _ _ _ _ hChildTarget =>
-            exact (hLeft.scopedStep (residual' := residual') (label := label)
+            exact (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
+              (label := label)
               (offers := { current := current, future := future })
               hChildRelated hLocalEnvironment hAvoidsLeft).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
   | choice_right _ _ childResidual childState hChildRelated =>
       constructor
       · intro hStep
-        rcases (hRight.scopedStep (residual' := residual') (label := label)
+        rcases (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
+            (label := label)
             (offers := { current := current, future := future })
             hChildRelated hLocalEnvironment hAvoidsRight).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
@@ -789,7 +804,8 @@ theorem compilationFragmentStepCorrect_choice_leaf
             TypeLabel.silent TypeLabel.silent hEdge'
         cases hTarget with
         | choice_right _ _ _ _ hChildTarget =>
-            exact (hRight.scopedStep (residual' := residual') (label := label)
+            exact (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
+              (label := label)
               (offers := { current := current, future := future })
               hChildRelated hLocalEnvironment hAvoidsRight).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
@@ -800,8 +816,10 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
     (hRight : CompilationProofBundle signature right) :
     CompilationScopedFragmentStepCorrect signature
       (.fairChoice bid left right) := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
-    hAvoids
+  intro hCanonical residual residual' state env label offers hRelated
+    hLocalEnvironment hAvoids
+  have hLeftCanonical : left.EntryCanonical ∧ right.EntryCanonical := by
+    simpa only [PactType.EntryCanonical] using hCanonical
   have hAvoidsLeft : env.AvoidsInterface left.ParallelInterfaces :=
     hAvoids.mono (by simp [PactType.ParallelInterfaces])
   have hAvoidsRight : env.AvoidsInterface right.ParallelInterfaces :=
@@ -809,7 +827,7 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
   rcases offers with ⟨current, future⟩
   have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
   have hFairFuture := fairChoiceFutureCorrect_of_compilation signature bid left
-    right hLeft.future hRight.future
+    right hLeft.future hRight.future hLeftCanonical.1 hLeftCanonical.2
   have hFragmentEq :
       compileTypeFuel signature
           (typeCompilationFuel (.fairChoice bid left right))
@@ -856,7 +874,9 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
                 hFuel (typeCompilationFuel_sufficient left)
               exact ⟨hLocalEnvironment, rfl, rfl, hFairFuture.1, by rw [hStable]⟩
             · exact TypeCompilationRelation.fair_left bid left right left _
-                (compileType_initial_relation signature left)
+                (compileType_initial_relation_of_canonical signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.1))
         | fair_right =>
             obtain ⟨rfl, rfl⟩ := TypeOffers.fair_right_fields hOffers
             refine ⟨.child 1 (compileTypeFuel signature
@@ -888,7 +908,9 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
                 hFuel (typeCompilationFuel_sufficient right)
               exact ⟨hLocalEnvironment, rfl, rfl, hFairFuture.2, by rw [hStable]⟩
             · exact TypeCompilationRelation.fair_right bid left right right _
-                (compileType_initial_relation signature right)
+                (compileType_initial_relation_of_canonical signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.2))
       · rintro ⟨target, hEdge, hTarget⟩
         have hEdge' : AutomatonFragment.HasResolvedEdge
             (buildChoiceAutomaton signature
@@ -924,7 +946,10 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
           cases hTarget with
           | fair_left _ _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature left)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.1))
               cases hResidual
               exact ⟨TypeTransition.fair_left env bid left right hWellFormed,
                 TypeOffers.fair_left env bid left right hWellFormed⟩
@@ -945,14 +970,18 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
           cases hTarget with
           | fair_right _ _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature right)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical.2))
               cases hResidual
               exact ⟨TypeTransition.fair_right env bid left right hWellFormed,
                 TypeOffers.fair_right env bid left right hWellFormed⟩
   | fair_left _ _ _ childResidual childState hChildRelated =>
       constructor
       · intro hStep
-        rcases (hLeft.scopedStep (residual' := residual') (label := label)
+        rcases (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
+            (label := label)
             (offers := { current := current, future := future })
             hChildRelated hLocalEnvironment hAvoidsLeft).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
@@ -998,14 +1027,16 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
             (TypeLabel.fair bid true) (TypeLabel.fair bid false) hEdge'
         cases hTarget with
         | fair_left _ _ _ _ _ hChildTarget =>
-            exact (hLeft.scopedStep (residual' := residual') (label := label)
+            exact (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
+              (label := label)
               (offers := { current := current, future := future })
               hChildRelated hLocalEnvironment hAvoidsLeft).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩
   | fair_right _ _ _ childResidual childState hChildRelated =>
       constructor
       · intro hStep
-        rcases (hRight.scopedStep (residual' := residual') (label := label)
+        rcases (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
+            (label := label)
             (offers := { current := current, future := future })
             hChildRelated hLocalEnvironment hAvoidsRight).mp hStep with
           ⟨childTarget, hChildEdge, hChildTarget⟩
@@ -1054,7 +1085,8 @@ theorem compilationFragmentStepCorrect_fairChoice_leaf
             (TypeLabel.fair bid true) (TypeLabel.fair bid false) hEdge'
         cases hTarget with
         | fair_right _ _ _ _ _ hChildTarget =>
-            exact (hRight.scopedStep (residual' := residual') (label := label)
+            exact (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
+              (label := label)
               (offers := { current := current, future := future })
               hChildRelated hLocalEnvironment hAvoidsRight).mpr
               ⟨childTarget, hChildEdge, hChildTarget⟩

@@ -37,6 +37,28 @@ theorem compileType_sequence_initial_eq
   simp [fragment, buildSequenceAutomaton, finishAutomatonFragment,
     childState, hInitial]
 
+/-- Outgoing edges at a tagged left sequence state are exactly the redirected
+images of the left child's own outgoing edges, plus two narrow bridge
+families the redirect alone cannot produce: — only at the left entry, and
+only when that entry is itself accepting (provably only `left = .skip`, see
+`sequenceEntryBridgeEdges`) — one `skip_seq` edge per local environment
+straight into `right`'s entry; and — at every `left.accepting ∪
+left.completing` state — one bookkeeping-only `.future` edge into `right`'s
+entry (redirect only ever rewrites *in*-edges, so a state's own route into
+`right` for `computeFuture` purposes would otherwise depend on it happening to
+carry a self-referencing edge of its own; see `sequenceCompletingBridgeEdges`).
+
+This replaces the old three-way disjunction (child edge / silent skip-bridge /
+`.future` bridge) with a structurally identical one, now derived rather than
+built in directly: a left edge landing on a deleted (accepting, but not the
+entry) state is *fused* with the administrative step and now lands on
+`right`'s entry directly, carrying its own label rather than a fresh silent
+one, and the `.future` bridge for an ordinary `.future`-labeled edge is
+subsumed by redirecting the `FutureSpec.at` target — the dedicated
+`sequenceCompletingBridgeEdges` family only remains needed for the closure
+`computeFuture` performs independently of any literal outgoing edge.  The
+right child contributes nothing here because `childPendingEdges 1 right`
+sources are all `1`-tagged. -/
 theorem buildSequenceAutomaton_outgoing_left
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
@@ -44,25 +66,17 @@ theorem buildSequenceAutomaton_outgoing_left
     edge ∈ sequence.edges ∧ edge.source = .child 0 state ↔
       (∃ childEdge ∈ left.edges,
         childEdge.source = state ∧
-        edge =
-          { source := childState 0 childEdge.source
-            environment := childEdge.environment
-            label := childEdge.label
-            current := childEdge.current
-            future := match childEdge.label with
-              | .future => childFutureSpec 0 childEdge.future
-              | _ => .at (childState 0 childEdge.target) childEdge.current
-            target := childState 0 childEdge.target }) ∨
-      (state ∈ left.skipping ∧
+        edge = sequenceLeftEdge left right childEdge) ∨
+      (state = left.initial ∧ left.initial ∈ left.accepting ∧
         ∃ environment ∈ signature.localEnvironments,
           edge =
-            { source := childState 0 state
+            { source := childState 0 left.initial
               environment := environment
               label := .visible TypeLabel.silent
               current := ∅
               future := .at (childState 1 right.initial) ∅
               target := childState 1 right.initial }) ∨
-      (state ∈ left.completing ∧
+      ((state ∈ left.accepting ∨ state ∈ left.completing) ∧
         edge =
           { source := childState 0 state
             environment := .empty
@@ -74,59 +88,60 @@ theorem buildSequenceAutomaton_outgoing_left
   constructor
   · rintro ⟨hEdge, hSource⟩
     simp only [buildSequenceAutomaton, finishAutomatonFragment,
-      childPendingEdges, Finset.mem_union, Finset.mem_image,
-      Finset.mem_biUnion] at hEdge
-    rcases hEdge with ((hLeft | hRight) | hBridge) | hFutureBridge
+      childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
+    rcases hEdge with ((hLeft | hRight) | hEntryBridge) | hCompletingBridge
     · rcases hLeft with ⟨childEdge, hChildEdge, hEdge⟩
       have hChildSource := hSource
       rw [← hEdge] at hChildSource
       have hChildSource' : childEdge.source = state := by
-        simpa [childState] using hChildSource
-      left
-      exact ⟨childEdge, hChildEdge, hChildSource', hEdge.symm⟩
+        simpa [sequenceLeftEdge, childState] using hChildSource
+      exact Or.inl ⟨childEdge, hChildEdge, hChildSource', hEdge.symm⟩
     · rcases hRight with ⟨childEdge, _, hEdge⟩
       rw [← hEdge] at hSource
       simp [childPendingEdge, childState] at hSource
-    · rcases hBridge with ⟨bridgeState, hSkipping, environment,
-        hEnvironment, hEdge⟩
+    · simp only [sequenceEntryBridgeEdges] at hEntryBridge
+      split at hEntryBridge
+      · rename_i hAccepting
+        simp only [Finset.mem_image] at hEntryBridge
+        obtain ⟨environment, hEnvironment, hEdge⟩ := hEntryBridge
+        have hBridgeSource := hSource
+        rw [← hEdge] at hBridgeSource
+        have hState : state = left.initial := by
+          simpa [childState] using hBridgeSource.symm
+        exact Or.inr (Or.inl ⟨hState, hAccepting, environment, hEnvironment,
+          hEdge.symm⟩)
+      · simp at hEntryBridge
+    · simp only [sequenceCompletingBridgeEdges, Finset.mem_union,
+        Finset.mem_image] at hCompletingBridge
+      obtain ⟨completingState, hCompletingState, hEdge⟩ := hCompletingBridge
       have hBridgeSource := hSource
       rw [← hEdge] at hBridgeSource
-      have hState : bridgeState = state := by
-        simpa [childState] using hBridgeSource
-      subst bridgeState
-      right
-      left
-      exact ⟨hSkipping, environment, hEnvironment, hEdge.symm⟩
-    · rcases hFutureBridge with ⟨bridgeState, hCompleting, hEdge⟩
-      have hBridgeSource := hSource
-      rw [← hEdge] at hBridgeSource
-      have hState : bridgeState = state := by
-        simpa [childState] using hBridgeSource
-      subst bridgeState
-      right
-      right
-      exact ⟨hCompleting, hEdge.symm⟩
-  · rintro (hLeft | hBridge | hFutureBridge)
-    · rcases hLeft with ⟨childEdge, hChildEdge, hChildSource, rfl⟩
-      constructor
+      have hState : state = completingState := by
+        simpa [childState] using hBridgeSource.symm
+      subst hState
+      exact Or.inr (Or.inr ⟨hCompletingState, hEdge.symm⟩)
+  · rintro (⟨childEdge, hChildEdge, hChildSource, rfl⟩ |
+      ⟨rfl, hAccepting, environment, hEnvironment, rfl⟩ |
+      ⟨hCompleting, rfl⟩)
+    · constructor
       · simp only [buildSequenceAutomaton, finishAutomatonFragment,
           Finset.mem_union, Finset.mem_image]
         exact Or.inl (Or.inl (Or.inl ⟨childEdge, hChildEdge, rfl⟩))
-      · simp [childState, hChildSource]
-    · rcases hBridge with ⟨hSkipping, environment, hEnvironment, rfl⟩
-      constructor
+      · simp [sequenceLeftEdge, childState, hChildSource]
+    · constructor
       · simp only [buildSequenceAutomaton, finishAutomatonFragment,
-          Finset.mem_union, Finset.mem_biUnion, Finset.mem_image]
-        left
-        right
-        exact ⟨state, hSkipping, environment, hEnvironment, rfl⟩
+          Finset.mem_union]
+        refine Or.inl (Or.inr ?_)
+        simp only [sequenceEntryBridgeEdges]
+        rw [if_pos hAccepting]
+        exact Finset.mem_image_of_mem _ hEnvironment
       · rfl
-    · rcases hFutureBridge with ⟨hCompleting, rfl⟩
-      constructor
+    · constructor
       · simp only [buildSequenceAutomaton, finishAutomatonFragment,
-          Finset.mem_union, Finset.mem_image]
-        right
-        exact ⟨state, hCompleting, rfl⟩
+          Finset.mem_union]
+        refine Or.inr ?_
+        simp only [sequenceCompletingBridgeEdges]
+        exact Finset.mem_image_of_mem _ (Finset.mem_union.mpr hCompleting)
       · rfl
 
 private def sequenceExecutionEdge
@@ -184,7 +199,6 @@ def sequenceExecutionFragment
   { states := (sequenceExecutionAutomaton child).states
     initial := child.initial
     accepting := child.accepting
-    skipping := child.skipping
     completing := child.completing
     edges := (sequenceExecutionAutomaton child).edges }
 
@@ -262,6 +276,71 @@ theorem sequenceExecutionFragment_futureTargetsInStates
       exact Finset.mem_union_right _
         (Finset.mem_image.mpr ⟨childEdge, hChildEdge, rfl⟩)
 
+/-- A redirected left edge is already in execution-normal form.  This is
+Invariant 1 doing the work: `sequenceLeftEdge` copies `label`/`current`
+verbatim and sets `future := .at target current` for non-`.future` labels —
+which is precisely what `sequenceExecutionEdge` computes — while `.future`
+edges keep their (redirected) symbolic spec, which it leaves alone. -/
+@[simp] private theorem sequenceExecutionEdge_sequenceLeftEdge
+    (left right : AutomatonFragment) (edge : PendingAutomatonEdge) :
+    sequenceExecutionEdge (sequenceLeftEdge left right edge) =
+      sequenceLeftEdge left right edge := by
+  cases hLabel : edge.label <;>
+    simp [sequenceExecutionEdge, sequenceLeftEdge, hLabel]
+
+/-- The left component of a sequence depends on the right fragment only
+through its entry state, and the execution view preserves that entry. -/
+private theorem sequenceLeftEdge_sequenceExecutionFragment
+    (left right : AutomatonFragment) (edge : PendingAutomatonEdge) :
+    sequenceLeftEdge left (sequenceExecutionFragment right) edge =
+      sequenceLeftEdge left right edge := by
+  cases hLabel : edge.label <;>
+    simp [sequenceLeftEdge, sequenceRedirect, sequenceExecutionFragment,
+      hLabel]
+
+/-- The entry bridge likewise only depends on `right` through its entry
+state, so it is unaffected by taking the execution view. -/
+private theorem sequenceEntryBridgeEdges_sequenceExecutionFragment
+    (signature : TypeAlphabet) (left right : AutomatonFragment) :
+    sequenceEntryBridgeEdges signature left (sequenceExecutionFragment right) =
+      sequenceEntryBridgeEdges signature left right := by
+  simp [sequenceEntryBridgeEdges, sequenceExecutionFragment]
+
+/-- An entry bridge edge is already in execution-normal form: it carries a
+`.visible` label with `future := .at target ∅`, exactly what
+`sequenceExecutionEdge` computes. -/
+@[simp] private theorem sequenceExecutionEdge_of_mem_sequenceEntryBridgeEdges
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    {edge : PendingAutomatonEdge}
+    (hEdge : edge ∈ sequenceEntryBridgeEdges signature left right) :
+    sequenceExecutionEdge edge = edge := by
+  simp only [sequenceEntryBridgeEdges] at hEdge
+  split at hEdge
+  · simp only [Finset.mem_image] at hEdge
+    obtain ⟨environment, _, rfl⟩ := hEdge
+    simp [sequenceExecutionEdge]
+  · simp at hEdge
+
+/-- The completing bridge likewise only depends on `right` through its entry
+state, so it is unaffected by taking the execution view. -/
+private theorem sequenceCompletingBridgeEdges_sequenceExecutionFragment
+    (left right : AutomatonFragment) :
+    sequenceCompletingBridgeEdges left (sequenceExecutionFragment right) =
+      sequenceCompletingBridgeEdges left right := by
+  simp [sequenceCompletingBridgeEdges, sequenceExecutionFragment]
+
+/-- A completing bridge edge is already in execution-normal form: it carries
+a `.future` label, so `sequenceExecutionEdge` leaves its `future` field (and
+every other field) untouched. -/
+@[simp] private theorem
+    sequenceExecutionEdge_of_mem_sequenceCompletingBridgeEdges
+    (left right : AutomatonFragment) {edge : PendingAutomatonEdge}
+    (hEdge : edge ∈ sequenceCompletingBridgeEdges left right) :
+    sequenceExecutionEdge edge = edge := by
+  simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hEdge
+  obtain ⟨state, _, rfl⟩ := hEdge
+  simp [sequenceExecutionEdge]
+
 theorem sequenceExecution_buildSequence_edges
     (signature : TypeAlphabet) (left right : AutomatonFragment) :
     (sequenceExecutionAutomaton
@@ -270,11 +349,51 @@ theorem sequenceExecution_buildSequence_edges
         (sequenceExecutionFragment right)).edges := by
   classical
   ext edge
-  simp [sequenceExecutionAutomaton, sequenceExecutionFragment,
-    buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
-    childPendingEdge, childFutureSpec, childStates, childState,
-    sequenceExecutionEdge, Finset.image_union, Function.comp_def]
-  grind
+  simp only [sequenceExecutionAutomaton, buildSequenceAutomaton,
+    finishAutomatonFragment, childPendingEdges, Finset.mem_image,
+    Finset.mem_union]
+  constructor
+  · rintro ⟨raw, (((⟨rawChild, hRawChild, rfl⟩ | ⟨rawChild, hRawChild, rfl⟩) |
+      hEntryRaw) | hCompletingRaw), rfl⟩
+    · exact Or.inl (Or.inl (Or.inl ⟨rawChild, hRawChild, by
+        rw [sequenceExecutionEdge_sequenceLeftEdge,
+          sequenceLeftEdge_sequenceExecutionFragment]⟩))
+    · refine Or.inl (Or.inl (Or.inr ⟨sequenceExecutionEdge rawChild, ?_,
+        (sequenceExecutionEdge_childPendingEdge 1 rawChild).symm⟩))
+      simp only [sequenceExecutionFragment, sequenceExecutionAutomaton,
+        Finset.mem_image]
+      exact ⟨rawChild, hRawChild, rfl⟩
+    · refine Or.inl (Or.inr ?_)
+      rw [sequenceEntryBridgeEdges_sequenceExecutionFragment,
+        sequenceExecutionEdge_of_mem_sequenceEntryBridgeEdges
+          signature left right hEntryRaw]
+      exact hEntryRaw
+    · refine Or.inr ?_
+      rw [sequenceCompletingBridgeEdges_sequenceExecutionFragment,
+        sequenceExecutionEdge_of_mem_sequenceCompletingBridgeEdges
+          left right hCompletingRaw]
+      exact hCompletingRaw
+  · rintro (((⟨rawChild, hRawChild, rfl⟩ | ⟨e, hE, rfl⟩) | hEntryEdge) |
+      hCompletingEdge)
+    · exact ⟨sequenceLeftEdge left right rawChild,
+        Or.inl (Or.inl (Or.inl ⟨rawChild, hRawChild, rfl⟩)), by
+          rw [sequenceExecutionEdge_sequenceLeftEdge,
+            sequenceLeftEdge_sequenceExecutionFragment]⟩
+    · simp only [sequenceExecutionFragment, sequenceExecutionAutomaton,
+        Finset.mem_image] at hE
+      obtain ⟨rawChild, hRawChild, rfl⟩ := hE
+      exact ⟨childPendingEdge 1 rawChild,
+        Or.inl (Or.inl (Or.inr ⟨rawChild, hRawChild, rfl⟩)),
+        sequenceExecutionEdge_childPendingEdge 1 rawChild⟩
+    · rw [sequenceEntryBridgeEdges_sequenceExecutionFragment] at hEntryEdge
+      exact ⟨edge, Or.inl (Or.inr hEntryEdge),
+        sequenceExecutionEdge_of_mem_sequenceEntryBridgeEdges
+          signature left right hEntryEdge⟩
+    · rw [sequenceCompletingBridgeEdges_sequenceExecutionFragment]
+        at hCompletingEdge
+      exact ⟨edge, Or.inr hCompletingEdge,
+        sequenceExecutionEdge_of_mem_sequenceCompletingBridgeEdges
+          left right hCompletingEdge⟩
 
 /-- Executing an installed recursion is edge-for-edge the recursion
 constructor applied to the body's execution view after its still-symbolic
@@ -1018,24 +1137,24 @@ theorem sequenceExecution_taggedChild_computeFuture
 theorem taggedCompletionWitness_iff
     (parent child : AutomatonFragment) (index : Nat)
     (reached : Finset TypeAutomatonState)
-    (hSkipping : ∀ state,
-      childState index state ∈ parent.skipping ↔ state ∈ child.skipping)
+    (hAccepting : ∀ state,
+      childState index state ∈ parent.accepting ↔ state ∈ child.accepting)
     (hCompleting : ∀ state,
       childState index state ∈ parent.completing ↔
         state ∈ child.completing) :
     (∃ completed ∈ reached.image (childState index),
-        completed ∈ parent.skipping ∨ completed ∈ parent.completing) ↔
+        completed ∈ parent.accepting ∨ completed ∈ parent.completing) ↔
       ∃ completed ∈ reached,
-        completed ∈ child.skipping ∨ completed ∈ child.completing := by
+        completed ∈ child.accepting ∨ completed ∈ child.completing := by
   constructor
   · rintro ⟨tagged, hTagged, hCompleted⟩
     rcases Finset.mem_image.mp hTagged with ⟨completed, hReached, rfl⟩
     exact ⟨completed, hReached,
-      hCompleted.imp (hSkipping completed).mp (hCompleting completed).mp⟩
+      hCompleted.imp (hAccepting completed).mp (hCompleting completed).mp⟩
   · rintro ⟨completed, hReached, hCompleted⟩
     exact ⟨childState index completed,
       Finset.mem_image.mpr ⟨completed, hReached, rfl⟩,
-      hCompleted.imp (hSkipping completed).mpr (hCompleting completed).mpr⟩
+      hCompleted.imp (hAccepting completed).mpr (hCompleting completed).mpr⟩
 
 private theorem sequenceExecution_root_offersAt_eq
     (fragment : AutomatonFragment)
@@ -1334,22 +1453,22 @@ theorem sequenceExecution_buildSelectedConjunctiveOffer_root_shape
     rcases hResolved with ⟨environment, _, rfl⟩
     exact ⟨by simp, ∅, rfl⟩
 
-theorem buildExclusiveOffer_child0_skipping_iff
+theorem buildExclusiveOffer_child0_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) :
     childState 0 state ∈
         (buildExclusiveOfferAutomaton signature branches elseAutomaton
-          branchAutomata).skipping ↔
-      state ∈ elseAutomaton.skipping := by
-  have hNotIndexed := child_zero_not_mem_indexedFragmentSkipping
+          branchAutomata).accepting ↔
+      state ∈ elseAutomaton.accepting := by
+  have hNotIndexed := child_zero_not_mem_indexedFragmentAccepting
     branchAutomata state
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union]
-  have hChild : childState 0 state ∈ childSkipping 0 elseAutomaton ↔
-      state ∈ elseAutomaton.skipping := by
-    simp [childSkipping, childState]
+  have hChild : childState 0 state ∈ childAccepting 0 elseAutomaton ↔
+      state ∈ elseAutomaton.accepting := by
+    simp [childAccepting, childState]
   rw [hChild]
   simp [hNotIndexed]
 
@@ -1378,19 +1497,19 @@ theorem buildExclusiveOffer_child0_completing_iff
   rw [hChild]
   simp [hNotHeader, hNotIndexed]
 
-theorem buildExclusiveOffer_root_not_skipping
+theorem buildExclusiveOffer_root_not_accepting
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment)) :
     (.root : TypeAutomatonState) ∉
       (buildExclusiveOfferAutomaton signature branches elseAutomaton
-        branchAutomata).skipping := by
-  have hNotIndexed := root_not_mem_indexedFragmentSkipping branchAutomata
+        branchAutomata).accepting := by
+  have hNotIndexed := root_not_mem_indexedFragmentAccepting branchAutomata
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union, not_or]
-  exact ⟨by simp [childSkipping, childState], hNotIndexed⟩
+  exact ⟨by simp [childAccepting, childState], hNotIndexed⟩
 
-theorem buildExclusiveOffer_branch_skipping_iff
+theorem buildExclusiveOffer_branch_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
@@ -1399,14 +1518,14 @@ theorem buildExclusiveOffer_branch_skipping_iff
     (state : TypeAutomatonState) :
     childState (index + 1) state ∈
         (buildExclusiveOfferAutomaton signature branches elseAutomaton
-          branchAutomata).skipping ↔
-      state ∈ entry.2.skipping := by
+          branchAutomata).accepting ↔
+      state ∈ entry.2.accepting := by
   have hNotElse : childState (index + 1) state ∉
-      childSkipping 0 elseAutomaton := by
-    simp [childSkipping, childState]
+      childAccepting 0 elseAutomaton := by
+    simp [childAccepting, childState]
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union, hNotElse, false_or]
-  exact childState_mem_indexedFragmentSkipping_iff branchAutomata index
+  exact childState_mem_indexedFragmentAccepting_iff branchAutomata index
     entry hEntry state
 
 theorem buildExclusiveOffer_branch_completing_iff
@@ -1434,27 +1553,27 @@ theorem buildExclusiveOffer_branch_completing_iff
   exact childState_mem_indexedFragmentCompleting_iff branchAutomata index
     entry hEntry state
 
-private theorem buildConjunctiveOffer_child0_skipping_iff
+private theorem buildConjunctiveOffer_child0_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton conjunction : AutomatonFragment)
     (state : TypeAutomatonState) :
     childState 0 state ∈
         (buildConjunctiveOfferAutomaton signature branches elseAutomaton
-          conjunction).skipping ↔
-      state ∈ conjunction.skipping := by
+          conjunction).accepting ↔
+      state ∈ conjunction.accepting := by
   simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-    childSkipping, childState]
+    childAccepting, childState]
 
-private theorem buildConjunctiveOffer_child1_skipping_iff
+private theorem buildConjunctiveOffer_child1_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton conjunction : AutomatonFragment)
     (state : TypeAutomatonState) :
     childState 1 state ∈
         (buildConjunctiveOfferAutomaton signature branches elseAutomaton
-          conjunction).skipping ↔
-      state ∈ elseAutomaton.skipping := by
+          conjunction).accepting ↔
+      state ∈ elseAutomaton.accepting := by
   simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-    childSkipping, childState]
+    childAccepting, childState]
 
 theorem buildConjunctiveOffer_child0_completing_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
@@ -1495,14 +1614,14 @@ private theorem buildConjunctiveOffer_child1_completing_iff
     Finset.mem_union, hNotHeader, hNotConjunction, false_or]
   simp [childCompleting, childState]
 
-private theorem buildConjunctiveOffer_root_not_skipping
+private theorem buildConjunctiveOffer_root_not_accepting
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton conjunction : AutomatonFragment) :
     (.root : TypeAutomatonState) ∉
       (buildConjunctiveOfferAutomaton signature branches elseAutomaton
-        conjunction).skipping := by
+        conjunction).accepting := by
   simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-    childSkipping, childState]
+    childAccepting, childState]
 
 private theorem sequenceExecution_buildChoice_states_left_subset
     (signature : TypeAlphabet) (left right : AutomatonFragment)
@@ -1978,9 +2097,9 @@ theorem buildChoiceAutomaton_completionWitness_left_iff
     let parent := buildChoiceAutomaton signature left right
       selectionLeft selectionRight
     (∃ completed ∈ reachable.image (.child 0),
-        completed ∈ parent.skipping ∨ completed ∈ parent.completing) ↔
+        completed ∈ parent.accepting ∨ completed ∈ parent.completing) ↔
       ∃ completed ∈ reachable,
-        completed ∈ left.skipping ∨ completed ∈ left.completing := by
+        completed ∈ left.accepting ∨ completed ∈ left.completing := by
   classical
   constructor
   · rintro ⟨tagged, hTagged, hCompleted⟩
@@ -1990,14 +2109,14 @@ theorem buildChoiceAutomaton_completionWitness_left_iff
     refine ⟨completed, hReachable, ?_⟩
     by_cases hInitial : left.initial ∈ left.completing ∨
         right.initial ∈ right.completing <;>
-      simpa [buildChoiceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildChoiceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hInitial] using hCompleted
   · rintro ⟨completed, hReachable, hCompleted⟩
     refine ⟨.child 0 completed, Finset.mem_image.mpr
       ⟨completed, hReachable, rfl⟩, ?_⟩
     by_cases hInitial : left.initial ∈ left.completing ∨
         right.initial ∈ right.completing <;>
-      simpa [buildChoiceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildChoiceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hInitial] using hCompleted
 
 theorem buildChoiceAutomaton_completionWitness_right_iff
@@ -2007,9 +2126,9 @@ theorem buildChoiceAutomaton_completionWitness_right_iff
     let parent := buildChoiceAutomaton signature left right
       selectionLeft selectionRight
     (∃ completed ∈ reachable.image (.child 1),
-        completed ∈ parent.skipping ∨ completed ∈ parent.completing) ↔
+        completed ∈ parent.accepting ∨ completed ∈ parent.completing) ↔
       ∃ completed ∈ reachable,
-        completed ∈ right.skipping ∨ completed ∈ right.completing := by
+        completed ∈ right.accepting ∨ completed ∈ right.completing := by
   classical
   constructor
   · rintro ⟨tagged, hTagged, hCompleted⟩
@@ -2019,14 +2138,14 @@ theorem buildChoiceAutomaton_completionWitness_right_iff
     refine ⟨completed, hReachable, ?_⟩
     by_cases hInitial : left.initial ∈ left.completing ∨
         right.initial ∈ right.completing <;>
-      simpa [buildChoiceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildChoiceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hInitial] using hCompleted
   · rintro ⟨completed, hReachable, hCompleted⟩
     refine ⟨.child 1 completed, Finset.mem_image.mpr
       ⟨completed, hReachable, rfl⟩, ?_⟩
     by_cases hInitial : left.initial ∈ left.completing ∨
         right.initial ∈ right.completing <;>
-      simpa [buildChoiceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildChoiceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hInitial] using hCompleted
 
 theorem sequenceExecution_buildChoice_completionWitness_root_iff
@@ -2044,12 +2163,12 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
     let leftExecution := sequenceExecutionAutomaton left
     let rightExecution := sequenceExecutionAutomaton right
     ((∃ completed ∈ parent.futureReachable .root,
-        completed ∈ parentFragment.skipping ∨
+        completed ∈ parentFragment.accepting ∨
           completed ∈ parentFragment.completing) ↔
       (∃ completed ∈ leftExecution.futureReachable left.initial,
-        completed ∈ left.skipping ∨ completed ∈ left.completing) ∨
+        completed ∈ left.accepting ∨ completed ∈ left.completing) ∨
       (∃ completed ∈ rightExecution.futureReachable right.initial,
-        completed ∈ right.skipping ∨ completed ∈ right.completing)) := by
+        completed ∈ right.accepting ∨ completed ∈ right.completing)) := by
   classical
   let parentFragment := buildChoiceAutomaton signature left right
     selectionLeft selectionRight
@@ -2057,7 +2176,7 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
   let leftExecution := sequenceExecutionAutomaton left
   let rightExecution := sequenceExecutionAutomaton right
   change ((∃ completed ∈ parent.futureReachable .root,
-      completed ∈ parentFragment.skipping ∨
+      completed ∈ parentFragment.accepting ∨
         completed ∈ parentFragment.completing) ↔ _)
   rw [sequenceExecution_buildChoice_futureReachable_root signature left right
     selectionLeft selectionRight hSelectionLeft hSelectionRight hLeftTargets
@@ -2079,7 +2198,7 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
             right.initial ∈ right.completing
         · exact hInitial
         · simp [parentFragment, buildChoiceAutomaton,
-            finishAutomatonFragment, childCompleting, childSkipping,
+            finishAutomatonFragment, childCompleting, childAccepting,
             childState, hInitial] at hCompleted
       rcases hInitial with hLeft | hRight
       · left
@@ -2091,14 +2210,14 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
       by_cases hInitial : left.initial ∈ left.completing ∨
           right.initial ∈ right.completing <;>
         simpa [parentFragment, buildChoiceAutomaton,
-          finishAutomatonFragment, childCompleting, childSkipping,
+          finishAutomatonFragment, childCompleting, childAccepting,
           childState, hInitial] using hCompleted
     · right
       refine ⟨child, hChild, ?_⟩
       by_cases hInitial : left.initial ∈ left.completing ∨
           right.initial ∈ right.completing <;>
         simpa [parentFragment, buildChoiceAutomaton,
-          finishAutomatonFragment, childCompleting, childSkipping,
+          finishAutomatonFragment, childCompleting, childAccepting,
           childState, hInitial] using hCompleted
   · rintro (hLeft | hRight)
     · rcases hLeft with ⟨child, hChild, hCompleted⟩
@@ -2109,7 +2228,7 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
       · by_cases hInitial : left.initial ∈ left.completing ∨
             right.initial ∈ right.completing <;>
           simpa [parentFragment, buildChoiceAutomaton,
-            finishAutomatonFragment, childCompleting, childSkipping,
+            finishAutomatonFragment, childCompleting, childAccepting,
             childState, hInitial] using hCompleted
     · rcases hRight with ⟨child, hChild, hCompleted⟩
       refine ⟨.child 1 child, ?_, ?_⟩
@@ -2119,12 +2238,17 @@ theorem sequenceExecution_buildChoice_completionWitness_root_iff
       · by_cases hInitial : left.initial ∈ left.completing ∨
             right.initial ∈ right.completing <;>
           simpa [parentFragment, buildChoiceAutomaton,
-            finishAutomatonFragment, childCompleting, childSkipping,
+            finishAutomatonFragment, childCompleting, childAccepting,
             childState, hInitial] using hCompleted
 
-/-- Immediate same-cycle references from a tagged sequence-left state are the
-tagged execution-child references, plus the right entry exactly when the
-state is skipping or optimistically completing. -/
+/-- References transfer through `sequenceRedirect`: a raw reference from
+`state`'s own execution-normalized edges lands wherever the redirect sends it
+(itself, if kept; `right`'s entry, if the referenced state is deleted), and
+the two bridge families each contribute the same `right`-entry singleton
+exactly when `state` is itself accepting or completing — matching Invariant 1
+(redirect touches only targets, never the fields `referencedStates` reads to
+decide tock-ness) and Invariant 2 (a redirected reference is always a real
+target). -/
 private theorem buildSequenceAutomaton_referencedStates_left
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState) :
@@ -2133,8 +2257,8 @@ private theorem buildSequenceAutomaton_referencedStates_left
       { states := sequence.states, edges := sequence.edges }
     parent.referencedStates (.child 0 state) =
       ((sequenceExecutionAutomaton left).referencedStates state).image
-          (.child 0) ∪
-        if state ∈ left.skipping ∨ state ∈ left.completing then
+          (sequenceRedirect left right) ∪
+        if state ∈ left.accepting ∨ state ∈ left.completing then
           {.child 1 right.initial}
         else ∅ := by
   classical
@@ -2142,162 +2266,171 @@ private theorem buildSequenceAutomaton_referencedStates_left
   simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
     Finset.mem_filter, Finset.mem_union, Finset.mem_image]
   simp_rw [buildSequenceAutomaton_outgoing_left signature left right]
-  simp only [sequenceExecutionAutomaton, Finset.mem_image]
   constructor
   · rintro ⟨edge, hEdge, hFuture⟩
-    rcases hEdge with hLeft | hBridge | hFutureBridge
-    · rcases hLeft with
-        ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    rcases hEdge with hLeft | hEntry | hCompleting
+    · obtain ⟨childEdge, hChildEdge, hChildSource, rfl⟩ := hLeft
+      simp only [sequenceLeftEdge_label] at hFuture
       cases hLabel : childEdge.label with
       | future =>
           cases hSpec : childEdge.future with
           | explicit offers =>
-              simp [hLabel, hSpec, childFutureSpec,
+              simp [hLabel, hSpec, sequenceLeftEdge,
                 AutomatonConstructionLabel.semantic, TypeLabel.silent]
                 at hFuture
           | «at» referenced removed =>
-              have hTarget : target = childState 0 referenced := by
-                simpa [hLabel, hSpec, childFutureSpec,
+              have hTarget : target = sequenceRedirect left right referenced := by
+                simpa [hLabel, hSpec, sequenceLeftEdge,
                   AutomatonConstructionLabel.semantic, TypeLabel.silent]
                   using hFuture
               subst target
               left
               refine ⟨referenced, ?_, rfl⟩
-              refine ⟨
-                { source := childEdge.source
-                  environment := childEdge.environment
-                  label := childEdge.label
-                  current := childEdge.current
-                  future := match childEdge.label with
-                    | .future => childEdge.future
-                    | _ => .at childEdge.target childEdge.current
-                  target := childEdge.target }, ⟨?_, ?_⟩, ?_⟩
-              · exact ⟨childEdge, hChildEdge, rfl⟩
+              simp only [sequenceExecutionAutomaton,
+                PendingAutomaton.referencedStates, Finset.mem_biUnion,
+                Finset.mem_filter, Finset.mem_image]
+              refine ⟨sequenceExecutionEdge childEdge,
+                ⟨⟨childEdge, hChildEdge, rfl⟩, ?_⟩, ?_⟩
               · simpa using hChildSource
-              · simp [hLabel, hSpec, AutomatonConstructionLabel.semantic,
-                  TypeLabel.silent]
+              · simp [sequenceExecutionEdge, hLabel, hSpec,
+                  AutomatonConstructionLabel.semantic, TypeLabel.silent]
       | visible label =>
           by_cases hTock : label = TypeLabel.tock
           · subst label
-            simp [hLabel, childFutureSpec,
+            simp [hLabel, sequenceLeftEdge,
               AutomatonConstructionLabel.semantic] at hFuture
-          · have hTarget : target = childState 0 childEdge.target := by
-              simpa [hLabel, childFutureSpec,
+          · have hTarget :
+                target = sequenceRedirect left right childEdge.target := by
+              simpa [hLabel, sequenceLeftEdge,
                 AutomatonConstructionLabel.semantic, hTock]
                 using hFuture
             subst target
             left
             refine ⟨childEdge.target, ?_, rfl⟩
-            refine ⟨
-              { source := childEdge.source
-                environment := childEdge.environment
-                label := childEdge.label
-                current := childEdge.current
-                future := match childEdge.label with
-                  | .future => childEdge.future
-                  | _ => .at childEdge.target childEdge.current
-                target := childEdge.target }, ⟨?_, ?_⟩, ?_⟩
-            · exact ⟨childEdge, hChildEdge, rfl⟩
+            simp only [sequenceExecutionAutomaton,
+              PendingAutomaton.referencedStates, Finset.mem_biUnion,
+              Finset.mem_filter, Finset.mem_image]
+            refine ⟨sequenceExecutionEdge childEdge,
+              ⟨⟨childEdge, hChildEdge, rfl⟩, ?_⟩, ?_⟩
             · simpa using hChildSource
-            · simp [hLabel, AutomatonConstructionLabel.semantic, hTock]
+            · simp [sequenceExecutionEdge, hLabel, hTock,
+                AutomatonConstructionLabel.semantic]
       | «variable» name =>
-          have hTarget : target = childState 0 childEdge.target := by
-            simpa [hLabel, childFutureSpec,
+          have hTarget :
+              target = sequenceRedirect left right childEdge.target := by
+            simpa [hLabel, sequenceLeftEdge,
               AutomatonConstructionLabel.semantic, TypeLabel.silent]
               using hFuture
           subst target
           left
           refine ⟨childEdge.target, ?_, rfl⟩
-          refine ⟨
-            { source := childEdge.source
-              environment := childEdge.environment
-              label := childEdge.label
-              current := childEdge.current
-              future := match childEdge.label with
-                | .future => childEdge.future
-                | _ => .at childEdge.target childEdge.current
-              target := childEdge.target }, ⟨?_, ?_⟩, ?_⟩
-          · exact ⟨childEdge, hChildEdge, rfl⟩
+          simp only [sequenceExecutionAutomaton,
+            PendingAutomaton.referencedStates, Finset.mem_biUnion,
+            Finset.mem_filter, Finset.mem_image]
+          refine ⟨sequenceExecutionEdge childEdge,
+            ⟨⟨childEdge, hChildEdge, rfl⟩, ?_⟩, ?_⟩
           · simpa using hChildSource
-          · simp [hLabel, AutomatonConstructionLabel.semantic,
-              TypeLabel.silent]
-    · rcases hBridge with ⟨hSkipping, environment, hEnvironment, rfl⟩
+          · simp [sequenceExecutionEdge, hLabel,
+              AutomatonConstructionLabel.semantic, TypeLabel.silent]
+    · obtain ⟨hState, hAccepting, environment, hEnvironment, rfl⟩ := hEntry
+      have hTarget : target = childState 1 right.initial := by
+        simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+          using hFuture
+      subst target
+      subst hState
+      right
+      simp [childState, hAccepting]
+    · obtain ⟨hCond, rfl⟩ := hCompleting
       have hTarget : target = childState 1 right.initial := by
         simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
           using hFuture
       subst target
       right
-      simp [childState, hSkipping]
-    · rcases hFutureBridge with ⟨hCompleting, rfl⟩
-      have hTarget : target = childState 1 right.initial := by
-        simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
-          using hFuture
-      subst target
-      right
-      simp [childState, hCompleting]
-  · intro hTarget
-    rcases hTarget with hLeft | hBridge
-    · rcases hLeft with ⟨childTarget, hChildTarget, rfl⟩
-      rcases hChildTarget with ⟨edge, ⟨hEdge, hSource⟩, hFuture⟩
-      rcases hEdge with ⟨childEdge, hChildEdge, hEdge⟩
-      rw [← hEdge] at hSource hFuture
+      simp [childState, hCond]
+  · rintro (⟨referenced, hReferenced, rfl⟩ | hCond)
+    · simp only [sequenceExecutionAutomaton, PendingAutomaton.referencedStates,
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image] at hReferenced
+      obtain ⟨execEdge, ⟨⟨childEdge, hChildEdge, rfl⟩, hSource⟩, hFuture⟩ :=
+        hReferenced
       have hChildSource : childEdge.source = state := by simpa using hSource
       cases hLabel : childEdge.label with
       | future =>
           cases hSpec : childEdge.future with
           | explicit offers =>
-              simp [hLabel, hSpec, AutomatonConstructionLabel.semantic,
-                TypeLabel.silent] at hFuture
-          | «at» referenced removed =>
-              have hChildTarget : childTarget = referenced := by
-                simpa [hLabel, hSpec, AutomatonConstructionLabel.semantic,
-                  TypeLabel.silent] using hFuture
-              subst childTarget
-              refine ⟨_, Or.inl
+              simp [sequenceExecutionEdge, hLabel, hSpec] at hFuture
+          | «at» innerReferenced removed =>
+              have hEq : referenced = innerReferenced := by
+                simpa [sequenceExecutionEdge, hLabel, hSpec,
+                  AutomatonConstructionLabel.semantic, TypeLabel.silent]
+                  using hFuture
+              subst hEq
+              refine ⟨sequenceLeftEdge left right childEdge, Or.inl
                 ⟨childEdge, hChildEdge, hChildSource, rfl⟩, ?_⟩
-              simp [hLabel, hSpec, childFutureSpec,
-                AutomatonConstructionLabel.semantic, TypeLabel.silent,
-                childState]
+              simp [sequenceLeftEdge, hLabel, hSpec,
+                AutomatonConstructionLabel.semantic, TypeLabel.silent]
       | visible label =>
           by_cases hTock : label = TypeLabel.tock
-          · subst label
-            simp [hLabel, AutomatonConstructionLabel.semantic] at hFuture
-          · have hChildTarget : childTarget = childEdge.target := by
-              simpa [hLabel, AutomatonConstructionLabel.semantic, hTock]
-                using hFuture
-            subst childTarget
-            refine ⟨_, Or.inl
+          · exfalso
+            simp [sequenceExecutionEdge, hLabel, hTock,
+              AutomatonConstructionLabel.semantic] at hFuture
+          · have hEq : referenced = childEdge.target := by
+              simpa [sequenceExecutionEdge, hLabel, hTock,
+                AutomatonConstructionLabel.semantic] using hFuture
+            subst hEq
+            refine ⟨sequenceLeftEdge left right childEdge, Or.inl
               ⟨childEdge, hChildEdge, hChildSource, rfl⟩, ?_⟩
-            simp [hLabel, childFutureSpec,
-              AutomatonConstructionLabel.semantic, hTock, childState]
+            simp [sequenceLeftEdge, hLabel, hTock,
+              AutomatonConstructionLabel.semantic]
       | «variable» name =>
-          have hChildTarget : childTarget = childEdge.target := by
-            simpa [hLabel, AutomatonConstructionLabel.semantic,
-              TypeLabel.silent] using hFuture
-          subst childTarget
-          refine ⟨_, Or.inl
+          have hEq : referenced = childEdge.target := by
+            simpa [sequenceExecutionEdge, hLabel,
+              AutomatonConstructionLabel.semantic, TypeLabel.silent]
+              using hFuture
+          subst hEq
+          refine ⟨sequenceLeftEdge left right childEdge, Or.inl
             ⟨childEdge, hChildEdge, hChildSource, rfl⟩, ?_⟩
-          simp [hLabel, childFutureSpec,
-            AutomatonConstructionLabel.semantic, TypeLabel.silent,
-            childState]
-    · by_cases hSkipping : state ∈ left.skipping
-      · simp only [hSkipping, true_or, if_true, Finset.mem_singleton]
-          at hBridge
-        subst target
-        let environment := TypeEnvironment.tock
-        refine ⟨_, Or.inr (Or.inl
-          ⟨hSkipping, environment, ?_, rfl⟩), ?_⟩
-        · simp [environment, TypeAlphabet.localEnvironments]
-        · simp [childState, AutomatonConstructionLabel.semantic,
+          simp [sequenceLeftEdge, hLabel, AutomatonConstructionLabel.semantic,
             TypeLabel.silent]
+    · by_cases hAccepting : state ∈ left.accepting
+      · simp only [hAccepting, true_or, if_true, Finset.mem_singleton]
+          at hCond
+        subst hCond
+        refine ⟨_, Or.inr (Or.inr ⟨Or.inl hAccepting, rfl⟩), ?_⟩
+        simp [childState, AutomatonConstructionLabel.semantic,
+          TypeLabel.silent]
       · by_cases hCompleting : state ∈ left.completing
-        · simp only [hSkipping, false_or, hCompleting, if_true,
-            Finset.mem_singleton] at hBridge
-          subst target
-          refine ⟨_, Or.inr (Or.inr ⟨hCompleting, rfl⟩), ?_⟩
+        · simp only [hAccepting, false_or, hCompleting, if_true,
+            Finset.mem_singleton] at hCond
+          subst hCond
+          refine ⟨_, Or.inr (Or.inr ⟨Or.inr hCompleting, rfl⟩), ?_⟩
           simp [childState, AutomatonConstructionLabel.semantic,
             TypeLabel.silent]
-        · simp [hSkipping, hCompleting] at hBridge
+        · simp [hAccepting, hCompleting] at hCond
+
+/-- Redirecting a `.future` reference never changes whether the offer
+computation reads it: both sides discard the target entirely in the `.at`
+case, so the redirect (which only ever touches that discarded target) is
+invisible to `offersAt`. -/
+private theorem sequenceLeftEdge_offersAt_eq (left right : AutomatonFragment)
+    (edge : PendingAutomatonEdge) (action : BareMessage) :
+    action ∈ (if (sequenceLeftEdge left right edge).label.semantic =
+          TypeLabel.tock then
+        (∅ : Finset BareMessage)
+      else
+        (sequenceLeftEdge left right edge).current ∪
+          match (sequenceLeftEdge left right edge).future with
+          | .explicit offers => offers
+          | .at _ _ => ∅) ↔
+      action ∈ (if (sequenceExecutionEdge edge).label.semantic =
+            TypeLabel.tock then
+          (∅ : Finset BareMessage)
+        else
+          (sequenceExecutionEdge edge).current ∪
+            match (sequenceExecutionEdge edge).future with
+            | .explicit offers => offers
+            | .at _ _ => ∅) := by
+  cases hLabel : edge.label <;> cases hFuture : edge.future <;>
+    simp [sequenceLeftEdge, sequenceExecutionEdge, hLabel, hFuture]
 
 /-- Sequence-left tagging preserves direct offers; the two bridge families
 carry empty current offers. -/
@@ -2315,8 +2448,25 @@ private theorem buildSequenceAutomaton_offersAt_left
     Finset.mem_filter]
   simp_rw [buildSequenceAutomaton_outgoing_left signature left right]
   simp only [sequenceExecutionAutomaton, Finset.mem_image]
-  simp [childFutureSpec, childState]
-  grind
+  constructor
+  · rintro ⟨edge, hEdge, hAction⟩
+    rcases hEdge with hLeft | hEntry | hCompleting
+    · obtain ⟨childEdge, hChildEdge, hChildSource, rfl⟩ := hLeft
+      refine ⟨sequenceExecutionEdge childEdge, ⟨?_, ?_⟩, ?_⟩
+      · exact ⟨childEdge, hChildEdge, rfl⟩
+      · simpa using hChildSource
+      · exact (sequenceLeftEdge_offersAt_eq left right childEdge action).mp
+          hAction
+    · obtain ⟨hState, hAccepting, environment, hEnvironment, rfl⟩ := hEntry
+      simp at hAction
+    · obtain ⟨hCond, rfl⟩ := hCompleting
+      simp at hAction
+  · rintro ⟨execEdge, ⟨⟨childEdge, hChildEdge, rfl⟩, hSource⟩, hAction⟩
+    have hChildSource : childEdge.source = state := by simpa using hSource
+    refine ⟨sequenceLeftEdge left right childEdge, ?_, ?_⟩
+    · exact Or.inl ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    · exact (sequenceLeftEdge_offersAt_eq left right childEdge action).mpr
+        hAction
 
 theorem buildSequenceAutomaton_outgoing_right
     (signature : TypeAlphabet) (left right : AutomatonFragment)
@@ -2331,20 +2481,26 @@ theorem buildSequenceAutomaton_outgoing_right
     simp only [buildSequenceAutomaton, finishAutomatonFragment,
       childPendingEdges, Finset.mem_union, Finset.mem_image,
       Finset.mem_biUnion] at hEdge
-    rcases hEdge with ((hLeft | hRight) | hBridge) | hFutureBridge
+    rcases hEdge with ((hLeft | hRight) | hEntry) | hCompleting
     · rcases hLeft with ⟨childEdge, _, hEdge⟩
       rw [← hEdge] at hSource
-      simp [childState] at hSource
+      simp [sequenceLeftEdge, childState] at hSource
     · rcases hRight with ⟨childEdge, hChildEdge, hEdge⟩
       have hChildSource := hSource
       rw [← hEdge] at hChildSource
       have hChildSource' : childEdge.source = state := by
         simpa [childPendingEdge, childState] using hChildSource
       exact ⟨childEdge, hChildEdge, hChildSource', hEdge.symm⟩
-    · rcases hBridge with ⟨bridgeState, _, environment, _, hEdge⟩
-      rw [← hEdge] at hSource
-      simp [childState] at hSource
-    · rcases hFutureBridge with ⟨bridgeState, _, hEdge⟩
+    · simp only [sequenceEntryBridgeEdges] at hEntry
+      split at hEntry
+      · simp only [Finset.mem_image] at hEntry
+        obtain ⟨environment, _, hEdge⟩ := hEntry
+        rw [← hEdge] at hSource
+        simp [childState] at hSource
+      · simp at hEntry
+    · simp only [sequenceCompletingBridgeEdges, Finset.mem_image]
+        at hCompleting
+      obtain ⟨completingState, _, hEdge⟩ := hCompleting
       rw [← hEdge] at hSource
       simp [childState] at hSource
   · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
@@ -2389,14 +2545,74 @@ private theorem buildSequenceAutomaton_offersAt_right
   simp [childPendingEdge, childFutureSpec, childState]
   grind
 
-/-- Exact same-cycle reachability from a tagged sequence-left state.  The
-left execution closure is always present.  The right closure is present
-exactly when that closure reaches either a literal-skip state or a state marked
-as optimistically completing by the child compiler. -/
+/-- The pruned-and-tagged-`.child 0` reachable set (`keep`, in
+`buildSequenceAutomaton_futureReachable_left`) is always a subset of the raw
+execution closure it prunes from — dropping edges sourced at a deleted
+intermediate, and dropping deleted targets afterward, only ever removes
+elements. Callers that still need `canBridge`'s own witness (stated over the
+*unpruned* closure) use this to promote a `keep`-membership fact back up. -/
+private theorem sequenceKeep_subset_leftReach
+    (left : AutomatonFragment) (state : TypeAutomatonState)
+    (hLeftTargets : left.FutureTargetsInStates)
+    (hState : state ∈ (sequenceExecutionAutomaton left).states) :
+    (({ states := (sequenceExecutionAutomaton left).states
+        edges := (sequenceExecutionAutomaton left).edges.filter fun edge =>
+          edge.source ∉ sequenceDeleted left ∨ edge.source = state } :
+        PendingAutomaton).futureReachable state) \ sequenceDeleted left ⊆
+      (sequenceExecutionAutomaton left).futureReachable state := by
+  set execution := sequenceExecutionAutomaton left with hExecDef
+  set prunedExecution : PendingAutomaton :=
+    { states := execution.states
+      edges := execution.edges.filter fun edge =>
+        edge.source ∉ sequenceDeleted left ∨ edge.source = state } with
+    hPrunedDef
+  have hClosed : execution.ReferencesClosed :=
+    sequenceExecutionAutomaton_referencesClosed left hLeftTargets
+  have hReachClosed : ∀ {source target},
+      source ∈ execution.futureReachable state →
+        target ∈ execution.referencedStates source →
+          target ∈ execution.futureReachable state := by
+    intro source target hSourceReach hReference
+    have hSourceState : source ∈ execution.states :=
+      execution.futureReachable_subset_of_reference_closed state
+        execution.states hState (fun cur hCur => hClosed cur hCur)
+        hSourceReach
+    exact execution.futureReachable_subset_of_mem hClosed hState hSourceReach
+      (execution.referencedStates_subset_futureReachable source hClosed
+        hSourceState hReference)
+  have hRefSubset : ∀ c, prunedExecution.referencedStates c ⊆
+      execution.referencedStates c := by
+    intro c
+    apply Finset.biUnion_subset_biUnion_of_subset_left
+    intro edge hEdge
+    simp only [Finset.mem_filter] at hEdge ⊢
+    exact ⟨(Finset.filter_subset _ _) hEdge.1, hEdge.2⟩
+  intro c hc
+  obtain ⟨hcPruned, _⟩ := Finset.mem_sdiff.mp hc
+  apply prunedExecution.futureReachable_subset_of_reference_closed state
+    (execution.futureReachable state)
+  · exact execution.mem_futureReachable_self state
+  · intro s hs t ht
+    exact hReachClosed hs (hRefSubset s ht)
+  · exact hcPruned
+
+/-- References transfer through `sequenceRedirect`, and a redirected state can
+collapse several distinct left states onto `right`'s entry — so `state`'s own
+tagged reachability set is not simply `leftReach` tagged with `.child 0`: a
+left state reachable *only* by passing through a deleted (accepting,
+non-initial) intermediate is never actually visited in the merged graph,
+since every edge landing on a deleted state is redirected away before it
+manifests as a `.child 0`-tagged target. `keep` computes reachability with
+that pruning already applied (edges sourced at a deleted, non-`state`
+intermediate are dropped first), then discards any deleted state still
+picked up as a plain *target*. `hNotDeleted` rules out the one remaining
+edge case (the seed itself being deleted), which needs the entry bridge
+rather than this closure argument — see `sequenceEntryBridgeEdges`. -/
 theorem buildSequenceAutomaton_futureReachable_left
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState)
     (hLeftState : state ∈ left.states)
+    (hNotDeleted : state ∉ sequenceDeleted left)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
     (hRightInitial : right.initial ∈ right.states) :
@@ -2404,213 +2620,43 @@ theorem buildSequenceAutomaton_futureReachable_left
     let parent : PendingAutomaton :=
       { states := sequence.states, edges := sequence.edges }
     let execution := sequenceExecutionAutomaton left
+    let prunedExecution : PendingAutomaton :=
+      { states := execution.states
+        edges := execution.edges.filter fun edge =>
+          edge.source ∉ sequenceDeleted left ∨ edge.source = state }
     let rightPending : PendingAutomaton :=
       { states := right.states, edges := right.edges }
-    let leftReach := execution.futureReachable state
-    let canBridge := ∃ completed ∈ leftReach,
-      completed ∈ left.skipping ∨ completed ∈ left.completing
+    let keep := prunedExecution.futureReachable state \ sequenceDeleted left
+    let canBridge := ∃ completed ∈ execution.futureReachable state,
+      completed ∈ left.accepting ∨ completed ∈ left.completing
     parent.futureReachable (.child 0 state) =
-      leftReach.image (.child 0) ∪
+      keep.image (.child 0) ∪
         if canBridge then
           (rightPending.futureReachable right.initial).image (.child 1)
         else ∅ := by
-  classical
-  let sequence := buildSequenceAutomaton signature left right
-  let parent : PendingAutomaton :=
-    { states := sequence.states, edges := sequence.edges }
-  let execution := sequenceExecutionAutomaton left
-  let rightPending : PendingAutomaton :=
-    { states := right.states, edges := right.edges }
-  let leftReach := execution.futureReachable state
-  let rightReach := rightPending.futureReachable right.initial
-  let canBridge := ∃ completed ∈ leftReach,
-    completed ∈ left.skipping ∨ completed ∈ left.completing
-  change parent.futureReachable (childState 0 state) =
-    leftReach.image (childState 0) ∪
-      if canBridge then rightReach.image (childState 1) else ∅
-  have hExecutionClosed : execution.ReferencesClosed := by
-    exact sequenceExecutionAutomaton_referencesClosed left hLeftTargets
-  have hRightClosed : rightPending.ReferencesClosed := by
-    exact PendingAutomaton.referencesClosed_of_futureTargetsInStates right
-      hRightTargets
-  have hParentClosed : parent.ReferencesClosed := by
-    apply PendingAutomaton.referencesClosed_of_futureTargetsInStates sequence
-    exact buildSequenceAutomaton_futureTargetsInStates signature left right
-      hLeftTargets hRightTargets hRightInitial
-  have hExecutionState : state ∈ execution.states := by
-    simp [execution, sequenceExecutionAutomaton, hLeftState]
-  have hParentLeftState : childState 0 state ∈ parent.states := by
-    simp [parent, sequence, buildSequenceAutomaton, finishAutomatonFragment,
-      childStates, childState, hLeftState]
-  have hParentRightState : childState 1 right.initial ∈ parent.states := by
-    simp [parent, sequence, buildSequenceAutomaton, finishAutomatonFragment,
-      childStates, childState, hRightInitial]
-  have hLeftReferences : ∀ child,
-      parent.referencedStates (childState 0 child) =
-        (execution.referencedStates child).image (childState 0) ∪
-          if child ∈ left.skipping ∨ child ∈ left.completing then
-            {childState 1 right.initial}
-          else ∅ := by
-    intro child
-    exact buildSequenceAutomaton_referencedStates_left signature left right
-      child
-  have hRightReferences : ∀ child,
-      parent.referencedStates (childState 1 child) =
-        (rightPending.referencedStates child).image (childState 1) := by
-    intro child
-    exact buildSequenceAutomaton_referencedStates_right signature left right
-      child
-  have hExecutionReachClosed : ∀ {source target},
-      source ∈ leftReach → target ∈ execution.referencedStates source →
-        target ∈ leftReach := by
-    intro source target hSourceReach hReference
-    have hSourceState : source ∈ execution.states :=
-      (execution.futureReachable_subset_of_reference_closed state
-        execution.states hExecutionState
-        (fun current hCurrent => hExecutionClosed current hCurrent))
-        hSourceReach
-    have hTargetFromSource :=
-      execution.referencedStates_subset_futureReachable source
-        hExecutionClosed hSourceState hReference
-    exact (execution.futureReachable_subset_of_mem hExecutionClosed
-      hExecutionState hSourceReach) hTargetFromSource
-  have hRightReachClosed : ∀ {source target},
-      source ∈ rightReach → target ∈ rightPending.referencedStates source →
-        target ∈ rightReach := by
-    intro source target hSourceReach hReference
-    have hSourceState : source ∈ rightPending.states :=
-      (rightPending.futureReachable_subset_of_reference_closed right.initial
-        rightPending.states hRightInitial
-        (fun current hCurrent => hRightClosed current hCurrent))
-        hSourceReach
-    have hTargetFromSource :=
-      rightPending.referencedStates_subset_futureReachable source
-        hRightClosed hSourceState hReference
-    exact (rightPending.futureReachable_subset_of_mem hRightClosed
-      hRightInitial hSourceReach) hTargetFromSource
-  have hStateReach : state ∈ leftReach := by
-    change state ∈ execution.futureReachable state
-    rw [execution.futureReachable_unfold state hExecutionClosed
-      hExecutionState]
-    simp
-  have hLeftReachSubset : leftReach.image (childState 0) ⊆
-      parent.futureReachable (childState 0 state) := by
-    apply PendingAutomaton.futureReachable_image_subset_of_embedding
-      execution parent (childState 0)
-    · intro child
-      rw [hLeftReferences child]
-      exact Finset.subset_union_left
-    · exact hParentClosed
-    · exact hParentLeftState
-  by_cases hCanBridge : canBridge
-  · have hBridgeStart : childState 1 right.initial ∈
-        parent.futureReachable (childState 0 state) := by
-      rcases hCanBridge with
-        ⟨completed, hCompletedReach, hBridgeable⟩
-      have hTaggedCompleted : childState 0 completed ∈
-          parent.futureReachable (childState 0 state) :=
-        hLeftReachSubset (Finset.mem_image.mpr
-          ⟨completed, hCompletedReach, rfl⟩)
-      have hBridgeReference : childState 1 right.initial ∈
-          parent.referencedStates (childState 0 completed) := by
-        rw [hLeftReferences completed]
-        simp [hBridgeable]
-      have hCompletedState : childState 0 completed ∈ parent.states :=
-        (parent.futureReachable_subset_of_reference_closed
-          (childState 0 state) parent.states hParentLeftState
-          (fun current hCurrent => hParentClosed current hCurrent))
-          hTaggedCompleted
-      have hReferenceFromCompleted :=
-        parent.referencedStates_subset_futureReachable
-          (childState 0 completed) hParentClosed hCompletedState
-          hBridgeReference
-      exact (parent.futureReachable_subset_of_mem hParentClosed
-        hParentLeftState hTaggedCompleted) hReferenceFromCompleted
-    have hRightFromEntry : rightReach.image (childState 1) ⊆
-        parent.futureReachable (childState 1 right.initial) := by
-      apply PendingAutomaton.futureReachable_image_subset_of_embedding
-        rightPending parent (childState 1)
-      · intro child
-        rw [hRightReferences child]
-      · exact hParentClosed
-      · exact hParentRightState
-    have hRightEntryToRoot :
-        parent.futureReachable (childState 1 right.initial) ⊆
-          parent.futureReachable (childState 0 state) :=
-      parent.futureReachable_subset_of_mem hParentClosed hParentLeftState
-        hBridgeStart
-    have hRightReachSubset : rightReach.image (childState 1) ⊆
-        parent.futureReachable (childState 0 state) :=
-      hRightFromEntry.trans hRightEntryToRoot
-    simp only [hCanBridge, if_true]
-    apply Finset.Subset.antisymm
-    · apply PendingAutomaton.futureReachable_subset_of_reference_closed
-        parent (childState 0 state)
-        (leftReach.image (childState 0) ∪
-          rightReach.image (childState 1))
-      · exact Finset.mem_union_left _
-          (Finset.mem_image.mpr ⟨state, hStateReach, rfl⟩)
-      · intro source hSource target hReference
-        simp only [Finset.mem_union, Finset.mem_image] at hSource ⊢
-        rcases hSource with ⟨child, hChildReach, rfl⟩ |
-            ⟨child, hChildReach, rfl⟩
-        · rw [hLeftReferences child] at hReference
-          rcases Finset.mem_union.mp hReference with hChildReference |
-            hBridgeReference
-          · rcases Finset.mem_image.mp hChildReference with
-              ⟨childTarget, hChildTarget, rfl⟩
-            left
-            refine ⟨childTarget, ?_, rfl⟩
-            exact hExecutionReachClosed hChildReach hChildTarget
-          · by_cases hBridgeable :
-                child ∈ left.skipping ∨ child ∈ left.completing
-            · simp [hBridgeable] at hBridgeReference
-              subst target
-              right
-              refine ⟨right.initial, ?_, rfl⟩
-              exact rightPending.mem_futureReachable_self right.initial
-            · simp [hBridgeable] at hBridgeReference
-        · rw [hRightReferences child] at hReference
-          rcases Finset.mem_image.mp hReference with
-            ⟨childTarget, hChildTarget, rfl⟩
-          right
-          refine ⟨childTarget, ?_, rfl⟩
-          exact hRightReachClosed hChildReach hChildTarget
-    · intro target hTarget
-      simp only [Finset.mem_union] at hTarget
-      rcases hTarget with hLeftTarget | hRightTarget
-      · exact hLeftReachSubset hLeftTarget
-      · exact hRightReachSubset hRightTarget
-  · simp only [hCanBridge, if_false, Finset.union_empty]
-    apply Finset.Subset.antisymm
-    · apply PendingAutomaton.futureReachable_subset_of_reference_closed
-        parent (childState 0 state) (leftReach.image (childState 0))
-      · exact Finset.mem_image.mpr ⟨state, hStateReach, rfl⟩
-      · intro source hSource target hReference
-        rcases Finset.mem_image.mp hSource with ⟨child, hChildReach, rfl⟩
-        rw [hLeftReferences child] at hReference
-        rcases Finset.mem_union.mp hReference with hChildReference |
-          hBridgeReference
-        · rcases Finset.mem_image.mp hChildReference with
-            ⟨childTarget, hChildTarget, rfl⟩
-          apply Finset.mem_image.mpr
-          refine ⟨childTarget, ?_, rfl⟩
-          exact hExecutionReachClosed hChildReach hChildTarget
-        · by_cases hBridgeable :
-              child ∈ left.skipping ∨ child ∈ left.completing
-          · exact (hCanBridge
-              ⟨child, hChildReach, hBridgeable⟩).elim
-          · simp [hBridgeable] at hBridgeReference
-    · exact hLeftReachSubset
+  -- TODO(unfinished): the statement above is the corrected one (see the
+  -- doc comment) — `leftReach.image (.child 0)` is provably false in
+  -- general (counterexample: `left = .choice .skip .skip`, where both
+  -- branches' entries are simultaneously same-cycle-referenced from
+  -- `left.initial` and both collapse onto the same redirected bridge
+  -- target, so tagging each with `.child 0` separately overclaims). This
+  -- `keep`-based statement is correct, but completing the proof needs a
+  -- lemma not yet in `PendingAutomatonFuture.lean`: every non-seed member
+  -- of a `futureReachable` closure has an immediate predecessor *within*
+  -- that same closure (used here to show the first deleted state hit along
+  -- any path has a `keep`-membership predecessor, hence the bridge fires
+  -- from something already known reachable). See AGENT.md's session-4
+  -- entry for the full derivation trail before attempting this.
+  sorry
 
 theorem buildSequenceAutomaton_completionWitness_right_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (reachable : Finset TypeAutomatonState) :
     let sequence := buildSequenceAutomaton signature left right
     (∃ completed ∈ reachable.image (.child 1),
-        completed ∈ sequence.skipping ∨ completed ∈ sequence.completing) ↔
+        completed ∈ sequence.accepting ∨ completed ∈ sequence.completing) ↔
       ∃ completed ∈ reachable,
-        completed ∈ right.skipping ∨ completed ∈ right.completing := by
+        completed ∈ right.accepting ∨ completed ∈ right.completing := by
   classical
   constructor
   · rintro ⟨tagged, hTagged, hCompleted⟩
@@ -2619,19 +2665,20 @@ theorem buildSequenceAutomaton_completionWitness_right_iff
     rw [← hTagged] at hCompleted
     refine ⟨completed, hReachable, ?_⟩
     by_cases hRight : right.initial ∈ right.completing <;>
-      simpa [buildSequenceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildSequenceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hRight] using hCompleted
   · rintro ⟨completed, hReachable, hCompleted⟩
     refine ⟨.child 1 completed, Finset.mem_image.mpr
       ⟨completed, hReachable, rfl⟩, ?_⟩
     by_cases hRight : right.initial ∈ right.completing <;>
-      simpa [buildSequenceAutomaton, finishAutomatonFragment, childSkipping,
+      simpa [buildSequenceAutomaton, finishAutomatonFragment, childAccepting,
         childCompleting, childState, hRight] using hCompleted
 
 theorem buildSequenceAutomaton_completionWitness_left_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState)
     (hLeftState : state ∈ left.states)
+    (hNotDeleted : state ∉ sequenceDeleted left)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
     (hRightInitial : right.initial ∈ right.states) :
@@ -2644,11 +2691,11 @@ theorem buildSequenceAutomaton_completionWitness_left_iff
     let leftReach := leftExecution.futureReachable state
     let rightReach := rightPending.futureReachable right.initial
     let canBridge := ∃ completed ∈ leftReach,
-      completed ∈ left.skipping ∨ completed ∈ left.completing
+      completed ∈ left.accepting ∨ completed ∈ left.completing
     let rightCanComplete := ∃ completed ∈ rightReach,
-      completed ∈ right.skipping ∨ completed ∈ right.completing
+      completed ∈ right.accepting ∨ completed ∈ right.completing
     ((∃ completed ∈ parent.futureReachable (.child 0 state),
-        completed ∈ sequence.skipping ∨ completed ∈ sequence.completing) ↔
+        completed ∈ sequence.accepting ∨ completed ∈ sequence.completing) ↔
       canBridge ∧ rightCanComplete) := by
   classical
   let sequence := buildSequenceAutomaton signature left right
@@ -2660,22 +2707,24 @@ theorem buildSequenceAutomaton_completionWitness_left_iff
   let leftReach := leftExecution.futureReachable state
   let rightReach := rightPending.futureReachable right.initial
   let canBridge := ∃ completed ∈ leftReach,
-    completed ∈ left.skipping ∨ completed ∈ left.completing
+    completed ∈ left.accepting ∨ completed ∈ left.completing
   let rightCanComplete := ∃ completed ∈ rightReach,
-    completed ∈ right.skipping ∨ completed ∈ right.completing
+    completed ∈ right.accepting ∨ completed ∈ right.completing
   change ((∃ completed ∈ parent.futureReachable (.child 0 state),
-      completed ∈ sequence.skipping ∨ completed ∈ sequence.completing) ↔
+      completed ∈ sequence.accepting ∨ completed ∈ sequence.completing) ↔
     canBridge ∧ rightCanComplete)
   rw [buildSequenceAutomaton_futureReachable_left signature left right state
-    hLeftState hLeftTargets hRightTargets hRightInitial]
+    hLeftState hNotDeleted hLeftTargets hRightTargets hRightInitial]
   have hRightSelf : right.initial ∈ rightReach := by
     exact rightPending.mem_futureReachable_self right.initial
+  have hExecutionState : state ∈ leftExecution.states := by
+    simp [leftExecution, sequenceExecutionAutomaton, hLeftState]
   constructor
   · rintro ⟨completed, hReachable, hCompleted⟩
     by_cases hBridge : canBridge
     · have hBridgeExpanded : ∃ completed ∈
           (sequenceExecutionAutomaton left).futureReachable state,
-          completed ∈ left.skipping ∨ completed ∈ left.completing := by
+          completed ∈ left.accepting ∨ completed ∈ left.completing := by
         simpa [canBridge, leftReach, leftExecution] using hBridge
       simp only [hBridgeExpanded, if_true, Finset.mem_union,
         Finset.mem_image]
@@ -2689,21 +2738,21 @@ theorem buildSequenceAutomaton_completionWitness_left_iff
               right.initial ∈ right.completing := by
             by_cases hRight : right.initial ∈ right.completing
             · simpa [sequence, buildSequenceAutomaton,
-                finishAutomatonFragment, childSkipping, childCompleting,
+                finishAutomatonFragment, childAccepting, childCompleting,
                 childState, hRight] using hCompleted
             · simp [sequence, buildSequenceAutomaton,
-                finishAutomatonFragment, childSkipping, childCompleting,
+                finishAutomatonFragment, childAccepting, childCompleting,
                 childState, hRight] at hCompleted
           exact ⟨right.initial, hRightSelf, Or.inr hFields.2⟩
         · rw [← hTagged] at hCompleted
           refine ⟨child, hChild, ?_⟩
           by_cases hRight : right.initial ∈ right.completing <;>
             simpa [sequence, buildSequenceAutomaton,
-              finishAutomatonFragment, childSkipping, childCompleting,
+              finishAutomatonFragment, childAccepting, childCompleting,
               childState, hRight] using hCompleted
     · have hBridgeExpanded : ¬ ∃ completed ∈
           (sequenceExecutionAutomaton left).futureReachable state,
-          completed ∈ left.skipping ∨ completed ∈ left.completing := by
+          completed ∈ left.accepting ∨ completed ∈ left.completing := by
         simpa [canBridge, leftReach, leftExecution] using hBridge
       simp only [hBridgeExpanded, if_false, Finset.union_empty,
         Finset.mem_image]
@@ -2713,24 +2762,27 @@ theorem buildSequenceAutomaton_completionWitness_left_iff
       have hLeftComplete : child ∈ left.completing := by
         by_cases hRight : right.initial ∈ right.completing
         · simpa [sequence, buildSequenceAutomaton,
-            finishAutomatonFragment, childSkipping, childCompleting,
+            finishAutomatonFragment, childAccepting, childCompleting,
             childState, hRight] using hCompleted
         · simp [sequence, buildSequenceAutomaton,
-            finishAutomatonFragment, childSkipping, childCompleting,
+            finishAutomatonFragment, childAccepting, childCompleting,
             childState, hRight] at hCompleted
-      exact (hBridge ⟨child, hChild, Or.inr hLeftComplete⟩).elim
+      have hChildLeftReach : child ∈ leftReach :=
+        sequenceKeep_subset_leftReach left state hLeftTargets hExecutionState
+          hChild
+      exact (hBridge ⟨child, hChildLeftReach, Or.inr hLeftComplete⟩).elim
   · rintro ⟨hBridge, child, hChild, hCompleted⟩
     refine ⟨.child 1 child, ?_, ?_⟩
     · have hBridgeExpanded : ∃ completed ∈
           (sequenceExecutionAutomaton left).futureReachable state,
-          completed ∈ left.skipping ∨ completed ∈ left.completing := by
+          completed ∈ left.accepting ∨ completed ∈ left.completing := by
         simpa [canBridge, leftReach, leftExecution] using hBridge
       simp only [hBridgeExpanded, if_true, Finset.mem_union,
         Finset.mem_image]
       exact Or.inr ⟨child, hChild, rfl⟩
     · by_cases hRight : right.initial ∈ right.completing <;>
         simpa [sequence, buildSequenceAutomaton,
-          finishAutomatonFragment, childSkipping, childCompleting,
+          finishAutomatonFragment, childAccepting, childCompleting,
           childState, hRight] using hCompleted
 
 /-- Future offers at a tagged sequence-left state are the offers of the
@@ -2740,6 +2792,7 @@ theorem buildSequenceAutomaton_computeFuture_left_formula
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState)
     (hLeftState : state ∈ left.states)
+    (hNotDeleted : state ∉ sequenceDeleted left)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
     (hRightInitial : right.initial ∈ right.states) :
@@ -2751,7 +2804,7 @@ theorem buildSequenceAutomaton_computeFuture_left_formula
       { states := right.states, edges := right.edges }
     let leftReach := execution.futureReachable state
     let canBridge := ∃ completed ∈ leftReach,
-      completed ∈ left.skipping ∨ completed ∈ left.completing
+      completed ∈ left.accepting ∨ completed ∈ left.completing
     computeFuture parent (.child 0 state) =
       computeFuture execution state ∪
         if canBridge then computeFuture rightPending right.initial else ∅ := by
@@ -2765,17 +2818,24 @@ theorem buildSequenceAutomaton_computeFuture_left_formula
   let leftReach := execution.futureReachable state
   let rightReach := rightPending.futureReachable right.initial
   let canBridge := ∃ completed ∈ leftReach,
-    completed ∈ left.skipping ∨ completed ∈ left.completing
+    completed ∈ left.accepting ∨ completed ∈ left.completing
   change computeFuture parent (childState 0 state) =
     computeFuture execution state ∪
       if canBridge then computeFuture rightPending right.initial else ∅
-  have hReach := buildSequenceAutomaton_futureReachable_left signature left
-    right state hLeftState hLeftTargets hRightTargets hRightInitial
+  -- TODO(unfinished): `buildSequenceAutomaton_futureReachable_left` now
+  -- gives its `.child 0`-tagged part as `keep`, not `leftReach`, matching
+  -- the corrected reachability set. Restating `hReach'` in terms of
+  -- `leftReach` (as below) needs "every accepting/deleted state's own
+  -- `offersAt` is empty" to bridge `keep.biUnion execution.offersAt` back up
+  -- to `leftReach.biUnion execution.offersAt` — plausible (accepting states
+  -- represent a literal `skip` residual, whose own edges always carry empty
+  -- `current`/`future`), but not yet proven for every constructor (`.par`'s
+  -- synchronized product is the one case not checked). See AGENT.md's
+  -- session-4 entry.
   have hReach' : parent.futureReachable (childState 0 state) =
       leftReach.image (childState 0) ∪
         if canBridge then rightReach.image (childState 1) else ∅ := by
-    simpa [sequence, parent, execution, rightPending, leftReach, rightReach,
-      canBridge] using hReach
+    sorry
   have hLeftOffers : ∀ child,
       parent.offersAt (childState 0 child) = execution.offersAt child := by
     intro child
@@ -2852,6 +2912,7 @@ theorem buildSequenceAutomaton_rightFuture_subset_of_completing
     (state : TypeAutomatonState)
     (hCompleting : state ∈ left.completing)
     (hLeftState : state ∈ left.states)
+    (hNotDeleted : state ∉ sequenceDeleted left)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
     (hRightInitial : right.initial ∈ right.states) :
@@ -2871,8 +2932,10 @@ theorem buildSequenceAutomaton_rightFuture_subset_of_completing
     exact buildSequenceAutomaton_futureTargetsInStates signature left right
       hLeftTargets hRightTargets hRightInitial
   have hSource : childState 0 state ∈ parent.states := by
-    simp [parent, sequence, buildSequenceAutomaton,
-      finishAutomatonFragment, childStates, childState, hLeftState]
+    simp only [parent, sequence, buildSequenceAutomaton, finishAutomatonFragment,
+      Finset.mem_union, Finset.mem_image, Finset.mem_sdiff]
+    left; left
+    exact ⟨state, ⟨hLeftState, hNotDeleted⟩, rfl⟩
   have hRightCard : right.states.card ≤ sequence.states.card := by
     have hSubset : childStates 1 right ⊆ sequence.states := by
       intro child hChild
@@ -2905,9 +2968,10 @@ theorem buildSequenceAutomaton_rightFuture_subset_of_completing
       Finset.mem_filter]
     refine ⟨bridge, ⟨?_, rfl⟩, ?_⟩
     · simp only [bridge, parent, sequence, buildSequenceAutomaton,
-        finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
+        finishAutomatonFragment, Finset.mem_union, Finset.mem_image,
+        sequenceCompletingBridgeEdges]
       right
-      exact ⟨state, hCompleting, rfl⟩
+      exact ⟨state, Or.inr hCompleting, rfl⟩
     · simp [bridge, AutomatonConstructionLabel.semantic, TypeLabel.silent]
   change computeFuture rightPending right.initial ⊆
     computeFuture parent (childState 0 state)
@@ -3004,7 +3068,8 @@ child fragment correspondence, while its current offers are preserved. -/
 theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (source target : TypeAutomatonState) (env : TypeEnvironment)
-    (label : TypeLabel) (offers : TypeOfferSummary) :
+    (label : TypeLabel) (offers : TypeOfferSummary)
+    (hNotDeleted : target ∉ sequenceDeleted left) :
     let sequence := buildSequenceAutomaton signature left right
     let pending : PendingAutomaton :=
       { states := sequence.states, edges := sequence.edges }
@@ -3025,8 +3090,18 @@ theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
         source edge).mp ⟨hEdge, hSource⟩
     rcases hOutgoing with hChild | hBridge | hFutureBridge
     · rcases hChild with ⟨childEdge, hChildEdge, hChildSource, rfl⟩
-      have hChildTarget : childEdge.target = target := by
-        simpa [childState] using hTarget
+      have hChildTarget : childEdge.target = target ∧
+          childEdge.target ∉ sequenceDeleted left := by
+        simp only [sequenceLeftEdge_target] at hTarget
+        by_cases hDel : childEdge.target ∈ sequenceDeleted left
+        · rw [sequenceRedirect_of_mem hDel] at hTarget
+          simp only [childState] at hTarget
+          injection hTarget with hIdx _
+          exact absurd hIdx (by decide)
+        · rw [sequenceRedirect_of_not_mem hDel] at hTarget
+          simp only [childState] at hTarget
+          injection hTarget with _ hEq2
+          exact ⟨hEq2, hDel⟩
       let childFuture : Finset BareMessage :=
         match childEdge.future with
         | .explicit future => future
@@ -3035,11 +3110,16 @@ theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
               state \ removed
       refine ⟨childFuture, ?_, ?_⟩
       · refine ⟨childEdge, hChildEdge, hChildSource, hEnvironment,
-          hLabel, hCurrent, ?_, hChildTarget⟩
+          hLabel, hCurrent, ?_, hChildTarget.1⟩
         rfl
-      · rw [hCurrent] at hFuture
-        have hChildVisible : childEdge.label = .visible label := hLabel
-        simpa [hChildVisible, childState, hChildTarget] using hFuture
+      · have hChildVisible : childEdge.label = .visible label := hLabel
+        have hTargetNotDel : target ∉ sequenceDeleted left :=
+          hChildTarget.1 ▸ hChildTarget.2
+        simp only [sequenceLeftEdge, hChildVisible, hChildTarget.1,
+          sequenceRedirect_of_not_mem hTargetNotDel] at hFuture
+        rw [show childEdge.current = offers.current from
+          by simpa using hCurrent] at hFuture
+        exact hFuture
     · rcases hBridge with ⟨_, _, _, _, rfl⟩
       simp [childState] at hTarget
     · rcases hFutureBridge with ⟨_, rfl⟩
@@ -3047,6 +3127,8 @@ theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
   · rintro ⟨childFuture,
       ⟨childEdge, hChildEdge, hChildSource, hEnvironment, hLabel,
         hCurrent, _, hChildTarget⟩, hFuture⟩
+    have hChildNotDeleted : childEdge.target ∉ sequenceDeleted left :=
+      hChildTarget ▸ hNotDeleted
     let lifted : PendingAutomatonEdge :=
       { source := childState 0 childEdge.source
         environment := childEdge.environment
@@ -3056,10 +3138,13 @@ theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
           | .future => childFutureSpec 0 childEdge.future
           | _ => .at (childState 0 childEdge.target) childEdge.current
         target := childState 0 childEdge.target }
+    have hLiftedEq : lifted = sequenceLeftEdge left right childEdge := by
+      simp only [lifted, sequenceLeftEdge, hLabel,
+        sequenceRedirect_of_not_mem hChildNotDeleted]
     have hOutgoing :=
       (buildSequenceAutomaton_outgoing_left signature left right source
         lifted).mpr (Or.inl
-          ⟨childEdge, hChildEdge, hChildSource, rfl⟩)
+          ⟨childEdge, hChildEdge, hChildSource, hLiftedEq⟩)
     refine ⟨lifted, hOutgoing.1, hOutgoing.2, ?_, ?_, ?_, ?_, ?_⟩
     · simpa [lifted] using hEnvironment
     · simpa [lifted] using hLabel
@@ -3067,7 +3152,16 @@ theorem buildSequenceAutomaton_hasResolvedEdge_left_iff
     · simpa [lifted, hLabel, childState, hChildTarget, hCurrent] using hFuture
     · simp [lifted, childState, hChildTarget]
 
-/-- Exact classification of an administrative sequence bridge. -/
+/-- Exact classification of an edge reaching `right`'s entry from a tagged
+left state.  Two families contribute: an ordinary left edge whose own target
+happens to be deleted by the redirect — *fused* with the administrative step,
+keeping its own label/current (see `sequenceLeftEdge`) — or the literal entry
+bridge firing at `left`'s own accepting entry, once per local environment
+(`sequenceEntryBridgeEdges`).  `sequenceCompletingBridgeEdges` never
+contributes here: its edges are `.future`-labeled, and `HasResolvedEdge` only
+ever resolves `.visible`-labeled edges (see its `edge.label = .visible label`
+conjunct), so a `.future`-labeled edge can never witness it regardless of
+`source`. -/
 theorem buildSequenceAutomaton_hasResolvedEdge_bridge_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (source : TypeAutomatonState) (env : TypeEnvironment)
@@ -3077,46 +3171,101 @@ theorem buildSequenceAutomaton_hasResolvedEdge_bridge_iff
       { states := sequence.states, edges := sequence.edges }
     sequence.HasResolvedEdge (.child 0 source) env label offers
         (.child 1 right.initial) ↔
-      source ∈ left.skipping ∧ env ∈ signature.localEnvironments ∧
-        label = TypeLabel.silent ∧ offers.current = ∅ ∧
-        computeFuture pending (.child 1 right.initial) = offers.future := by
+      ((∃ childFuture deletedTarget, deletedTarget ∈ sequenceDeleted left ∧
+          left.HasResolvedEdge source env label
+              { current := offers.current, future := childFuture }
+              deletedTarget ∧
+          computeFuture pending (.child 1 right.initial) \ offers.current =
+            offers.future) ∨
+        (source = left.initial ∧ left.initial ∈ left.accepting ∧
+          env ∈ signature.localEnvironments ∧ label = TypeLabel.silent ∧
+          offers.current = ∅ ∧
+          computeFuture pending (.child 1 right.initial) = offers.future)) := by
   classical
   dsimp only
   constructor
-  · rintro ⟨edge, hEdge, hSource, hEnvironment, hLabel, hCurrent,
-      hFuture, hTarget⟩
+  · rintro ⟨edge, hEdge, hSource, hEnvironment, hLabel, hCurrent, hFuture,
+      hTarget⟩
     have hOutgoing :=
       (buildSequenceAutomaton_outgoing_left signature left right
         source edge).mp ⟨hEdge, hSource⟩
     rcases hOutgoing with hChild | hBridge | hFutureBridge
-    · rcases hChild with ⟨childEdge, _, _, rfl⟩
-      simp [childState] at hTarget
-    · rcases hBridge with ⟨hSkipping, bridgeEnvironment,
-        hBridgeEnvironment, rfl⟩
-      simp only at hEnvironment hLabel hCurrent hFuture hTarget
-      have hEnvironmentEq : bridgeEnvironment = env := hEnvironment
-      subst bridgeEnvironment
-      refine ⟨hSkipping, hBridgeEnvironment, ?_, ?_, ?_⟩
-      · simpa using hLabel.symm
-      · simpa using hCurrent.symm
-      · simpa using hFuture
+    · rcases hChild with ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+      have hDel : childEdge.target ∈ sequenceDeleted left := by
+        by_contra hNotDel
+        rw [sequenceLeftEdge_target, sequenceRedirect_of_not_mem hNotDel]
+          at hTarget
+        simp [childState] at hTarget
+      rw [sequenceLeftEdge_target, sequenceRedirect_of_mem hDel] at hTarget
+      left
+      let childFuture : Finset BareMessage :=
+        match childEdge.future with
+        | .explicit future => future
+        | .at state removed =>
+            computeFuture { states := left.states, edges := left.edges }
+              state \ removed
+      refine ⟨childFuture, childEdge.target, hDel, ⟨childEdge, hChildEdge,
+        hChildSource, hEnvironment, hLabel, hCurrent, rfl, rfl⟩, ?_⟩
+      have hChildVisible : childEdge.label = .visible label := hLabel
+      simp only [sequenceLeftEdge, hChildVisible, sequenceRedirect_of_mem hDel]
+        at hFuture
+      rw [show childEdge.current = offers.current from
+        by simpa using hCurrent] at hFuture
+      exact hFuture
+    · rcases hBridge with ⟨rfl, hAccepting, environment, hEnvironment', rfl⟩
+      right
+      have hLabelEq : AutomatonConstructionLabel.visible TypeLabel.silent =
+          AutomatonConstructionLabel.visible label := hLabel
+      injection hLabelEq with hLabelEq
+      refine ⟨rfl, hAccepting, ?_, hLabelEq.symm, by simpa using hCurrent.symm,
+        by simpa using hFuture⟩
+      rw [show environment = env from by simpa using hEnvironment] at hEnvironment'
+      exact hEnvironment'
     · rcases hFutureBridge with ⟨_, rfl⟩
       simp at hLabel
-  · rintro ⟨hSkipping, hEnvironment, rfl, hCurrent, hFuture⟩
-    let bridge : PendingAutomatonEdge :=
-      { source := childState 0 source
-        environment := env
-        label := .visible TypeLabel.silent
-        current := ∅
-        future := .at (childState 1 right.initial) ∅
-        target := childState 1 right.initial }
-    have hOutgoing :=
-      (buildSequenceAutomaton_outgoing_left signature left right source
-        bridge).mpr (Or.inr (Or.inl
-          ⟨hSkipping, env, hEnvironment, rfl⟩))
-    refine ⟨bridge, hOutgoing.1, hOutgoing.2, rfl, rfl, ?_, ?_, rfl⟩
-    · simpa [bridge] using hCurrent.symm
-    · simpa [bridge] using hFuture
+  · rintro (⟨childFuture, deletedTarget, hDel,
+        ⟨childEdge, hChildEdge, hChildSource, hEnvironment, hLabel, hCurrent,
+          _, hChildTarget⟩, hFuture⟩ |
+      ⟨rfl, hAccepting, hEnvironment, hLabel, hCurrent, hFuture⟩)
+    · have hDel' : childEdge.target ∈ sequenceDeleted left := hChildTarget ▸ hDel
+      let lifted : PendingAutomatonEdge :=
+        { source := childState 0 childEdge.source
+          environment := childEdge.environment
+          label := childEdge.label
+          current := childEdge.current
+          future := match childEdge.label with
+            | .future => childFutureSpec 0 childEdge.future
+            | _ => .at (childState 1 right.initial) childEdge.current
+          target := childState 1 right.initial }
+      have hLiftedEq : lifted = sequenceLeftEdge left right childEdge := by
+        simp only [lifted, sequenceLeftEdge, hLabel,
+          sequenceRedirect_of_mem hDel']
+      have hOutgoing :=
+        (buildSequenceAutomaton_outgoing_left signature left right source
+          lifted).mpr (Or.inl ⟨childEdge, hChildEdge, hChildSource, hLiftedEq⟩)
+      refine ⟨lifted, hOutgoing.1, hOutgoing.2, ?_, ?_, ?_, ?_, ?_⟩
+      · simpa [lifted] using hEnvironment
+      · simpa [lifted] using hLabel
+      · simpa [lifted] using hCurrent
+      · simpa [lifted, hLabel, childState, hChildTarget, hCurrent] using hFuture
+      · simp [lifted, childState]
+    · refine ⟨
+        { source := childState 0 left.initial
+          environment := env
+          label := AutomatonConstructionLabel.visible TypeLabel.silent
+          current := ∅
+          future := FutureSpec.at (childState 1 right.initial) ∅
+          target := childState 1 right.initial },
+        ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · exact ((buildSequenceAutomaton_outgoing_left signature left right
+          left.initial _).mpr
+          (Or.inr (Or.inl ⟨rfl, hAccepting, env, hEnvironment, rfl⟩))).1
+      · simp [childState]
+      · rfl
+      · rw [hLabel]
+      · simpa using hCurrent.symm
+      · simpa [childState] using hFuture
+      · simp [childState]
 
 end
 

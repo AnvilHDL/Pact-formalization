@@ -89,7 +89,8 @@ theorem compileType_recursion_header_step_iff
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅
         (typeFutureOffers (body.replaceVar name (.recur name body)))) ∈
-          signature.transitionAlphabet) :
+          signature.transitionAlphabet)
+    (hBodyCanonical : body.EntryCanonical) :
     DecoratedTypeTransition env (.recur name body) TypeLabel.silent
         (TypeOfferSummary.mk ∅
           (typeFutureOffers (body.replaceVar name (.recur name body))))
@@ -109,7 +110,9 @@ theorem compileType_recursion_header_step_iff
     · exact compileType_recursion_header_edge signature name body
         hEnvironment hFuture hSymbol
     · exact TypeCompilationRelation.recur_body name body body _
-        (compileType_initial_relation signature body)
+        (compileType_initial_relation_of_canonical signature body
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hBodyCanonical))
   · intro _
     exact ⟨TypeTransition.recur env name body hWellFormed,
       TypeOffers.recur env name body hWellFormed⟩
@@ -387,11 +390,12 @@ theorem buildRecursionAutomaton_computeFuture_root
 invariant required by the recursion constructor. -/
 theorem recursionBodyFutureCorrect_of_compilationFutureCorrect
     (signature : TypeAlphabet) (name : String) (body : PactType)
-    (hFuture : CompilationFutureCorrect signature (.recur name body)) :
+    (hFuture : CompilationFutureCorrect signature (.recur name body))
+    (hCanonical : (PactType.recur name body).EntryCanonical) :
     RecursionBodyFutureCorrect signature name body := by
   intro state residual hRelated
   simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
-    hFuture (.child 0 state)
+    hFuture hCanonical (.child 0 state)
       (residual.replaceVar name (.recur name body))
       (TypeCompilationRelation.recur_body name body residual state hRelated)
 
@@ -404,7 +408,9 @@ theorem compilationFutureCorrect_recursion
     (hGuarded : body.GuardedOccurrences name False)
     (hBodyFuture : RecursionBodyFutureCorrect signature name body) :
     CompilationFutureCorrect signature (.recur name body) := by
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hBodyCanonical : body.EntryCanonical := by
+    simpa only [PactType.EntryCanonical] using hCanonical
   cases hRelated with
   | recur_source =>
       let bodyFragment := compileTypeFuel signature
@@ -426,8 +432,10 @@ theorem compilationFutureCorrect_recursion
             bodyFragment hTargets hInitial
       have hInitialRelation : TypeCompilationRelation body
           bodyFragment.initial body :=
-        compileTypeFuel_initial_relation signature
+        compileTypeFuel_initial_relation_of_canonical signature
           (typeCompilationFuel body) body hFuel
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hBodyCanonical)
       have hEntry : computeFuture pending (.child 0 bodyFragment.initial) =
           typeFutureOffers (body.replaceVar name (.recur name body)) := by
         simpa [RecursionBodyFutureCorrect, bodyFragment, recursion, pending]
@@ -510,6 +518,7 @@ tail-recursiveness enter later, when the two body invariants are established. -/
 theorem compilationFragmentStepCorrect_recursion_root
     (signature : TypeAlphabet) (name : String) (body : PactType)
     (hFuture : RecursionBodyFutureCorrect signature name body)
+    (hBodyCanonical : body.EntryCanonical)
     {residual' : PactType} {env : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary}
     (hLocalEnvironment : env ∈ signature.localEnvironments) :
@@ -524,9 +533,11 @@ theorem compilationFragmentStepCorrect_recursion_root
   let pending : PendingAutomaton :=
     { states := recursion.states, edges := recursion.edges }
   have hBodyInitial : TypeCompilationRelation body bodyFragment.initial body := by
-    exact compileTypeFuel_initial_relation signature
+    exact compileTypeFuel_initial_relation_of_canonical signature
       (typeCompilationFuel body) body
       (typeCompilationFuel_sufficient body)
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hBodyCanonical)
   have hComputed : computeFuture pending (.child 0 bodyFragment.initial) =
       typeFutureOffers (body.replaceVar name (.recur name body)) := by
     have hAmbient := hFuture bodyFragment.initial body hBodyInitial
@@ -567,63 +578,6 @@ theorem compilationFragmentStepCorrect_recursion_root
     exact ⟨TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment,
       hLabel, hResidual, hCurrent,
       (hComputed.symm.trans hEdgeFuture).symm⟩
-
-/-- The header and tagged-body branches compose into raw recursion step
-correspondence once their two closed-graph invariants are available. -/
-theorem compilationFragmentStepCorrect_recursion
-    (signature : TypeAlphabet) (name : String) (body : PactType)
-    (hFuture : RecursionBodyFutureCorrect signature name body)
-    (hBodyStep : RecursionBodyStepCorrect signature name body) :
-    CompilationFragmentStepCorrect signature (.recur name body) := by
-  intro residual residual' state env label offers hRelated hLocalEnvironment
-  cases hRelated with
-  | recur_source =>
-      exact compilationFragmentStepCorrect_recursion_root signature name body
-        hFuture hLocalEnvironment
-  | recur_body _ _ childResidual childState hChildRelated =>
-      exact hBodyStep hChildRelated hLocalEnvironment
-
-/-- Raw fragment correspondence exports uniformly through the fixed public
-alphabet filter. -/
-theorem compilationStepCorrect_of_fragmentStepCorrect
-    (signature : TypeAlphabet) (processType : PactType)
-    (hRaw : CompilationFragmentStepCorrect signature processType) :
-    CompilationStepCorrect signature processType := by
-  intro residual residual' state env label offers hRelated hSymbol
-  have hSignatureSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet := by
-    simpa [compileType] using hSymbol
-  have hLocalEnvironment : env ∈ signature.localEnvironments := by
-    have hFields : env ∈ signature.environments ∧
-        label ∈ signature.labels ∧ offers ∈ signature.offerSummaries := by
-      simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
-    exact signature.environments_subset_localEnvironments hFields.1
-  have hFragment := hRaw (residual' := residual') (label := label)
-    (offers := offers) hRelated hLocalEnvironment
-  constructor
-  · intro hStep
-    rcases hFragment.mp hStep with ⟨target, hEdge, hTarget⟩
-    exact ⟨target,
-      (compileType_hasEdge_iff_hasResolvedEdge signature processType
-        state target env label offers hSignatureSymbol).mpr hEdge,
-      hTarget⟩
-  · rintro ⟨target, hEdge, hTarget⟩
-    apply hFragment.mpr
-    exact ⟨target,
-      (compileType_hasEdge_iff_hasResolvedEdge signature processType
-        state target env label offers hSignatureSymbol).mp hEdge,
-      hTarget⟩
-
-/-- Public recursion correspondence follows from the two closed-graph
-recursion invariants. -/
-theorem compilationStepCorrect_recursion
-    (signature : TypeAlphabet) (name : String) (body : PactType)
-    (hFuture : RecursionBodyFutureCorrect signature name body)
-    (hBodyStep : RecursionBodyStepCorrect signature name body) :
-    CompilationStepCorrect signature (.recur name body) :=
-  compilationStepCorrect_of_fragmentStepCorrect signature (.recur name body)
-    (compilationFragmentStepCorrect_recursion signature name body
-      hFuture hBodyStep)
 
 /-- Every compiled parallel edge hides immediate interface actions. -/
 theorem compileType_parallel_edge_hides_immediate_interface

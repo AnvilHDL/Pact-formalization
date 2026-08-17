@@ -68,18 +68,11 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       .tock
   | skip (env : TypeEnvironment) :
       env.WellFormed ∧
-      env.clock = false ∧
-      env.immediate = ∅ →
+      env.clock = false →
       --
       TypeTransition env .skip
       TypeLabel.silent
       .skip
-  | skip_seq (env : TypeEnvironment) (processType : PactType) :
-      env.WellFormed →
-      --
-      TypeTransition env (.seq .skip processType)
-      TypeLabel.silent
-      processType
   | seq_fuse (env : TypeEnvironment) (left right : PactType) (label : TypeLabel) :
       TypeTransition env left label .skip →
       --

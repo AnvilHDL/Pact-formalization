@@ -48,7 +48,9 @@ private theorem buildChoiceAutomaton_right_mem_completing_iff
 theorem compilationCompletingCorrect_choice
     (signature : TypeAlphabet) (left right : PactType)
     (hLeft : CompilationCompletingCorrect signature left)
-    (hRight : CompilationCompletingCorrect signature right) :
+    (hRight : CompilationCompletingCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     CompilationCompletingCorrect signature (.choice left right) := by
   intro state residual hRelated
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
@@ -69,12 +71,16 @@ theorem compilationCompletingCorrect_choice
   have hLeftInitial : leftFragment.initial ∈ leftFragment.completing ↔
       left.CanCompleteBeforeTock = true := by
     have hCanonical := hLeft _ left
-      (compileType_initial_relation signature left)
+      (compileType_initial_relation_of_canonical signature left
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hLeftCanonical))
     simpa [leftFragment, hLeftStable, compileType] using hCanonical
   have hRightInitial : rightFragment.initial ∈ rightFragment.completing ↔
       right.CanCompleteBeforeTock = true := by
     have hCanonical := hRight _ right
-      (compileType_initial_relation signature right)
+      (compileType_initial_relation_of_canonical signature right
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hRightCanonical))
     simpa [rightFragment, hRightStable, compileType] using hCanonical
   have hFragment :
       compileTypeFuel signature (typeCompilationFuel (.choice left right))
@@ -113,7 +119,9 @@ selection labels do not affect same-cycle completion. -/
 theorem compilationCompletingCorrect_fairChoice
     (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
     (hLeft : CompilationCompletingCorrect signature left)
-    (hRight : CompilationCompletingCorrect signature right) :
+    (hRight : CompilationCompletingCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     CompilationCompletingCorrect signature (.fairChoice bid left right) := by
   intro state residual hRelated
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
@@ -134,12 +142,16 @@ theorem compilationCompletingCorrect_fairChoice
   have hLeftInitial : leftFragment.initial ∈ leftFragment.completing ↔
       left.CanCompleteBeforeTock = true := by
     have hCanonical := hLeft _ left
-      (compileType_initial_relation signature left)
+      (compileType_initial_relation_of_canonical signature left
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hLeftCanonical))
     simpa [leftFragment, hLeftStable, compileType] using hCanonical
   have hRightInitial : rightFragment.initial ∈ rightFragment.completing ↔
       right.CanCompleteBeforeTock = true := by
     have hCanonical := hRight _ right
-      (compileType_initial_relation signature right)
+      (compileType_initial_relation_of_canonical signature right
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hRightCanonical))
     simpa [rightFragment, hRightStable, compileType] using hCanonical
   have hFragment :
       compileTypeFuel signature
@@ -185,7 +197,7 @@ theorem compilationCompletingCorrect_parallel
   intro state residual hRelated
   cases hRelated with
   | parallel _ _ leftResidual rightResidual _ leftQ rightQ
-      hLeftRelated hRightRelated =>
+      hLeftRelated hRightRelated _ =>
       let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
       let leftFragment := compileTypeFuel signature fuel left
       let rightFragment := compileTypeFuel signature fuel right
@@ -213,6 +225,34 @@ theorem compilationCompletingCorrect_parallel
       simpa [buildParallelAutomaton, finishAutomatonFragment,
         leftFragment, rightFragment, PactType.CanCompleteBeforeTock] using
           (and_congr hLeftChild hRightChild)
+  | parallel_fuse _ _ _ leftQ rightQ hLeftRelated hRightRelated =>
+      let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+      let leftFragment := compileTypeFuel signature fuel left
+      let rightFragment := compileTypeFuel signature fuel right
+      have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+        simp [TypeCompilationFuelSufficient, fuel]
+      have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+        simp [TypeCompilationFuelSufficient, fuel]
+      have hLeftStable : leftFragment = compileTypeFuel signature
+          (typeCompilationFuel left) left :=
+        compileTypeFuel_eq_of_sufficient signature left hLeftFuel
+          (typeCompilationFuel_sufficient left)
+      have hRightStable : rightFragment = compileTypeFuel signature
+          (typeCompilationFuel right) right :=
+        compileTypeFuel_eq_of_sufficient signature right hRightFuel
+          (typeCompilationFuel_sufficient right)
+      have hLeftChild : leftQ ∈ leftFragment.completing ↔
+          (PactType.skip).CanCompleteBeforeTock = true := by
+        have hCanonical := hLeft leftQ .skip hLeftRelated
+        simpa [leftFragment, hLeftStable] using hCanonical
+      have hRightChild : rightQ ∈ rightFragment.completing ↔
+          (PactType.skip).CanCompleteBeforeTock = true := by
+        have hCanonical := hRight rightQ .skip hRightRelated
+        simpa [rightFragment, hRightStable] using hCanonical
+      simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+      simpa [buildParallelAutomaton, finishAutomatonFragment,
+        leftFragment, rightFragment, PactType.CanCompleteBeforeTock] using
+          (and_congr hLeftChild hRightChild)
 
 /-! ### Offer completion correspondence -/
 
@@ -235,7 +275,8 @@ theorem compilationCompletingCorrect_xoffer
     (hElse : CompilationCompletingCorrect signature elseType)
     (hBranches : ∀ (action : BareMessage) (branchType : PactType)
         (index : Nat), branches[index]? = some (action, branchType) →
-          CompilationCompletingCorrect signature branchType) :
+          CompilationCompletingCorrect signature branchType)
+    (hElseCanonical : elseType.EntryCanonical) :
     CompilationCompletingCorrect signature (.xoffer elseType branches) := by
   intro state residual hRelated
   let fuel := max (typeCompilationFuel elseType)
@@ -252,7 +293,9 @@ theorem compilationCompletingCorrect_xoffer
   have hElseInitial : elseFragment.initial ∈ elseFragment.completing ↔
       elseType.CanCompleteBeforeTock = true := by
     have hCanonical := hElse _ elseType
-      (compileType_initial_relation signature elseType)
+      (compileType_initial_relation_of_canonical signature elseType
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hElseCanonical))
     simpa [elseFragment, hElseStable, compileType] using hCanonical
   simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
   change state ∈
@@ -404,6 +447,7 @@ theorem compilationCompletingCorrect_parallelTypeBranches
             Prod.mk.injEq] at hEntry
           rcases hEntry with ⟨rfl, rfl⟩
           exact hHead
+        · simp [PactType.EntryCanonical]
       cases rest with
       | nil =>
           simpa [parallelTypeBranches] using hSingleton
@@ -431,7 +475,8 @@ theorem compilationCompletingCorrect_offer
     (hConjunction : ∀ (selected : BareMessage × PactType) (index : Nat),
       branches[index]? = some selected →
         CompilationCompletingCorrect signature
-          (parallelTypeBranchesSelecting selected branches)) :
+          (parallelTypeBranchesSelecting selected branches))
+    (hElseCanonical : elseType.EntryCanonical) :
     CompilationCompletingCorrect signature (.offer elseType branches) := by
   intro state residual hRelated
   let fuel := max (typeCompilationFuel elseType)
@@ -449,7 +494,9 @@ theorem compilationCompletingCorrect_offer
   have hElseInitial : elseFragment.initial ∈ elseFragment.completing ↔
       elseType.CanCompleteBeforeTock = true := by
     have hCanonical := hElse _ elseType
-      (compileType_initial_relation signature elseType)
+      (compileType_initial_relation_of_canonical signature elseType
+        (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+          hElseCanonical))
     simpa [elseFragment, hElseStable, compileType] using hCanonical
   simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
   change state ∈
@@ -769,10 +816,12 @@ theorem compilationFutureCorrect_parallel
     (hLeftFuture : CompilationFutureCorrect signature left)
     (hRightFuture : CompilationFutureCorrect signature right) :
     CompilationFutureCorrect signature (.par left right interface) := by
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  simp only [PactType.EntryCanonical] at hCanonical
+  obtain ⟨_, hLeftCanonical, hRightCanonical⟩ := hCanonical
   cases hRelated with
   | parallel _ _ leftResidual rightResidual _ leftState rightState
-      hLeftRelated hRightRelated =>
+      hLeftRelated hRightRelated _ =>
       let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
       let leftFragment := compileTypeFuel signature fuel left
       let rightFragment := compileTypeFuel signature fuel right
@@ -799,17 +848,57 @@ theorem compilationFutureCorrect_parallel
       have hLeftSemantic : computeFuture
           { states := leftFragment.states, edges := leftFragment.edges }
           leftState = typeFutureOffers leftResidual := by
-        have hExact := hLeftFuture leftState leftResidual hLeftRelated
+        have hExact := hLeftFuture hLeftCanonical leftState leftResidual
+          hLeftRelated
         simpa [leftFragment, hLeftStable] using hExact
       have hRightSemantic : computeFuture
           { states := rightFragment.states, edges := rightFragment.edges }
           rightState = typeFutureOffers rightResidual := by
-        have hExact := hRightFuture rightState rightResidual hRightRelated
+        have hExact := hRightFuture hRightCanonical rightState rightResidual
+          hRightRelated
         simpa [rightFragment, hRightStable] using hExact
       simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
       rw [hFormula, hLeftSemantic, hRightSemantic,
         typeFutureOffers_parallel]
       rfl
+  | parallel_fuse _ _ _ leftState rightState hLeftRelated hRightRelated =>
+      let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+      let leftFragment := compileTypeFuel signature fuel left
+      let rightFragment := compileTypeFuel signature fuel right
+      have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
+        simp [TypeCompilationFuelSufficient, fuel]
+      have hRightFuel : TypeCompilationFuelSufficient right fuel := by
+        simp [TypeCompilationFuelSufficient, fuel]
+      have hLeftStable := compileTypeFuel_eq_of_sufficient signature left
+        hLeftFuel (typeCompilationFuel_sufficient left)
+      have hRightStable := compileTypeFuel_eq_of_sufficient signature right
+        hRightFuel (typeCompilationFuel_sufficient right)
+      have hLeftState : leftState ∈ leftFragment.states := by
+        have hState := compilationStateCorrect_of_compilation signature left
+          leftState .skip hLeftRelated
+        simpa [leftFragment, hLeftStable] using hState
+      have hRightState : rightState ∈ rightFragment.states := by
+        have hState := compilationStateCorrect_of_compilation signature right
+          rightState .skip hRightRelated
+        simpa [rightFragment, hRightStable] using hState
+      have hFormula := buildParallelAutomaton_computeFuture interface
+        leftFragment rightFragment leftState rightState hLeftState hRightState
+        (compileTypeFuel_futureTargetsInStates signature fuel left hLeftFuel)
+        (compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel)
+      have hLeftSemantic : computeFuture
+          { states := leftFragment.states, edges := leftFragment.edges }
+          leftState = typeFutureOffers PactType.skip := by
+        have hExact := hLeftFuture hLeftCanonical leftState .skip hLeftRelated
+        simpa [leftFragment, hLeftStable] using hExact
+      have hRightSemantic : computeFuture
+          { states := rightFragment.states, edges := rightFragment.edges }
+          rightState = typeFutureOffers PactType.skip := by
+        have hExact := hRightFuture hRightCanonical rightState .skip
+          hRightRelated
+        simpa [rightFragment, hRightStable] using hExact
+      simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+      rw [hFormula, hLeftSemantic, hRightSemantic]
+      simp [typeFutureOffers, typeFutureOffersFuel, hideOffers]
 
 end
 

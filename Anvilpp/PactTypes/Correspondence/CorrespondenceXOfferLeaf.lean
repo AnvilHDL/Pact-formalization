@@ -170,7 +170,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
         ((∃ completed ∈
               (sequenceExecutionAutomaton elseFragment).futureReachable
                 elseFragment.initial,
-              completed ∈ elseFragment.skipping ∨
+              completed ∈ elseFragment.accepting ∨
                 completed ∈ elseFragment.completing) ↔
           elseType.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, elseFragment, hElseStable]
@@ -178,7 +178,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
   have hEntryFacts : ∀ entry ∈ entries,
       computeFuture execution entry = computeFuture pending entry ∧
         ((∃ completed ∈ execution.futureReachable entry,
-            completed ∈ fragment.skipping ∨
+            completed ∈ fragment.accepting ∨
               completed ∈ fragment.completing) →
           (PactType.xoffer elseType branches).CanCompleteBeforeTock = true) := by
     intro entry hEntry
@@ -203,10 +203,10 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             elseFragment.initial hElseInitial
         rw [hReachEmbedding] at hReach
         have hSkip : ∀ state,
-            childState 0 state ∈ fragment.skipping ↔
-              state ∈ elseFragment.skipping := by
+            childState 0 state ∈ fragment.accepting ↔
+              state ∈ elseFragment.accepting := by
           intro state
-          exact buildExclusiveOffer_child0_skipping_iff signature branches
+          exact buildExclusiveOffer_child0_accepting_iff signature branches
             elseFragment branchAutomata state
         have hComplete : ∀ state,
             childState 0 state ∈ fragment.completing ↔
@@ -217,7 +217,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
         have hChildWitness : ∃ childCompleted ∈
             (sequenceExecutionAutomaton elseFragment).futureReachable
               elseFragment.initial,
-            childCompleted ∈ elseFragment.skipping ∨
+            childCompleted ∈ elseFragment.accepting ∨
               childCompleted ∈ elseFragment.completing :=
           (taggedCompletionWitness_iff fragment elseFragment 0 _ hSkip
             hComplete).mp ⟨completed, hReach, hCompleted⟩
@@ -295,7 +295,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             ((∃ completed ∈
                   (sequenceExecutionAutomaton branchFragment).futureReachable
                     branchFragment.initial,
-                  completed ∈ branchFragment.skipping ∨
+                  completed ∈ branchFragment.accepting ∨
                     completed ∈ branchFragment.completing) ↔
               branchType.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, branchFragment,
@@ -320,10 +320,10 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             hBranchTargets' branchFragment.initial hBranchInitialState
         rw [hReachEmbedding] at hReach
         have hSkip : ∀ state,
-            childState (index + 1) state ∈ fragment.skipping ↔
-              state ∈ branchFragment.skipping := by
+            childState (index + 1) state ∈ fragment.accepting ↔
+              state ∈ branchFragment.accepting := by
           intro state
-          exact buildExclusiveOffer_branch_skipping_iff signature branches
+          exact buildExclusiveOffer_branch_accepting_iff signature branches
             elseFragment branchAutomata index (action, branchFragment)
               hAutomatonEntry state
         have hComplete : ∀ state,
@@ -336,7 +336,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
         have hChildWitness : ∃ childCompleted ∈
             (sequenceExecutionAutomaton branchFragment).futureReachable
               branchFragment.initial,
-            childCompleted ∈ branchFragment.skipping ∨
+            childCompleted ∈ branchFragment.accepting ∨
               childCompleted ∈ branchFragment.completing :=
           (taggedCompletionWitness_iff fragment branchFragment (index + 1)
             _ hSkip hComplete).mp ⟨completed, hReach, hCompleted⟩
@@ -376,13 +376,13 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             Finset.mem_biUnion] at hReach
           rcases hReach with hAtRoot | ⟨entry, hEntry, hAtEntry⟩
           · subst completed
-            have hRootNotSkipping :
-                (.root : TypeAutomatonState) ∉ fragment.skipping := by
-              exact buildExclusiveOffer_root_not_skipping signature branches
+            have hRootNotAccepting :
+                (.root : TypeAutomatonState) ∉ fragment.accepting := by
+              exact buildExclusiveOffer_root_not_accepting signature branches
                 elseFragment branchAutomata
             have hRootCompleting : (.root : TypeAutomatonState) ∈
                 fragment.completing := hCompleted.resolve_left
-              hRootNotSkipping
+              hRootNotAccepting
             exact (hWholeCompleting .root (.xoffer elseType branches)
               (TypeCompilationRelation.xoffer_source elseType branches)).mp
                 (by simpa [hParent] using hRootCompleting)
@@ -408,7 +408,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             ((∃ completed ∈
                   (sequenceExecutionAutomaton elseFragment).futureReachable
                     childState,
-                  completed ∈ elseFragment.skipping ∨
+                  completed ∈ elseFragment.accepting ∨
                     completed ∈ elseFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, elseFragment,
@@ -424,15 +424,15 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
         change ((∃ completed ∈
               (sequenceExecutionAutomaton fragment).futureReachable
                 (Pact.childState 0 childState),
-              completed ∈ fragment.skipping ∨
+              completed ∈ fragment.accepting ∨
                 completed ∈ fragment.completing) ↔
             residual.CanCompleteBeforeTock = true)
         rw [hReachEquality]
         have hSkip : ∀ child,
-            Pact.childState 0 child ∈ fragment.skipping ↔
-              child ∈ elseFragment.skipping := by
+            Pact.childState 0 child ∈ fragment.accepting ↔
+              child ∈ elseFragment.accepting := by
           intro child
-          exact buildExclusiveOffer_child0_skipping_iff signature branches
+          exact buildExclusiveOffer_child0_accepting_iff signature branches
             elseFragment branchAutomata child
         have hComplete : ∀ child,
             Pact.childState 0 child ∈ fragment.completing ↔
@@ -511,7 +511,7 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
             ((∃ completed ∈
                   (sequenceExecutionAutomaton branchFragment).futureReachable
                     childState,
-                  completed ∈ branchFragment.skipping ∨
+                  completed ∈ branchFragment.accepting ∨
                     completed ∈ branchFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, branchFragment,
@@ -527,15 +527,15 @@ private theorem compilationSequenceExecutionCorrect_xoffer_regular_leaf
         change ((∃ completed ∈
               (sequenceExecutionAutomaton fragment).futureReachable
                 (Pact.childState (index + 1) childState),
-              completed ∈ fragment.skipping ∨
+              completed ∈ fragment.accepting ∨
                 completed ∈ fragment.completing) ↔
             residual.CanCompleteBeforeTock = true)
         rw [hReachEquality]
         have hSkip : ∀ child,
-            Pact.childState (index + 1) child ∈ fragment.skipping ↔
-              child ∈ branchFragment.skipping := by
+            Pact.childState (index + 1) child ∈ fragment.accepting ↔
+              child ∈ branchFragment.accepting := by
           intro child
-          exact buildExclusiveOffer_branch_skipping_iff signature branches
+          exact buildExclusiveOffer_branch_accepting_iff signature branches
             elseFragment branchAutomata index (action, branchFragment)
               hAutomatonEntry child
         have hComplete : ∀ child,

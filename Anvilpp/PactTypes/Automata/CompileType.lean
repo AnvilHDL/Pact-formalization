@@ -183,7 +183,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       -- skip: Q = {root}, i = root, F = {root}; epsilon self-loops.
       | .skip =>
           let idleEnvironments := signature.localEnvironments.filter fun environment =>
-            environment.clock = false ∧ environment.immediate = ∅
+            environment.clock = false
           exact finishAutomatonFragment {.root} .root {.root} {.root} <|
             idleEnvironments.image fun environment =>
               { source := .root
@@ -217,8 +217,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
-              environment.clock = false ∧
-              environment.immediate = ∅
+              environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
                 environment := environment
@@ -250,8 +249,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
-              environment.clock = false ∧
-              environment.immediate = ∅
+              environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
                 environment := environment
@@ -275,8 +273,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 target := .final }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
-              environment.clock = false ∧
-              environment.immediate = ∅
+              environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
                 environment := environment
@@ -671,7 +668,7 @@ theorem compileType_skip_has_no_clock_edge
   simp [TypeAutomaton.HasEdge, compileType, typeCompilationFuel,
     compileTypeFuel, finishAutomatonFragment, resolvedAutomatonEdges,
     TypeEnvironment.tock]
-  intro environment _ hClock _
+  intro environment _ hClock
   split_ifs
   · simp only [Finset.mem_singleton]
     intro edgeEquality

@@ -108,9 +108,9 @@ theorem compilationSequenceExecutionCorrect_var
     obtain ⟨environment, _, rfl⟩ := hEdge
     simp
   · constructor
-    · rintro ⟨completed, _, hSkipping | hCompleting⟩
+    · rintro ⟨completed, _, hAccepting | hCompleting⟩
       · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
-          at hSkipping
+          at hAccepting
       · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
           at hCompleting
     · intro hComplete
@@ -399,7 +399,9 @@ theorem compilationSequenceExecutionCorrect_message
 theorem compilationSequenceExecutionCorrect_choice
     (signature : TypeAlphabet) (left right : PactType)
     (hLeft : CompilationSequenceExecutionCorrect signature left)
-    (hRight : CompilationSequenceExecutionCorrect signature right) :
+    (hRight : CompilationSequenceExecutionCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     CompilationSequenceExecutionCorrect signature (.choice left right) := by
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
   let leftFragment := compileTypeFuel signature fuel left
@@ -432,16 +434,20 @@ theorem compilationSequenceExecutionCorrect_choice
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
   have hLeftRootCanonical := hLeft _ left
-    (compileType_initial_relation signature left)
+    (compileType_initial_relation_of_canonical signature left
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hLeftCanonical))
   have hRightRootCanonical := hRight _ right
-    (compileType_initial_relation signature right)
+    (compileType_initial_relation_of_canonical signature right
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical))
   have hLeftRoot :
       computeFuture (sequenceExecutionAutomaton leftFragment)
           leftFragment.initial = typeFutureOffers left ∧
         ((∃ completed ∈
               (sequenceExecutionAutomaton leftFragment).futureReachable
                 leftFragment.initial,
-              completed ∈ leftFragment.skipping ∨
+              completed ∈ leftFragment.accepting ∨
                 completed ∈ leftFragment.completing) ↔
           left.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, leftFragment, hLeftStable,
@@ -452,7 +458,7 @@ theorem compilationSequenceExecutionCorrect_choice
         ((∃ completed ∈
               (sequenceExecutionAutomaton rightFragment).futureReachable
                 rightFragment.initial,
-              completed ∈ rightFragment.skipping ∨
+              completed ∈ rightFragment.accepting ∨
                 completed ∈ rightFragment.completing) ↔
           right.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, rightFragment, hRightStable,
@@ -490,7 +496,7 @@ theorem compilationSequenceExecutionCorrect_choice
             ((∃ completed ∈
                   (sequenceExecutionAutomaton leftFragment).futureReachable
                     childState,
-                  completed ∈ leftFragment.skipping ∨
+                  completed ∈ leftFragment.accepting ∨
                     completed ∈ leftFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, leftFragment,
@@ -518,7 +524,7 @@ theorem compilationSequenceExecutionCorrect_choice
             ((∃ completed ∈
                   (sequenceExecutionAutomaton rightFragment).futureReachable
                     childState,
-                  completed ∈ rightFragment.skipping ∨
+                  completed ∈ rightFragment.accepting ∨
                     completed ∈ rightFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, rightFragment,
@@ -537,7 +543,9 @@ theorem compilationSequenceExecutionCorrect_choice
 theorem compilationSequenceExecutionCorrect_fairChoice
     (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
     (hLeft : CompilationSequenceExecutionCorrect signature left)
-    (hRight : CompilationSequenceExecutionCorrect signature right) :
+    (hRight : CompilationSequenceExecutionCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     CompilationSequenceExecutionCorrect signature
       (.fairChoice bid left right) := by
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
@@ -571,16 +579,20 @@ theorem compilationSequenceExecutionCorrect_fairChoice
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
   have hLeftRootCanonical := hLeft _ left
-    (compileType_initial_relation signature left)
+    (compileType_initial_relation_of_canonical signature left
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hLeftCanonical))
   have hRightRootCanonical := hRight _ right
-    (compileType_initial_relation signature right)
+    (compileType_initial_relation_of_canonical signature right
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical))
   have hLeftRoot :
       computeFuture (sequenceExecutionAutomaton leftFragment)
           leftFragment.initial = typeFutureOffers left ∧
         ((∃ completed ∈
               (sequenceExecutionAutomaton leftFragment).futureReachable
                 leftFragment.initial,
-              completed ∈ leftFragment.skipping ∨
+              completed ∈ leftFragment.accepting ∨
                 completed ∈ leftFragment.completing) ↔
           left.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, leftFragment, hLeftStable,
@@ -591,7 +603,7 @@ theorem compilationSequenceExecutionCorrect_fairChoice
         ((∃ completed ∈
               (sequenceExecutionAutomaton rightFragment).futureReachable
                 rightFragment.initial,
-              completed ∈ rightFragment.skipping ∨
+              completed ∈ rightFragment.accepting ∨
                 completed ∈ rightFragment.completing) ↔
           right.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, rightFragment, hRightStable,
@@ -630,7 +642,7 @@ theorem compilationSequenceExecutionCorrect_fairChoice
             ((∃ completed ∈
                   (sequenceExecutionAutomaton leftFragment).futureReachable
                     childState,
-                  completed ∈ leftFragment.skipping ∨
+                  completed ∈ leftFragment.accepting ∨
                     completed ∈ leftFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, leftFragment,
@@ -660,7 +672,7 @@ theorem compilationSequenceExecutionCorrect_fairChoice
             ((∃ completed ∈
                   (sequenceExecutionAutomaton rightFragment).futureReachable
                     childState,
-                  completed ∈ rightFragment.skipping ∨
+                  completed ∈ rightFragment.accepting ∨
                     completed ∈ rightFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, rightFragment,
@@ -682,7 +694,8 @@ theorem compilationSequenceExecutionCorrect_fairChoice
 theorem compilationSequenceExecutionCorrect_sequence
     (signature : TypeAlphabet) (left right : PactType)
     (hLeft : CompilationSequenceExecutionCorrect signature left)
-    (hRight : CompilationSequenceExecutionCorrect signature right) :
+    (hRight : CompilationSequenceExecutionCorrect signature right)
+    (hRightCanonical : right.EntryCanonical) :
     CompilationSequenceExecutionCorrect signature (.seq left right) := by
   classical
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
@@ -740,7 +753,7 @@ theorem compilationSequenceExecutionCorrect_sequence
   have hEdges : parentExecution.edges = shadow.edges := by
     exact sequenceExecution_buildSequence_edges signature leftFragment
       rightFragment
-  have hSkipping : parentFragment.skipping = shadowFragment.skipping := by
+  have hAccepting : parentFragment.accepting = shadowFragment.accepting := by
     rfl
   have hCompleting : parentFragment.completing = shadowFragment.completing := by
     rfl
@@ -750,13 +763,15 @@ theorem compilationSequenceExecutionCorrect_sequence
     simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
     rfl
   have hRightRootCanonical := hRight _ right
-    (compileType_initial_relation signature right)
+    (compileType_initial_relation_of_canonical signature right
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical))
   have hRightRoot :
       computeFuture rightExecution rightFragment.initial =
           typeFutureOffers right ∧
         ((∃ completed ∈ rightExecution.futureReachable
               rightFragment.initial,
-              completed ∈ rightFragment.skipping ∨
+              completed ∈ rightFragment.accepting ∨
                 completed ∈ rightFragment.completing) ↔
           right.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, rightExecution,
@@ -764,17 +779,23 @@ theorem compilationSequenceExecutionCorrect_sequence
   intro state residual hRelated
   rw [hParent]
   cases hRelated with
-  | sequence_left _ _ childResidual childQ hChildRelated =>
+  | sequence_left_entry _ _ childResidual childQ hEntry hChildRelated =>
       have hLeftStateCanonical := compilationStateCorrect_of_compilation
         signature left childQ childResidual hChildRelated
       have hLeftState : childQ ∈ leftFragment.states := by
         simpa [leftFragment, hLeftStable] using hLeftStateCanonical
+      have hEntryUnique : childQ = leftFragment.initial :=
+        TypeEntry.unique hEntry
+          (compileTypeFuel_initial_entry signature fuel left hLeftFuel)
+      have hNotDeleted : childQ ∉ sequenceDeleted leftFragment := by
+        rw [hEntryUnique]
+        exact initial_not_mem_sequenceDeleted leftFragment
       have hChildCanonical := hLeft childQ childResidual hChildRelated
       have hChild :
           computeFuture leftExecution childQ =
               typeFutureOffers childResidual ∧
             ((∃ completed ∈ leftExecution.futureReachable childQ,
-                  completed ∈ leftFragment.skipping ∨
+                  completed ∈ leftFragment.accepting ∨
                     completed ∈ leftFragment.completing) ↔
               childResidual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, leftExecution,
@@ -783,11 +804,13 @@ theorem compilationSequenceExecutionCorrect_sequence
           parentExecution.states := by
         exact Finset.mem_union_left _ (by
           simp [parentFragment, buildSequenceAutomaton,
-            finishAutomatonFragment, childStates, childState, hLeftState])
+            finishAutomatonFragment, childStates, childState, hLeftState,
+            hNotDeleted])
       have hShadowState : (.child 0 childQ : TypeAutomatonState) ∈
           shadow.states := by
         simp [shadow, shadowFragment, buildSequenceAutomaton,
-          finishAutomatonFragment, childStates, childState, hLeftState]
+          finishAutomatonFragment, childStates, childState, hLeftState,
+          hNotDeleted]
       have hSameFuture := computeFuture_eq_of_same_edges parentExecution
         shadow hEdges hParentClosed hShadowClosed (.child 0 childQ)
           hParentState hShadowState
@@ -795,14 +818,15 @@ theorem compilationSequenceExecutionCorrect_sequence
         parentExecution shadow hEdges hParentClosed hShadowClosed
           (.child 0 childQ) hParentState hShadowState
       let canBridge := ∃ completed ∈ leftExecution.futureReachable childQ,
-        completed ∈ leftFragment.skipping ∨
+        completed ∈ leftFragment.accepting ∨
           completed ∈ leftFragment.completing
       have hBridgeIff : canBridge ↔
           childResidual.CanCompleteBeforeTock = true := by
         simpa [canBridge] using hChild.2
       have hFormula := buildSequenceAutomaton_computeFuture_left_formula
         signature leftFragment rightExecutionFragment childQ hLeftState
-          hLeftTargets hRightExecutionTargets hRightExecutionInitial
+          hNotDeleted hLeftTargets hRightExecutionTargets
+          hRightExecutionInitial
       have hShadowFuture : computeFuture shadow (.child 0 childQ) =
           typeFutureOffers (.seq childResidual right) := by
         have hFormula' : computeFuture shadow (.child 0 childQ) =
@@ -822,10 +846,88 @@ theorem compilationSequenceExecutionCorrect_sequence
           simp [hComplete, hCannotBridge]
       constructor
       · exact hSameFuture.trans hShadowFuture
-      · rw [hSameReach, hSkipping, hCompleting]
+      · rw [hSameReach, hAccepting, hCompleting]
         have hWitness := buildSequenceAutomaton_completionWitness_left_iff
           signature leftFragment rightExecutionFragment childQ
-            hLeftState hLeftTargets hRightExecutionTargets
+            hLeftState hNotDeleted hLeftTargets hRightExecutionTargets
+            hRightExecutionInitial
+        refine hWitness.trans ((and_congr hChild.2 hRightRoot.2).trans ?_)
+        simp [PactType.CanCompleteBeforeTock]
+  | sequence_left_progressed _ _ childResidual childQ hChildRelated
+      hNotAccepting =>
+      have hLeftStateCanonical := compilationStateCorrect_of_compilation
+        signature left childQ childResidual hChildRelated
+      have hLeftState : childQ ∈ leftFragment.states := by
+        simpa [leftFragment, hLeftStable] using hLeftStateCanonical
+      have hNotDeleted : childQ ∉ sequenceDeleted leftFragment := by
+        apply not_mem_sequenceDeleted_of_not_accepting
+        intro hAccepting
+        have hAcceptingCanonical : childQ ∈ (compileTypeFuel signature
+            (typeCompilationFuel left) left).accepting := by
+          simpa [leftFragment, hLeftStable] using hAccepting
+        exact hNotAccepting
+          ((compilationAcceptingCorrect_of_compilation signature left)
+            childQ childResidual hChildRelated |>.mp hAcceptingCanonical)
+      have hChildCanonical := hLeft childQ childResidual hChildRelated
+      have hChild :
+          computeFuture leftExecution childQ =
+              typeFutureOffers childResidual ∧
+            ((∃ completed ∈ leftExecution.futureReachable childQ,
+                  completed ∈ leftFragment.accepting ∨
+                    completed ∈ leftFragment.completing) ↔
+              childResidual.CanCompleteBeforeTock = true) := by
+        simpa [CompilationSequenceExecutionCorrect, leftExecution,
+          leftFragment, hLeftStable] using hChildCanonical
+      have hParentState : (.child 0 childQ : TypeAutomatonState) ∈
+          parentExecution.states := by
+        exact Finset.mem_union_left _ (by
+          simp [parentFragment, buildSequenceAutomaton,
+            finishAutomatonFragment, childStates, childState, hLeftState,
+            hNotDeleted])
+      have hShadowState : (.child 0 childQ : TypeAutomatonState) ∈
+          shadow.states := by
+        simp [shadow, shadowFragment, buildSequenceAutomaton,
+          finishAutomatonFragment, childStates, childState, hLeftState,
+          hNotDeleted]
+      have hSameFuture := computeFuture_eq_of_same_edges parentExecution
+        shadow hEdges hParentClosed hShadowClosed (.child 0 childQ)
+          hParentState hShadowState
+      have hSameReach := PendingAutomaton.futureReachable_eq_of_same_edges
+        parentExecution shadow hEdges hParentClosed hShadowClosed
+          (.child 0 childQ) hParentState hShadowState
+      let canBridge := ∃ completed ∈ leftExecution.futureReachable childQ,
+        completed ∈ leftFragment.accepting ∨
+          completed ∈ leftFragment.completing
+      have hBridgeIff : canBridge ↔
+          childResidual.CanCompleteBeforeTock = true := by
+        simpa [canBridge] using hChild.2
+      have hFormula := buildSequenceAutomaton_computeFuture_left_formula
+        signature leftFragment rightExecutionFragment childQ hLeftState
+          hNotDeleted hLeftTargets hRightExecutionTargets
+          hRightExecutionInitial
+      have hShadowFuture : computeFuture shadow (.child 0 childQ) =
+          typeFutureOffers (.seq childResidual right) := by
+        have hFormula' : computeFuture shadow (.child 0 childQ) =
+            computeFuture leftExecution childQ ∪
+              if canBridge then
+                computeFuture rightExecution rightFragment.initial else ∅ := by
+          simpa [shadow, shadowFragment, rightExecutionFragment,
+            leftExecution, rightExecution, canBridge,
+            sequenceExecutionFragment] using hFormula
+        rw [hFormula', hChild.1, hRightRoot.1,
+          typeFutureOffers_sequence]
+        by_cases hComplete : childResidual.CanCompleteBeforeTock = true
+        · have hCanBridge := hBridgeIff.mpr hComplete
+          simp [hComplete, hCanBridge]
+        · have hCannotBridge : ¬ canBridge := fun h =>
+            hComplete (hBridgeIff.mp h)
+          simp [hComplete, hCannotBridge]
+      constructor
+      · exact hSameFuture.trans hShadowFuture
+      · rw [hSameReach, hAccepting, hCompleting]
+        have hWitness := buildSequenceAutomaton_completionWitness_left_iff
+          signature leftFragment rightExecutionFragment childQ
+            hLeftState hNotDeleted hLeftTargets hRightExecutionTargets
             hRightExecutionInitial
         refine hWitness.trans ((and_congr hChild.2 hRightRoot.2).trans ?_)
         simp [PactType.CanCompleteBeforeTock]
@@ -841,7 +943,7 @@ theorem compilationSequenceExecutionCorrect_sequence
           computeFuture rightExecution childQ =
               typeFutureOffers residual ∧
             ((∃ completed ∈ rightExecution.futureReachable childQ,
-                  completed ∈ rightFragment.skipping ∨
+                  completed ∈ rightFragment.accepting ∨
                     completed ∈ rightFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, rightExecution,
@@ -896,7 +998,7 @@ theorem compilationSequenceExecutionCorrect_sequence
               hRightTargets) childQ hRightExecutionState hRightCard
       constructor
       · exact hSameFuture.trans (hShadowFuture.trans hChild.1)
-      · rw [hSameReach, hShadowReach, hSkipping, hCompleting]
+      · rw [hSameReach, hShadowReach, hAccepting, hCompleting]
         exact (buildSequenceAutomaton_completionWitness_right_iff signature
           leftFragment rightExecutionFragment
             (rightExecution.futureReachable childQ)).trans hChild.2

@@ -260,6 +260,8 @@ private theorem choiceFutureCorrect_core
     (selectionLeft selectionRight : TypeLabel)
     (hLeftCorrect : CompilationFutureCorrect signature left)
     (hRightCorrect : CompilationFutureCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical)
     (hLeftClosed :
       let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
       let fragment := compileTypeFuel signature fuel left
@@ -324,9 +326,12 @@ private theorem choiceFutureCorrect_core
       { states := leftFragment.states, edges := leftFragment.edges }
       leftFragment.initial = typeFutureOffers left := by
     unfold CompilationFutureCorrect at hLeftCorrect
-    have hRelation := compileTypeFuel_initial_relation signature fuel left
-      hLeftFuel
-    have hResult := hLeftCorrect leftFragment.initial left hRelation
+    have hRelation := compileTypeFuel_initial_relation_of_canonical signature
+      fuel left hLeftFuel
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hLeftCanonical)
+    have hResult := hLeftCorrect hLeftCanonical leftFragment.initial left
+      hRelation
     have hStable := compileTypeFuel_eq_of_sufficient signature left
       hLeftFuel (typeCompilationFuel_sufficient left)
     simpa [leftFragment, hStable] using hResult
@@ -334,9 +339,12 @@ private theorem choiceFutureCorrect_core
       { states := rightFragment.states, edges := rightFragment.edges }
       rightFragment.initial = typeFutureOffers right := by
     unfold CompilationFutureCorrect at hRightCorrect
-    have hRelation := compileTypeFuel_initial_relation signature fuel right
-      hRightFuel
-    have hResult := hRightCorrect rightFragment.initial right hRelation
+    have hRelation := compileTypeFuel_initial_relation_of_canonical signature
+      fuel right hRightFuel
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical)
+    have hResult := hRightCorrect hRightCanonical rightFragment.initial right
+      hRelation
     have hStable := compileTypeFuel_eq_of_sufficient signature right
       hRightFuel (typeCompilationFuel_sufficient right)
     simpa [rightFragment, hStable] using hResult
@@ -356,10 +364,13 @@ invariant rather than exposed as a separate hypothesis. -/
 theorem choiceFutureCorrect_of_compilation
     (signature : TypeAlphabet) (left right : PactType)
     (hLeftCorrect : CompilationFutureCorrect signature left)
-    (hRightCorrect : CompilationFutureCorrect signature right) :
+    (hRightCorrect : CompilationFutureCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     ChoiceFutureCorrect signature left right := by
   apply choiceFutureCorrect_core signature left right
     TypeLabel.silent TypeLabel.silent hLeftCorrect hRightCorrect
+    hLeftCanonical hRightCanonical
   · apply compileTypeFuel_referencesClosed
     simp [TypeCompilationFuelSufficient]
   · apply compileTypeFuel_referencesClosed
@@ -539,7 +550,9 @@ private theorem compiledChoiceRootFuture_eq_union
     (hSelectionLeft : selectionLeft ≠ TypeLabel.tock)
     (hSelectionRight : selectionRight ≠ TypeLabel.tock)
     (hLeftCorrect : CompilationFutureCorrect signature left)
-    (hRightCorrect : CompilationFutureCorrect signature right) :
+    (hRightCorrect : CompilationFutureCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
     let leftFragment := compileTypeFuel signature fuel left
     let rightFragment := compileTypeFuel signature fuel right
@@ -570,21 +583,27 @@ private theorem compiledChoiceRootFuture_eq_union
     (compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel)
     hLeftInitial hRightInitial
   have hLeftRelation : TypeCompilationRelation left leftFragment.initial left :=
-    compileTypeFuel_initial_relation signature fuel left hLeftFuel
+    compileTypeFuel_initial_relation_of_canonical signature fuel left hLeftFuel
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical hLeftCanonical)
   have hRightRelation :
       TypeCompilationRelation right rightFragment.initial right :=
-    compileTypeFuel_initial_relation signature fuel right hRightFuel
+    compileTypeFuel_initial_relation_of_canonical signature fuel right
+      hRightFuel
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical)
   have hLeftSemantic : computeFuture
       { states := leftFragment.states, edges := leftFragment.edges }
       leftFragment.initial = typeFutureOffers left := by
-    have hResult := hLeftCorrect leftFragment.initial left hLeftRelation
+    have hResult := hLeftCorrect hLeftCanonical leftFragment.initial left
+      hLeftRelation
     have hStable := compileTypeFuel_eq_of_sufficient signature left hLeftFuel
       (typeCompilationFuel_sufficient left)
     simpa [leftFragment, hStable] using hResult
   have hRightSemantic : computeFuture
       { states := rightFragment.states, edges := rightFragment.edges }
       rightFragment.initial = typeFutureOffers right := by
-    have hResult := hRightCorrect rightFragment.initial right hRightRelation
+    have hResult := hRightCorrect hRightCanonical rightFragment.initial right
+      hRightRelation
     have hStable := compileTypeFuel_eq_of_sufficient signature right hRightFuel
       (typeCompilationFuel_sufficient right)
     simpa [rightFragment, hStable] using hResult
@@ -597,7 +616,8 @@ private theorem compiledChoiceLeftFuture_eq
     (state : TypeAutomatonState)
     (hRelated : TypeCompilationRelation left state residual)
     (hFuture : CompilationFutureCorrect signature left)
-    (hStateCorrect : CompilationStateCorrect signature left) :
+    (hStateCorrect : CompilationStateCorrect signature left)
+    (hCanonical : left.EntryCanonical) :
     let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
     let leftFragment := compileTypeFuel signature fuel left
     let rightFragment := compileTypeFuel signature fuel right
@@ -638,7 +658,7 @@ private theorem compiledChoiceLeftFuture_eq
   have hEmbedding := buildChoiceAutomaton_computeFuture_left signature
     leftFragment rightFragment selectionLeft selectionRight state hClosed
     hState hCard
-  have hSemantic := hFuture state residual hRelated
+  have hSemantic := hFuture hCanonical state residual hRelated
   have hSemanticShared : computeFuture
       { states := leftFragment.states, edges := leftFragment.edges }
       state = typeFutureOffers residual := by
@@ -654,7 +674,8 @@ private theorem compiledChoiceRightFuture_eq
     (state : TypeAutomatonState)
     (hRelated : TypeCompilationRelation right state residual)
     (hFuture : CompilationFutureCorrect signature right)
-    (hStateCorrect : CompilationStateCorrect signature right) :
+    (hStateCorrect : CompilationStateCorrect signature right)
+    (hCanonical : right.EntryCanonical) :
     let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
     let leftFragment := compileTypeFuel signature fuel left
     let rightFragment := compileTypeFuel signature fuel right
@@ -695,7 +716,7 @@ private theorem compiledChoiceRightFuture_eq
   have hEmbedding := buildChoiceAutomaton_computeFuture_right signature
     leftFragment rightFragment selectionLeft selectionRight state hClosed
     hState hCard
-  have hSemantic := hFuture state residual hRelated
+  have hSemantic := hFuture hCanonical state residual hRelated
   have hSemanticShared : computeFuture
       { states := rightFragment.states, edges := rightFragment.edges }
       state = typeFutureOffers residual := by
@@ -712,12 +733,21 @@ theorem compilationFutureCorrect_choice
     (hLeftFuture : CompilationFutureCorrect signature left)
     (hRightFuture : CompilationFutureCorrect signature right) :
     CompilationFutureCorrect signature (.choice left right) := by
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hLeftCanonical : left.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hRightCanonical : right.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   cases hRelated with
   | choice_source =>
       have hRoot := compiledChoiceRootFuture_eq_union signature left right
         TypeLabel.silent TypeLabel.silent (by simp [TypeLabel.silent])
-        (by simp [TypeLabel.silent]) hLeftFuture hRightFuture
+        (by simp [TypeLabel.silent]) hLeftFuture hRightFuture hLeftCanonical
+        hRightCanonical
       have hSyntax := typeFutureOffers_choice left right
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hRoot.trans hSyntax.symm
@@ -725,14 +755,14 @@ theorem compilationFutureCorrect_choice
       have hChild := compiledChoiceLeftFuture_eq signature left right
         residual TypeLabel.silent TypeLabel.silent childState
         hChildRelated hLeftFuture
-        (compilationStateCorrect_of_compilation signature left)
+        (compilationStateCorrect_of_compilation signature left) hLeftCanonical
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hChild
   | choice_right _ _ childResidual childState hChildRelated =>
       have hChild := compiledChoiceRightFuture_eq signature left right
         residual TypeLabel.silent TypeLabel.silent childState
         hChildRelated hRightFuture
-        (compilationStateCorrect_of_compilation signature right)
+        (compilationStateCorrect_of_compilation signature right) hRightCanonical
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hChild
 
@@ -743,13 +773,21 @@ theorem compilationFutureCorrect_fairChoice
     (hLeftFuture : CompilationFutureCorrect signature left)
     (hRightFuture : CompilationFutureCorrect signature right) :
     CompilationFutureCorrect signature (.fairChoice bid left right) := by
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hLeftCanonical : left.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hRightCanonical : right.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   cases hRelated with
   | fair_source =>
       have hRoot := compiledChoiceRootFuture_eq_union signature left right
         (TypeLabel.fair bid true) (TypeLabel.fair bid false)
         (by simp [TypeLabel.fair]) (by simp [TypeLabel.fair])
-        hLeftFuture hRightFuture
+        hLeftFuture hRightFuture hLeftCanonical hRightCanonical
       have hSyntax := typeFutureOffers_fairChoice bid left right
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hRoot.trans hSyntax.symm
@@ -757,14 +795,14 @@ theorem compilationFutureCorrect_fairChoice
       have hChild := compiledChoiceLeftFuture_eq signature left right
         residual (TypeLabel.fair bid true) (TypeLabel.fair bid false)
         childState hChildRelated hLeftFuture
-        (compilationStateCorrect_of_compilation signature left)
+        (compilationStateCorrect_of_compilation signature left) hLeftCanonical
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hChild
   | fair_right _ _ _ childResidual childState hChildRelated =>
       have hChild := compiledChoiceRightFuture_eq signature left right
         residual (TypeLabel.fair bid true) (TypeLabel.fair bid false)
         childState hChildRelated hRightFuture
-        (compilationStateCorrect_of_compilation signature right)
+        (compilationStateCorrect_of_compilation signature right) hRightCanonical
       simpa only [typeCompilationFuel, Nat.one_add, compileTypeFuel] using
         hChild
 
@@ -1134,6 +1172,7 @@ theorem compileType_choice_left_selection_step_iff
     {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
     (hFuture : ChoiceFutureCorrect signature left right)
+    (hCanonical : left.EntryCanonical)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
         signature.transitionAlphabet) :
@@ -1151,7 +1190,9 @@ theorem compileType_choice_left_selection_step_iff
     · exact compileType_choice_left_selection_edge signature left right
         hEnvironment hFuture hSymbol
     · exact TypeCompilationRelation.choice_left left right left _
-        (compileType_initial_relation signature left)
+        (compileType_initial_relation_of_canonical signature left
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hCanonical))
   · intro _
     exact ⟨TypeTransition.choice_left env left right hWellFormed,
       TypeOffers.choice_left env left right hWellFormed⟩
@@ -1163,6 +1204,7 @@ theorem compileType_choice_right_selection_step_iff
     {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
     (hFuture : ChoiceFutureCorrect signature left right)
+    (hCanonical : right.EntryCanonical)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
         signature.transitionAlphabet) :
@@ -1180,7 +1222,9 @@ theorem compileType_choice_right_selection_step_iff
     · exact compileType_choice_right_selection_edge signature left right
         hEnvironment hFuture hSymbol
     · exact TypeCompilationRelation.choice_right left right right _
-        (compileType_initial_relation signature right)
+        (compileType_initial_relation_of_canonical signature right
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hCanonical))
   · intro _
     exact ⟨TypeTransition.choice_right env left right hWellFormed,
       TypeOffers.choice_right env left right hWellFormed⟩
@@ -1192,7 +1236,8 @@ theorem compilationStepCorrect_choice
     (hLeftStep : CompilationStepCorrect signature left)
     (hRightStep : CompilationStepCorrect signature right)
     (hLeftFuture : CompilationFutureCorrect signature left)
-    (hRightFuture : CompilationFutureCorrect signature right) :
+    (hRightFuture : CompilationFutureCorrect signature right)
+    (hCanonical : (PactType.choice left right).EntryCanonical) :
     CompilationStepCorrect signature (.choice left right) := by
   intro residual residual' state env label offers hRelated hSymbol
   rcases offers with ⟨current, future⟩
@@ -1207,8 +1252,16 @@ theorem compilationStepCorrect_choice
           signature.offerSummaries := by
       simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
     exact hParts.1
+  have hLeftCanonical : left.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hRightCanonical : right.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   have hChoiceFuture := choiceFutureCorrect_of_compilation signature left right
-    hLeftFuture hRightFuture
+    hLeftFuture hRightFuture hLeftCanonical hRightCanonical
   cases hRelated with
   | choice_source =>
       constructor
@@ -1220,14 +1273,18 @@ theorem compilationStepCorrect_choice
             · exact compileType_choice_left_selection_edge signature left right
                 hEnvironment hChoiceFuture hSignatureSymbol
             · exact TypeCompilationRelation.choice_left left right left _
-                (compileType_initial_relation signature left)
+                (compileType_initial_relation_of_canonical signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical))
         | choice_right =>
             obtain ⟨rfl, rfl⟩ := TypeOffers.choice_right_fields hOffers
             refine ⟨.child 1 (compileType signature right).initial, ?_, ?_⟩
             · exact compileType_choice_right_selection_edge signature left right
                 hEnvironment hChoiceFuture hSignatureSymbol
             · exact TypeCompilationRelation.choice_right left right right _
-                (compileType_initial_relation signature right)
+                (compileType_initial_relation_of_canonical signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hRightCanonical))
       · rintro ⟨target, hEdge, hTarget⟩
         have hCases := compileType_choice_root_edge_cases signature left right
           hSignatureSymbol hChoiceFuture hEdge
@@ -1239,7 +1296,10 @@ theorem compilationStepCorrect_choice
           cases hTarget with
           | choice_left _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature left)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical))
               cases hResidual
               exact ⟨TypeTransition.choice_left env left right
                   (TypeAlphabet.environment_wellFormed hEnvironment),
@@ -1252,7 +1312,10 @@ theorem compilationStepCorrect_choice
           cases hTarget with
           | choice_right _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature right)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hRightCanonical))
               cases hResidual
               exact ⟨TypeTransition.choice_right env left right
                   (TypeAlphabet.environment_wellFormed hEnvironment),
@@ -1330,11 +1393,13 @@ as ordinary choice, with observable branch labels on the two root edges. -/
 theorem fairChoiceFutureCorrect_of_compilation
     (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
     (hLeftCorrect : CompilationFutureCorrect signature left)
-    (hRightCorrect : CompilationFutureCorrect signature right) :
+    (hRightCorrect : CompilationFutureCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical) :
     FairChoiceFutureCorrect signature bid left right := by
   apply choiceFutureCorrect_core signature left right
     (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-    hLeftCorrect hRightCorrect
+    hLeftCorrect hRightCorrect hLeftCanonical hRightCanonical
   · apply compileTypeFuel_referencesClosed
     simp [TypeCompilationFuelSufficient]
   · apply compileTypeFuel_referencesClosed
@@ -1722,6 +1787,7 @@ theorem compileType_fairChoice_left_selection_step_iff
     {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
     (hFuture : FairChoiceFutureCorrect signature bid left right)
+    (hCanonical : left.EntryCanonical)
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.fair bid true)
       (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
         signature.transitionAlphabet) :
@@ -1740,7 +1806,9 @@ theorem compileType_fairChoice_left_selection_step_iff
     · exact compileType_fairChoice_left_selection_edge signature bid left right
         hEnvironment hFuture hSymbol
     · exact TypeCompilationRelation.fair_left bid left right left _
-        (compileType_initial_relation signature left)
+        (compileType_initial_relation_of_canonical signature left
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hCanonical))
   · intro _
     exact ⟨TypeTransition.fair_left env bid left right hWellFormed,
       TypeOffers.fair_left env bid left right hWellFormed⟩
@@ -1751,6 +1819,7 @@ theorem compileType_fairChoice_right_selection_step_iff
     {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
     (hFuture : FairChoiceFutureCorrect signature bid left right)
+    (hCanonical : right.EntryCanonical)
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.fair bid false)
       (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
         signature.transitionAlphabet) :
@@ -1769,7 +1838,9 @@ theorem compileType_fairChoice_right_selection_step_iff
     · exact compileType_fairChoice_right_selection_edge signature bid left right
         hEnvironment hFuture hSymbol
     · exact TypeCompilationRelation.fair_right bid left right right _
-        (compileType_initial_relation signature right)
+        (compileType_initial_relation_of_canonical signature right
+          (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+            hCanonical))
   · intro _
     exact ⟨TypeTransition.fair_right env bid left right hWellFormed,
       TypeOffers.fair_right env bid left right hWellFormed⟩
@@ -1781,7 +1852,8 @@ theorem compilationStepCorrect_fairChoice
     (hLeftStep : CompilationStepCorrect signature left)
     (hRightStep : CompilationStepCorrect signature right)
     (hLeftFuture : CompilationFutureCorrect signature left)
-    (hRightFuture : CompilationFutureCorrect signature right) :
+    (hRightFuture : CompilationFutureCorrect signature right)
+    (hCanonical : (PactType.fairChoice bid left right).EntryCanonical) :
     CompilationStepCorrect signature (.fairChoice bid left right) := by
   intro residual residual' state env label offers hRelated hSymbol
   rcases offers with ⟨current, future⟩
@@ -1796,8 +1868,16 @@ theorem compilationStepCorrect_fairChoice
           signature.offerSummaries := by
       simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
     exact hFields.1
+  have hLeftCanonical : left.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.1
+  have hRightCanonical : right.EntryCanonical := by
+    have h := hCanonical
+    simp only [PactType.EntryCanonical] at h
+    exact h.2
   have hFairFuture := fairChoiceFutureCorrect_of_compilation signature bid
-    left right hLeftFuture hRightFuture
+    left right hLeftFuture hRightFuture hLeftCanonical hRightCanonical
   cases hRelated with
   | fair_source =>
       constructor
@@ -1809,14 +1889,18 @@ theorem compilationStepCorrect_fairChoice
             · exact compileType_fairChoice_left_selection_edge signature bid
                 left right hEnvironment hFairFuture hSignatureSymbol
             · exact TypeCompilationRelation.fair_left bid left right left _
-                (compileType_initial_relation signature left)
+                (compileType_initial_relation_of_canonical signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical))
         | fair_right =>
             obtain ⟨rfl, rfl⟩ := TypeOffers.fair_right_fields hOffers
             refine ⟨.child 1 (compileType signature right).initial, ?_, ?_⟩
             · exact compileType_fairChoice_right_selection_edge signature bid
                 left right hEnvironment hFairFuture hSignatureSymbol
             · exact TypeCompilationRelation.fair_right bid left right right _
-                (compileType_initial_relation signature right)
+                (compileType_initial_relation_of_canonical signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hRightCanonical))
       · rintro ⟨target, hEdge, hTarget⟩
         have hCases := compileType_fairChoice_root_edge_cases signature bid
           left right hSignatureSymbol hFairFuture hEdge
@@ -1828,7 +1912,10 @@ theorem compilationStepCorrect_fairChoice
           cases hTarget with
           | fair_left _ _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature left)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature left
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hLeftCanonical))
               cases hResidual
               exact ⟨TypeTransition.fair_left env bid left right
                   (TypeAlphabet.environment_wellFormed hEnvironment),
@@ -1841,7 +1928,10 @@ theorem compilationStepCorrect_fairChoice
           cases hTarget with
           | fair_right _ _ _ _ _ hChildTarget =>
               have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation signature right)
+                hChildTarget (compileType_initial_relation_of_canonical
+                  signature right
+                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+                    hRightCanonical))
               cases hResidual
               exact ⟨TypeTransition.fair_right env bid left right
                   (TypeAlphabet.environment_wellFormed hEnvironment),

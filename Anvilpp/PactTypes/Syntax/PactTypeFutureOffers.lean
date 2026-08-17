@@ -1606,12 +1606,8 @@ mutual
         env.WellFormed ∧ env.clock = false →
         TypeOffers env .tock TypeLabel.silent .tock ∅ ∅
     | skip (env : TypeEnvironment) :
-        env.WellFormed ∧ env.clock = false ∧ env.immediate = ∅ →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env .skip TypeLabel.silent .skip ∅ ∅
-    | skip_seq (env : TypeEnvironment) (processType : PactType) :
-        env.WellFormed →
-        TypeOffers env (.seq .skip processType) TypeLabel.silent processType
-          ∅ (typeFutureOffers processType)
     | progress (env : TypeEnvironment) (pid : ProcId) :
         env.WellFormed →
         TypeOffers env (.progress pid) (TypeLabel.progress pid) .skip ∅ ∅

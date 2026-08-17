@@ -675,13 +675,19 @@ theorem compileTypeFuel_parallel_hasResolvedEdge_iff
         AutomatonConstructionLabel.combine] using hLabel
 
 
+/-- A `.par`-sourced decorated offer step is either an ordinary `TypeOffers.par`
+step (target stays compound) or a `TypeOffers.par_fuse` step (target
+collapses to literal `.skip`, exactly when both children's own decorations
+also target `.skip`). Each disjunct repeats the same field bundle
+(environments/labels/offers/locals/sync) that `TypeOffers.par`/`par_fuse`
+share; only the target shape and the two children's own target differ. -/
 private theorem TypeOffers.parallel_fields
     {outer : TypeEnvironment} {left right target : PactType}
     {interface : Interface} {label : TypeLabel}
     {current future : Finset BareMessage}
     (hOffers : TypeOffers outer (.par left right interface) label target
       current future) :
-    ∃ leftEnvironment rightEnvironment leftTarget rightTarget
+    (∃ leftEnvironment rightEnvironment leftTarget rightTarget
         leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture,
       target = .par leftTarget rightTarget interface ∧
       label = TypeLabel.combine interface leftLabel rightLabel ∧
@@ -691,18 +697,42 @@ private theorem TypeOffers.parallel_fields
         leftFuture ∧
       TypeOffers rightEnvironment right rightLabel rightTarget rightCurrent
         rightFuture ∧
+      ¬ (leftTarget = .skip ∧ rightTarget = .skip) ∧
       LocalTypeEnvironment outer interface rightEnvironment right rightLabel
         leftEnvironment ∧
       LocalTypeEnvironment outer interface leftEnvironment left leftLabel
         rightEnvironment ∧
-      outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel := by
+      outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel) ∨
+    (target = .skip ∧
+      ∃ leftEnvironment rightEnvironment
+        leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture,
+      label = TypeLabel.combine interface leftLabel rightLabel ∧
+      hideTypeOffers interface (leftCurrent ∪ rightCurrent) = current ∧
+      hideTypeOffers interface (leftFuture ∪ rightFuture) = future ∧
+      TypeOffers leftEnvironment left leftLabel .skip leftCurrent
+        leftFuture ∧
+      TypeOffers rightEnvironment right rightLabel .skip rightCurrent
+        rightFuture ∧
+      LocalTypeEnvironment outer interface rightEnvironment right rightLabel
+        leftEnvironment ∧
+      LocalTypeEnvironment outer interface leftEnvironment left leftLabel
+        rightEnvironment ∧
+      outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel) := by
   cases hOffers with
   | par outer leftEnvironment rightEnvironment interface left leftTarget right
       rightTarget leftLabel rightLabel leftCurrent leftFuture rightCurrent
-      rightFuture hLeftOffers hRightOffers hLeftLocal hRightLocal hFields =>
-      exact ⟨leftEnvironment, rightEnvironment, leftTarget, rightTarget,
+      rightFuture hLeftOffers hRightOffers hExcl hLeftLocal hRightLocal
+      hFields =>
+      exact Or.inl ⟨leftEnvironment, rightEnvironment, leftTarget, rightTarget,
         leftLabel, rightLabel, leftCurrent, leftFuture, rightCurrent,
         rightFuture, rfl, rfl, rfl, rfl, hLeftOffers, hRightOffers,
+        hExcl, hLeftLocal, hRightLocal, hFields⟩
+  | par_fuse outer leftEnvironment rightEnvironment interface left right
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeftOffers hRightOffers hLeftLocal hRightLocal hFields =>
+      exact Or.inr ⟨rfl, leftEnvironment, rightEnvironment,
+        leftLabel, rightLabel, leftCurrent, leftFuture, rightCurrent,
+        rightFuture, rfl, rfl, rfl, hLeftOffers, hRightOffers,
         hLeftLocal, hRightLocal, hFields⟩
 
 /-- The forward half of scoped parallel correspondence.  A semantic product
@@ -715,6 +745,8 @@ theorem parallel_semantic_step_to_resolved_edge
     (hScoped : PactType.InterfaceScoped (.par left right interface))
     (hLeftStep : CompilationScopedFragmentStepCorrect signature left)
     (hRightStep : CompilationScopedFragmentStepCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical)
     {residual residual' : PactType} {state : TypeAutomatonState}
     {environment : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary}
@@ -767,52 +799,234 @@ theorem parallel_semantic_step_to_resolved_edge
   | parallel _ _ leftResidual rightResidual _ leftState rightState
       hLeftRelated hRightRelated =>
       rcases hStep with ⟨_, hOffers⟩
-      obtain ⟨leftEnvironment, rightEnvironment, leftTarget, rightTarget,
+      -- Shared reconstruction: given the two decorated child steps
+      -- underlying whichever `TypeOffers.par`/`par_fuse` derivation fired,
+      -- rebuild the matching synchronized automaton edge. What differs
+      -- between the two is only the final `TypeCompilationRelation` used to
+      -- tag the target pair, supplied by each caller below.
+      have hEdgeExists : ∀ (leftTarget rightTarget : PactType)
+          (leftEnvironment rightEnvironment : TypeEnvironment)
+          (leftLabel rightLabel : TypeLabel)
+          (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage),
+          label = TypeLabel.combine interface leftLabel rightLabel →
+          hideTypeOffers interface (leftCurrent ∪ rightCurrent) = current →
+          hideTypeOffers interface (leftFuture ∪ rightFuture) = future →
+          TypeOffers leftEnvironment leftResidual leftLabel leftTarget
+            leftCurrent leftFuture →
+          TypeOffers rightEnvironment rightResidual rightLabel rightTarget
+            rightCurrent rightFuture →
+          LocalTypeEnvironment environment interface rightEnvironment
+            rightResidual rightLabel leftEnvironment →
+          LocalTypeEnvironment environment interface leftEnvironment
+            leftResidual leftLabel rightEnvironment →
+          TypeLabel.Sync interface leftLabel rightLabel →
+          ∃ leftTargetState rightTargetState,
+            (compileTypeFuel signature
+              (typeCompilationFuel (.par left right interface))
+              (.par left right interface)).HasResolvedEdge
+              (.pair leftState rightState) environment label
+              { current := current, future := future }
+              (.pair leftTargetState rightTargetState) ∧
+            TypeCompilationRelation left leftTargetState leftTarget ∧
+            TypeCompilationRelation right rightTargetState rightTarget := by
+        intro leftTarget rightTarget leftEnvironment rightEnvironment
+          leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+          hLabel hCurrent hFuture hLeftOffers hRightOffers hLeftLocal
+          hRightLocal hLabelSync
+        have hLeftLocalEnvironment :
+            leftEnvironment ∈ signature.localEnvironments :=
+          TypeAlphabet.localEnvironment_mem_of_localTypeEnvironment_local
+            signature interface hInterface hOuterEnvironment hLeftLocal
+        have hRightLocalEnvironment :
+            rightEnvironment ∈ signature.localEnvironments :=
+          TypeAlphabet.localEnvironment_mem_of_localTypeEnvironment_local
+            signature interface hInterface hOuterEnvironment hRightLocal
+        have hLeftAvoids :
+            leftEnvironment.AvoidsInterface left.ParallelInterfaces :=
+          hLeftLocal.avoidsInterface_of_disjoint hOuterAvoidsLeft hDisjointLeft
+        have hRightAvoids :
+            rightEnvironment.AvoidsInterface right.ParallelInterfaces :=
+          hRightLocal.avoidsInterface_of_disjoint hOuterAvoidsRight
+            hDisjointRight
+        rcases (hLeftStep (residual' := leftTarget) (label := leftLabel)
+            (offers := { current := leftCurrent, future := leftFuture })
+            hLeftCanonical hLeftRelated hLeftLocalEnvironment hLeftAvoids).mp
+            ⟨TypeOffers.to_transition hLeftOffers, hLeftOffers⟩ with
+          ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩
+        rcases (hRightStep (residual' := rightTarget) (label := rightLabel)
+            (offers := { current := rightCurrent, future := rightFuture })
+            hRightCanonical hRightRelated hRightLocalEnvironment
+            hRightAvoids).mp
+            ⟨TypeOffers.to_transition hRightOffers, hRightOffers⟩ with
+          ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩
+        let leftSummary : TypeOfferSummary :=
+          { current := leftCurrent, future := leftFuture }
+        let rightSummary : TypeOfferSummary :=
+          { current := rightCurrent, future := rightFuture }
+        let leftAutomatonEdge : AutomatonFragmentEdge :=
+          { source := leftState
+            environment := leftEnvironment
+            label := .visible leftLabel
+            current := leftCurrent
+            future := leftFuture
+            target := leftTargetState }
+        let rightAutomatonEdge : AutomatonFragmentEdge :=
+          { source := rightState
+            environment := rightEnvironment
+            label := .visible rightLabel
+            current := rightCurrent
+            future := rightFuture
+            target := rightTargetState }
+        have hLeftEdgeMember : leftAutomatonEdge ∈
+            semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel left) left) := by
+          simp only [semanticResolvedAutomatonEdges, Finset.mem_filter]
+          exact ⟨(mem_resolvedAutomatonEdges_visible_iff _ _ _ _ _ _).mpr
+            hLeftEdge, by simp [leftAutomatonEdge]⟩
+        have hRightEdgeMember : rightAutomatonEdge ∈
+            semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel right) right) := by
+          simp only [semanticResolvedAutomatonEdges, Finset.mem_filter]
+          exact ⟨(mem_resolvedAutomatonEdges_visible_iff _ _ _ _ _ _).mpr
+            hRightEdge, by simp [rightAutomatonEdge]⟩
+        have hLeftRealizes :
+            ∀ {target current future},
+              TypeOffers leftEnvironment leftResidual leftLabel target current
+                  future →
+              ∃ witness ∈ semanticResolvedAutomatonEdges
+                  (compileTypeFuel signature (typeCompilationFuel left) left),
+                matchesAutomatonOfferWitness leftAutomatonEdge witness ∧
+                  witness.current = current ∧ witness.future = future := by
+          intro target current future hSiblingOffers
+          rcases (hLeftStep (residual' := target) (label := leftLabel)
+              (offers := { current := current, future := future })
+              hLeftCanonical hLeftRelated hLeftLocalEnvironment hLeftAvoids).mp
+              ⟨TypeOffers.to_transition hSiblingOffers, hSiblingOffers⟩ with
+            ⟨targetState, hResolved, _⟩
+          let witness : AutomatonFragmentEdge :=
+            { source := leftState
+              environment := leftEnvironment
+              label := .visible leftLabel
+              current := current
+              future := future
+              target := targetState }
+          refine ⟨witness, ?_, ?_, rfl, rfl⟩
+          · simp only [semanticResolvedAutomatonEdges, Finset.mem_filter]
+            exact ⟨(mem_resolvedAutomatonEdges_visible_iff _ _ _ _ _ _).mpr
+              hResolved, by simp [witness]⟩
+          · simp [matchesAutomatonOfferWitness, leftAutomatonEdge, witness,
+              AutomatonConstructionLabel.semantic]
+        have hRightRealizes :
+            ∀ {target current future},
+              TypeOffers rightEnvironment rightResidual rightLabel target
+                  current future →
+              ∃ witness ∈ semanticResolvedAutomatonEdges
+                  (compileTypeFuel signature (typeCompilationFuel right) right),
+                matchesAutomatonOfferWitness rightAutomatonEdge witness ∧
+                  witness.current = current ∧ witness.future = future := by
+          intro target current future hSiblingOffers
+          rcases (hRightStep (residual' := target) (label := rightLabel)
+              (offers := { current := current, future := future })
+              hRightCanonical hRightRelated hRightLocalEnvironment
+            hRightAvoids).mp
+              ⟨TypeOffers.to_transition hSiblingOffers, hSiblingOffers⟩ with
+            ⟨targetState, hResolved, _⟩
+          let witness : AutomatonFragmentEdge :=
+            { source := rightState
+              environment := rightEnvironment
+              label := .visible rightLabel
+              current := current
+              future := future
+              target := targetState }
+          refine ⟨witness, ?_, ?_, rfl, rfl⟩
+          · simp only [semanticResolvedAutomatonEdges, Finset.mem_filter]
+            exact ⟨(mem_resolvedAutomatonEdges_visible_iff _ _ _ _ _ _).mpr
+              hResolved, by simp [witness]⟩
+          · simp [matchesAutomatonOfferWitness, rightAutomatonEdge, witness,
+              AutomatonConstructionLabel.semantic]
+        obtain ⟨hSynchronized, hCombinedEnvironment⟩ :=
+          localTypeEnvironments_to_syncAutomatonEdges_local signature interface
+            hInterface hOuterEnvironment hOuterAvoidsInterface hLeftEdgeMember
+            hRightEdgeMember hLeftLocal hRightLocal hLeftRealizes
+            hRightRealizes hLabelSync
+        refine ⟨leftTargetState, rightTargetState, ?_, hLeftTargetRelated,
+          hRightTargetRelated⟩
+        apply (compileTypeFuel_parallel_hasResolvedEdge_iff signature left
+          right interface leftState rightState leftTargetState
+          rightTargetState environment label
+          { current := current, future := future }).mpr
+        refine ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+          leftSummary, rightSummary, hLeftEdge, hRightEdge, ?_⟩
+        dsimp only
+        refine ⟨?_, hCombinedEnvironment, hLabel.symm, ?_, ?_⟩
+        · simpa [leftAutomatonEdge, rightAutomatonEdge, leftSummary,
+            rightSummary] using hSynchronized
+        · simpa [leftSummary, rightSummary, hideOffers, hideTypeOffers]
+            using hCurrent
+        · simpa [leftSummary, rightSummary, hideOffers, hideTypeOffers]
+            using hFuture
+      rcases TypeOffers.parallel_fields hOffers with
+        ⟨leftEnvironment, rightEnvironment, leftTarget, rightTarget,
           leftLabel, rightLabel, leftCurrent, leftFuture, rightCurrent,
           rightFuture, hTarget, hLabel, hCurrent, hFuture, hLeftOffers,
-          hRightOffers, hLeftLocal, hRightLocal, _, hLabelSync⟩ :=
-        TypeOffers.parallel_fields hOffers
-      have hLeftLocalEnvironment :
-          leftEnvironment ∈ signature.localEnvironments :=
-        TypeAlphabet.localEnvironment_mem_of_localTypeEnvironment_local
-          signature interface hInterface hOuterEnvironment hLeftLocal
-      have hRightLocalEnvironment :
-          rightEnvironment ∈ signature.localEnvironments :=
-        TypeAlphabet.localEnvironment_mem_of_localTypeEnvironment_local
-          signature interface hInterface hOuterEnvironment hRightLocal
-      have hLeftAvoids :
-          leftEnvironment.AvoidsInterface left.ParallelInterfaces :=
-        hLeftLocal.avoidsInterface_of_disjoint hOuterAvoidsLeft hDisjointLeft
-      have hRightAvoids :
-          rightEnvironment.AvoidsInterface right.ParallelInterfaces :=
-        hRightLocal.avoidsInterface_of_disjoint hOuterAvoidsRight hDisjointRight
-      rcases (hLeftStep (residual' := leftTarget) (label := leftLabel)
-          (offers := { current := leftCurrent, future := leftFuture })
-          hLeftRelated hLeftLocalEnvironment hLeftAvoids).mp
-          ⟨TypeOffers.to_transition hLeftOffers, hLeftOffers⟩ with
-        ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩
-      rcases (hRightStep (residual' := rightTarget) (label := rightLabel)
-          (offers := { current := rightCurrent, future := rightFuture })
-          hRightRelated hRightLocalEnvironment hRightAvoids).mp
-          ⟨TypeOffers.to_transition hRightOffers, hRightOffers⟩ with
-        ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩
-      let leftSummary : TypeOfferSummary :=
-        { current := leftCurrent, future := leftFuture }
-      let rightSummary : TypeOfferSummary :=
-        { current := rightCurrent, future := rightFuture }
+          hRightOffers, hExcl, hLeftLocal, hRightLocal, hLabelSync⟩ |
+        ⟨hTarget, leftEnvironment, rightEnvironment,
+          leftLabel, rightLabel, leftCurrent, leftFuture, rightCurrent,
+          rightFuture, hLabel, hCurrent, hFuture, hLeftOffers,
+          hRightOffers, hLeftLocal, hRightLocal, hLabelSync⟩
+      · obtain ⟨leftTargetState, rightTargetState, hEdge, hL, hR⟩ :=
+          hEdgeExists leftTarget rightTarget leftEnvironment rightEnvironment
+            leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLabel hCurrent hFuture hLeftOffers hRightOffers
+            hLeftLocal hRightLocal hLabelSync.2
+        refine ⟨.pair leftTargetState rightTargetState, hEdge, ?_⟩
+        rw [hTarget]
+        exact TypeCompilationRelation.parallel left right leftTarget
+          rightTarget interface leftTargetState rightTargetState hL hR hExcl
+      · obtain ⟨leftTargetState, rightTargetState, hEdge, hL, hR⟩ :=
+          hEdgeExists .skip .skip leftEnvironment rightEnvironment
+            leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLabel hCurrent hFuture hLeftOffers hRightOffers
+            hLeftLocal hRightLocal hLabelSync.2
+        refine ⟨.pair leftTargetState rightTargetState, hEdge, ?_⟩
+        rw [hTarget]
+        exact TypeCompilationRelation.parallel_fuse left right interface
+          leftTargetState rightTargetState hL hR
+  | parallel_fuse _ _ _ leftState rightState hLeftRelated hRightRelated =>
+      -- `residual` is already bare `.skip`: the only witnessing transition
+      -- is `.skip`'s own self-loop, so the resolved edge is the product of
+      -- both siblings' own self-loops (each siblings' own relation already
+      -- pins its residual to `.skip`, so its own `stepIff` applies directly
+      -- at environment `environment` itself, with no combination needed).
+      rcases hStep with ⟨hTransition, hOffersStep⟩
+      cases hTransition with
+      | skip _ hGuard =>
+      cases hOffersStep with
+      | skip _ _ =>
+      have hSelfStep : DecoratedTypeTransition environment .skip
+          TypeLabel.silent { current := ∅, future := ∅ } .skip :=
+        ⟨TypeTransition.skip environment hGuard,
+          TypeOffers.skip environment hGuard⟩
+      obtain ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩ :=
+        (hLeftStep hLeftCanonical hLeftRelated hOuterEnvironment
+          hOuterAvoidsLeft).mp hSelfStep
+      obtain ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩ :=
+        (hRightStep hRightCanonical hRightRelated hOuterEnvironment
+          hOuterAvoidsRight).mp
+          hSelfStep
       let leftAutomatonEdge : AutomatonFragmentEdge :=
         { source := leftState
-          environment := leftEnvironment
-          label := .visible leftLabel
-          current := leftCurrent
-          future := leftFuture
+          environment := environment
+          label := .visible TypeLabel.silent
+          current := ∅
+          future := ∅
           target := leftTargetState }
       let rightAutomatonEdge : AutomatonFragmentEdge :=
         { source := rightState
-          environment := rightEnvironment
-          label := .visible rightLabel
-          current := rightCurrent
-          future := rightFuture
+          environment := environment
+          label := .visible TypeLabel.silent
+          current := ∅
+          future := ∅
           target := rightTargetState }
       have hLeftEdgeMember : leftAutomatonEdge ∈
           semanticResolvedAutomatonEdges (compileTypeFuel signature
@@ -826,24 +1040,41 @@ theorem parallel_semantic_step_to_resolved_edge
         simp only [semanticResolvedAutomatonEdges, Finset.mem_filter]
         exact ⟨(mem_resolvedAutomatonEdges_visible_iff _ _ _ _ _ _).mpr
           hRightEdge, by simp [rightAutomatonEdge]⟩
+      have hDisjointImmediateFuture :
+          Disjoint environment.immediate environment.future :=
+        Finset.disjoint_iff_inter_eq_empty.mpr (hGuard.1.2 hGuard.2)
+      have hLeftLocal : LocalTypeEnvironment environment interface environment
+          .skip TypeLabel.silent environment :=
+        LocalTypeEnvironment.ordinary environment environment environment
+          interface .skip .skip TypeLabel.silent ∅ ∅ hGuard.2 hGuard.2
+          (TypeOffers.skip environment hGuard)
+          hGuard.2 (by simp [restrictTypeOffers])
+          (by
+            simp only [restrictTypeOffers, Finset.filter_empty,
+              Finset.union_empty]
+            exact (Finset.sdiff_eq_self_of_disjoint
+              hDisjointImmediateFuture.symm).symm)
+      have hRightLocal : LocalTypeEnvironment environment interface environment
+          .skip TypeLabel.silent environment := hLeftLocal
       have hLeftRealizes :
           ∀ {target current future},
-            TypeOffers leftEnvironment leftResidual leftLabel target current
+            TypeOffers environment .skip TypeLabel.silent target current
                 future →
             ∃ witness ∈ semanticResolvedAutomatonEdges
                 (compileTypeFuel signature (typeCompilationFuel left) left),
               matchesAutomatonOfferWitness leftAutomatonEdge witness ∧
                 witness.current = current ∧ witness.future = future := by
         intro target current future hSiblingOffers
-        rcases (hLeftStep (residual' := target) (label := leftLabel)
+        rcases (hLeftStep (residual' := target) (label := TypeLabel.silent)
             (offers := { current := current, future := future })
-            hLeftRelated hLeftLocalEnvironment hLeftAvoids).mp
+            hLeftCanonical hLeftRelated hOuterEnvironment
+            hOuterAvoidsLeft).mp
             ⟨TypeOffers.to_transition hSiblingOffers, hSiblingOffers⟩ with
           ⟨targetState, hResolved, _⟩
         let witness : AutomatonFragmentEdge :=
           { source := leftState
-            environment := leftEnvironment
-            label := .visible leftLabel
+            environment := environment
+            label := .visible TypeLabel.silent
             current := current
             future := future
             target := targetState }
@@ -855,22 +1086,23 @@ theorem parallel_semantic_step_to_resolved_edge
             AutomatonConstructionLabel.semantic]
       have hRightRealizes :
           ∀ {target current future},
-            TypeOffers rightEnvironment rightResidual rightLabel target current
+            TypeOffers environment .skip TypeLabel.silent target current
                 future →
             ∃ witness ∈ semanticResolvedAutomatonEdges
                 (compileTypeFuel signature (typeCompilationFuel right) right),
               matchesAutomatonOfferWitness rightAutomatonEdge witness ∧
                 witness.current = current ∧ witness.future = future := by
         intro target current future hSiblingOffers
-        rcases (hRightStep (residual' := target) (label := rightLabel)
+        rcases (hRightStep (residual' := target) (label := TypeLabel.silent)
             (offers := { current := current, future := future })
-            hRightRelated hRightLocalEnvironment hRightAvoids).mp
+            hRightCanonical hRightRelated hOuterEnvironment
+            hOuterAvoidsRight).mp
             ⟨TypeOffers.to_transition hSiblingOffers, hSiblingOffers⟩ with
           ⟨targetState, hResolved, _⟩
         let witness : AutomatonFragmentEdge :=
           { source := rightState
-            environment := rightEnvironment
-            label := .visible rightLabel
+            environment := environment
+            label := .visible TypeLabel.silent
             current := current
             future := future
             target := targetState }
@@ -880,29 +1112,34 @@ theorem parallel_semantic_step_to_resolved_edge
             hResolved, by simp [witness]⟩
         · simp [matchesAutomatonOfferWitness, rightAutomatonEdge, witness,
             AutomatonConstructionLabel.semantic]
+      have hLabelSync : TypeLabel.Sync interface TypeLabel.silent
+          TypeLabel.silent := by
+        simp [TypeLabel.Sync, TypeLabel.sends, TypeLabel.recvs,
+          TypeLabel.isTock, TypeLabel.silent, TypeLabel.messageIdsWith]
       obtain ⟨hSynchronized, hCombinedEnvironment⟩ :=
         localTypeEnvironments_to_syncAutomatonEdges_local signature interface
           hInterface hOuterEnvironment hOuterAvoidsInterface hLeftEdgeMember
-          hRightEdgeMember hLeftLocal hRightLocal hLeftRealizes hRightRealizes
-          hLabelSync
-      refine ⟨.pair leftTargetState rightTargetState, ?_, ?_⟩
-      · apply (compileTypeFuel_parallel_hasResolvedEdge_iff signature left right
-          interface leftState rightState leftTargetState rightTargetState
-          environment label { current := current, future := future }).mpr
-        refine ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
-          leftSummary, rightSummary, hLeftEdge, hRightEdge, ?_⟩
-        dsimp only
-        refine ⟨?_, hCombinedEnvironment, hLabel.symm, ?_, ?_⟩
-        · simpa [leftAutomatonEdge, rightAutomatonEdge, leftSummary,
-            rightSummary] using hSynchronized
-        · simpa [leftSummary, rightSummary, hideOffers, hideTypeOffers]
-            using hCurrent
-        · simpa [leftSummary, rightSummary, hideOffers, hideTypeOffers]
-            using hFuture
-      · rw [hTarget]
-        exact TypeCompilationRelation.parallel left right leftTarget rightTarget
-          interface leftTargetState rightTargetState hLeftTargetRelated
-          hRightTargetRelated
+          hRightEdgeMember hLeftLocal hRightLocal hLeftRealizes
+          hRightRealizes hLabelSync
+      refine ⟨.pair leftTargetState rightTargetState, ?_,
+        TypeCompilationRelation.parallel_fuse left right interface
+          leftTargetState rightTargetState hLeftTargetRelated
+          hRightTargetRelated⟩
+      apply (compileTypeFuel_parallel_hasResolvedEdge_iff signature left
+        right interface leftState rightState leftTargetState
+        rightTargetState environment TypeLabel.silent
+        { current := (∅ : Finset BareMessage), future := ∅ }).mpr
+      refine ⟨environment, environment, TypeLabel.silent, TypeLabel.silent,
+        { current := ∅, future := ∅ }, { current := ∅, future := ∅ },
+        hLeftEdge, hRightEdge, ?_⟩
+      dsimp only
+      refine ⟨?_, hCombinedEnvironment, ?_, ?_, ?_⟩
+      · simpa [leftAutomatonEdge, rightAutomatonEdge] using hSynchronized
+      · simp [TypeLabel.combine, TypeLabel.silent, TypeLabel.synced,
+          TypeLabel.sends, TypeLabel.messageIdsWith,
+          TypeLabel.isRawSyncedMessage]
+      · simp [hideOffers]
+      · simp [hideOffers]
 
 /-- The reverse half of scoped parallel correspondence.  The product edge
 stores actual child targets but may use independent same-source offer witnesses
@@ -919,6 +1156,8 @@ theorem parallel_resolved_edge_to_semantic_step
       CompilationScopedResolvedOfferWitnessCorrect signature left)
     (hRightWitness :
       CompilationScopedResolvedOfferWitnessCorrect signature right)
+    (hLeftCanonical : left.EntryCanonical)
+    (hRightCanonical : right.EntryCanonical)
     {residual residual' : PactType} {state target : TypeAutomatonState}
     {environment : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary}
@@ -963,129 +1202,347 @@ theorem parallel_resolved_edge_to_semantic_step
   cases hRelated with
   | parallel _ _ leftResidual rightResidual _ leftState rightState
       hLeftRelated hRightRelated =>
+      -- Shared reconstruction: recover both children's own transitions and
+      -- synchronization fields from `hEdge`, regardless of whether the
+      -- target pair ends up compound (`.par`) or collapses (`par_fuse`) —
+      -- everything needed to build the parent `TypeTransition`/`TypeOffers`
+      -- except the final constructor choice, which the two callers below
+      -- supply themselves.
+      have hReconstruct : ∀ (leftTarget rightTarget : PactType)
+          (leftTargetState rightTargetState : TypeAutomatonState),
+          TypeCompilationRelation left leftTargetState leftTarget →
+          TypeCompilationRelation right rightTargetState rightTarget →
+          (compileTypeFuel signature
+            (typeCompilationFuel (.par left right interface))
+            (.par left right interface)).HasResolvedEdge
+            (.pair leftState rightState) environment label
+            { current := current, future := future }
+            (.pair leftTargetState rightTargetState) →
+          ∃ leftEnvironment rightEnvironment leftLabel rightLabel
+              leftCurrent leftFuture rightCurrent rightFuture,
+            TypeTransition leftEnvironment leftResidual leftLabel leftTarget ∧
+            TypeOffers leftEnvironment leftResidual leftLabel leftTarget
+              leftCurrent leftFuture ∧
+            TypeTransition rightEnvironment rightResidual rightLabel
+              rightTarget ∧
+            TypeOffers rightEnvironment rightResidual rightLabel rightTarget
+              rightCurrent rightFuture ∧
+            LocalTypeEnvironment environment interface rightEnvironment
+              rightResidual rightLabel leftEnvironment ∧
+            LocalTypeEnvironment environment interface leftEnvironment
+              leftResidual leftLabel rightEnvironment ∧
+            environment.WellFormed ∧
+            TypeLabel.Sync interface leftLabel rightLabel ∧
+            label = TypeLabel.combine interface leftLabel rightLabel ∧
+            hideOffers interface (leftCurrent ∪ rightCurrent) = current ∧
+            hideOffers interface (leftFuture ∪ rightFuture) = future := by
+        intro leftTarget rightTarget leftTargetState rightTargetState
+          hLeftTargetRelated hRightTargetRelated hEdge
+        rcases (compileTypeFuel_parallel_hasResolvedEdge_iff signature
+            left right interface leftState rightState leftTargetState
+            rightTargetState environment label
+            { current := current, future := future }).mp hEdge with
+          ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftSummary, rightSummary, hLeftEdge, hRightEdge,
+            hSynchronized, hCombinedEnvironment, hLabel, hCurrent,
+            hFuture⟩
+        let leftAutomatonEdge : AutomatonFragmentEdge :=
+          { source := leftState
+            environment := leftEnvironment
+            label := .visible leftLabel
+            current := leftSummary.current
+            future := leftSummary.future
+            target := leftTargetState }
+        let rightAutomatonEdge : AutomatonFragmentEdge :=
+          { source := rightState
+            environment := rightEnvironment
+            label := .visible rightLabel
+            current := rightSummary.current
+            future := rightSummary.future
+            target := rightTargetState }
+        change syncAutomatonEdges interface
+            (semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel left) left))
+            (semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel right) right))
+            leftAutomatonEdge rightAutomatonEdge at hSynchronized
+        rcases hSynchronized with ⟨leftWitnessEdge, hLeftWitnessSemantic,
+          rightWitnessEdge, hRightWitnessSemantic, hWitnessSync⟩
+        have hLocalEnvironments :=
+          TypeAlphabet.localEnvironments_of_syncAutomatonEdgeWitnesses_local
+            signature interface hInterface hOuterEnvironment
+            hCombinedEnvironment hWitnessSync
+        have hLeftAvoidsPair :=
+          syncAutomatonEdgeWitnesses_environments_avoid interface
+            left.ParallelInterfaces hCombinedEnvironment hOuterAvoidsLeft
+            hDisjointLeft hWitnessSync
+        have hRightAvoidsPair :=
+          syncAutomatonEdgeWitnesses_environments_avoid interface
+            right.ParallelInterfaces hCombinedEnvironment hOuterAvoidsRight
+            hDisjointRight hWitnessSync
+        rcases (hLeftStep hLeftCanonical hLeftRelated hLocalEnvironments.1
+            hLeftAvoidsPair.1).mpr
+            ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩ with
+          ⟨hLeftTransition, hLeftOffers⟩
+        rcases (hRightStep hRightCanonical hRightRelated hLocalEnvironments.2
+            hRightAvoidsPair.2).mpr
+            ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩ with
+          ⟨hRightTransition, hRightOffers⟩
+        have hWitnessFields := hWitnessSync
+        unfold syncAutomatonEdgeWitnesses at hWitnessFields
+        rcases hWitnessFields with ⟨hLeftMatch, hRightMatch, _,
+          hLabelSyncRaw⟩
+        have hLeftWitnessEdge : leftWitnessEdge ∈ resolvedAutomatonEdges
+            (compileTypeFuel signature (typeCompilationFuel left) left) :=
+          (Finset.mem_filter.mp hLeftWitnessSemantic).1
+        have hRightWitnessEdge : rightWitnessEdge ∈ resolvedAutomatonEdges
+            (compileTypeFuel signature (typeCompilationFuel right) right) :=
+          (Finset.mem_filter.mp hRightWitnessSemantic).1
+        obtain ⟨leftWitnessTarget, hLeftWitnessOffers⟩ :=
+          hLeftWitness hLeftRelated hLocalEnvironments.1
+            hLeftAvoidsPair.1 hLeftEdge leftWitnessEdge hLeftWitnessEdge
+            (Finset.mem_filter.mp hLeftWitnessSemantic).2 hLeftMatch.1
+            hLeftMatch.2.1 hLeftMatch.2.2
+        obtain ⟨rightWitnessTarget, hRightWitnessOffers⟩ :=
+          hRightWitness hRightRelated hLocalEnvironments.2
+            hRightAvoidsPair.2 hRightEdge rightWitnessEdge hRightWitnessEdge
+            (Finset.mem_filter.mp hRightWitnessSemantic).2 hRightMatch.1
+            hRightMatch.2.1 hRightMatch.2.2
+        have hLeftWitnessOffers' : TypeOffers leftWitnessEdge.environment
+            leftResidual leftWitnessEdge.label.semantic leftWitnessTarget
+            leftWitnessEdge.current leftWitnessEdge.future := by
+          rw [hLeftMatch.2.1, hLeftMatch.2.2]
+          exact hLeftWitnessOffers
+        have hRightWitnessOffers' : TypeOffers rightWitnessEdge.environment
+            rightResidual rightWitnessEdge.label.semantic rightWitnessTarget
+            rightWitnessEdge.current rightWitnessEdge.future := by
+          rw [hRightMatch.2.1, hRightMatch.2.2]
+          exact hRightWitnessOffers
+        have hSemanticLocals :=
+          syncAutomatonEdgeWitnesses_to_localTypeEnvironments interface
+            hLeftWitnessOffers' hRightWitnessOffers' hWitnessSync
+        dsimp only at hSemanticLocals
+        have hSemanticLocals' :
+            LocalTypeEnvironment environment interface rightEnvironment
+                rightResidual rightLabel leftEnvironment ∧
+              LocalTypeEnvironment environment interface leftEnvironment
+                leftResidual leftLabel rightEnvironment := by
+          simpa [leftAutomatonEdge, rightAutomatonEdge,
+            hCombinedEnvironment] using hSemanticLocals
+        have hLabelSync : TypeLabel.Sync interface leftLabel rightLabel := by
+          simpa [leftAutomatonEdge, rightAutomatonEdge,
+            AutomatonConstructionLabel.semantic] using hLabelSyncRaw
+        have hEnvironmentWellFormed : environment.WellFormed :=
+          signature.localEnvironment_wellFormed hOuterEnvironment
+        refine ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+          leftSummary.current, leftSummary.future, rightSummary.current,
+          rightSummary.future, hLeftTransition, hLeftOffers,
+          hRightTransition, hRightOffers, hSemanticLocals'.1,
+          hSemanticLocals'.2, hEnvironmentWellFormed, hLabelSync, hLabel.symm,
+          ?_, ?_⟩
+        · simpa using hCurrent
+        · simpa using hFuture
       cases hTargetRelated with
       | parallel _ _ leftTarget rightTarget _ leftTargetState
-          rightTargetState hLeftTargetRelated hRightTargetRelated =>
-          rcases (compileTypeFuel_parallel_hasResolvedEdge_iff signature
-              left right interface leftState rightState leftTargetState
-              rightTargetState environment label
-              { current := current, future := future }).mp hEdge with
-            ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
-              leftSummary, rightSummary, hLeftEdge, hRightEdge,
-              hSynchronized, hCombinedEnvironment, hLabel, hCurrent,
-              hFuture⟩
-          let leftAutomatonEdge : AutomatonFragmentEdge :=
-            { source := leftState
-              environment := leftEnvironment
-              label := .visible leftLabel
-              current := leftSummary.current
-              future := leftSummary.future
-              target := leftTargetState }
-          let rightAutomatonEdge : AutomatonFragmentEdge :=
-            { source := rightState
-              environment := rightEnvironment
-              label := .visible rightLabel
-              current := rightSummary.current
-              future := rightSummary.future
-              target := rightTargetState }
-          change syncAutomatonEdges interface
-              (semanticResolvedAutomatonEdges (compileTypeFuel signature
-                (typeCompilationFuel left) left))
-              (semanticResolvedAutomatonEdges (compileTypeFuel signature
-                (typeCompilationFuel right) right))
-              leftAutomatonEdge rightAutomatonEdge at hSynchronized
-          rcases hSynchronized with ⟨leftWitnessEdge, hLeftWitnessSemantic,
-            rightWitnessEdge, hRightWitnessSemantic, hWitnessSync⟩
-          have hLocalEnvironments :=
-            TypeAlphabet.localEnvironments_of_syncAutomatonEdgeWitnesses_local
-              signature interface hInterface hOuterEnvironment
-              hCombinedEnvironment hWitnessSync
-          have hLeftAvoidsPair :=
-            syncAutomatonEdgeWitnesses_environments_avoid interface
-              left.ParallelInterfaces hCombinedEnvironment hOuterAvoidsLeft
-              hDisjointLeft hWitnessSync
-          have hRightAvoidsPair :=
-            syncAutomatonEdgeWitnesses_environments_avoid interface
-              right.ParallelInterfaces hCombinedEnvironment hOuterAvoidsRight
-              hDisjointRight hWitnessSync
-          rcases (hLeftStep hLeftRelated hLocalEnvironments.1
-              hLeftAvoidsPair.1).mpr
-              ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩ with
-            ⟨hLeftTransition, hLeftOffers⟩
-          rcases (hRightStep hRightRelated hLocalEnvironments.2
-              hRightAvoidsPair.2).mpr
-              ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩ with
-            ⟨hRightTransition, hRightOffers⟩
-          have hWitnessFields := hWitnessSync
-          unfold syncAutomatonEdgeWitnesses at hWitnessFields
-          rcases hWitnessFields with ⟨hLeftMatch, hRightMatch, _,
-            hLabelSyncRaw⟩
-          have hLeftWitnessEdge : leftWitnessEdge ∈ resolvedAutomatonEdges
-              (compileTypeFuel signature (typeCompilationFuel left) left) :=
-            (Finset.mem_filter.mp hLeftWitnessSemantic).1
-          have hRightWitnessEdge : rightWitnessEdge ∈ resolvedAutomatonEdges
-              (compileTypeFuel signature (typeCompilationFuel right) right) :=
-            (Finset.mem_filter.mp hRightWitnessSemantic).1
-          obtain ⟨leftWitnessTarget, hLeftWitnessOffers⟩ :=
-            hLeftWitness hLeftRelated hLocalEnvironments.1
-              hLeftAvoidsPair.1 hLeftEdge leftWitnessEdge hLeftWitnessEdge
-              (Finset.mem_filter.mp hLeftWitnessSemantic).2 hLeftMatch.1
-              hLeftMatch.2.1 hLeftMatch.2.2
-          obtain ⟨rightWitnessTarget, hRightWitnessOffers⟩ :=
-            hRightWitness hRightRelated hLocalEnvironments.2
-              hRightAvoidsPair.2 hRightEdge rightWitnessEdge hRightWitnessEdge
-              (Finset.mem_filter.mp hRightWitnessSemantic).2 hRightMatch.1
-              hRightMatch.2.1 hRightMatch.2.2
-          have hLeftWitnessOffers' : TypeOffers leftWitnessEdge.environment
-              leftResidual leftWitnessEdge.label.semantic leftWitnessTarget
-              leftWitnessEdge.current leftWitnessEdge.future := by
-            rw [hLeftMatch.2.1, hLeftMatch.2.2]
-            exact hLeftWitnessOffers
-          have hRightWitnessOffers' : TypeOffers rightWitnessEdge.environment
-              rightResidual rightWitnessEdge.label.semantic rightWitnessTarget
-              rightWitnessEdge.current rightWitnessEdge.future := by
-            rw [hRightMatch.2.1, hRightMatch.2.2]
-            exact hRightWitnessOffers
-          have hSemanticLocals :=
-            syncAutomatonEdgeWitnesses_to_localTypeEnvironments interface
-              hLeftWitnessOffers' hRightWitnessOffers' hWitnessSync
-          dsimp only at hSemanticLocals
-          have hSemanticLocals' :
-              LocalTypeEnvironment environment interface rightEnvironment
-                  rightResidual rightLabel leftEnvironment ∧
-                LocalTypeEnvironment environment interface leftEnvironment
-                  leftResidual leftLabel rightEnvironment := by
-            simpa [leftAutomatonEdge, rightAutomatonEdge,
-              hCombinedEnvironment] using hSemanticLocals
-          have hLabelSync : TypeLabel.Sync interface leftLabel rightLabel := by
-            simpa [leftAutomatonEdge, rightAutomatonEdge,
-              AutomatonConstructionLabel.semantic] using hLabelSyncRaw
-          have hEnvironmentWellFormed : environment.WellFormed :=
-            signature.localEnvironment_wellFormed hOuterEnvironment
+          rightTargetState hLeftTargetRelated hRightTargetRelated hExcl =>
+          obtain ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftCurrent, leftFuture, rightCurrent, rightFuture,
+            hLeftTransition, hLeftOffers, hRightTransition, hRightOffers,
+            hLocalRight, hLocalLeft, hEnvironmentWellFormed, hLabelSync,
+            hLabel, hCurrent, hFuture⟩ :=
+            hReconstruct leftTarget rightTarget leftTargetState
+              rightTargetState hLeftTargetRelated hRightTargetRelated hEdge
           have hParentTransition := TypeTransition.par environment
             leftEnvironment rightEnvironment interface leftResidual leftTarget
             rightResidual rightTarget leftLabel rightLabel hLeftTransition
-            hRightTransition ⟨hEnvironmentWellFormed, hSemanticLocals'.1,
-              hSemanticLocals'.2, hLabelSync⟩
+            hRightTransition hExcl ⟨hEnvironmentWellFormed, hLocalRight,
+              hLocalLeft, hLabelSync⟩
           have hParentOffers := TypeOffers.par environment leftEnvironment
             rightEnvironment interface leftResidual leftTarget rightResidual
-            rightTarget leftLabel rightLabel leftSummary.current
-            leftSummary.future rightSummary.current rightSummary.future
-            hLeftOffers hRightOffers hSemanticLocals'.1 hSemanticLocals'.2
-            ⟨hEnvironmentWellFormed, hLabelSync⟩
+            rightTarget leftLabel rightLabel leftCurrent leftFuture
+            rightCurrent rightFuture hLeftOffers hRightOffers hExcl
+            hLocalRight hLocalLeft ⟨hEnvironmentWellFormed, hLabelSync⟩
           constructor
           · simpa [hLabel] using hParentTransition
           · change TypeOffers environment
               (.par leftResidual rightResidual interface) label
               (.par leftTarget rightTarget interface) current future
-            have hCurrent' : hideOffers interface
-                (leftSummary.current ∪ rightSummary.current) = current := by
-              simpa using hCurrent
-            have hFuture' : hideOffers interface
-                (leftSummary.future ∪ rightSummary.future) = future := by
-              simpa using hFuture
-            rw [← hCurrent', ← hFuture']
-            simpa [hideOffers, hideTypeOffers, hLabel] using hParentOffers
+            rw [← hCurrent, ← hFuture]
+            simpa [hLabel] using hParentOffers
+      | parallel_fuse _ _ _ leftTargetState rightTargetState
+          hLeftTargetRelated hRightTargetRelated =>
+          obtain ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftCurrent, leftFuture, rightCurrent, rightFuture,
+            hLeftTransition, hLeftOffers, hRightTransition, hRightOffers,
+            hLocalRight, hLocalLeft, hEnvironmentWellFormed, hLabelSync,
+            hLabel, hCurrent, hFuture⟩ :=
+            hReconstruct .skip .skip leftTargetState
+              rightTargetState hLeftTargetRelated hRightTargetRelated hEdge
+          have hParentTransition := TypeTransition.par_fuse environment
+            leftEnvironment rightEnvironment interface leftResidual
+            rightResidual leftLabel rightLabel hLeftTransition
+            hRightTransition ⟨hEnvironmentWellFormed, hLocalRight,
+              hLocalLeft, hLabelSync⟩
+          have hParentOffers := TypeOffers.par_fuse environment leftEnvironment
+            rightEnvironment interface leftResidual rightResidual leftLabel
+            rightLabel leftCurrent leftFuture rightCurrent rightFuture
+            hLeftOffers hRightOffers hLocalRight hLocalLeft
+            ⟨hEnvironmentWellFormed, hLabelSync⟩
+          constructor
+          · simpa [hLabel] using hParentTransition
+          · change TypeOffers environment
+              (.par leftResidual rightResidual interface) label
+              .skip current future
+            rw [← hCurrent, ← hFuture]
+            simpa [hLabel] using hParentOffers
+  | parallel_fuse _ _ _ leftState rightState hLeftRelated hRightRelated =>
+      -- `state` is already at the empty self-loop position (both siblings
+      -- accepting): the *only* automaton edge available from here mirrors
+      -- both children's own `.skip` self-loops, so the target must be the
+      -- same collapsed shape again — `hTargetRelated`'s `.parallel` reading
+      -- is unreachable (both children's own transitions would be forced to
+      -- `.skip`, contradicting its exclusion hypothesis), and the
+      -- `.parallel_fuse` reading reduces to reconstructing the parent's own
+      -- `TypeTransition.skip`/`TypeOffers.skip` self-loop.
+      have hReconstruct : ∀ (leftTarget rightTarget : PactType)
+          (leftTargetState rightTargetState : TypeAutomatonState),
+          TypeCompilationRelation left leftTargetState leftTarget →
+          TypeCompilationRelation right rightTargetState rightTarget →
+          (compileTypeFuel signature
+            (typeCompilationFuel (.par left right interface))
+            (.par left right interface)).HasResolvedEdge
+            (.pair leftState rightState) environment label
+            { current := current, future := future }
+            (.pair leftTargetState rightTargetState) →
+          ∃ leftEnvironment rightEnvironment leftLabel rightLabel
+              leftCurrent leftFuture rightCurrent rightFuture,
+            TypeTransition leftEnvironment .skip leftLabel leftTarget ∧
+            TypeOffers leftEnvironment .skip leftLabel leftTarget
+              leftCurrent leftFuture ∧
+            TypeTransition rightEnvironment .skip rightLabel rightTarget ∧
+            TypeOffers rightEnvironment .skip rightLabel rightTarget
+              rightCurrent rightFuture ∧
+            environment.WellFormed ∧
+            combineAutomatonEnvironment interface leftEnvironment
+              rightEnvironment = environment ∧
+            label = TypeLabel.combine interface leftLabel rightLabel ∧
+            hideOffers interface (leftCurrent ∪ rightCurrent) = current ∧
+            hideOffers interface (leftFuture ∪ rightFuture) = future := by
+        intro leftTarget rightTarget leftTargetState rightTargetState
+          hLeftTargetRelated hRightTargetRelated hEdge
+        rcases (compileTypeFuel_parallel_hasResolvedEdge_iff signature
+            left right interface leftState rightState leftTargetState
+            rightTargetState environment label
+            { current := current, future := future }).mp hEdge with
+          ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftSummary, rightSummary, hLeftEdge, hRightEdge,
+            hSynchronized, hCombinedEnvironment, hLabel, hCurrent,
+            hFuture⟩
+        let leftAutomatonEdge : AutomatonFragmentEdge :=
+          { source := leftState
+            environment := leftEnvironment
+            label := .visible leftLabel
+            current := leftSummary.current
+            future := leftSummary.future
+            target := leftTargetState }
+        let rightAutomatonEdge : AutomatonFragmentEdge :=
+          { source := rightState
+            environment := rightEnvironment
+            label := .visible rightLabel
+            current := rightSummary.current
+            future := rightSummary.future
+            target := rightTargetState }
+        change syncAutomatonEdges interface
+            (semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel left) left))
+            (semanticResolvedAutomatonEdges (compileTypeFuel signature
+              (typeCompilationFuel right) right))
+            leftAutomatonEdge rightAutomatonEdge at hSynchronized
+        rcases hSynchronized with ⟨leftWitnessEdge, hLeftWitnessSemantic,
+          rightWitnessEdge, hRightWitnessSemantic, hWitnessSync⟩
+        have hLocalEnvironments :=
+          TypeAlphabet.localEnvironments_of_syncAutomatonEdgeWitnesses_local
+            signature interface hInterface hOuterEnvironment
+            hCombinedEnvironment hWitnessSync
+        have hLeftAvoidsPair :=
+          syncAutomatonEdgeWitnesses_environments_avoid interface
+            left.ParallelInterfaces hCombinedEnvironment hOuterAvoidsLeft
+            hDisjointLeft hWitnessSync
+        have hRightAvoidsPair :=
+          syncAutomatonEdgeWitnesses_environments_avoid interface
+            right.ParallelInterfaces hCombinedEnvironment hOuterAvoidsRight
+            hDisjointRight hWitnessSync
+        rcases (hLeftStep hLeftCanonical hLeftRelated hLocalEnvironments.1
+            hLeftAvoidsPair.1).mpr
+            ⟨leftTargetState, hLeftEdge, hLeftTargetRelated⟩ with
+          ⟨hLeftTransition, hLeftOffers⟩
+        rcases (hRightStep hRightCanonical hRightRelated hLocalEnvironments.2
+            hRightAvoidsPair.2).mpr
+            ⟨rightTargetState, hRightEdge, hRightTargetRelated⟩ with
+          ⟨hRightTransition, hRightOffers⟩
+        have hEnvironmentWellFormed : environment.WellFormed :=
+          signature.localEnvironment_wellFormed hOuterEnvironment
+        refine ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+          leftSummary.current, leftSummary.future, rightSummary.current,
+          rightSummary.future, hLeftTransition, hLeftOffers,
+          hRightTransition, hRightOffers, hEnvironmentWellFormed,
+          hCombinedEnvironment, hLabel.symm, ?_, ?_⟩
+        · simpa using hCurrent
+        · simpa using hFuture
+      cases hTargetRelated with
+      | parallel _ _ leftTarget rightTarget _ leftTargetState
+          rightTargetState hLeftTargetRelated hRightTargetRelated hExcl =>
+          obtain ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftCurrent, leftFuture, rightCurrent, rightFuture,
+            hLeftTransition, hLeftOffers, hRightTransition, hRightOffers,
+            _hEnvironmentWellFormed, _hCombinedEnvironment, _hLabel,
+            _hCurrent, _hFuture⟩ :=
+            hReconstruct leftTarget rightTarget leftTargetState
+              rightTargetState hLeftTargetRelated hRightTargetRelated hEdge
+          exfalso
+          cases hLeftTransition with
+          | skip _ _ =>
+          cases hRightTransition with
+          | skip _ _ =>
+          exact hExcl ⟨rfl, rfl⟩
+      | parallel_fuse _ _ _ leftTargetState rightTargetState
+          hLeftTargetRelated hRightTargetRelated =>
+          obtain ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftCurrent, leftFuture, rightCurrent, rightFuture,
+            hLeftTransition, hLeftOffers, hRightTransition, hRightOffers,
+            hEnvironmentWellFormed, hCombinedEnvironment, hLabel, hCurrent,
+            hFuture⟩ :=
+            hReconstruct .skip .skip leftTargetState
+              rightTargetState hLeftTargetRelated hRightTargetRelated hEdge
+          cases hLeftTransition with
+          | skip _ hLeftGuard =>
+          cases hRightTransition with
+          | skip _ hRightGuard =>
+          cases hLeftOffers with
+          | skip _ _ =>
+          cases hRightOffers with
+          | skip _ _ =>
+          have hEnvironmentClock : environment.clock = false := by
+            rw [← hCombinedEnvironment]
+            simp [combineAutomatonEnvironment, hLeftGuard.2]
+          have hLabelSilent : label = TypeLabel.silent := by
+            rw [hLabel]
+            simp [TypeLabel.combine, TypeLabel.silent, TypeLabel.synced,
+              TypeLabel.sends, TypeLabel.messageIdsWith,
+              TypeLabel.isRawSyncedMessage]
+          have hCurrentEmpty : current = ∅ := by
+            rw [← hCurrent]; simp [hideOffers]
+          have hFutureEmpty : future = ∅ := by
+            rw [← hFuture]; simp [hideOffers]
+          have hParentTransition := TypeTransition.skip environment
+            ⟨hEnvironmentWellFormed, hEnvironmentClock⟩
+          have hParentOffers := TypeOffers.skip environment
+            ⟨hEnvironmentWellFormed, hEnvironmentClock⟩
+          constructor
+          · simpa [hLabelSilent] using hParentTransition
+          · change TypeOffers environment .skip label .skip current future
+            rw [hCurrentEmpty, hFutureEmpty, hLabelSilent]
+            exact hParentOffers
 
 /-- Target relatedness composes through the synchronized product.  Internal
 future-observation self-loops cannot appear in `HasResolvedEdge`; every such
@@ -1135,10 +1592,69 @@ theorem compilationResolvedEdgeTargetsRelated_parallel
           ⟨leftTargetResidual, hLeftTargetRelated⟩
         rcases hRightTargets hRightRelated hRightEdge with
           ⟨rightTargetResidual, hRightTargetRelated⟩
-        exact ⟨.par leftTargetResidual rightTargetResidual interface,
-          TypeCompilationRelation.parallel left right leftTargetResidual
-            rightTargetResidual interface leftEdge.target rightEdge.target
-            hLeftTargetRelated hRightTargetRelated⟩
+        by_cases hCollapse : leftTargetResidual = .skip ∧
+            rightTargetResidual = .skip
+        · refine ⟨.skip, ?_⟩
+          rw [hCollapse.1] at hLeftTargetRelated
+          rw [hCollapse.2] at hRightTargetRelated
+          exact TypeCompilationRelation.parallel_fuse left right interface
+            leftEdge.target rightEdge.target hLeftTargetRelated
+            hRightTargetRelated
+        · exact ⟨.par leftTargetResidual rightTargetResidual interface,
+            TypeCompilationRelation.parallel left right leftTargetResidual
+              rightTargetResidual interface leftEdge.target rightEdge.target
+              hLeftTargetRelated hRightTargetRelated hCollapse⟩
+      · rcases hObservation with hLeftObservation | hRightObservation
+        · rcases hLeftObservation with ⟨leftState, _, rightState, _, rfl⟩
+          simp at hLabel
+        · rcases hRightObservation with ⟨leftState, _, rightState, _, rfl⟩
+          simp at hLabel
+  | parallel_fuse _ _ _ leftSource rightSource hLeftRelated hRightRelated =>
+      let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
+      let leftFragment := compileTypeFuel signature fuel left
+      let rightFragment := compileTypeFuel signature fuel right
+      have hFragment : compileTypeFuel signature
+          (typeCompilationFuel (.par left right interface))
+          (.par left right interface) =
+          buildParallelAutomaton interface leftFragment rightFragment := by
+        simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
+        rfl
+      have hOriginal := hEdge
+      rw [hFragment] at hEdge
+      rcases hEdge with ⟨pending, hPending, hSource, hEnvironment, hLabel,
+        hCurrent, hFuture, hTarget⟩
+      simp only [buildParallelAutomaton, finishAutomatonFragment,
+        Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
+        Finset.mem_filter] at hPending
+      rcases hPending with hTransition | hObservation
+      · rcases hTransition with
+          ⟨leftEdge, hLeftMember, rightEdge, hRightMember, rfl⟩
+        simp only at hSource hTarget
+        injection hSource with hLeftSource hRightSource
+        have hTargetEq : target = .pair leftEdge.target rightEdge.target :=
+          hTarget.symm
+        subst target
+        rcases (compileTypeFuel_parallel_hasResolvedEdge_iff signature left
+            right interface leftSource rightSource leftEdge.target
+            rightEdge.target environment label offers).mp hOriginal with
+          ⟨leftEnvironment, rightEnvironment, leftLabel, rightLabel,
+            leftOffers, rightOffers, hLeftEdge, hRightEdge, _⟩
+        rcases hLeftTargets hLeftRelated hLeftEdge with
+          ⟨leftTargetResidual, hLeftTargetRelated⟩
+        rcases hRightTargets hRightRelated hRightEdge with
+          ⟨rightTargetResidual, hRightTargetRelated⟩
+        by_cases hCollapse : leftTargetResidual = .skip ∧
+            rightTargetResidual = .skip
+        · refine ⟨.skip, ?_⟩
+          rw [hCollapse.1] at hLeftTargetRelated
+          rw [hCollapse.2] at hRightTargetRelated
+          exact TypeCompilationRelation.parallel_fuse left right interface
+            leftEdge.target rightEdge.target hLeftTargetRelated
+            hRightTargetRelated
+        · exact ⟨.par leftTargetResidual rightTargetResidual interface,
+            TypeCompilationRelation.parallel left right leftTargetResidual
+              rightTargetResidual interface leftEdge.target rightEdge.target
+              hLeftTargetRelated hRightTargetRelated hCollapse⟩
       · rcases hObservation with hLeftObservation | hRightObservation
         · rcases hLeftObservation with ⟨leftState, _, rightState, _, rfl⟩
           simp at hLabel
@@ -1173,7 +1689,8 @@ theorem compilationScopedResolvedOfferWitnessCorrect_of_step_targets_visible
     (signature : TypeAlphabet) (processType : PactType)
     (hStep : CompilationScopedFragmentStepCorrect signature processType)
     (hTargets : CompilationResolvedEdgeTargetsRelated signature processType)
-    (hVisible : CompilationPendingEdgesVisible signature processType) :
+    (hVisible : CompilationPendingEdgesVisible signature processType)
+    (hCanonical : processType.EntryCanonical) :
     CompilationScopedResolvedOfferWitnessCorrect signature processType := by
   intro residual state environment label actualOffers actualTarget hRelated
     hLocalEnvironment hAvoids hActualEdge witness hWitness hWitnessSemantic
@@ -1207,7 +1724,7 @@ theorem compilationScopedResolvedOfferWitnessCorrect_of_step_targets_visible
     exact hWitness
   obtain ⟨targetResidual, hTargetRelated⟩ :=
     hTargets hRelated hWitnessResolved
-  have hDecorated := (hStep hRelated hLocalEnvironment hAvoids).mpr
+  have hDecorated := (hStep hCanonical hRelated hLocalEnvironment hAvoids).mpr
     ⟨witness.target, hWitnessResolved, hTargetRelated⟩
   exact ⟨targetResidual, hDecorated.2⟩
 end

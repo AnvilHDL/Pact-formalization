@@ -386,22 +386,22 @@ private theorem sequenceExecution_buildSelectedConjunctiveOffer_root_shape_leaf
     rcases hResolved with ⟨environment, _, rfl⟩
     exact ⟨by simp, ∅, rfl⟩
 
-private theorem buildSelectedConjunctiveOffer_child0_skipping_iff
+private theorem buildSelectedConjunctiveOffer_child0_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) :
     childState 0 state ∈
         (buildSelectedConjunctiveOfferAutomaton signature branches
-          elseAutomaton selectedConjunctions).skipping ↔
-      state ∈ elseAutomaton.skipping := by
-  have hNotIndexed := child_zero_not_mem_indexedFragmentSkipping
+          elseAutomaton selectedConjunctions).accepting ↔
+      state ∈ elseAutomaton.accepting := by
+  have hNotIndexed := child_zero_not_mem_indexedFragmentAccepting
     selectedConjunctions state
   simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union]
-  have hChild : childState 0 state ∈ childSkipping 0 elseAutomaton ↔
-      state ∈ elseAutomaton.skipping := by
-    simp [childSkipping, childState]
+  have hChild : childState 0 state ∈ childAccepting 0 elseAutomaton ↔
+      state ∈ elseAutomaton.accepting := by
+    simp [childAccepting, childState]
   rw [hChild]
   simp [hNotIndexed]
 
@@ -430,19 +430,19 @@ private theorem buildSelectedConjunctiveOffer_child0_completing_iff
   rw [hChild]
   simp [hNotHeader, hNotIndexed]
 
-private theorem buildSelectedConjunctiveOffer_root_not_skipping
+private theorem buildSelectedConjunctiveOffer_root_not_accepting
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
     (.root : TypeAutomatonState) ∉
       (buildSelectedConjunctiveOfferAutomaton signature branches
-        elseAutomaton selectedConjunctions).skipping := by
-  have hNotIndexed := root_not_mem_indexedFragmentSkipping selectedConjunctions
+        elseAutomaton selectedConjunctions).accepting := by
+  have hNotIndexed := root_not_mem_indexedFragmentAccepting selectedConjunctions
   simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union, not_or]
-  exact ⟨by simp [childSkipping, childState], hNotIndexed⟩
+  exact ⟨by simp [childAccepting, childState], hNotIndexed⟩
 
-private theorem buildSelectedConjunctiveOffer_conjunction_skipping_iff
+private theorem buildSelectedConjunctiveOffer_conjunction_accepting_iff
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
@@ -451,14 +451,14 @@ private theorem buildSelectedConjunctiveOffer_conjunction_skipping_iff
     (state : TypeAutomatonState) :
     childState (index + 1) state ∈
         (buildSelectedConjunctiveOfferAutomaton signature branches
-          elseAutomaton selectedConjunctions).skipping ↔
-      state ∈ entry.2.skipping := by
+          elseAutomaton selectedConjunctions).accepting ↔
+      state ∈ entry.2.accepting := by
   have hNotElse : childState (index + 1) state ∉
-      childSkipping 0 elseAutomaton := by
-    simp [childSkipping, childState]
+      childAccepting 0 elseAutomaton := by
+    simp [childAccepting, childState]
   simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union, hNotElse, false_or]
-  exact childState_mem_indexedFragmentSkipping_iff selectedConjunctions index
+  exact childState_mem_indexedFragmentAccepting_iff selectedConjunctions index
     entry hEntry state
 
 private theorem buildSelectedConjunctiveOffer_conjunction_completing_iff
@@ -634,7 +634,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
         ((∃ completed ∈
               (sequenceExecutionAutomaton elseFragment).futureReachable
                 elseFragment.initial,
-              completed ∈ elseFragment.skipping ∨
+              completed ∈ elseFragment.accepting ∨
                 completed ∈ elseFragment.completing) ↔
           elseType.CanCompleteBeforeTock = true) := by
     simpa [CompilationSequenceExecutionCorrect, elseFragment, hElseStable]
@@ -642,7 +642,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
   have hEntryFacts : ∀ entry ∈ entries,
       computeFuture execution entry = computeFuture pending entry ∧
         ((∃ completed ∈ execution.futureReachable entry,
-            completed ∈ fragment.skipping ∨
+            completed ∈ fragment.accepting ∨
               completed ∈ fragment.completing) →
           (PactType.offer elseType branches).CanCompleteBeforeTock = true) := by
     intro entry hEntry
@@ -667,10 +667,10 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
             elseFragment.initial hElseInitial
         rw [hReachEmbedding] at hReach
         have hSkip : ∀ state,
-            childState 0 state ∈ fragment.skipping ↔
-              state ∈ elseFragment.skipping := by
+            childState 0 state ∈ fragment.accepting ↔
+              state ∈ elseFragment.accepting := by
           intro state
-          exact buildSelectedConjunctiveOffer_child0_skipping_iff signature
+          exact buildSelectedConjunctiveOffer_child0_accepting_iff signature
             branches elseFragment selectedConjunctions state
         have hComplete : ∀ state,
             childState 0 state ∈ fragment.completing ↔
@@ -681,7 +681,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
         have hChildWitness : ∃ childCompleted ∈
             (sequenceExecutionAutomaton elseFragment).futureReachable
               elseFragment.initial,
-            childCompleted ∈ elseFragment.skipping ∨
+            childCompleted ∈ elseFragment.accepting ∨
               childCompleted ∈ elseFragment.completing :=
           (taggedCompletionWitness_iff fragment elseFragment 0 _ hSkip
             hComplete).mp ⟨completed, hReach, hCompleted⟩
@@ -766,7 +766,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
                   (sequenceExecutionAutomaton
                     selectedFragment).futureReachable
                       selectedFragment.initial,
-                  completed ∈ selectedFragment.skipping ∨
+                  completed ∈ selectedFragment.accepting ∨
                     completed ∈ selectedFragment.completing) ↔
               (parallelTypeBranchesSelecting selected
                 branches).CanCompleteBeforeTock = true) := by
@@ -795,10 +795,10 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
               hSelectedInitialState
         rw [hReachEmbedding] at hReach
         have hSkip : ∀ state,
-            childState (index + 1) state ∈ fragment.skipping ↔
-              state ∈ selectedFragment.skipping := by
+            childState (index + 1) state ∈ fragment.accepting ↔
+              state ∈ selectedFragment.accepting := by
           intro state
-          exact buildSelectedConjunctiveOffer_conjunction_skipping_iff
+          exact buildSelectedConjunctiveOffer_conjunction_accepting_iff
             signature branches elseFragment selectedConjunctions index
               (selected.1, selectedFragment) hAutomatonEntry state
         have hComplete : ∀ state,
@@ -811,7 +811,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
         have hChildWitness : ∃ childCompleted ∈
             (sequenceExecutionAutomaton selectedFragment).futureReachable
               selectedFragment.initial,
-            childCompleted ∈ selectedFragment.skipping ∨
+            childCompleted ∈ selectedFragment.accepting ∨
               childCompleted ∈ selectedFragment.completing :=
           (taggedCompletionWitness_iff fragment selectedFragment (index + 1)
             _ hSkip hComplete).mp ⟨completed, hReach, hCompleted⟩
@@ -855,13 +855,13 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
             Finset.mem_biUnion] at hReach
           rcases hReach with hAtRoot | ⟨entry, hEntry, hAtEntry⟩
           · subst completed
-            have hRootNotSkipping :
-                (.root : TypeAutomatonState) ∉ fragment.skipping :=
-              buildSelectedConjunctiveOffer_root_not_skipping signature
+            have hRootNotAccepting :
+                (.root : TypeAutomatonState) ∉ fragment.accepting :=
+              buildSelectedConjunctiveOffer_root_not_accepting signature
                 branches elseFragment selectedConjunctions
             have hRootCompleting : (.root : TypeAutomatonState) ∈
                 fragment.completing := hCompleted.resolve_left
-              hRootNotSkipping
+              hRootNotAccepting
             exact (hWholeCompleting .root (.offer elseType branches)
               (TypeCompilationRelation.offer_source elseType branches)).mp
                 (by simpa [hParent] using hRootCompleting)
@@ -887,7 +887,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
             ((∃ completed ∈
                   (sequenceExecutionAutomaton elseFragment).futureReachable
                     childState,
-                  completed ∈ elseFragment.skipping ∨
+                  completed ∈ elseFragment.accepting ∨
                     completed ∈ elseFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, elseFragment,
@@ -903,15 +903,15 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
         change ((∃ completed ∈
               (sequenceExecutionAutomaton fragment).futureReachable
                 (Pact.childState 0 childState),
-              completed ∈ fragment.skipping ∨
+              completed ∈ fragment.accepting ∨
                 completed ∈ fragment.completing) ↔
             residual.CanCompleteBeforeTock = true)
         rw [hReachEquality]
         have hSkip : ∀ child,
-            Pact.childState 0 child ∈ fragment.skipping ↔
-              child ∈ elseFragment.skipping := by
+            Pact.childState 0 child ∈ fragment.accepting ↔
+              child ∈ elseFragment.accepting := by
           intro child
-          exact buildSelectedConjunctiveOffer_child0_skipping_iff signature
+          exact buildSelectedConjunctiveOffer_child0_accepting_iff signature
             branches elseFragment selectedConjunctions child
         have hComplete : ∀ child,
             Pact.childState 0 child ∈ fragment.completing ↔
@@ -986,7 +986,7 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
             ((∃ completed ∈
                   (sequenceExecutionAutomaton
                     selectedFragment).futureReachable childState,
-                  completed ∈ selectedFragment.skipping ∨
+                  completed ∈ selectedFragment.accepting ∨
                     completed ∈ selectedFragment.completing) ↔
               residual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, selectedFragment,
@@ -1002,15 +1002,15 @@ private theorem compilationSequenceExecutionCorrect_offer_regular_leaf
         change ((∃ completed ∈
               (sequenceExecutionAutomaton fragment).futureReachable
                 (Pact.childState (index + 1) childState),
-              completed ∈ fragment.skipping ∨
+              completed ∈ fragment.accepting ∨
                 completed ∈ fragment.completing) ↔
             residual.CanCompleteBeforeTock = true)
         rw [hReachEquality]
         have hSkip : ∀ child,
-            Pact.childState (index + 1) child ∈ fragment.skipping ↔
-              child ∈ selectedFragment.skipping := by
+            Pact.childState (index + 1) child ∈ fragment.accepting ↔
+              child ∈ selectedFragment.accepting := by
           intro child
-          exact buildSelectedConjunctiveOffer_conjunction_skipping_iff
+          exact buildSelectedConjunctiveOffer_conjunction_accepting_iff
             signature branches elseFragment selectedConjunctions index
               (selected.1, selectedFragment) hAutomatonEntry child
         have hComplete : ∀ child,

@@ -1,7 +1,7 @@
 import Anvilpp.PactTypes.Correspondence.CorrespondenceRegularityCore
 
 /-!
-# Marker reachability (first wave) and compiledFragmentSkipping_represented
+# Marker reachability (first wave) and compiledFragmentAccepting_represented
 -/
 
 namespace Pact
@@ -187,13 +187,13 @@ theorem buildChoiceAutomaton_markerReachable_root
     · exact Or.inr ⟨_, by simp, hRight⟩
 
 /-- Every state placed in the compiler's literal-termination set represents
-`skip`.  This is the target-total half of `compileTypeFuel_skipping_iff`; it
+`skip`.  This is the target-total half of `compileTypeFuel_accepting_iff`; it
 is needed for the administrative bridge of sequence. -/
-theorem compiledFragmentSkipping_represented
+theorem compiledFragmentAccepting_represented
     (signature : TypeAlphabet) :
     ∀ (fuel : Nat) (processType : PactType),
       TypeCompilationFuelSufficient processType fuel →
-      ∀ state ∈ (compileTypeFuel signature fuel processType).skipping,
+      ∀ state ∈ (compileTypeFuel signature fuel processType).accepting,
         TypeCompilationRelation processType state .skip := by
   intro fuel
   induction fuel with
@@ -202,40 +202,40 @@ theorem compiledFragmentSkipping_represented
       exact (Nat.not_lt_zero _
         (TypeCompilationFuelSufficient.positive hFuel)).elim
   | succ fuel ih =>
-      intro processType hFuel state hSkipping
+      intro processType hFuel state hAccepting
       cases processType with
       | skip =>
           simp only [compileTypeFuel, finishAutomatonFragment,
-            Finset.mem_singleton] at hSkipping
+            Finset.mem_singleton] at hAccepting
           subst state
           exact .skip
       | message msg dir =>
           simp only [compileTypeFuel, finishAutomatonFragment,
-            Finset.mem_singleton] at hSkipping
+            Finset.mem_singleton] at hAccepting
           subst state
           exact .message_final msg dir
       | tock =>
           simp only [compileTypeFuel, finishAutomatonFragment,
-            Finset.mem_singleton] at hSkipping
+            Finset.mem_singleton] at hAccepting
           subst state
           exact .cycle_final
       | progress pid =>
           simp only [compileTypeFuel, finishAutomatonFragment,
-            Finset.mem_singleton] at hSkipping
+            Finset.mem_singleton] at hAccepting
           subst state
           exact .progress_final pid
       | var other =>
-          simp [compileTypeFuel, finishAutomatonFragment] at hSkipping
+          simp [compileTypeFuel, finishAutomatonFragment] at hAccepting
       | recur binder body =>
           have hBodyFuel : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildRecursionAutomaton,
-            finishAutomatonFragment, childSkipping, Finset.mem_image]
-              at hSkipping
-          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩
-          have hChild := ih body hBodyFuel child hChildSkipping
+            finishAutomatonFragment, childAccepting, Finset.mem_image]
+              at hAccepting
+          rcases hAccepting with ⟨child, hChildAccepting, rfl⟩
+          have hChild := ih body hBodyFuel child hChildAccepting
           convert TypeCompilationRelation.recur_body binder body .skip
             child hChild using 1 <;>
               simp [PactType.replaceVar, childState]
@@ -249,14 +249,14 @@ theorem compiledFragmentSkipping_represented
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, Finset.mem_union, childSkipping,
-            Finset.mem_image] at hSkipping
-          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩ |
-            ⟨child, hChildSkipping, rfl⟩
+            finishAutomatonFragment, Finset.mem_union, childAccepting,
+            Finset.mem_image] at hAccepting
+          rcases hAccepting with ⟨child, hChildAccepting, rfl⟩ |
+            ⟨child, hChildAccepting, rfl⟩
           · exact TypeCompilationRelation.choice_left left right .skip child
-              (ih left hLeftFuel child hChildSkipping)
+              (ih left hLeftFuel child hChildAccepting)
           · exact TypeCompilationRelation.choice_right left right .skip child
-              (ih right hRightFuel child hChildSkipping)
+              (ih right hRightFuel child hChildAccepting)
       | fairChoice bid left right =>
           have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -267,28 +267,28 @@ theorem compiledFragmentSkipping_represented
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildChoiceAutomaton,
-            finishAutomatonFragment, Finset.mem_union, childSkipping,
-            Finset.mem_image] at hSkipping
-          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩ |
-            ⟨child, hChildSkipping, rfl⟩
+            finishAutomatonFragment, Finset.mem_union, childAccepting,
+            Finset.mem_image] at hAccepting
+          rcases hAccepting with ⟨child, hChildAccepting, rfl⟩ |
+            ⟨child, hChildAccepting, rfl⟩
           · exact TypeCompilationRelation.fair_left bid left right .skip child
-              (ih left hLeftFuel child hChildSkipping)
+              (ih left hLeftFuel child hChildAccepting)
           · exact TypeCompilationRelation.fair_right bid left right .skip child
-              (ih right hRightFuel child hChildSkipping)
+              (ih right hRightFuel child hChildAccepting)
       | seq left right =>
           have hRightFuel : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildSequenceAutomaton,
-            finishAutomatonFragment, childSkipping, Finset.mem_image]
-              at hSkipping
-          rcases hSkipping with ⟨child, hChildSkipping, rfl⟩
+            finishAutomatonFragment, childAccepting, Finset.mem_image]
+              at hAccepting
+          rcases hAccepting with ⟨child, hChildAccepting, rfl⟩
           exact TypeCompilationRelation.sequence_right left right .skip child
-            (ih right hRightFuel child hChildSkipping)
+            (ih right hRightFuel child hChildAccepting)
       | par left right interface =>
           simp [compileTypeFuel, buildParallelAutomaton,
-            finishAutomatonFragment] at hSkipping
+            finishAutomatonFragment] at hAccepting
       | xoffer elseType branches =>
           let branchAutomata := branches.map fun branch =>
             (branch.1, compileTypeFuel signature fuel branch.2)
@@ -297,17 +297,17 @@ theorem compiledFragmentSkipping_represented
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping
-          rcases hSkipping with hElse | hBranch
-          · simp only [childSkipping, Finset.mem_image] at hElse
-            rcases hElse with ⟨child, hChildSkipping, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting
+          rcases hAccepting with hElse | hBranch
+          · simp only [childAccepting, Finset.mem_image] at hElse
+            rcases hElse with ⟨child, hChildAccepting, rfl⟩
             exact TypeCompilationRelation.xoffer_else elseType .skip branches
-              child (ih elseType hElseFuel child hChildSkipping)
-          · rw [indexedFragmentSkipping, mem_foldl_union_iff] at hBranch
+              child (ih elseType hElseFuel child hChildAccepting)
+          · rw [indexedFragmentAccepting, mem_foldl_union_iff] at hBranch
             rcases hBranch with hEmpty | ⟨indexed, hIndexed, hChild⟩
             · simp at hEmpty
-            · simp only [childSkipping, Finset.mem_image] at hChild
-              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+            · simp only [childAccepting, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildAccepting, rfl⟩
               have hFields := List.mem_zipIdx hIndexed
               simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
                 at hFields
@@ -336,9 +336,9 @@ theorem compiledFragmentSkipping_represented
                 have hFragment : indexed.1.2 =
                     compileTypeFuel signature fuel branchType := by
                   simpa using (congrArg Prod.snd hAt).symm
-                rw [hFragment] at hChildSkipping
+                rw [hFragment] at hChildAccepting
                 have hChildRelated := ih branchType hBranchFuel child
-                  hChildSkipping
+                  hChildAccepting
                 exact TypeCompilationRelation.xoffer_branch elseType
                   branchType .skip branches action indexed.2 child hOriginal
                     hChildRelated
@@ -351,17 +351,17 @@ theorem compiledFragmentSkipping_represented
               at hFuel ⊢
             omega
           simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
-            finishAutomatonFragment, Finset.mem_union] at hSkipping
-          rcases hSkipping with hElse | hSelected
-          · simp only [childSkipping, Finset.mem_image] at hElse
-            rcases hElse with ⟨child, hChildSkipping, rfl⟩
+            finishAutomatonFragment, Finset.mem_union] at hAccepting
+          rcases hAccepting with hElse | hSelected
+          · simp only [childAccepting, Finset.mem_image] at hElse
+            rcases hElse with ⟨child, hChildAccepting, rfl⟩
             exact TypeCompilationRelation.offer_else elseType .skip branches
-              child (ih elseType hElseFuel child hChildSkipping)
-          · rw [indexedFragmentSkipping, mem_foldl_union_iff] at hSelected
+              child (ih elseType hElseFuel child hChildAccepting)
+          · rw [indexedFragmentAccepting, mem_foldl_union_iff] at hSelected
             rcases hSelected with hEmpty | ⟨indexed, hIndexed, hChild⟩
             · simp at hEmpty
-            · simp only [childSkipping, Finset.mem_image] at hChild
-              rcases hChild with ⟨child, hChildSkipping, rfl⟩
+            · simp only [childAccepting, Finset.mem_image] at hChild
+              rcases hChild with ⟨child, hChildAccepting, rfl⟩
               have hFields := List.mem_zipIdx hIndexed
               simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and]
                 at hFields
@@ -385,10 +385,10 @@ theorem compiledFragmentSkipping_represented
                 have hFragment : indexed.1.2 = compileTypeFuel signature fuel
                     (parallelTypeBranchesSelecting selected branches) := by
                   simpa using (congrArg Prod.snd hAt).symm
-                rw [hFragment] at hChildSkipping
+                rw [hFragment] at hChildAccepting
                 have hChildRelated := ih
                   (parallelTypeBranchesSelecting selected branches) hChildFuel
-                    child hChildSkipping
+                    child hChildAccepting
                 exact TypeCompilationRelation.offer_branches elseType .skip
                   branches selected indexed.2 child hOriginal hChildRelated
 

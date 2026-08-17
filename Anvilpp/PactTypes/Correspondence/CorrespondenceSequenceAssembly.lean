@@ -18,7 +18,10 @@ private theorem buildSequenceAutomaton_computeFuture_left_of_bundle
     (hRight : CompilationProofBundle signature right)
     (hLeftExecution : CompilationSequenceExecutionCorrect signature left)
     (state : TypeAutomatonState) (residual : PactType)
-    (hRelated : TypeCompilationRelation left state residual) :
+    (hRelated : TypeCompilationRelation left state residual)
+    (hNotDeleted : state ∉ sequenceDeleted (compileTypeFuel signature
+      (typeCompilationFuel left) left))
+    (hRightCanonical : right.EntryCanonical) :
     let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
     let leftFragment := compileTypeFuel signature fuel left
     let rightFragment := compileTypeFuel signature fuel right
@@ -38,7 +41,7 @@ private theorem buildSequenceAutomaton_computeFuture_left_of_bundle
     { states := rightFragment.states, edges := rightFragment.edges }
   let leftReach := leftExecution.futureReachable state
   let canBridge := ∃ completed ∈ leftReach,
-    completed ∈ leftFragment.skipping ∨
+    completed ∈ leftFragment.accepting ∨
       completed ∈ leftFragment.completing
   have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
     simp [TypeCompilationFuelSufficient, fuel]
@@ -56,6 +59,8 @@ private theorem buildSequenceAutomaton_computeFuture_left_of_bundle
     have hCanonical := compilationStateCorrect_of_compilation signature left
       state residual hRelated
     simpa [leftFragment, hLeftStable] using hCanonical
+  have hNotDeleted' : state ∉ sequenceDeleted leftFragment := by
+    rwa [hLeftStable]
   have hRightInitial : rightFragment.initial ∈ rightFragment.states :=
     compileTypeFuel_initial_mem signature fuel right hRightFuel
   have hLeftTargets : leftFragment.FutureTargetsInStates :=
@@ -63,8 +68,8 @@ private theorem buildSequenceAutomaton_computeFuture_left_of_bundle
   have hRightTargets : rightFragment.FutureTargetsInStates :=
     compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel
   have hFormula := buildSequenceAutomaton_computeFuture_left_formula signature
-    leftFragment rightFragment state hLeftState hLeftTargets hRightTargets
-      hRightInitial
+    leftFragment rightFragment state hLeftState hNotDeleted' hLeftTargets
+      hRightTargets hRightInitial
   have hExecutionCanonical := hLeftExecution state residual hRelated
   have hExecution : computeFuture leftExecution state =
       typeFutureOffers residual := by
@@ -77,10 +82,12 @@ private theorem buildSequenceAutomaton_computeFuture_left_of_bundle
         hExecutionCanonical.2
   have hRightFuture : computeFuture rightPending rightFragment.initial =
       typeFutureOffers right := by
-    have hInitialRelation := compileTypeFuel_initial_relation signature fuel
-      right hRightFuel
-    have hCanonical := hRight.future rightFragment.initial right
-      hInitialRelation
+    have hInitialRelation := compileTypeFuel_initial_relation_of_canonical
+      signature fuel right hRightFuel
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
+        hRightCanonical)
+    have hCanonical := hRight.future hRightCanonical rightFragment.initial
+      right hInitialRelation
     simpa [rightPending, rightFragment, hRightStable] using hCanonical
   have hFormula' : computeFuture pending (.child 0 state) =
       computeFuture leftExecution state ∪
@@ -108,7 +115,9 @@ theorem compilationFutureCorrect_sequence
     (hRight : CompilationProofBundle signature right)
     (hLeftExecution : CompilationSequenceExecutionCorrect signature left) :
     CompilationFutureCorrect signature (.seq left right) := by
-  intro state residual hRelated
+  intro hCanonical state residual hRelated
+  have hCanonical' : left.EntryCanonical ∧ right.EntryCanonical := by
+    simpa only [PactType.EntryCanonical] using hCanonical
   let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
   let leftFragment := compileTypeFuel signature fuel left
   let rightFragment := compileTypeFuel signature fuel right
@@ -133,11 +142,32 @@ theorem compilationFutureCorrect_sequence
     rfl
   rw [hFragment]
   cases hRelated with
-  | sequence_left _ _ childResidual childState hChildRelated =>
+  | sequence_left_entry _ _ childResidual childState hEntry hChildRelated =>
+      have hEntryUnique : childState = leftFragment.initial :=
+        TypeEntry.unique hEntry
+          (compileTypeFuel_initial_entry signature fuel left hLeftFuel)
+      have hNotDeleted : childState ∉ sequenceDeleted
+          (compileTypeFuel signature (typeCompilationFuel left) left) := by
+        rw [hLeftStable] at hEntryUnique
+        rw [hEntryUnique]
+        exact initial_not_mem_sequenceDeleted _
       simpa [fuel, leftFragment, rightFragment, sequence, pending] using
         buildSequenceAutomaton_computeFuture_left_of_bundle signature left
           right hLeft hRight hLeftExecution childState childResidual
-            hChildRelated
+            hChildRelated hNotDeleted hCanonical'.2
+  | sequence_left_progressed _ _ childResidual childState hChildRelated
+      hNotAccepting =>
+      have hNotDeleted : childState ∉ sequenceDeleted
+          (compileTypeFuel signature (typeCompilationFuel left) left) := by
+        apply not_mem_sequenceDeleted_of_not_accepting
+        intro hAccepting
+        exact hNotAccepting
+          ((compilationAcceptingCorrect_of_compilation signature left)
+            childState childResidual hChildRelated |>.mp hAccepting)
+      simpa [fuel, leftFragment, rightFragment, sequence, pending] using
+        buildSequenceAutomaton_computeFuture_left_of_bundle signature left
+          right hLeft hRight hLeftExecution childState childResidual
+            hChildRelated hNotDeleted hCanonical'.2
   | sequence_right _ _ _ childState hChildRelated =>
       have hRightState : childState ∈ rightFragment.states := by
         have hCanonical := compilationStateCorrect_of_compilation signature
@@ -164,9 +194,40 @@ theorem compilationFutureCorrect_sequence
           _ ≤ sequence.states.card := Finset.card_le_card hSubset
       have hEmbedded := buildSequenceAutomaton_computeFuture_right signature
         leftFragment rightFragment childState hRightClosed hRightState hRightCard
-      have hCanonical := hRight.future childState residual hChildRelated
+      have hCanonical := hRight.future hCanonical'.2 childState residual
+        hChildRelated
       rw [hEmbedded]
       simpa [rightFragment, hRightStable, pending, sequence] using hCanonical
+
+/-- A kept (non-deleted) left-child state always represents its `.seq`
+embedding, regardless of whether it happens to be the entry or an ordinary
+non-accepting state — the two `TypeCompilationRelation` constructors this
+dispatches to differ only in *why* the redirect leaves the state alone. -/
+private theorem sequence_left_of_kept
+    (signature : TypeAlphabet) (left right residual : PactType)
+    (state : TypeAutomatonState)
+    (hRelated : TypeCompilationRelation left state residual)
+    (hNotDeleted : state ∉ sequenceDeleted (compileTypeFuel signature
+      (typeCompilationFuel left) left)) :
+    TypeCompilationRelation (.seq left right) (.child 0 state)
+      (.seq residual right) := by
+  by_cases hEntry : state = (compileTypeFuel signature
+      (typeCompilationFuel left) left).initial
+  · refine TypeCompilationRelation.sequence_left_entry left right residual
+      state ?_ hRelated
+    rw [hEntry]
+    exact compileTypeFuel_initial_entry signature (typeCompilationFuel left)
+      left (typeCompilationFuel_sufficient left)
+  · refine TypeCompilationRelation.sequence_left_progressed left right residual
+      state hRelated ?_
+    intro hAccepting
+    exact hEntry (by
+      have hMem : state ∈ (compileTypeFuel signature (typeCompilationFuel left)
+          left).accepting :=
+        (compilationAcceptingCorrect_of_compilation signature left) state
+          residual hRelated |>.mpr hAccepting
+      by_contra hNe
+      exact hNotDeleted (mem_sequenceDeleted_iff.mpr ⟨hMem, hNe⟩))
 
 theorem compilationResolvedEdgeTargetsRelated_sequence
     (signature : TypeAlphabet) (left right : PactType)
@@ -175,25 +236,46 @@ theorem compilationResolvedEdgeTargetsRelated_sequence
     CompilationResolvedEdgeTargetsRelated signature (.seq left right) := by
   intro source residual environment label offers target hRelated hEdge
   cases hRelated with
-  | sequence_left _ _ childResidual childState hChildRelated =>
+  | sequence_left_entry _ _ childResidual childState _ hChildRelated =>
       rcases compileTypeFuel_sequence_left_edge_cases signature left right
           hEdge with hChild | hBridge
       · rcases hChild with
-          ⟨childTarget, childFuture, rfl, hChildEdge, _⟩
+          ⟨childTarget, childFuture, rfl, hNotDeleted, hChildEdge, _⟩
         obtain ⟨targetResidual, hTargetRelated⟩ :=
           hLeftTargets hChildRelated hChildEdge
         exact ⟨.seq targetResidual right,
-          TypeCompilationRelation.sequence_left left right targetResidual
-            childTarget hTargetRelated⟩
-      · rcases hBridge with ⟨_, _, _, _, _, rfl⟩
+          sequence_left_of_kept signature left right targetResidual childTarget
+            hTargetRelated hNotDeleted⟩
+      · rcases hBridge with ⟨rfl, _⟩
         have hInitial : TypeCompilationRelation right
             (compileTypeFuel signature (typeCompilationFuel right) right).initial
-            right :=
+            right.canonicalEntryResidual :=
           compileTypeFuel_initial_relation signature
             (typeCompilationFuel right) right
             (typeCompilationFuel_sufficient right)
-        exact ⟨right, TypeCompilationRelation.sequence_right left right
-          right _ hInitial⟩
+        exact ⟨right.canonicalEntryResidual,
+          TypeCompilationRelation.sequence_right left right
+            right.canonicalEntryResidual _ hInitial⟩
+  | sequence_left_progressed _ _ childResidual childState hChildRelated _ =>
+      rcases compileTypeFuel_sequence_left_edge_cases signature left right
+          hEdge with hChild | hBridge
+      · rcases hChild with
+          ⟨childTarget, childFuture, rfl, hNotDeleted, hChildEdge, _⟩
+        obtain ⟨targetResidual, hTargetRelated⟩ :=
+          hLeftTargets hChildRelated hChildEdge
+        exact ⟨.seq targetResidual right,
+          sequence_left_of_kept signature left right targetResidual childTarget
+            hTargetRelated hNotDeleted⟩
+      · rcases hBridge with ⟨rfl, _⟩
+        have hInitial : TypeCompilationRelation right
+            (compileTypeFuel signature (typeCompilationFuel right) right).initial
+            right.canonicalEntryResidual :=
+          compileTypeFuel_initial_relation signature
+            (typeCompilationFuel right) right
+            (typeCompilationFuel_sufficient right)
+        exact ⟨right.canonicalEntryResidual,
+          TypeCompilationRelation.sequence_right left right
+            right.canonicalEntryResidual _ hInitial⟩
   | sequence_right _ _ childResidual childState hChildRelated =>
       rcases compileTypeFuel_sequence_right_edge_cases signature left right
           hEdge with ⟨childTarget, rfl, hChildEdge⟩
@@ -226,13 +308,15 @@ theorem compilationResolvedEdgeTargetsRelated_choice
       · rw [hSelected]
         have hInitial := compileTypeFuel_initial_relation signature
           (typeCompilationFuel left) left (typeCompilationFuel_sufficient left)
-        exact ⟨left, TypeCompilationRelation.choice_left left right left _
-          hInitial⟩
+        exact ⟨left.canonicalEntryResidual,
+          TypeCompilationRelation.choice_left left right
+            left.canonicalEntryResidual _ hInitial⟩
       · rw [hSelected]
         have hInitial := compileTypeFuel_initial_relation signature
           (typeCompilationFuel right) right (typeCompilationFuel_sufficient right)
-        exact ⟨right, TypeCompilationRelation.choice_right left right right _
-          hInitial⟩
+        exact ⟨right.canonicalEntryResidual,
+          TypeCompilationRelation.choice_right left right
+            right.canonicalEntryResidual _ hInitial⟩
   | choice_left _ _ childResidual childState hChildRelated =>
       rcases compileTypeFuel_choiceLike_left_target_cases signature left right
           TypeLabel.silent TypeLabel.silent hParent with
@@ -274,13 +358,15 @@ theorem compilationResolvedEdgeTargetsRelated_fairChoice
       · rw [hSelected]
         have hInitial := compileTypeFuel_initial_relation signature
           (typeCompilationFuel left) left (typeCompilationFuel_sufficient left)
-        exact ⟨left, TypeCompilationRelation.fair_left bid left right left _
-          hInitial⟩
+        exact ⟨left.canonicalEntryResidual,
+          TypeCompilationRelation.fair_left bid left right
+            left.canonicalEntryResidual _ hInitial⟩
       · rw [hSelected]
         have hInitial := compileTypeFuel_initial_relation signature
           (typeCompilationFuel right) right (typeCompilationFuel_sufficient right)
-        exact ⟨right, TypeCompilationRelation.fair_right bid left right right _
-          hInitial⟩
+        exact ⟨right.canonicalEntryResidual,
+          TypeCompilationRelation.fair_right bid left right
+            right.canonicalEntryResidual _ hInitial⟩
   | fair_left _ _ _ childResidual childState hChildRelated =>
       rcases compileTypeFuel_choiceLike_left_target_cases signature left right
           (TypeLabel.fair bid true) (TypeLabel.fair bid false) hParent with
@@ -316,23 +402,27 @@ theorem compilationResolvedEdgeTargetsRelated_recursion
       rcases (buildRecursionAutomaton_root_hasResolvedEdge_iff signature name
           bodyFragment environment label offers target).mp hEdge with
         ⟨_, _, _, _, rfl⟩
-      have hInitial : TypeCompilationRelation body bodyFragment.initial body :=
+      have hInitial : TypeCompilationRelation body bodyFragment.initial
+          body.canonicalEntryResidual :=
         compileTypeFuel_initial_relation signature (typeCompilationFuel body)
           body (typeCompilationFuel_sufficient body)
-      exact ⟨body.replaceVar name (.recur name body),
-        TypeCompilationRelation.recur_body name body body _ hInitial⟩
+      exact ⟨body.canonicalEntryResidual.replaceVar name (.recur name body),
+        TypeCompilationRelation.recur_body name body
+          body.canonicalEntryResidual _ hInitial⟩
   | recur_body _ _ childResidual childState hChildRelated =>
       rcases (buildRecursionAutomaton_body_hasResolvedEdge_iff signature name
           bodyFragment childState environment label offers target).mp hEdge with
         hMarker | hBody
       · rcases hMarker with
           ⟨edge, _, _, _, _, _, _, _, rfl⟩
-        have hInitial : TypeCompilationRelation body bodyFragment.initial body :=
+        have hInitial : TypeCompilationRelation body bodyFragment.initial
+            body.canonicalEntryResidual :=
           compileTypeFuel_initial_relation signature
             (typeCompilationFuel body) body
             (typeCompilationFuel_sufficient body)
-        exact ⟨body.replaceVar name (.recur name body),
-          TypeCompilationRelation.recur_body name body body _ hInitial⟩
+        exact ⟨body.canonicalEntryResidual.replaceVar name (.recur name body),
+          TypeCompilationRelation.recur_body name body
+            body.canonicalEntryResidual _ hInitial⟩
       · rcases hBody with
           ⟨edge, hPending, hSource, _, hEnvironment, hLabel, _, _, rfl⟩
         let childOffers : TypeOfferSummary :=
@@ -609,7 +699,7 @@ theorem compilationScopedFragmentStepCorrect_sequence_leaf
     hAvoids.mono (by simp [PactType.ParallelInterfaces])
   have hAvoidsRight : env.AvoidsInterface right.ParallelInterfaces :=
     hAvoids.mono (by simp [PactType.ParallelInterfaces])
-  have hLeftSkipping := compilationSkippingCorrect_of_compilation signature left
+  have hLeftAccepting := compilationAcceptingCorrect_of_compilation signature left
   cases hRelated with
   | sequence_left _ _ childResidual childState hChildRelated =>
       constructor
@@ -618,10 +708,10 @@ theorem compilationScopedFragmentStepCorrect_sequence_leaf
         | skip_seq =>
             obtain ⟨hCurrent, hOfferFuture⟩ :=
               TypeOffers.skip_sequence_fields hOffers
-            have hSkipping : childState ∈
+            have hAccepting : childState ∈
                 (compileTypeFuel signature
-                  (typeCompilationFuel left) left).skipping :=
-              (hLeftSkipping childState .skip hChildRelated).mpr rfl
+                  (typeCompilationFuel left) left).accepting :=
+              (hLeftAccepting childState .skip hChildRelated).mpr rfl
             have hRightInitial : TypeCompilationRelation right
                 (compileTypeFuel signature
                   (typeCompilationFuel right) right).initial right := by
@@ -637,7 +727,7 @@ theorem compilationScopedFragmentStepCorrect_sequence_leaf
                 (typeCompilationFuel right) right).initial, ?_, hTarget⟩
             apply (compileTypeFuel_sequence_bridge_edge_iff signature left right
               childState env TypeLabel.silent offers).mpr
-            exact ⟨hSkipping, hLocal, rfl, hCurrent,
+            exact ⟨hAccepting, hLocal, rfl, hCurrent,
               hComputed.trans hOfferFuture.symm⟩
         | seq _ _ childTarget _ _ hChildTransition =>
             obtain ⟨childFuture, hChildOffers, hOfferFuture⟩ :=
@@ -685,7 +775,7 @@ theorem compilationScopedFragmentStepCorrect_sequence_leaf
                 (TypeOffers.seq env childResidual targetResidual right label
                   offers.current childFuture hChildOffers)
         · rcases hBridge with
-            ⟨hSkipping, _, hLabel, hCurrent, hComputed, rfl⟩
+            ⟨hAccepting, _, hLabel, hCurrent, hComputed, rfl⟩
           cases hTarget with
           | sequence_right _ _ targetResidual _ hChildTarget =>
               have hRightInitial : TypeCompilationRelation right
@@ -697,8 +787,8 @@ theorem compilationScopedFragmentStepCorrect_sequence_leaf
                 hChildTarget hRightInitial
               cases hResidual
               have hChildResidual : childResidual = .skip :=
-                (hLeftSkipping childState childResidual hChildRelated).mp
-                  hSkipping
+                (hLeftAccepting childState childResidual hChildRelated).mp
+                  hAccepting
               subst childResidual
               have hParentTarget : TypeCompilationRelation (.seq left right)
                   (.child 1 (compileTypeFuel signature
@@ -906,7 +996,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
             ((∃ completed ∈
                 (sequenceExecutionAutomaton leftFragment).futureReachable
                   leftState,
-                completed ∈ leftFragment.skipping ∨
+                completed ∈ leftFragment.accepting ∨
                   completed ∈ leftFragment.completing) ↔
               leftResidual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, leftFragment, hLeftStable]
@@ -917,7 +1007,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
             ((∃ completed ∈
                 (sequenceExecutionAutomaton rightFragment).futureReachable
                   rightState,
-                completed ∈ rightFragment.skipping ∨
+                completed ∈ rightFragment.accepting ∨
                   completed ∈ rightFragment.completing) ↔
               rightResidual.CanCompleteBeforeTock = true) := by
         simpa [CompilationSequenceExecutionCorrect, rightFragment,
@@ -1013,7 +1103,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
               ((∃ completed ∈
                   (sequenceExecutionAutomaton leftFragment).futureReachable
                     leftEdge.source,
-                  completed ∈ leftFragment.skipping ∨
+                  completed ∈ leftFragment.accepting ∨
                     completed ∈ leftFragment.completing) ↔
                 childLeftResidual.CanCompleteBeforeTock = true) := by
           simpa [CompilationSequenceExecutionCorrect, leftFragment,
@@ -1024,7 +1114,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
               ((∃ completed ∈
                   (sequenceExecutionAutomaton rightFragment).futureReachable
                     rightEdge.source,
-                  completed ∈ rightFragment.skipping ∨
+                  completed ∈ rightFragment.accepting ∨
                     completed ∈ rightFragment.completing) ↔
                 childRightResidual.CanCompleteBeforeTock = true) := by
           simpa [CompilationSequenceExecutionCorrect, rightFragment,
@@ -1090,7 +1180,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
               ((∃ completed ∈
                   (sequenceExecutionAutomaton leftFragment).futureReachable
                     leftEdge.target,
-                  completed ∈ leftFragment.skipping ∨
+                  completed ∈ leftFragment.accepting ∨
                     completed ∈ leftFragment.completing) ↔
                 leftTargetResidual.CanCompleteBeforeTock = true) := by
           simpa [CompilationSequenceExecutionCorrect, leftFragment,
@@ -1101,7 +1191,7 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
               ((∃ completed ∈
                   (sequenceExecutionAutomaton rightFragment).futureReachable
                     rightEdge.target,
-                  completed ∈ rightFragment.skipping ∨
+                  completed ∈ rightFragment.accepting ∨
                     completed ∈ rightFragment.completing) ↔
                 rightTargetResidual.CanCompleteBeforeTock = true) := by
           simpa [CompilationSequenceExecutionCorrect, rightFragment,
@@ -1226,9 +1316,9 @@ theorem compilationSequenceExecutionCorrect_parallel_regular_leaf
       constructor
       · exact hSameFuture.trans hSourceOffers
       · constructor
-        · rintro ⟨completed, hReachable, hSkipping | hCompleting⟩
+        · rintro ⟨completed, hReachable, hAccepting | hCompleting⟩
           · simp [fragment, buildParallelAutomaton,
-              finishAutomatonFragment] at hSkipping
+              finishAutomatonFragment] at hAccepting
           · let allowed := execution.states.filter represented
             have hSourceAllowed :
                 (.pair leftState rightState : TypeAutomatonState) ∈ allowed := by

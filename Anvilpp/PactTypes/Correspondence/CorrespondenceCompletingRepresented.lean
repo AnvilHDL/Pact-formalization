@@ -564,7 +564,7 @@ theorem compiledFragmentNonClockPredecessor_eval
               rcases hEdge with
                 ((⟨childEdge, _, hEq⟩ |
                   ⟨childEdge, hChildEdge, hEq⟩) |
-                  ⟨bridgeState, hBridgeSkipping, environment, _, hEq⟩) |
+                  ⟨bridgeState, hBridgeAccepting, environment, _, hEq⟩) |
                     ⟨bridgeState, hBridgeCompleting, hEq⟩
               · subst edge
                 simp [Pact.childState] at hTargetState
@@ -595,8 +595,8 @@ theorem compiledFragmentNonClockPredecessor_eval
                     (hChildState ▸ hRightInitial)
                 subst targetResidual
                 have hLeftSkip : TypeCompilationRelation left bridgeState .skip :=
-                  compiledFragmentSkipping_represented signature fuel left
-                    hLeftFuel bridgeState hBridgeSkipping
+                  compiledFragmentAccepting_represented signature fuel left
+                    hLeftFuel bridgeState hBridgeAccepting
                 refine ⟨.seq .skip right,
                   TypeCompilationRelation.sequence_left left right .skip
                     bridgeState hLeftSkip, ?_⟩

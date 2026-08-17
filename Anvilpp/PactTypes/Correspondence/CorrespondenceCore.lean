@@ -361,6 +361,138 @@ def PactType.canonicalEntryResidual : PactType → PactType
       else .par leftResidual rightResidual interface
   | processType => processType
 
+/- No `.par` anywhere in the syntax tree is degenerate — that is, no product
+has both sides' entries already collapsing to `.skip`.
+
+`canonicalEntryResidual` alone is too shallow to express this: it only
+descends through `.seq`'s left child and `.par`'s two children, so
+`(.xoffer elseType branches).canonicalEntryResidual` is the type itself no
+matter how degenerate `elseType` or a branch continuation is.  Correspondence
+statements that hand a *sub*-term to a recursive call therefore need this
+hereditary form, not `canonicalEntryResidual _ = _`.
+
+The excluded shape is a product that can never step (e.g.
+`.par .skip .skip ∅`): its compiled entry state can only ever represent
+literal `.skip`, so pinning the represented residual to the type as written
+is false for it.  Every such type is semantically `.skip`; the restriction
+costs no expressiveness. -/
+mutual
+  def PactType.EntryCanonical : PactType → Prop
+    | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+    | .recur _ body => body.EntryCanonical
+    | .choice left right | .fairChoice _ left right | .seq left right =>
+        left.EntryCanonical ∧ right.EntryCanonical
+    | .par left right _ =>
+        ¬ (left.canonicalEntryResidual = .skip ∧
+            right.canonicalEntryResidual = .skip) ∧
+          left.EntryCanonical ∧ right.EntryCanonical
+    | .xoffer elseType branches | .offer elseType branches =>
+        elseType.EntryCanonical ∧ PactType.EntryCanonicalBranches branches
+  termination_by processType => sizeOf processType
+
+  def PactType.EntryCanonicalBranches :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (_, processType) :: rest =>
+        processType.EntryCanonical ∧ PactType.EntryCanonicalBranches rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/-- The bridge from the hereditary predicate to the shallow transform that
+`compileTypeFuel_initial_relation` is stated with. -/
+theorem PactType.canonicalEntryResidual_eq_self_of_entryCanonical :
+    ∀ {processType : PactType}, processType.EntryCanonical →
+      processType.canonicalEntryResidual = processType
+  | .message _ _, _ | .progress _, _ | .tock, _ | .skip, _ | .var _, _ =>
+      rfl
+  | .recur _ _, _ | .choice _ _, _ | .fairChoice _ _ _, _
+  | .xoffer _ _, _ | .offer _ _, _ => rfl
+  | .seq left _, hCanonical => by
+      simp only [canonicalEntryResidual]
+      rw [canonicalEntryResidual_eq_self_of_entryCanonical
+        (show left.EntryCanonical from (by
+          simp only [EntryCanonical] at hCanonical
+          exact hCanonical.1))]
+  | .par left right _, hCanonical => by
+      simp only [EntryCanonical] at hCanonical
+      obtain ⟨hNotBoth, hLeft, hRight⟩ := hCanonical
+      simp only [canonicalEntryResidual,
+        canonicalEntryResidual_eq_self_of_entryCanonical hLeft,
+        canonicalEntryResidual_eq_self_of_entryCanonical hRight]
+      rw [if_neg]
+      rw [canonicalEntryResidual_eq_self_of_entryCanonical hLeft,
+        canonicalEntryResidual_eq_self_of_entryCanonical hRight] at hNotBoth
+      exact hNotBoth
+
+/-- Every branch entry of a hereditarily-canonical `.xoffer`/`.offer` branch
+list is itself canonical.  Used to recover the per-branch hypothesis
+`compilationFragmentStepCorrect_xoffer`/`_offer` and friends need to recurse
+into `hBranchStep`. -/
+theorem PactType.EntryCanonicalBranches.get :
+    ∀ {branches : List (BareMessage × PactType)} {index : Nat}
+      {action : BareMessage} {branchType : PactType},
+      PactType.EntryCanonicalBranches branches →
+      branches[index]? = some (action, branchType) →
+      branchType.EntryCanonical
+  | [], _, _, _, _, hEntry => by simp at hEntry
+  | (_, _) :: _, 0, _, _, hCanonical, hEntry => by
+      simp only [List.getElem?_cons_zero, Option.some.injEq,
+        Prod.mk.injEq] at hEntry
+      simp only [EntryCanonicalBranches] at hCanonical
+      rw [← hEntry.2]
+      exact hCanonical.1
+  | (_, _) :: rest, index + 1, action, branchType, hCanonical, hEntry => by
+      simp only [List.getElem?_cons_succ] at hEntry
+      simp only [EntryCanonicalBranches] at hCanonical
+      exact PactType.EntryCanonicalBranches.get hCanonical.2 hEntry
+
+/-- The head branch's own continuation is canonical.  Companion to `.get`
+above (which needs a `getElem?` witness); this is the direct `head :: tail`
+split, useful when destructuring a concrete list literal rather than indexing
+into it.  Stated with an opaque `head : BareMessage × PactType` — the match
+compiles against `head.1`/`head.2` via `Prod`'s structure eta, so it applies
+to non-literal pairs at the call site too. -/
+theorem PactType.EntryCanonicalBranches.head :
+    ∀ {head : BareMessage × PactType} {rest : List (BareMessage × PactType)},
+      PactType.EntryCanonicalBranches (head :: rest) →
+      head.2.EntryCanonical
+  | (_, _), _, hCanonical => by
+      simp only [EntryCanonicalBranches] at hCanonical
+      exact hCanonical.1
+
+/-- The tail of a hereditarily-canonical branch list is itself hereditarily
+canonical. -/
+theorem PactType.EntryCanonicalBranches.tail :
+    ∀ {head : BareMessage × PactType} {rest : List (BareMessage × PactType)},
+      PactType.EntryCanonicalBranches (head :: rest) →
+      PactType.EntryCanonicalBranches rest
+  | (_, _), _, hCanonical => by
+      simp only [EntryCanonicalBranches] at hCanonical
+      exact hCanonical.2
+
+/-- Converse of `.head`/`.tail`: a canonical head and canonical tail rebuild a
+canonical `head :: tail`. -/
+theorem PactType.EntryCanonicalBranches.cons :
+    ∀ {head : BareMessage × PactType} {rest : List (BareMessage × PactType)},
+      head.2.EntryCanonical → PactType.EntryCanonicalBranches rest →
+      PactType.EntryCanonicalBranches (head :: rest)
+  | (_, _), _, hHead, hRest => by
+      simp only [EntryCanonicalBranches]
+      exact ⟨hHead, hRest⟩
+
+/-- A singleton branch list is canonical exactly when its one continuation
+is. -/
+theorem PactType.EntryCanonicalBranches.singleton :
+    ∀ {branch : BareMessage × PactType}, branch.2.EntryCanonical →
+      PactType.EntryCanonicalBranches [branch]
+  | (_, _), hCanonical =>
+      PactType.EntryCanonicalBranches.cons hCanonical (by
+        simp only [EntryCanonicalBranches])
+
 /-- Sufficiently fuelled compilation starts in the state representing its
 input's `canonicalEntryResidual` (which is the input itself, except for the
 `.seq`/`.par` propagation described there). -/
@@ -503,8 +635,8 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
                     (compileTypeFuel signature fuel left).initial :=
             Or.inl (ih left hLeft)
           simpa [compileTypeFuel, buildSequenceAutomaton,
-            finishAutomatonFragment, childStates, childState] using
-              hInitialOrTarget
+            finishAutomatonFragment, childStates, childState,
+            initial_not_mem_sequenceDeleted] using hInitialOrTarget
       | par left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -1315,6 +1447,160 @@ theorem compilationAcceptingCorrect_of_compilation
     (typeCompilationFuel processType) processType
     (typeCompilationFuel_sufficient processType)
 
+/-- Replacing a variable by its recursion binder yields literal `skip` exactly
+when the original residual was already literal `skip`. -/
+theorem PactType.replaceVar_recur_eq_skip_iff
+    (processType : PactType) (name : String) (body : PactType) :
+    (processType.replaceVar name (.recur name body) = .skip) ↔
+      processType = .skip := by
+  cases processType <;> simp only [PactType.replaceVar] <;>
+    try simp
+  all_goals split <;> simp_all
+
+/-- A represented residual is literally `skip` exactly when the structural
+`TypeAccepting` predicate holds at its state. Needed by `buildSequenceAutomaton`'s
+redirect, which deletes/reroutes states by the *concrete* `accepting` field
+(via `TypeAccepting`, see `CompilationAcceptingCorrect`) but whose callers
+reason about the *residual* directly (e.g. matching on `TypeTransition.
+skip_seq`/`seq_fuse`, which pattern-match a literal `.skip` child). Proved by
+induction on the relation derivation; the only non-immediate case is `.par`,
+where `parallel`'s exclusion hypothesis rules out its own residual being
+`.skip` whenever both children are already (recursively) accepting, forcing
+`parallel_fuse` to be the only derivation reaching an accepting pair state. -/
+theorem TypeCompilationRelation.residual_eq_skip_iff_typeAccepting :
+    ∀ {processType : PactType} {state : TypeAutomatonState} {residual : PactType},
+      TypeCompilationRelation processType state residual →
+      (residual = .skip ↔ TypeAccepting processType state) := by
+  intro processType state residual hRelated
+  induction hRelated with
+  | skip => exact ⟨fun _ => TypeAccepting.skip, fun _ => rfl⟩
+  | message_source msg dir =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | message_final msg dir =>
+      exact ⟨fun _ => TypeAccepting.message_final msg dir, fun _ => rfl⟩
+  | cycle_source =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | cycle_final =>
+      exact ⟨fun _ => TypeAccepting.cycle_final, fun _ => rfl⟩
+  | progress_source pid =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | progress_final pid =>
+      exact ⟨fun _ => TypeAccepting.progress_final pid, fun _ => rfl⟩
+  | «variable» name =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | recur_source name body =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | recur_body name body residual state hBody ih =>
+      rw [PactType.replaceVar_recur_eq_skip_iff]
+      constructor
+      · intro h
+        exact TypeAccepting.recur_body name body state (ih.mp h)
+      · intro h
+        cases h with
+        | recur_body _ _ _ hInner => exact ih.mpr hInner
+  | choice_source left right =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | choice_left left right residual state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.choice_left left right state (ih.mp h)
+      · intro h
+        cases h with
+        | choice_left _ _ _ hInner => exact ih.mpr hInner
+  | choice_right left right residual state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.choice_right left right state (ih.mp h)
+      · intro h
+        cases h with
+        | choice_right _ _ _ hInner => exact ih.mpr hInner
+  | fair_source bid left right =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | fair_left bid left right residual state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.fair_left bid left right state (ih.mp h)
+      · intro h
+        cases h with
+        | fair_left _ _ _ _ hInner => exact ih.mpr hInner
+  | fair_right bid left right residual state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.fair_right bid left right state (ih.mp h)
+      · intro h
+        cases h with
+        | fair_right _ _ _ _ hInner => exact ih.mpr hInner
+  | sequence_left_entry left right residual state hEntry hSelf ih =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | sequence_left_progressed left right residual state hChild hNotAcc ih =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | sequence_right left right residual state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.sequence_right left right state (ih.mp h)
+      · intro h
+        cases h with
+        | sequence_right _ _ _ hInner => exact ih.mpr hInner
+  | parallel left right leftResidual rightResidual interface leftState
+      rightState hL hR hExcl ihL ihR =>
+      constructor
+      · intro h; exact absurd h (by simp)
+      · intro h
+        cases h with
+        | parallel _ _ _ _ _ hAcceptL hAcceptR =>
+            exact absurd ⟨ihL.mpr hAcceptL, ihR.mpr hAcceptR⟩ hExcl
+  | parallel_fuse left right interface leftState rightState hL hR ihL ihR =>
+      exact ⟨fun _ => TypeAccepting.parallel left right interface leftState
+        rightState (ihL.mp rfl) (ihR.mp rfl), fun _ => rfl⟩
+  | xoffer_source elseType branches =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | xoffer_else elseType residual branches state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.xoffer_else elseType branches state (ih.mp h)
+      · intro h
+        cases h with
+        | xoffer_else _ _ _ hInner => exact ih.mpr hInner
+  | xoffer_branch elseType branchType residual branches action index state
+      hEntry hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.xoffer_branch elseType branchType branches action
+          index state hEntry (ih.mp h)
+      · intro h
+        cases h with
+        | xoffer_branch _ branchType' _ action' _ _ hEntry' hInner =>
+            have hSame : (action, branchType) = (action', branchType') := by
+              rw [hEntry] at hEntry'
+              exact Option.some.inj hEntry'
+            have hBranchTypeEq : branchType' = branchType :=
+              (congrArg Prod.snd hSame).symm
+            subst hBranchTypeEq
+            exact ih.mpr hInner
+  | offer_source elseType branches =>
+      exact ⟨fun h => absurd h (by simp), fun h => by cases h⟩
+  | offer_branches elseType residual branches selected index state hEntry
+      hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.offer_branches elseType branches selected index
+          state hEntry (ih.mp h)
+      · intro h
+        cases h with
+        | offer_branches _ _ selected' _ _ hEntry' hInner =>
+            have hSame : selected = selected' := by
+              rw [hEntry] at hEntry'
+              exact Option.some.inj hEntry'
+            subst hSame
+            exact ih.mpr hInner
+  | offer_else elseType residual branches state hChild ih =>
+      constructor
+      · intro h
+        exact TypeAccepting.offer_else elseType branches state (ih.mp h)
+      · intro h
+        cases h with
+        | offer_else _ _ _ hInner => exact ih.mpr hInner
+
 def CompilationStateCorrect
     (signature : TypeAlphabet) (processType : PactType) : Prop :=
   ∀ state residual,
@@ -1465,9 +1751,9 @@ private theorem compileTypeFuel_relation_state_mem
           rw [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment]
           simp only [Finset.mem_union, Finset.mem_image, Finset.mem_sdiff]
-          refine Or.inl (Or.inl ⟨childQ, ⟨hChild, ?_⟩, rfl⟩)
-          intro hMem
-          exact hNotAcceptingConcrete hMem.1
+          exact Or.inl (Or.inl ⟨childQ, ⟨hChild,
+            not_mem_sequenceDeleted_of_not_accepting hNotAcceptingConcrete⟩,
+            rfl⟩)
       | sequence_right left right _ childQ hChildRelated =>
           have hRightFuel : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
@@ -1624,6 +1910,7 @@ def CompilationFutureCorrect
     (typeCompilationFuel processType) processType
   let pending : PendingAutomaton :=
     { states := fragment.states, edges := fragment.edges }
+  processType.EntryCanonical →
   ∀ state residual,
     TypeCompilationRelation processType state residual →
       computeFuture pending state = typeFutureOffers residual
@@ -1667,17 +1954,6 @@ def CompilationStepCorrect
         (compileType signature processType).HasEdge state env label offers
           state' ∧
         TypeCompilationRelation processType state' residual')
-
-/-- Replacing a variable by its recursion binder yields literal `skip` exactly
-when the original residual was already literal `skip`. -/
-theorem PactType.replaceVar_recur_eq_skip_iff
-    (processType : PactType) (name : String) (body : PactType) :
-    (processType.replaceVar name (.recur name body) = .skip) ↔
-      processType = .skip := by
-  cases processType <;> simp only [PactType.replaceVar] <;>
-    try simp
-  all_goals split <;> simp_all
-
 
 /-- The constructor metadata used only for optimistic future propagation is
 exactly the syntax predicate saying that the represented residual may finish
@@ -1734,6 +2010,7 @@ def CompilationFragmentStepCorrect
     (signature : TypeAlphabet) (processType : PactType) : Prop :=
   let fragment := compileTypeFuel signature
     (typeCompilationFuel processType) processType
+  processType.EntryCanonical →
   ∀ {residual residual' : PactType} {state : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
     TypeCompilationRelation processType state residual →
@@ -1765,7 +2042,7 @@ private theorem computeFuture_eq_empty_of_edges_empty
 /-- Future correctness for `skip`. -/
 theorem compilationFutureCorrect_skip (signature : TypeAlphabet) :
     CompilationFutureCorrect signature .skip := by
-  intro state residual hRelated
+  intro _ state residual hRelated
   cases hRelated
   let fragment := compileTypeFuel signature (typeCompilationFuel .skip) .skip
   let pending : PendingAutomaton :=
@@ -1786,6 +2063,7 @@ theorem compilationFutureCorrect_skip (signature : TypeAlphabet) :
 theorem compilationFutureCorrect_progress
     (signature : TypeAlphabet) (pid : ProcId) :
     CompilationFutureCorrect signature (.progress pid) := by
+  intro _
   let fragment := compileTypeFuel signature
     (typeCompilationFuel (.progress pid)) (.progress pid)
   let pending : PendingAutomaton :=
@@ -1809,6 +2087,7 @@ theorem compilationFutureCorrect_progress
 /-- Future correctness for the clock constructor. -/
 theorem compilationFutureCorrect_tock (signature : TypeAlphabet) :
     CompilationFutureCorrect signature .tock := by
+  intro _
   let fragment := compileTypeFuel signature
     (typeCompilationFuel .tock) .tock
   let pending : PendingAutomaton :=
@@ -1834,6 +2113,7 @@ theorem compilationFutureCorrect_tock (signature : TypeAlphabet) :
 theorem compilationFutureCorrect_message
     (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
     CompilationFutureCorrect signature (.message msg dir) := by
+  intro _
   let fragment := compileTypeFuel signature
     (typeCompilationFuel (.message msg dir)) (.message msg dir)
   let pending : PendingAutomaton :=
@@ -1914,7 +2194,7 @@ theorem compilationFutureCorrect_message
 theorem compilationFutureCorrect_var
     (signature : TypeAlphabet) (name : String) :
     CompilationFutureCorrect signature (.var name) := by
-  intro state residual hRelated
+  intro _ state residual hRelated
   cases hRelated
   let fragment := compileTypeFuel signature
     (typeCompilationFuel (.var name)) (.var name)
@@ -2025,6 +2305,7 @@ def CompilationScopedFragmentStepCorrect
     (signature : TypeAlphabet) (processType : PactType) : Prop :=
   let fragment := compileTypeFuel signature
     (typeCompilationFuel processType) processType
+  processType.EntryCanonical →
   ∀ {residual residual' : PactType} {state : TypeAutomatonState}
     {environment : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary},
@@ -2042,7 +2323,7 @@ labelled `.variable name`, never `.visible _`. -/
 theorem compilationScopedFragmentStepCorrect_var
     (signature : TypeAlphabet) (name : String) :
     CompilationScopedFragmentStepCorrect signature (.var name) := by
-  intro residual residual' state environment label offers hRelated hLocal
+  intro _ residual residual' state environment label offers hRelated hLocal
     hAvoids
   cases hRelated
   constructor
@@ -2912,8 +3193,7 @@ theorem compileType_skip_correspondence (signature : TypeAlphabet) :
               simpa [compileType] using hAlphabet
             simp [compileType, typeCompilationFuel, compileTypeFuel,
               finishAutomatonFragment, resolvedAutomatonEdges]
-            exact ⟨env, ⟨hLocalEnvironment, conditions.2.1,
-              conditions.2.2⟩, by simp [hSymbol]⟩
+            exact ⟨env, ⟨hLocalEnvironment, conditions.2⟩, by simp [hSymbol]⟩
   · rintro ⟨state', hEdge, hTarget⟩
     rcases hTarget with ⟨rfl, rfl⟩
     have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
@@ -2993,7 +3273,7 @@ theorem compileType_message_final_edge
     (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
     {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
-    (hClock : env.clock = false) (hImmediate : env.immediate = ∅)
+    (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
     (compileType signature (.message msg dir)).HasEdge .final env
@@ -3017,7 +3297,7 @@ theorem compileType_message_final_edge
         future := .explicit ∅
         target := .final }, ?_, by simp⟩
     simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocalEnvironment, hClock, hImmediate]
+      hLocalEnvironment, hClock]
   · simp [hSymbol]
 
 private theorem TypeOffers.message_action_fields
@@ -3095,8 +3375,7 @@ theorem compileType_message_step_to_edge
           refine ⟨.final, ?_, TypeCompilationRelation.message_final msg dir⟩
           apply compileType_message_final_edge signature msg dir
           · exact hEnvironment
-          · exact conditions.2.1
-          · exact conditions.2.2
+          · exact conditions.2
           · simpa [compileType] using hSymbol
 
 private theorem compileType_message_edge_cases
@@ -3112,8 +3391,7 @@ private theorem compileType_message_edge_cases
         current = {(msg, dir)} ∧ future = ∅ ∧ env.clock = false ∧
         ¬ env.hasNeed (msg, dir)) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
-        current = ∅ ∧ future = ∅ ∧ env.clock = false ∧
-        env.immediate = ∅) := by
+        current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion] at hEdge
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
@@ -3132,7 +3410,7 @@ private theorem compileType_message_edge_cases
           simp_all
         · rcases hWaiting with ⟨edgeEnv, ⟨_, hClock, hNoNeed⟩, rfl⟩
           simp_all
-        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩
+        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩
           simp_all
       · simp at hOutput
 
@@ -3170,14 +3448,13 @@ theorem compileType_message_edge_to_step
             simpa [typeFutureOffers, typeFutureOffersFuel] using
               TypeOffers.action_wait env msg dir
                 ⟨hWellFormed, hNoNeed, hClock⟩
-  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock, hImmediate⟩
+  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
     cases hRelated with
     | message_final =>
         cases hTarget with
         | message_final =>
-            exact ⟨TypeTransition.skip env
-                ⟨hWellFormed, hClock, hImmediate⟩,
-              TypeOffers.skip env ⟨hWellFormed, hClock, hImmediate⟩⟩
+            exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
+              TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
 
 /-- The atomic message constructor satisfies the complete step correspondence. -/
 theorem compileType_message_correspondence
@@ -3277,7 +3554,7 @@ theorem compileType_tock_wait_edge
 theorem compileType_tock_final_edge
     (signature : TypeAlphabet) {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
-    (hClock : env.clock = false) (hImmediate : env.immediate = ∅)
+    (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
     (compileType signature .tock).HasEdge .final env TypeLabel.silent
@@ -3301,7 +3578,7 @@ theorem compileType_tock_final_edge
         future := .explicit ∅
         target := .final }, ?_, by simp⟩
     simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocalEnvironment, hClock, hImmediate]
+      hLocalEnvironment, hClock]
   · simp [hSymbol]
 
 private theorem TypeOffers.tock_action_fields
@@ -3363,8 +3640,7 @@ theorem compileType_tock_step_to_edge
           refine ⟨.final, ?_, TypeCompilationRelation.cycle_final⟩
           apply compileType_tock_final_edge signature
           · exact hEnvironment
-          · exact conditions.2.1
-          · exact conditions.2.2
+          · exact conditions.2
           · simpa [compileType] using hSymbol
 
 private theorem compileType_tock_edge_cases
@@ -3378,8 +3654,7 @@ private theorem compileType_tock_edge_cases
       (source = .root ∧ target = .root ∧ label = TypeLabel.silent ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = false) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
-        current = ∅ ∧ future = ∅ ∧ env.clock = false ∧
-        env.immediate = ∅) := by
+        current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion] at hEdge
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
@@ -3401,7 +3676,7 @@ private theorem compileType_tock_edge_cases
           · right
             left
             simp_all
-        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩
+        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩
           simp_all
       · simp at hOutput
 
@@ -3433,14 +3708,13 @@ theorem compileType_tock_edge_to_step
         | cycle_source =>
             exact ⟨TypeTransition.cycle_wait env ⟨hWellFormed, hClock⟩,
               TypeOffers.cycle_wait env ⟨hWellFormed, hClock⟩⟩
-  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock, hImmediate⟩
+  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
     cases hRelated with
     | cycle_final =>
         cases hTarget with
         | cycle_final =>
-            exact ⟨TypeTransition.skip env
-                ⟨hWellFormed, hClock, hImmediate⟩,
-              TypeOffers.skip env ⟨hWellFormed, hClock, hImmediate⟩⟩
+            exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
+              TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
 
 /-- The atomic clock constructor satisfies the complete step correspondence. -/
 theorem compileType_tock_correspondence (signature : TypeAlphabet) :
@@ -3500,7 +3774,7 @@ theorem compileType_progress_action_edge
 theorem compileType_progress_final_edge
     (signature : TypeAlphabet) (pid : ProcId) {env : TypeEnvironment}
     (hEnvironment : env ∈ signature.environments)
-    (hClock : env.clock = false) (hImmediate : env.immediate = ∅)
+    (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
     (compileType signature (.progress pid)).HasEdge .final env
@@ -3524,7 +3798,7 @@ theorem compileType_progress_final_edge
         future := .explicit ∅
         target := .final }, ?_, by simp⟩
     simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocalEnvironment, hClock, hImmediate]
+      hLocalEnvironment, hClock]
   · simp [hSymbol]
 
 private theorem TypeOffers.progress_fields
@@ -3574,8 +3848,7 @@ theorem compileType_progress_step_to_edge
           refine ⟨.final, ?_, TypeCompilationRelation.progress_final pid⟩
           apply compileType_progress_final_edge signature pid
           · exact hEnvironment
-          · exact conditions.2.1
-          · exact conditions.2.2
+          · exact conditions.2
           · simpa [compileType] using hSymbol
 
 private theorem compileType_progress_edge_cases
@@ -3587,8 +3860,7 @@ private theorem compileType_progress_edge_cases
     (source = .root ∧ target = .final ∧
         label = TypeLabel.progress pid ∧ current = ∅ ∧ future = ∅) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
-        current = ∅ ∧ future = ∅ ∧ env.clock = false ∧
-        env.immediate = ∅) := by
+        current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   simp only [TypeAutomaton.HasEdge, compileType, Finset.mem_biUnion] at hEdge
   rcases hEdge with ⟨resolvedEdge, hResolvedEdge, hOutput⟩
   cases hLabel : resolvedEdge.label with
@@ -3605,7 +3877,7 @@ private theorem compileType_progress_edge_cases
         rcases hPendingEdge with hAction | hFinal
         · rcases hAction with ⟨edgeEnv, _, rfl⟩
           simp_all
-        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock, hImmediate⟩, rfl⟩
+        · rcases hFinal with ⟨edgeEnv, ⟨_, hClock⟩, rfl⟩
           simp_all
       · simp at hOutput
 
@@ -3631,14 +3903,13 @@ theorem compileType_progress_edge_to_step
         | progress_final =>
             exact ⟨TypeTransition.progress env pid hWellFormed,
               TypeOffers.progress env pid hWellFormed⟩
-  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock, hImmediate⟩
+  · rcases hFinal with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
     cases hRelated with
     | progress_final =>
         cases hTarget with
         | progress_final =>
-            exact ⟨TypeTransition.skip env
-                ⟨hWellFormed, hClock, hImmediate⟩,
-              TypeOffers.skip env ⟨hWellFormed, hClock, hImmediate⟩⟩
+            exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
+              TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
 
 /-- The atomic progress constructor satisfies the complete correspondence. -/
 theorem compileType_progress_correspondence

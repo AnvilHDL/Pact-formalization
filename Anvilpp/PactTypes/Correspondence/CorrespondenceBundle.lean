@@ -14,9 +14,9 @@ theorem compilationScopedFragmentStepCorrect_of_fragmentStepCorrect
     (signature : TypeAlphabet) (processType : PactType)
     (hStep : CompilationFragmentStepCorrect signature processType) :
     CompilationScopedFragmentStepCorrect signature processType := by
-  intro residual residual' state environment label offers hRelated
+  intro hCanonical residual residual' state environment label offers hRelated
     hEnvironment _
-  exact hStep hRelated hEnvironment
+  exact hStep hCanonical hRelated hEnvironment
 
 private theorem mem_parallelBranchInterfaces_iff_exists
     (message : MessageId) : ∀ branches,
@@ -230,19 +230,22 @@ theorem compilationCompletingCorrect_parallelTypeBranchesSelecting
     (∀ (action : BareMessage) (branchType : PactType) (index : Nat),
       branches[index]? = some (action, branchType) →
         CompilationCompletingCorrect signature branchType) →
+    PactType.EntryCanonicalBranches branches →
     CompilationCompletingCorrect signature
       (parallelTypeBranchesSelecting selected branches) := by
   intro branches
   induction branches with
   | nil =>
-      intro _
+      intro _ _
       simpa [parallelTypeBranchesSelecting] using
         (compilationCompletingCorrect_skip signature)
   | cons branch rest ih =>
       rcases branch with ⟨action, branchType⟩
-      intro hBranches
+      intro hBranches hBranchesCanonical
       have hHead : CompilationCompletingCorrect signature branchType :=
         hBranches action branchType 0 (by simp)
+      have hHeadCanonical : branchType.EntryCanonical :=
+        PactType.EntryCanonicalBranches.head hBranchesCanonical
       have hSingleton : CompilationCompletingCorrect signature
           (singletonTypeXOffer (action, branchType)) := by
         apply compilationCompletingCorrect_xoffer signature .skip
@@ -256,12 +259,13 @@ theorem compilationCompletingCorrect_parallelTypeBranchesSelecting
             Prod.mk.injEq] at hEntry
           rcases hEntry with ⟨rfl, rfl⟩
           exact hHead
+        · simp [PactType.EntryCanonical]
       have hSelectedBranch : CompilationCompletingCorrect signature
           (selectedTypeBranch (action, branchType)) := by
         have hSeq := compilationCompletingCorrect_sequence signature
           (.message action.1 action.2) branchType
           (compilationCompletingCorrect_message signature action.1 action.2)
-          hHead
+          hHead hHeadCanonical
         simpa [selectedTypeBranch] using hSeq
       have hRestBranches : ∀ (selectedAction : BareMessage)
           (selectedType : PactType) (index : Nat),
@@ -270,7 +274,9 @@ theorem compilationCompletingCorrect_parallelTypeBranchesSelecting
         intro selectedAction selectedType index hEntry
         exact hBranches selectedAction selectedType (index + 1) (by
           simpa using hEntry)
-      have hRest := ih hRestBranches
+      have hRestBranchesCanonical : PactType.EntryCanonicalBranches rest :=
+        PactType.EntryCanonicalBranches.tail hBranchesCanonical
+      have hRest := ih hRestBranches hRestBranchesCanonical
       by_cases hEq : (action, branchType) = selected
       · cases rest with
         | nil =>
@@ -311,6 +317,7 @@ theorem compilationCompletingCorrect_of_nestedRecursion
     PactType.ClockGuarded processType →
     PactType.TailRecursive processType →
     PactType.BinderHygienic [] processType →
+    processType.EntryCanonical →
     (∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) ≤ sizeOf processType →
       signature.Supports (.recur nestedName nestedBody) →
@@ -322,30 +329,31 @@ theorem compilationCompletingCorrect_of_nestedRecursion
   intro processType
   cases processType with
   | message msg dir =>
-      intro _ _ _ _ _
+      intro _ _ _ _ _ _
       exact compilationCompletingCorrect_message signature msg dir
   | progress pid =>
-      intro _ _ _ _ _
+      intro _ _ _ _ _ _
       exact compilationCompletingCorrect_progress signature pid
   | tock =>
-      intro _ _ _ _ _
+      intro _ _ _ _ _ _
       exact compilationCompletingCorrect_tock signature
   | skip =>
-      intro _ _ _ _ _
+      intro _ _ _ _ _ _
       exact compilationCompletingCorrect_skip signature
   | var name =>
-      intro _ _ _ _ _
+      intro _ _ _ _ _ _
       exact compilationCompletingCorrect_var signature name
   | recur nestedName nestedBody =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic _ hNestedRecursion
       exact hNestedRecursion nestedName nestedBody le_rfl hSupports hGuarded
         hTail hHygienic
   | choice left right =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hLeftSize : sizeOf left < sizeOf (PactType.choice left right) := by
         simp_wf
         omega
@@ -353,27 +361,28 @@ theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2
+        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2 hCanonical.2
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_choice signature left right hLeft
-        hRight
+        hRight hCanonical.1 hCanonical.2
   | fairChoice bid left right =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hLeftSize : sizeOf left <
           sizeOf (PactType.fairChoice bid left right) := by
         simp_wf
@@ -383,27 +392,28 @@ theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1
+        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2
+        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2 hCanonical.2
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_fairChoice signature bid left right
-        hLeft hRight
+        hLeft hRight hCanonical.1 hCanonical.2
   | seq left right =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hLeftSize : sizeOf left < sizeOf (PactType.seq left right) := by
         simp_wf
         omega
@@ -411,27 +421,28 @@ theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        left hSupports.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2
+        right hSupports.2 hGuarded.2 hTail.2 hHygienic.2 hCanonical.2
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hRightSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_sequence signature left right hLeft
-        hRight
+        hRight hCanonical.2
   | par left right interface =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hLeftSize : sizeOf left <
           sizeOf (PactType.par left right interface) := by
         simp_wf
@@ -441,14 +452,14 @@ theorem compilationCompletingCorrect_of_nestedRecursion
         simp_wf
         omega
       have hLeft := compilationCompletingCorrect_of_nestedRecursion signature
-        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1
+        left hSupports.2.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.2.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
             (le_trans hSize (le_of_lt hLeftSize)) hNestedSupports
               hNestedGuarded hNestedTail hNestedHygienic)
       have hRight := compilationCompletingCorrect_of_nestedRecursion signature
-        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2
+        right hSupports.2.2 hGuarded.2 hTail.2 hHygienic.2 hCanonical.2.2
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
@@ -457,17 +468,18 @@ theorem compilationCompletingCorrect_of_nestedRecursion
       exact compilationCompletingCorrect_parallel signature left right interface
         hLeft hRight
   | xoffer elseType branches =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hElseSize : sizeOf elseType <
           sizeOf (PactType.xoffer elseType branches) := by
         simp_wf
         omega
       have hElse := compilationCompletingCorrect_of_nestedRecursion signature
-        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
@@ -502,25 +514,27 @@ theorem compilationCompletingCorrect_of_nestedRecursion
             hTail.2 hMember)
           (binderHygienic_branch_of_mem [] branches (action, branchType)
             hHygienic.2 hMember)
+          (PactType.EntryCanonicalBranches.get hCanonical.2 hEntry)
           (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
               hNestedTail hNestedHygienic =>
             hNestedRecursion nestedName nestedBody
               (le_trans hSize (le_of_lt hBranchSize)) hNestedSupports
                 hNestedGuarded hNestedTail hNestedHygienic)
       exact compilationCompletingCorrect_xoffer signature elseType branches
-        hElse hBranches
+        hElse hBranches hCanonical.1
   | offer elseType branches =>
-      intro hSupports hGuarded hTail hHygienic hNestedRecursion
+      intro hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
       simp only [TypeAlphabet.Supports] at hSupports
       simp only [PactType.ClockGuarded] at hGuarded
       simp only [PactType.TailRecursive] at hTail
       simp only [PactType.BinderHygienic] at hHygienic
+      simp only [PactType.EntryCanonical] at hCanonical
       have hElseSize : sizeOf elseType <
           sizeOf (PactType.offer elseType branches) := by
         simp_wf
         omega
       have hElse := compilationCompletingCorrect_of_nestedRecursion signature
-        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1
+        elseType hSupports.1 hGuarded.1 hTail.1 hHygienic.1 hCanonical.1
         (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
             hNestedTail hNestedHygienic =>
           hNestedRecursion nestedName nestedBody
@@ -555,6 +569,7 @@ theorem compilationCompletingCorrect_of_nestedRecursion
             hTail.2 hMember)
           (binderHygienic_branch_of_mem [] branches (action, branchType)
             hHygienic.2 hMember)
+          (PactType.EntryCanonicalBranches.get hCanonical.2 hEntry)
           (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded
               hNestedTail hNestedHygienic =>
             hNestedRecursion nestedName nestedBody
@@ -566,9 +581,9 @@ theorem compilationCompletingCorrect_of_nestedRecursion
               (parallelTypeBranchesSelecting selected branches) := by
         intro selected _ _
         exact compilationCompletingCorrect_parallelTypeBranchesSelecting
-          signature selected branches hBranches
+          signature selected branches hBranches hCanonical.2
       exact compilationCompletingCorrect_offer signature elseType branches
-        hElse hConjunction
+        hElse hConjunction hCanonical.1
 termination_by processType => sizeOf processType
 decreasing_by all_goals assumption
 
@@ -610,6 +625,7 @@ theorem recursionBodyCompletingCorrect_vanilla
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
     (hHygienic : PactType.BinderHygienic [] body)
+    (hCanonical : body.EntryCanonical)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
@@ -623,7 +639,7 @@ theorem recursionBodyCompletingCorrect_vanilla
     simp_wf
     omega
   exact compilationCompletingCorrect_of_nestedRecursion signature body hSupports
-    hGuarded hTail hHygienic
+    hGuarded hTail hHygienic hCanonical
     (fun nestedName nestedBody hSize hNestedSupports hNestedGuarded hNestedTail
         hNestedHygienic =>
       hNestedRecursion nestedName nestedBody
@@ -639,6 +655,7 @@ theorem recursionBodyCompletingCorrect_vanilla_initial
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
     (hHygienic : PactType.BinderHygienic [] body)
+    (hCanonical : body.EntryCanonical)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
@@ -651,10 +668,11 @@ theorem recursionBodyCompletingCorrect_vanilla_initial
         (compileTypeFuel signature (typeCompilationFuel body) body).completing ↔
       body.CanCompleteBeforeTock = true) := by
   have hVanilla := recursionBodyCompletingCorrect_vanilla signature name body
-    hSupports hGuarded hTail hHygienic hNestedRecursion
-  have hCanonical := hVanilla _ body
-    (compileType_initial_relation signature body)
-  simpa [compileType] using hCanonical
+    hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
+  have hResult := hVanilla _ body
+    (compileType_initial_relation_of_canonical signature body
+      (PactType.canonicalEntryResidual_eq_self_of_entryCanonical hCanonical))
+  simpa [compileType] using hResult
 
 /-- Fuel-general form of the previous corollary.  `buildRecursionAutomaton` is
 applied to `compileTypeFuel signature fuel body` for the enclosing binder's
@@ -666,6 +684,7 @@ private theorem recursionBodyCompletingCorrect_vanilla_initial_of_sufficient
     (hGuarded : PactType.ClockGuarded body)
     (hTail : PactType.TailRecursive body)
     (hHygienic : PactType.BinderHygienic [] body)
+    (hCanonical : body.EntryCanonical)
     (hNestedRecursion : ∀ (nestedName : String) (nestedBody : PactType),
       sizeOf (PactType.recur nestedName nestedBody) <
           sizeOf (PactType.recur name body) →
@@ -683,7 +702,7 @@ private theorem recursionBodyCompletingCorrect_vanilla_initial_of_sufficient
       (typeCompilationFuel_sufficient body)
   rw [hStable]
   exact recursionBodyCompletingCorrect_vanilla_initial signature name body
-    hSupports hGuarded hTail hHygienic hNestedRecursion
+    hSupports hGuarded hTail hHygienic hCanonical hNestedRecursion
 
 private theorem parallelInterfaces_subset_of_supports_leaf
     (signature : TypeAlphabet) (processType : PactType)
@@ -751,6 +770,7 @@ theorem compilationStepCorrect_of_scopedFragmentStepCorrect
     (signature : TypeAlphabet) (processType : PactType)
     (hAlphabet : signature.WellFormed)
     (hSupports : signature.Supports processType)
+    (hCanonical : processType.EntryCanonical)
     (hStep : CompilationScopedFragmentStepCorrect signature processType) :
     CompilationStepCorrect signature processType := by
   intro residual residual' state environment label offers hRelated hSymbol
@@ -763,7 +783,7 @@ theorem compilationStepCorrect_of_scopedFragmentStepCorrect
   have hAvoids := signature.environment_avoids_subinterface hAlphabet
     hFields.1 (parallelInterfaces_subset_of_supports_leaf signature processType
       hSupports)
-  have hRaw := hStep (residual := residual) (residual' := residual')
+  have hRaw := hStep hCanonical (residual := residual) (residual' := residual')
     (state := state) (environment := environment) (label := label)
     (offers := offers) hRelated
     (signature.environments_subset_localEnvironments hFields.1) hAvoids
@@ -796,7 +816,7 @@ def CompilationSequenceExecutionCorrect
     TypeCompilationRelation processType state residual →
       computeFuture execution state = typeFutureOffers residual ∧
         ((∃ completed ∈ execution.futureReachable state,
-              completed ∈ fragment.skipping ∨
+              completed ∈ fragment.accepting ∨
                 completed ∈ fragment.completing) ↔
           residual.CanCompleteBeforeTock = true)
 

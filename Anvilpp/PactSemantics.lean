@@ -321,16 +321,9 @@ inductive ProcessTransition : Environment → Proc → Label → Proc → Prop w
       ProcessTransition env Proc.cycle
       Label.silent
       Proc.cycle
-  | skip_seq (env : Environment) (process : Proc) :
-      env.WellFormed →
-      --
-      ProcessTransition env (Proc.seq Proc.skip process)
-      Label.silent
-      process
   | skip (env : Environment) :
       env.WellFormed ∧
-      env.clock = false ∧
-      env.immediate = ∅ →
+      env.clock = false →
       --
       ProcessTransition env Proc.skip
       Label.silent

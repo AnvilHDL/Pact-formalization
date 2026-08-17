@@ -203,17 +203,32 @@ theorem compileTypeFuel_variable_label_mem_bound
           simp only [PactType.AllVariablesBound] at hBound
           simp only [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, Finset.mem_union] at hEdge
-          rcases hEdge with hLeft | hRight
+          rcases hEdge with ((hLeft | hRight) | hEntryBridge) |
+            hCompletingBridge
           · simp only [Finset.mem_image] at hLeft
             rcases hLeft with ⟨child, hChild, hEq⟩
             exact ih left bound hBound.1 child hChild name (by
               rw [← hEq] at hLabel
-              simpa using hLabel)
+              simpa [sequenceLeftEdge] using hLabel)
           · simp only [childPendingEdges, Finset.mem_image] at hRight
             rcases hRight with ⟨child, hChild, hEq⟩
             exact ih right bound hBound.2 child hChild name (by
               rw [← hEq] at hLabel
               simpa [childPendingEdge] using hLabel)
+          · exfalso
+            simp only [sequenceEntryBridgeEdges] at hEntryBridge
+            split at hEntryBridge
+            · simp only [Finset.mem_image] at hEntryBridge
+              obtain ⟨environment, _, hEq⟩ := hEntryBridge
+              rw [← hEq] at hLabel
+              simp at hLabel
+            · simp at hEntryBridge
+          · exfalso
+            simp only [sequenceCompletingBridgeEdges, Finset.mem_image]
+              at hCompletingBridge
+            obtain ⟨completingState, _, hEq⟩ := hCompletingBridge
+            rw [← hEq] at hLabel
+            simp at hLabel
       | par left right interface =>
           simp only [PactType.AllVariablesBound] at hBound
           have hLeftVariable : ∀ resolved ∈ resolvedAutomatonEdges
