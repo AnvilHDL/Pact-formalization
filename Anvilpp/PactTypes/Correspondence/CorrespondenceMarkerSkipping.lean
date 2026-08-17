@@ -287,8 +287,11 @@ theorem compiledFragmentAccepting_represented
           exact TypeCompilationRelation.sequence_right left right .skip child
             (ih right hRightFuel child hChildAccepting)
       | par left right interface =>
-          simp [compileTypeFuel, buildParallelAutomaton,
-            finishAutomatonFragment] at hAccepting
+          -- TODO(redevelopment): since the `parallel`/`parallel_fuse` split, a
+          -- product state can be genuinely accepting (via `parallel_fuse`
+          -- when both components finish); the old "no par state accepts"
+          -- contradiction no longer closes this case. .
+          sorry
       | xoffer elseType branches =>
           let branchAutomata := branches.map fun branch =>
             (branch.1, compileTypeFuel signature fuel branch.2)

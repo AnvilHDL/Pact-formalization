@@ -816,89 +816,9 @@ theorem compilationFutureCorrect_parallel
     (hLeftFuture : CompilationFutureCorrect signature left)
     (hRightFuture : CompilationFutureCorrect signature right) :
     CompilationFutureCorrect signature (.par left right interface) := by
-  intro hCanonical state residual hRelated
-  simp only [PactType.EntryCanonical] at hCanonical
-  obtain ⟨_, hLeftCanonical, hRightCanonical⟩ := hCanonical
-  cases hRelated with
-  | parallel _ _ leftResidual rightResidual _ leftState rightState
-      hLeftRelated hRightRelated _ =>
-      let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-      let leftFragment := compileTypeFuel signature fuel left
-      let rightFragment := compileTypeFuel signature fuel right
-      have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-        simp [TypeCompilationFuelSufficient, fuel]
-      have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-        simp [TypeCompilationFuelSufficient, fuel]
-      have hLeftStable := compileTypeFuel_eq_of_sufficient signature left
-        hLeftFuel (typeCompilationFuel_sufficient left)
-      have hRightStable := compileTypeFuel_eq_of_sufficient signature right
-        hRightFuel (typeCompilationFuel_sufficient right)
-      have hLeftState : leftState ∈ leftFragment.states := by
-        have hState := compilationStateCorrect_of_compilation signature left
-          leftState leftResidual hLeftRelated
-        simpa [leftFragment, hLeftStable] using hState
-      have hRightState : rightState ∈ rightFragment.states := by
-        have hState := compilationStateCorrect_of_compilation signature right
-          rightState rightResidual hRightRelated
-        simpa [rightFragment, hRightStable] using hState
-      have hFormula := buildParallelAutomaton_computeFuture interface
-        leftFragment rightFragment leftState rightState hLeftState hRightState
-        (compileTypeFuel_futureTargetsInStates signature fuel left hLeftFuel)
-        (compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel)
-      have hLeftSemantic : computeFuture
-          { states := leftFragment.states, edges := leftFragment.edges }
-          leftState = typeFutureOffers leftResidual := by
-        have hExact := hLeftFuture hLeftCanonical leftState leftResidual
-          hLeftRelated
-        simpa [leftFragment, hLeftStable] using hExact
-      have hRightSemantic : computeFuture
-          { states := rightFragment.states, edges := rightFragment.edges }
-          rightState = typeFutureOffers rightResidual := by
-        have hExact := hRightFuture hRightCanonical rightState rightResidual
-          hRightRelated
-        simpa [rightFragment, hRightStable] using hExact
-      simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-      rw [hFormula, hLeftSemantic, hRightSemantic,
-        typeFutureOffers_parallel]
-      rfl
-  | parallel_fuse _ _ _ leftState rightState hLeftRelated hRightRelated =>
-      let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-      let leftFragment := compileTypeFuel signature fuel left
-      let rightFragment := compileTypeFuel signature fuel right
-      have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-        simp [TypeCompilationFuelSufficient, fuel]
-      have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-        simp [TypeCompilationFuelSufficient, fuel]
-      have hLeftStable := compileTypeFuel_eq_of_sufficient signature left
-        hLeftFuel (typeCompilationFuel_sufficient left)
-      have hRightStable := compileTypeFuel_eq_of_sufficient signature right
-        hRightFuel (typeCompilationFuel_sufficient right)
-      have hLeftState : leftState ∈ leftFragment.states := by
-        have hState := compilationStateCorrect_of_compilation signature left
-          leftState .skip hLeftRelated
-        simpa [leftFragment, hLeftStable] using hState
-      have hRightState : rightState ∈ rightFragment.states := by
-        have hState := compilationStateCorrect_of_compilation signature right
-          rightState .skip hRightRelated
-        simpa [rightFragment, hRightStable] using hState
-      have hFormula := buildParallelAutomaton_computeFuture interface
-        leftFragment rightFragment leftState rightState hLeftState hRightState
-        (compileTypeFuel_futureTargetsInStates signature fuel left hLeftFuel)
-        (compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel)
-      have hLeftSemantic : computeFuture
-          { states := leftFragment.states, edges := leftFragment.edges }
-          leftState = typeFutureOffers PactType.skip := by
-        have hExact := hLeftFuture hLeftCanonical leftState .skip hLeftRelated
-        simpa [leftFragment, hLeftStable] using hExact
-      have hRightSemantic : computeFuture
-          { states := rightFragment.states, edges := rightFragment.edges }
-          rightState = typeFutureOffers PactType.skip := by
-        have hExact := hRightFuture hRightCanonical rightState .skip
-          hRightRelated
-        simpa [rightFragment, hRightStable] using hExact
-      simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-      rw [hFormula, hLeftSemantic, hRightSemantic]
-      simp [typeFutureOffers, typeFutureOffersFuel, hideOffers]
+  sorry -- TODO(redevelopment): body used buildParallelAutomaton_computeFuture,
+  -- deleted with the old synthetic-future-edge mechanism; needs re-deriving
+  -- against computeFutureOf's native product-state case; .
 
 end
 

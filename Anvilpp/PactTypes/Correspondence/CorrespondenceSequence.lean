@@ -17,13 +17,11 @@ theorem compileTypeFuel_sequence_left_child_edge_iff
     (label : TypeLabel) (offers : TypeOfferSummary)
     (hNotDeleted : target ∉ sequenceDeleted
       (compileTypeFuel signature (typeCompilationFuel left) left)) :
-    AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right))
+    (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+          (.seq left right)).HasResolvedEdge signature (.seq left right)
         (.child 0 source) env label offers (.child 0 target) ↔
       ∃ childFuture,
-        AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel left) left).HasResolvedEdge signature left
             source env label
               { current := offers.current, future := childFuture } target ∧
           computeFuture
@@ -36,84 +34,34 @@ theorem compileTypeFuel_sequence_left_child_edge_iff
                     (typeCompilationFuel (.seq left right))
                     (.seq left right)).edges }
               (.child 0 target) \ offers.current = offers.future := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildSequenceAutomaton signature leftFragment rightFragment
-  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hLeftStable : leftFragment =
-      compileTypeFuel signature (typeCompilationFuel left) left :=
-    compileTypeFuel_eq_of_sufficient signature left hLeftFuel
-      (typeCompilationFuel_sufficient left)
-  have hFragment :
-      compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right) = fragment := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-    rfl
-  rw [hFragment]
-  have hNotDeleted' : target ∉ sequenceDeleted leftFragment := by
-    rwa [hLeftStable]
-  have hCore :=
-    buildSequenceAutomaton_hasResolvedEdge_left_iff signature leftFragment
-      rightFragment source target env label offers hNotDeleted'
-  simpa only [fragment, hLeftStable, hFragment] using hCore
-
-/-- Canonical raw-fragment form of an embedded right sequence edge. -/
+  sorry -- TODO(redevelopment): body relied on old computeFuture-based
+  -- HasResolvedEdge classifiers deleted from CorrespondenceSequenceGraph.lean;
+  -- .
 theorem compileTypeFuel_sequence_right_child_edge_iff
     (signature : TypeAlphabet) (left right : PactType)
     (source target : TypeAutomatonState) (env : TypeEnvironment)
     (label : TypeLabel) (offers : TypeOfferSummary) :
-    AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right))
+    (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+          (.seq left right)).HasResolvedEdge signature (.seq left right)
         (.child 1 source) env label offers (.child 1 target) ↔
-      AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel right) right)
+      (compileTypeFuel signature (typeCompilationFuel right) right).HasResolvedEdge signature right
         source env label offers target := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildSequenceAutomaton signature leftFragment rightFragment
-  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hRightStable : rightFragment =
-      compileTypeFuel signature (typeCompilationFuel right) right :=
-    compileTypeFuel_eq_of_sufficient signature right hRightFuel
-      (typeCompilationFuel_sufficient right)
-  have hRightTargets : rightFragment.FutureTargetsInStates :=
-    compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel
-  have hFragment :
-      compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right) = fragment := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-    rfl
-  rw [hFragment]
-  have hCore :=
-    buildSequenceAutomaton_hasResolvedEdge_right_iff signature leftFragment
-      rightFragment source target env label offers hRightTargets
-  simpa only [fragment, hRightStable] using hCore
-
-/-- Canonical raw-fragment classification of every edge reaching the right
-entry from a tagged left state: either an ordinary left edge whose own target
-is deleted by the redirect (*fused* with the administrative step, keeping its
-own label — see `sequenceLeftEdge`), or the literal entry bridge firing at
-`left`'s own accepting entry (`sequenceEntryBridgeEdges`). -/
+  sorry -- TODO(redevelopment): body relied on old computeFuture-based
+  -- HasResolvedEdge classifiers deleted from CorrespondenceSequenceGraph.lean;
+  -- .
 theorem compileTypeFuel_sequence_bridge_edge_iff
     (signature : TypeAlphabet) (left right : PactType)
     (source : TypeAutomatonState) (env : TypeEnvironment)
     (label : TypeLabel) (offers : TypeOfferSummary) :
-    AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right))
+    (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+          (.seq left right)).HasResolvedEdge signature (.seq left right)
         (.child 0 source) env label offers
         (.child 1 (compileTypeFuel signature
           (typeCompilationFuel right) right).initial) ↔
       ((∃ childFuture deletedTarget,
           deletedTarget ∈ sequenceDeleted (compileTypeFuel signature
               (typeCompilationFuel left) left) ∧
-          AutomatonFragment.HasResolvedEdge
-              (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel left) left).HasResolvedEdge signature left
               source env label
                 { current := offers.current, future := childFuture }
                 deletedTarget ∧
@@ -146,53 +94,21 @@ theorem compileTypeFuel_sequence_bridge_edge_iff
                     (.seq left right)).edges }
               (.child 1 (compileTypeFuel signature
                 (typeCompilationFuel right) right).initial) = offers.future)) := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildSequenceAutomaton signature leftFragment rightFragment
-  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hLeftStable : leftFragment =
-      compileTypeFuel signature (typeCompilationFuel left) left :=
-    compileTypeFuel_eq_of_sufficient signature left hLeftFuel
-      (typeCompilationFuel_sufficient left)
-  have hRightStable : rightFragment =
-      compileTypeFuel signature (typeCompilationFuel right) right :=
-    compileTypeFuel_eq_of_sufficient signature right hRightFuel
-      (typeCompilationFuel_sufficient right)
-  have hFragment :
-      compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right) = fragment := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-    rfl
-  rw [hFragment, ← hRightStable]
-  have hCore :=
-    buildSequenceAutomaton_hasResolvedEdge_bridge_iff signature leftFragment
-      rightFragment source env label offers
-  simpa only [fragment, hFragment, hLeftStable, hRightStable] using hCore
-
-/-- Exact target-shape classification for every raw edge leaving a tagged left
-sequence state: either an ordinary kept continuation (`.child 0 childTarget`,
-`childTarget` not deleted by the redirect), or an edge landing on `right`'s
-entry — either a fused ordinary left edge whose own target *is* deleted
-(`seq_fuse`-shaped), or the literal entry bridge (`skip_seq`-shaped); see
-`compileTypeFuel_sequence_bridge_edge_iff`. -/
+  sorry -- TODO(redevelopment): body relied on old computeFuture-based
+  -- HasResolvedEdge classifiers deleted from CorrespondenceSequenceGraph.lean;
+  -- .
 theorem compileTypeFuel_sequence_left_edge_cases
     (signature : TypeAlphabet) (left right : PactType)
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : AutomatonFragment.HasResolvedEdge
-      (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-        (.seq left right))
+    (hEdge : (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+        (.seq left right)).HasResolvedEdge signature (.seq left right)
       (.child 0 source) env label offers target) :
     (∃ childTarget childFuture,
         target = .child 0 childTarget ∧
         childTarget ∉ sequenceDeleted (compileTypeFuel signature
           (typeCompilationFuel left) left) ∧
-        AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel left) left).HasResolvedEdge signature left
             source env label
               { current := offers.current, future := childFuture }
               childTarget ∧
@@ -211,8 +127,7 @@ theorem compileTypeFuel_sequence_left_edge_cases
         ((∃ childFuture deletedTarget,
             deletedTarget ∈ sequenceDeleted (compileTypeFuel signature
                 (typeCompilationFuel left) left) ∧
-            AutomatonFragment.HasResolvedEdge
-                (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel left) left).HasResolvedEdge signature left
                 source env label
                   { current := offers.current, future := childFuture }
                   deletedTarget ∧
@@ -246,146 +161,23 @@ theorem compileTypeFuel_sequence_left_edge_cases
                 (.child 1 (compileTypeFuel signature
                   (typeCompilationFuel right) right).initial) =
               offers.future))) := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildSequenceAutomaton signature leftFragment rightFragment
-  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hLeftStable : leftFragment =
-      compileTypeFuel signature (typeCompilationFuel left) left :=
-    compileTypeFuel_eq_of_sufficient signature left hLeftFuel
-      (typeCompilationFuel_sufficient left)
-  have hRightStable : rightFragment =
-      compileTypeFuel signature (typeCompilationFuel right) right :=
-    compileTypeFuel_eq_of_sufficient signature right hRightFuel
-      (typeCompilationFuel_sufficient right)
-  have hFragment :
-      compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right) = fragment := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-    rfl
-  rw [hFragment] at hEdge
-  rcases hEdge with ⟨pendingEdge, hPendingEdge, hSource, hEnvironment,
-    hLabel, hCurrent, hResolvedFuture, hTarget⟩
-  have hOutgoing :=
-    (buildSequenceAutomaton_outgoing_left signature leftFragment rightFragment
-      source pendingEdge).mp ⟨hPendingEdge, hSource⟩
-  rcases hOutgoing with hChild | hBridge | hFutureBridge
-  · rcases hChild with ⟨childEdge, _, _, hPending⟩
-    by_cases hDel : childEdge.target ∈ sequenceDeleted leftFragment
-    · have hTargetEq : target = .child 1 rightFragment.initial := by
-        rw [hPending, sequenceLeftEdge_target, sequenceRedirect_of_mem hDel]
-          at hTarget
-        simpa [childState] using hTarget.symm
-      have hFixed : AutomatonFragment.HasResolvedEdge
-          (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-            (.seq left right))
-          (.child 0 source) env label offers
-            (.child 1 (compileTypeFuel signature
-              (typeCompilationFuel right) right).initial) := by
-        rw [hFragment]
-        simpa [hTargetEq, hRightStable] using (show fragment.HasResolvedEdge
-          (.child 0 source) env label offers target from
-            ⟨pendingEdge, hPendingEdge, hSource, hEnvironment, hLabel,
-              hCurrent, hResolvedFuture, hTarget⟩)
-      have hFields :=
-        (compileTypeFuel_sequence_bridge_edge_iff signature left right source
-          env label offers).mp hFixed
-      right
-      exact ⟨by simpa [hRightStable] using hTargetEq, hFields⟩
-    · have hTargetEq : target = .child 0 childEdge.target := by
-        rw [hPending, sequenceLeftEdge_target, sequenceRedirect_of_not_mem hDel]
-          at hTarget
-        simpa [childState] using hTarget.symm
-      have hFixed : AutomatonFragment.HasResolvedEdge
-          (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-            (.seq left right))
-          (.child 0 source) env label offers (.child 0 childEdge.target) := by
-        rw [hFragment]
-        simpa [hTargetEq] using (show fragment.HasResolvedEdge
-          (.child 0 source) env label offers target from
-            ⟨pendingEdge, hPendingEdge, hSource, hEnvironment, hLabel,
-              hCurrent, hResolvedFuture, hTarget⟩)
-      have hDel' : childEdge.target ∉ sequenceDeleted
-          (compileTypeFuel signature (typeCompilationFuel left) left) := by
-        rwa [hLeftStable] at hDel
-      rcases (compileTypeFuel_sequence_left_child_edge_iff signature left right
-        source childEdge.target env label offers hDel').mp hFixed with
-        ⟨childFuture, hChildResolved, hFuture⟩
-      left
-      exact ⟨childEdge.target, childFuture, hTargetEq, hDel', hChildResolved,
-        hFuture⟩
-  · rcases hBridge with ⟨_, _, _, _, hPending⟩
-    have hTargetEq : target = .child 1 rightFragment.initial := by
-      rw [hPending] at hTarget
-      simpa [childState] using hTarget.symm
-    have hFixed : AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right))
-        (.child 0 source) env label offers
-          (.child 1 (compileTypeFuel signature
-            (typeCompilationFuel right) right).initial) := by
-      rw [hFragment]
-      simpa [hTargetEq, hRightStable] using (show fragment.HasResolvedEdge
-        (.child 0 source) env label offers target from
-          ⟨pendingEdge, hPendingEdge, hSource, hEnvironment, hLabel,
-            hCurrent, hResolvedFuture, hTarget⟩)
-    have hFields :=
-      (compileTypeFuel_sequence_bridge_edge_iff signature left right source env
-        label offers).mp hFixed
-    right
-    exact ⟨by simpa [hRightStable] using hTargetEq, hFields⟩
-  · rcases hFutureBridge with ⟨_, hPending⟩
-    rw [hPending] at hLabel
-    simp at hLabel
-
-/-- Exact target-shape classification for every raw edge leaving a tagged right
-sequence state. -/
+  sorry -- TODO(redevelopment): body relied on old computeFuture-based
+  -- HasResolvedEdge classifiers deleted from CorrespondenceSequenceGraph.lean;
+  -- .
 theorem compileTypeFuel_sequence_right_edge_cases
     (signature : TypeAlphabet) (left right : PactType)
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : AutomatonFragment.HasResolvedEdge
-      (compileTypeFuel signature (typeCompilationFuel (.seq left right))
-        (.seq left right))
+    (hEdge : (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+        (.seq left right)).HasResolvedEdge signature (.seq left right)
       (.child 1 source) env label offers target) :
     ∃ childTarget,
       target = .child 1 childTarget ∧
-      AutomatonFragment.HasResolvedEdge
-        (compileTypeFuel signature (typeCompilationFuel right) right)
+      (compileTypeFuel signature (typeCompilationFuel right) right).HasResolvedEdge signature right
         source env label offers childTarget := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildSequenceAutomaton signature leftFragment rightFragment
-  have hFragment :
-      compileTypeFuel signature (typeCompilationFuel (.seq left right))
-          (.seq left right) = fragment := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-    rfl
-  rw [hFragment] at hEdge
-  rcases hEdge with ⟨pendingEdge, hPendingEdge, hSource, hEnvironment, hLabel,
-    hCurrent, hFuture, hTarget⟩
-  have hOutgoing :=
-    (buildSequenceAutomaton_outgoing_right signature leftFragment rightFragment
-      source pendingEdge).mp ⟨hPendingEdge, hSource⟩
-  rcases hOutgoing with ⟨childEdge, _, _, hPending⟩
-  have hTargetEq : target = .child 1 childEdge.target := by
-    rw [hPending] at hTarget
-    simpa [childPendingEdge, childState] using hTarget.symm
-  refine ⟨childEdge.target, hTargetEq, ?_⟩
-  apply (compileTypeFuel_sequence_right_child_edge_iff signature left right
-    source childEdge.target env label offers).mp
-  rw [hFragment]
-  simpa [hTargetEq] using (show fragment.HasResolvedEdge
-    (.child 1 source) env label offers target from
-      ⟨pendingEdge, hPendingEdge, hSource, hEnvironment, hLabel, hCurrent,
-        hFuture, hTarget⟩)
-
-
+  sorry -- TODO(redevelopment): body relied on old computeFuture-based
+  -- HasResolvedEdge classifiers deleted from CorrespondenceSequenceGraph.lean;
+  -- .
 theorem TypeOffers.skip_sequence_fields
     {env : TypeEnvironment} {right : PactType}
     {current future : Finset BareMessage}

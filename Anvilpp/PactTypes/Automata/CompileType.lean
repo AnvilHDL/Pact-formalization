@@ -519,6 +519,97 @@ theorem compileTypeFuel_eq_of_sufficient
     obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
     exact compileTypeFuel_add_stable signature processType rightFuel extra hRight
 
+/-!
+### Native product-aware future resolution (`pactautomatonconstruction.typ`, "Future menus are global")
+
+`OF(q) = μX.Φ(X)` is a single global least fixed point over the whole
+compiled automaton, whose product-state case `hide_I(X(q₁)∪X(q₂))` is read
+directly off the two component states, not off any transition. `computeFuture`
+(`PendingAutomatonFuture.lean`) only ever follows real graph edges, so it has
+no native way to see that contribution; `BuildParallelAutomaton.lean` used to
+patch this by inserting synthetic `.future`-labelled edges carrying a
+precomputed value. `stateProductInfo`/`computeFutureOf` replace that: they
+recover, purely from a state's shape and the originating `PactType`, which
+`.par` node (if any) a state's core `.pair q₁ q₂` came from, and fold in
+`q₁`/`q₂`'s own (recursively native) future menus natively.
+
+Fuel-bounded throughout, matching `compileTypeFuel`'s own convention: a
+conjunctive `.offer`'s generated `parallelTypeBranchesSelecting` type is not
+structurally smaller than the `.offer` node itself (it duplicates every
+branch into a `.par` chain), so plain structural recursion on `PactType` does
+not terminate here the way it does for every other constructor.
+-/
+
+/-- If `state` is (once its `.child` wrappers are peeled back) a product-core
+state `.pair q₁ q₂` arising from a `.par _ _ interface` subterm reached by
+walking `processType` alongside those wrappers, return that interface, the
+two component types, and the two component states. Mirrors exactly the
+`.child`-tagging convention each `Build*Automaton.lean` constructor uses
+(`compileTypeFuel`'s own dispatch), not an independent guess at it. -/
+def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
+    Option (Interface × PactType × PactType × TypeAutomatonState ×
+      TypeAutomatonState)
+  | 0, _, _ => none
+  | fuel + 1, processType, state =>
+      match processType, state with
+      | .par left right interface, .pair q1 q2 =>
+          some (interface, left, right, q1, q2)
+      | .choice left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .choice _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .fairChoice _ left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .fairChoice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .seq left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .seq _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .recur _ body, .child 0 q => stateProductInfoFuel fuel body q
+      | .xoffer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
+      | .xoffer _ branches, .child (i + 1) q =>
+          match branches[i]? with
+          | some (_, branchType) => stateProductInfoFuel fuel branchType q
+          | none => none
+      | .offer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
+      | .offer _ branches, .child (i + 1) q =>
+          match branches[i]? with
+          | some selected =>
+              stateProductInfoFuel fuel
+                (parallelTypeBranchesSelecting selected branches) q
+          | none => none
+      | _, _ => none
+
+def stateProductInfo (processType : PactType) (state : TypeAutomatonState) :
+    Option (Interface × PactType × PactType × TypeAutomatonState ×
+      TypeAutomatonState) :=
+  stateProductInfoFuel (typeCompilationFuel processType) processType state
+
+/-- `OF`'s native computation against `processType`'s own compiled fragment:
+the usual local edge-closure (`computeFuture`, real same-cycle references),
+plus, at every product-core state (however deeply `.child`-nested), the
+interface-hidden union of both components' own (recursively native) future
+menus, read directly off the two component states per `Φ`'s second disjunct —
+no synthetic edge involved. -/
+def computeFutureOfFuel (signature : TypeAlphabet) :
+    Nat → PactType → TypeAutomatonState → Finset BareMessage
+  | 0, _, _ => ∅
+  | fuel + 1, processType, state =>
+      let fragment :=
+        compileTypeFuel signature (typeCompilationFuel processType) processType
+      let pending : PendingAutomaton :=
+        { states := fragment.states, edges := fragment.edges }
+      (pending.futureReachable state).biUnion fun visited =>
+        pending.offersAt visited ∪
+          match stateProductInfo processType visited with
+          | some (interface, left, right, q1, q2) =>
+              hideTypeOffers interface
+                (computeFutureOfFuel signature fuel left q1 ∪
+                  computeFutureOfFuel signature fuel right q2)
+          | none => ∅
+
+/-- All same-cycle offers reachable from `state` in `processType`'s own
+compiled automaton, computed against the doc-accurate global `OF`. -/
+def computeFutureOf (signature : TypeAlphabet) (processType : PactType)
+    (state : TypeAutomatonState) : Finset BareMessage :=
+  computeFutureOfFuel signature (typeCompilationFuel processType) processType
+    state
+
 /-- A decorated automaton edge represented as the tuple `(q, σ, q')`. -/
 structure TypeAutomatonEdge : Type where
   source : TypeAutomatonState
@@ -552,6 +643,40 @@ private def typeAutomatonEdgeStates
     (edges : Finset TypeAutomatonEdge) : Finset TypeAutomatonState :=
   edges.biUnion fun edge => {edge.source, edge.target}
 
+/-- A visible edge in `processType`'s own compiled fragment, resolved
+against the doc-accurate global `OF` (`computeFutureOf`) rather than a local,
+edge-only closure — this is what makes a product state's future menu include
+its two components' own menus natively, with no synthetic edge needed.  This
+is the internal edge view used by the structural correspondence proof, before
+the public alphabet filter is applied. -/
+def AutomatonFragment.HasResolvedEdge (signature : TypeAlphabet)
+    (processType : PactType) (fragment : AutomatonFragment)
+    (source : TypeAutomatonState) (env : TypeEnvironment) (label : TypeLabel)
+    (offers : TypeOfferSummary) (target : TypeAutomatonState) : Prop :=
+  ∃ edge ∈ fragment.edges,
+    edge.source = source ∧ edge.environment = env ∧
+      edge.label = .visible label ∧ edge.current = offers.current ∧
+      (match edge.future with
+        | .explicit future => future
+        | .at state removed => computeFutureOf signature processType state \ removed)
+        = offers.future ∧
+      edge.target = target
+
+private def resolvedAutomatonEdgesNative (signature : TypeAlphabet)
+    (processType : PactType) (fragment : AutomatonFragment) :
+    Finset AutomatonFragmentEdge :=
+  fragment.edges.image fun edge =>
+    let resolvedFuture :=
+      match edge.future with
+      | .explicit offers => offers
+      | .at state removed => computeFutureOf signature processType state \ removed
+    { source := edge.source
+      environment := edge.environment
+      label := edge.label
+      current := edge.current
+      future := resolvedFuture
+      target := edge.target }
+
 /--
 Compile a type by composing its constructor automata,
 then remove unresolved variable edges and transitions outside the fixed external alphabet.
@@ -561,7 +686,8 @@ def compileType
     (processType : PactType) : TypeAutomaton :=
   let fuel := typeCompilationFuel processType
   let constructed := compileTypeFuel signature fuel processType
-  let constructedEdges := resolvedAutomatonEdges constructed
+  let constructedEdges :=
+    resolvedAutomatonEdgesNative signature processType constructed
   let transitionAlphabet := signature.transitionAlphabet
   let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
@@ -585,24 +711,6 @@ def compileType
     alphabet := transitionAlphabet
     edges := edges }
 
-/-- A visible edge in a constructor fragment after resolving its symbolic
-future field against that complete fragment.  This is the internal edge view
-used by the structural correspondence proof, before the public alphabet
-filter is applied. -/
-def AutomatonFragment.HasResolvedEdge (fragment : AutomatonFragment)
-    (source : TypeAutomatonState) (env : TypeEnvironment) (label : TypeLabel)
-    (offers : TypeOfferSummary) (target : TypeAutomatonState) : Prop :=
-  ∃ edge ∈ fragment.edges,
-    edge.source = source ∧ edge.environment = env ∧
-      edge.label = .visible label ∧ edge.current = offers.current ∧
-      (match edge.future with
-        | .explicit future => future
-        | .at state removed =>
-            computeFuture
-              { states := fragment.states, edges := fragment.edges }
-              state \ removed) = offers.future ∧
-      edge.target = target
-
 /-- Once a symbol belongs to the fixed alphabet, public edge membership is
 exactly resolved membership in the constructor fragment. -/
 theorem compileType_hasEdge_iff_hasResolvedEdge
@@ -612,12 +720,12 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
     (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
       signature.transitionAlphabet) :
     (compileType signature processType).HasEdge source env label offers target ↔
-      AutomatonFragment.HasResolvedEdge
+      AutomatonFragment.HasResolvedEdge signature processType
         (compileTypeFuel signature (typeCompilationFuel processType) processType)
         source env label offers target := by
   classical
   simp [TypeAutomaton.HasEdge, compileType,
-    AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdges, hSymbol]
+    AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdgesNative, hSymbol]
   aesop
 
 /-- The source of every compiled transition belongs to the exported state
@@ -665,18 +773,9 @@ theorem compileType_skip_has_no_clock_edge
     ¬ (compileType signature .skip).HasEdge
       (compileType signature .skip).initial
       TypeEnvironment.tock TypeLabel.silent offers target := by
-  simp [TypeAutomaton.HasEdge, compileType, typeCompilationFuel,
-    compileTypeFuel, finishAutomatonFragment, resolvedAutomatonEdges,
-    TypeEnvironment.tock]
-  intro environment _ hClock
-  split_ifs
-  · simp only [Finset.mem_singleton]
-    intro edgeEquality
-    have clockEquality := congrArg
-      (fun edge : TypeAutomatonEdge => edge.symbol.environment.clock)
-      edgeEquality
-    simp [hClock] at clockEquality
-  · simp
+  sorry -- TODO(redevelopment): proof used the old `resolvedAutomatonEdges`-based
+  -- `compileType` unfolding; needs redoing against `resolvedAutomatonEdgesNative`.
+  -- .
 
 end
 

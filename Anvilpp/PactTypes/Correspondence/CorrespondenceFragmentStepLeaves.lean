@@ -388,11 +388,11 @@ theorem compilationFragmentStepCorrect_progress_leaf
             TypeOffers.skip edgeEnv ⟨hWellFormed, hClock⟩⟩
 
 theorem compileTypeFuel_choiceLike_root_target_cases
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (left right : PactType) (processType : PactType)
     (selectionLeft selectionRight : TypeLabel)
     {environment : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary} {target : TypeAutomatonState}
-    (hEdge : AutomatonFragment.HasResolvedEdge
+    (hEdge : AutomatonFragment.HasResolvedEdge signature processType
       (buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -404,37 +404,16 @@ theorem compileTypeFuel_choiceLike_root_target_cases
         (typeCompilationFuel left) left).initial ∨
       target = .child 1 (compileTypeFuel signature
         (typeCompilationFuel right) right).initial := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hLeftStable : leftFragment = compileTypeFuel signature
-      (typeCompilationFuel left) left :=
-    compileTypeFuel_eq_of_sufficient signature left hLeftFuel
-      (typeCompilationFuel_sufficient left)
-  have hRightStable : rightFragment = compileTypeFuel signature
-      (typeCompilationFuel right) right :=
-    compileTypeFuel_eq_of_sufficient signature right hRightFuel
-      (typeCompilationFuel_sufficient right)
-  have hFields :=
-    (buildChoiceAutomaton_root_hasResolvedEdge_iff signature leftFragment
-      rightFragment selectionLeft selectionRight environment label offers
-      target).mp (by simpa [fuel, leftFragment, rightFragment] using hEdge)
-  rcases hFields with hSelected | hSelected
-  · left
-    simpa [hLeftStable] using hSelected.2.2.2.2
-  · right
-    simpa [hRightStable] using hSelected.2.2.2.2
+  sorry -- TODO(redevelopment): body called buildChoiceAutomaton_root_hasResolvedEdge_iff,
+  -- deleted from CorrespondenceChoice.lean along with the old
+  -- computeFuture-based classifier cluster; .
 
 theorem compileTypeFuel_choiceLike_left_target_cases
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (left right : PactType) (processType : PactType)
     (selectionLeft selectionRight : TypeLabel)
     {source target : TypeAutomatonState} {environment : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : AutomatonFragment.HasResolvedEdge
+    (hEdge : AutomatonFragment.HasResolvedEdge signature processType
       (buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -444,52 +423,19 @@ theorem compileTypeFuel_choiceLike_left_target_cases
       (.child 0 source) environment label offers target) :
     ∃ childTarget,
       target = .child 0 childTarget ∧
-        AutomatonFragment.HasResolvedEdge
+        AutomatonFragment.HasResolvedEdge signature left
           (compileTypeFuel signature (typeCompilationFuel left) left)
           source environment label offers childTarget := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildChoiceAutomaton signature leftFragment rightFragment
-    selectionLeft selectionRight
-  have hLeftFuel : TypeCompilationFuelSufficient left fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hLeftStable : leftFragment = compileTypeFuel signature
-      (typeCompilationFuel left) left :=
-    compileTypeFuel_eq_of_sufficient signature left hLeftFuel
-      (typeCompilationFuel_sufficient left)
-  have hTargets : leftFragment.FutureTargetsInStates :=
-    compileTypeFuel_futureTargetsInStates signature fuel left hLeftFuel
-  have hParent : fragment.HasResolvedEdge (.child 0 source) environment label
-      offers target := by
-    simpa [fragment, fuel, leftFragment, rightFragment] using hEdge
-  rcases hParent with ⟨pending, hPending, hSource, hEnvironment, hLabel,
-    hCurrent, hFuture, hTarget⟩
-  rcases (buildChoiceAutomaton_outgoing_left signature leftFragment
-      rightFragment selectionLeft selectionRight source pending).mp
-      ⟨hPending, hSource⟩ with
-    ⟨childEdge, hChildEdge, hChildSource, hPendingEq⟩
-  have hTargetEq : target = .child 0 childEdge.target := by
-    rw [hPendingEq] at hTarget
-    simpa [childPendingEdge, childState] using hTarget.symm
-  have hFixed : fragment.HasResolvedEdge (.child 0 source) environment label
-      offers (.child 0 childEdge.target) := by
-    simpa [hTargetEq] using (show fragment.HasResolvedEdge
-      (.child 0 source) environment label offers target from
-        ⟨pending, hPending, hSource, hEnvironment, hLabel, hCurrent,
-          hFuture, hTarget⟩)
-  have hChild :=
-    (buildChoiceAutomaton_hasResolvedEdge_left_iff signature leftFragment
-      rightFragment selectionLeft selectionRight source childEdge.target
-      environment label offers hTargets).mp hFixed
-  exact ⟨childEdge.target, hTargetEq, by simpa [hLeftStable] using hChild⟩
+  sorry -- TODO(redevelopment): body called buildChoiceAutomaton_hasResolvedEdge_left_iff,
+  -- deleted from CorrespondenceChoice.lean along with the old
+  -- computeFuture-based classifier cluster; .
 
 theorem compileTypeFuel_choiceLike_right_target_cases
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (left right : PactType) (processType : PactType)
     (selectionLeft selectionRight : TypeLabel)
     {source target : TypeAutomatonState} {environment : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : AutomatonFragment.HasResolvedEdge
+    (hEdge : AutomatonFragment.HasResolvedEdge signature processType
       (buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -499,597 +445,30 @@ theorem compileTypeFuel_choiceLike_right_target_cases
       (.child 1 source) environment label offers target) :
     ∃ childTarget,
       target = .child 1 childTarget ∧
-        AutomatonFragment.HasResolvedEdge
+        AutomatonFragment.HasResolvedEdge signature right
           (compileTypeFuel signature (typeCompilationFuel right) right)
           source environment label offers childTarget := by
-  let fuel := max (typeCompilationFuel left) (typeCompilationFuel right)
-  let leftFragment := compileTypeFuel signature fuel left
-  let rightFragment := compileTypeFuel signature fuel right
-  let fragment := buildChoiceAutomaton signature leftFragment rightFragment
-    selectionLeft selectionRight
-  have hRightFuel : TypeCompilationFuelSufficient right fuel := by
-    simp [TypeCompilationFuelSufficient, fuel]
-  have hRightStable : rightFragment = compileTypeFuel signature
-      (typeCompilationFuel right) right :=
-    compileTypeFuel_eq_of_sufficient signature right hRightFuel
-      (typeCompilationFuel_sufficient right)
-  have hTargets : rightFragment.FutureTargetsInStates :=
-    compileTypeFuel_futureTargetsInStates signature fuel right hRightFuel
-  have hParent : fragment.HasResolvedEdge (.child 1 source) environment label
-      offers target := by
-    simpa [fragment, fuel, leftFragment, rightFragment] using hEdge
-  rcases hParent with ⟨pending, hPending, hSource, hEnvironment, hLabel,
-    hCurrent, hFuture, hTarget⟩
-  rcases (buildChoiceAutomaton_outgoing_right signature leftFragment
-      rightFragment selectionLeft selectionRight source pending).mp
-      ⟨hPending, hSource⟩ with
-    ⟨childEdge, hChildEdge, hChildSource, hPendingEq⟩
-  have hTargetEq : target = .child 1 childEdge.target := by
-    rw [hPendingEq] at hTarget
-    simpa [childPendingEdge, childState] using hTarget.symm
-  have hFixed : fragment.HasResolvedEdge (.child 1 source) environment label
-      offers (.child 1 childEdge.target) := by
-    simpa [hTargetEq] using (show fragment.HasResolvedEdge
-      (.child 1 source) environment label offers target from
-        ⟨pending, hPending, hSource, hEnvironment, hLabel, hCurrent,
-          hFuture, hTarget⟩)
-  have hChild :=
-    (buildChoiceAutomaton_hasResolvedEdge_right_iff signature leftFragment
-      rightFragment selectionLeft selectionRight source childEdge.target
-      environment label offers hTargets).mp hFixed
-  exact ⟨childEdge.target, hTargetEq, by simpa [hRightStable] using hChild⟩
+  sorry -- TODO(redevelopment): body called buildChoiceAutomaton_hasResolvedEdge_right_iff,
+  -- deleted from CorrespondenceChoice.lean along with the old
+  -- computeFuture-based classifier cluster; .
 
 theorem compilationFragmentStepCorrect_choice_leaf
     (signature : TypeAlphabet) (left right : PactType)
     (hLeft : CompilationProofBundle signature left)
     (hRight : CompilationProofBundle signature right) :
     CompilationScopedFragmentStepCorrect signature (.choice left right) := by
-  intro hCanonical residual residual' state env label offers hRelated
-    hLocalEnvironment hAvoids
-  have hLeftCanonical : left.EntryCanonical ∧ right.EntryCanonical := by
-    simpa only [PactType.EntryCanonical] using hCanonical
-  have hAvoidsLeft : env.AvoidsInterface left.ParallelInterfaces :=
-    hAvoids.mono (by simp [PactType.ParallelInterfaces])
-  have hAvoidsRight : env.AvoidsInterface right.ParallelInterfaces :=
-    hAvoids.mono (by simp [PactType.ParallelInterfaces])
-  rcases offers with ⟨current, future⟩
-  have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
-  have hChoiceFuture := choiceFutureCorrect_of_compilation signature left right
-    hLeft.future hRight.future hLeftCanonical.1 hLeftCanonical.2
-  have hFragmentEq :
-      compileTypeFuel signature (typeCompilationFuel (.choice left right))
-          (.choice left right) =
-        buildChoiceAutomaton signature
-          (compileTypeFuel signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-          (compileTypeFuel signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-          TypeLabel.silent TypeLabel.silent := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-  cases hRelated with
-  | choice_source =>
-      constructor
-      · rintro ⟨hTransition, hOffers⟩
-        cases hTransition with
-        | choice_left =>
-            obtain ⟨rfl, rfl⟩ := TypeOffers.choice_left_fields hOffers
-            refine ⟨.child 0 (compileTypeFuel signature
-                (typeCompilationFuel left) left).initial, ?_, ?_⟩
-            · show AutomatonFragment.HasResolvedEdge
-                (compileTypeFuel signature (typeCompilationFuel (.choice left right))
-                  (.choice left right)) .root env TypeLabel.silent
-                { current := ∅, future := typeFutureOffers left }
-                (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
-                  left).initial)
-              rw [hFragmentEq]
-              apply (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-                TypeLabel.silent TypeLabel.silent env TypeLabel.silent
-                { current := ∅, future := typeFutureOffers left }
-                (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
-                  left).initial)).mpr
-              left
-              have hFuel : TypeCompilationFuelSufficient left
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-                simp [TypeCompilationFuelSufficient]
-              have hStable := compileTypeFuel_eq_of_sufficient signature left
-                hFuel (typeCompilationFuel_sufficient left)
-              exact ⟨hLocalEnvironment, rfl, rfl, hChoiceFuture.1, by rw [hStable]⟩
-            · exact TypeCompilationRelation.choice_left left right left _
-                (compileType_initial_relation_of_canonical signature left
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.1))
-        | choice_right =>
-            obtain ⟨rfl, rfl⟩ := TypeOffers.choice_right_fields hOffers
-            refine ⟨.child 1 (compileTypeFuel signature
-                (typeCompilationFuel right) right).initial, ?_, ?_⟩
-            · show AutomatonFragment.HasResolvedEdge
-                (compileTypeFuel signature (typeCompilationFuel (.choice left right))
-                  (.choice left right)) .root env TypeLabel.silent
-                { current := ∅, future := typeFutureOffers right }
-                (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
-                  right).initial)
-              rw [hFragmentEq]
-              apply (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-                TypeLabel.silent TypeLabel.silent env TypeLabel.silent
-                { current := ∅, future := typeFutureOffers right }
-                (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
-                  right).initial)).mpr
-              right
-              have hFuel : TypeCompilationFuelSufficient right
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-                simp [TypeCompilationFuelSufficient]
-              have hStable := compileTypeFuel_eq_of_sufficient signature right
-                hFuel (typeCompilationFuel_sufficient right)
-              exact ⟨hLocalEnvironment, rfl, rfl, hChoiceFuture.2, by rw [hStable]⟩
-            · exact TypeCompilationRelation.choice_right left right right _
-                (compileType_initial_relation_of_canonical signature right
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.2))
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              TypeLabel.silent TypeLabel.silent)
-            .root env label { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        have hFields := (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            TypeLabel.silent TypeLabel.silent env label
-            { current := current, future := future } target).mp hEdge'
-        rcases hFields with hLeftSel | hRightSel
-        · obtain ⟨_, hLabel, hCurrent, hComputed, hTargetEq⟩ := hLeftSel
-
-          subst hLabel
-          subst hCurrent
-          have hFuel : TypeCompilationFuelSufficient left
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature left
-            hFuel (typeCompilationFuel_sufficient left)
-          rw [hStable] at hTargetEq
-          simp only at hComputed
-          have hFutureEq : future = typeFutureOffers left := by
-            rw [← hComputed]; simpa using hChoiceFuture.1
-          subst hFutureEq
-          subst hTargetEq
-          cases hTarget with
-          | choice_left _ _ _ _ hChildTarget =>
-              have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation_of_canonical
-                  signature left
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.1))
-              cases hResidual
-              exact ⟨TypeTransition.choice_left env left right hWellFormed,
-                TypeOffers.choice_left env left right hWellFormed⟩
-        · obtain ⟨_, hLabel, hCurrent, hComputed, hTargetEq⟩ := hRightSel
-          subst hLabel
-          subst hCurrent
-          have hFuel : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature right
-            hFuel (typeCompilationFuel_sufficient right)
-          rw [hStable] at hTargetEq
-          simp only at hComputed
-          have hFutureEq : future = typeFutureOffers right := by
-            rw [← hComputed]; simpa using hChoiceFuture.2
-          subst hFutureEq
-          subst hTargetEq
-          cases hTarget with
-          | choice_right _ _ _ _ hChildTarget =>
-              have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation_of_canonical
-                  signature right
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.2))
-              cases hResidual
-              exact ⟨TypeTransition.choice_right env left right hWellFormed,
-                TypeOffers.choice_right env left right hWellFormed⟩
-  | choice_left _ _ childResidual childState hChildRelated =>
-      constructor
-      · intro hStep
-        rcases (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
-            (label := label)
-            (offers := { current := current, future := future })
-            hChildRelated hLocalEnvironment hAvoidsLeft).mp hStep with
-          ⟨childTarget, hChildEdge, hChildTarget⟩
-        refine ⟨.child 0 childTarget, ?_, ?_⟩
-        · show AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature (typeCompilationFuel (.choice left right))
-              (.choice left right)) (.child 0 childState) env label
-            { current := current, future := future } (.child 0 childTarget)
-          rw [hFragmentEq]
-          have hFuel : TypeCompilationFuelSufficient left
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hTargets := compileTypeFuel_futureTargetsInStates signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) left hFuel
-          apply (buildChoiceAutomaton_hasResolvedEdge_left_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            TypeLabel.silent TypeLabel.silent childState childTarget env label
-            { current := current, future := future } hTargets).mpr
-          have hStable := compileTypeFuel_eq_of_sufficient signature left
-            hFuel (typeCompilationFuel_sufficient left)
-          rw [hStable]
-          exact hChildEdge
-        · exact TypeCompilationRelation.choice_left left right residual'
-            childTarget hChildTarget
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              TypeLabel.silent TypeLabel.silent)
-            (.child 0 childState) env label
-            { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        obtain ⟨childTarget, rfl, hChildEdge⟩ :=
-          compileTypeFuel_choiceLike_left_target_cases signature left right
-            TypeLabel.silent TypeLabel.silent hEdge'
-        cases hTarget with
-        | choice_left _ _ _ _ hChildTarget =>
-            exact (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
-              (label := label)
-              (offers := { current := current, future := future })
-              hChildRelated hLocalEnvironment hAvoidsLeft).mpr
-              ⟨childTarget, hChildEdge, hChildTarget⟩
-  | choice_right _ _ childResidual childState hChildRelated =>
-      constructor
-      · intro hStep
-        rcases (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
-            (label := label)
-            (offers := { current := current, future := future })
-            hChildRelated hLocalEnvironment hAvoidsRight).mp hStep with
-          ⟨childTarget, hChildEdge, hChildTarget⟩
-        refine ⟨.child 1 childTarget, ?_, ?_⟩
-        · show AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature (typeCompilationFuel (.choice left right))
-              (.choice left right)) (.child 1 childState) env label
-            { current := current, future := future } (.child 1 childTarget)
-          rw [hFragmentEq]
-          have hFuelR : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hTargets := compileTypeFuel_futureTargetsInStates signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) right hFuelR
-          apply (buildChoiceAutomaton_hasResolvedEdge_right_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            TypeLabel.silent TypeLabel.silent childState childTarget env label
-            { current := current, future := future } hTargets).mpr
-          have hFuel : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature right
-            hFuel (typeCompilationFuel_sufficient right)
-          rw [hStable]
-          exact hChildEdge
-        · exact TypeCompilationRelation.choice_right left right residual'
-            childTarget hChildTarget
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              TypeLabel.silent TypeLabel.silent)
-            (.child 1 childState) env label
-            { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        obtain ⟨childTarget, rfl, hChildEdge⟩ :=
-          compileTypeFuel_choiceLike_right_target_cases signature left right
-            TypeLabel.silent TypeLabel.silent hEdge'
-        cases hTarget with
-        | choice_right _ _ _ _ hChildTarget =>
-            exact (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
-              (label := label)
-              (offers := { current := current, future := future })
-              hChildRelated hLocalEnvironment hAvoidsRight).mpr
-              ⟨childTarget, hChildEdge, hChildTarget⟩
-
+  sorry -- TODO(redevelopment): body relied on the deleted
+  -- buildChoiceAutomaton_*_hasResolvedEdge_* classifier cluster and old
+  -- .HasResolvedEdge arities throughout; .
 theorem compilationFragmentStepCorrect_fairChoice_leaf
     (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
     (hLeft : CompilationProofBundle signature left)
     (hRight : CompilationProofBundle signature right) :
     CompilationScopedFragmentStepCorrect signature
       (.fairChoice bid left right) := by
-  intro hCanonical residual residual' state env label offers hRelated
-    hLocalEnvironment hAvoids
-  have hLeftCanonical : left.EntryCanonical ∧ right.EntryCanonical := by
-    simpa only [PactType.EntryCanonical] using hCanonical
-  have hAvoidsLeft : env.AvoidsInterface left.ParallelInterfaces :=
-    hAvoids.mono (by simp [PactType.ParallelInterfaces])
-  have hAvoidsRight : env.AvoidsInterface right.ParallelInterfaces :=
-    hAvoids.mono (by simp [PactType.ParallelInterfaces])
-  rcases offers with ⟨current, future⟩
-  have hWellFormed := TypeAlphabet.localEnvironment_wellFormed hLocalEnvironment
-  have hFairFuture := fairChoiceFutureCorrect_of_compilation signature bid left
-    right hLeft.future hRight.future hLeftCanonical.1 hLeftCanonical.2
-  have hFragmentEq :
-      compileTypeFuel signature
-          (typeCompilationFuel (.fairChoice bid left right))
-          (.fairChoice bid left right) =
-        buildChoiceAutomaton signature
-          (compileTypeFuel signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-          (compileTypeFuel signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-          (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
-    simp only [typeCompilationFuel, Nat.one_add, compileTypeFuel]
-  cases hRelated with
-  | fair_source =>
-      constructor
-      · rintro ⟨hTransition, hOffers⟩
-        cases hTransition with
-        | fair_left =>
-            obtain ⟨rfl, rfl⟩ := TypeOffers.fair_left_fields hOffers
-            refine ⟨.child 0 (compileTypeFuel signature
-                (typeCompilationFuel left) left).initial, ?_, ?_⟩
-            · show AutomatonFragment.HasResolvedEdge
-                (compileTypeFuel signature
-                  (typeCompilationFuel (.fairChoice bid left right))
-                  (.fairChoice bid left right)) .root env (TypeLabel.fair bid true)
-                { current := ∅, future := typeFutureOffers left }
-                (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
-                  left).initial)
-              rw [hFragmentEq]
-              apply (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-                (TypeLabel.fair bid true) (TypeLabel.fair bid false) env
-                (TypeLabel.fair bid true)
-                { current := ∅, future := typeFutureOffers left }
-                (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
-                  left).initial)).mpr
-              left
-              have hFuel : TypeCompilationFuelSufficient left
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-                simp [TypeCompilationFuelSufficient]
-              have hStable := compileTypeFuel_eq_of_sufficient signature left
-                hFuel (typeCompilationFuel_sufficient left)
-              exact ⟨hLocalEnvironment, rfl, rfl, hFairFuture.1, by rw [hStable]⟩
-            · exact TypeCompilationRelation.fair_left bid left right left _
-                (compileType_initial_relation_of_canonical signature left
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.1))
-        | fair_right =>
-            obtain ⟨rfl, rfl⟩ := TypeOffers.fair_right_fields hOffers
-            refine ⟨.child 1 (compileTypeFuel signature
-                (typeCompilationFuel right) right).initial, ?_, ?_⟩
-            · show AutomatonFragment.HasResolvedEdge
-                (compileTypeFuel signature
-                  (typeCompilationFuel (.fairChoice bid left right))
-                  (.fairChoice bid left right)) .root env
-                (TypeLabel.fair bid false)
-                { current := ∅, future := typeFutureOffers right }
-                (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
-                  right).initial)
-              rw [hFragmentEq]
-              apply (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-                (compileTypeFuel signature
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-                (TypeLabel.fair bid true) (TypeLabel.fair bid false) env
-                (TypeLabel.fair bid false)
-                { current := ∅, future := typeFutureOffers right }
-                (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
-                  right).initial)).mpr
-              right
-              have hFuel : TypeCompilationFuelSufficient right
-                  (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-                simp [TypeCompilationFuelSufficient]
-              have hStable := compileTypeFuel_eq_of_sufficient signature right
-                hFuel (typeCompilationFuel_sufficient right)
-              exact ⟨hLocalEnvironment, rfl, rfl, hFairFuture.2, by rw [hStable]⟩
-            · exact TypeCompilationRelation.fair_right bid left right right _
-                (compileType_initial_relation_of_canonical signature right
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.2))
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              (TypeLabel.fair bid true) (TypeLabel.fair bid false))
-            .root env label { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        have hFields := (buildChoiceAutomaton_root_hasResolvedEdge_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            (TypeLabel.fair bid true) (TypeLabel.fair bid false) env label
-            { current := current, future := future } target).mp hEdge'
-        rcases hFields with hLeftSel | hRightSel
-        · obtain ⟨_, hLabel, hCurrent, hComputed, hTargetEq⟩ := hLeftSel
-          subst hLabel
-          subst hCurrent
-          have hFuel : TypeCompilationFuelSufficient left
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature left
-            hFuel (typeCompilationFuel_sufficient left)
-          rw [hStable] at hTargetEq
-          simp only at hComputed
-          have hFutureEq : future = typeFutureOffers left := by
-            rw [← hComputed]; simpa using hFairFuture.1
-          subst hFutureEq
-          subst hTargetEq
-          cases hTarget with
-          | fair_left _ _ _ _ _ hChildTarget =>
-              have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation_of_canonical
-                  signature left
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.1))
-              cases hResidual
-              exact ⟨TypeTransition.fair_left env bid left right hWellFormed,
-                TypeOffers.fair_left env bid left right hWellFormed⟩
-        · obtain ⟨_, hLabel, hCurrent, hComputed, hTargetEq⟩ := hRightSel
-          subst hLabel
-          subst hCurrent
-          have hFuel : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature right
-            hFuel (typeCompilationFuel_sufficient right)
-          rw [hStable] at hTargetEq
-          simp only at hComputed
-          have hFutureEq : future = typeFutureOffers right := by
-            rw [← hComputed]; simpa using hFairFuture.2
-          subst hFutureEq
-          subst hTargetEq
-          cases hTarget with
-          | fair_right _ _ _ _ _ hChildTarget =>
-              have hResidual := TypeCompilationRelation.residual_unique
-                hChildTarget (compileType_initial_relation_of_canonical
-                  signature right
-                  (PactType.canonicalEntryResidual_eq_self_of_entryCanonical
-                    hLeftCanonical.2))
-              cases hResidual
-              exact ⟨TypeTransition.fair_right env bid left right hWellFormed,
-                TypeOffers.fair_right env bid left right hWellFormed⟩
-  | fair_left _ _ _ childResidual childState hChildRelated =>
-      constructor
-      · intro hStep
-        rcases (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
-            (label := label)
-            (offers := { current := current, future := future })
-            hChildRelated hLocalEnvironment hAvoidsLeft).mp hStep with
-          ⟨childTarget, hChildEdge, hChildTarget⟩
-        refine ⟨.child 0 childTarget, ?_, ?_⟩
-        · show AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature
-              (typeCompilationFuel (.fairChoice bid left right))
-              (.fairChoice bid left right)) (.child 0 childState) env label
-            { current := current, future := future } (.child 0 childTarget)
-          rw [hFragmentEq]
-          have hFuel : TypeCompilationFuelSufficient left
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hTargets := compileTypeFuel_futureTargetsInStates signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) left hFuel
-          apply (buildChoiceAutomaton_hasResolvedEdge_left_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            (TypeLabel.fair bid true) (TypeLabel.fair bid false) childState
-            childTarget env label
-            { current := current, future := future } hTargets).mpr
-          have hStable := compileTypeFuel_eq_of_sufficient signature left
-            hFuel (typeCompilationFuel_sufficient left)
-          rw [hStable]
-          exact hChildEdge
-        · exact TypeCompilationRelation.fair_left bid left right residual'
-            childTarget hChildTarget
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              (TypeLabel.fair bid true) (TypeLabel.fair bid false))
-            (.child 0 childState) env label
-            { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        obtain ⟨childTarget, rfl, hChildEdge⟩ :=
-          compileTypeFuel_choiceLike_left_target_cases signature left right
-            (TypeLabel.fair bid true) (TypeLabel.fair bid false) hEdge'
-        cases hTarget with
-        | fair_left _ _ _ _ _ hChildTarget =>
-            exact (hLeft.scopedStep hLeftCanonical.1 (residual' := residual')
-              (label := label)
-              (offers := { current := current, future := future })
-              hChildRelated hLocalEnvironment hAvoidsLeft).mpr
-              ⟨childTarget, hChildEdge, hChildTarget⟩
-  | fair_right _ _ _ childResidual childState hChildRelated =>
-      constructor
-      · intro hStep
-        rcases (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
-            (label := label)
-            (offers := { current := current, future := future })
-            hChildRelated hLocalEnvironment hAvoidsRight).mp hStep with
-          ⟨childTarget, hChildEdge, hChildTarget⟩
-        refine ⟨.child 1 childTarget, ?_, ?_⟩
-        · show AutomatonFragment.HasResolvedEdge
-            (compileTypeFuel signature
-              (typeCompilationFuel (.fairChoice bid left right))
-              (.fairChoice bid left right)) (.child 1 childState) env label
-            { current := current, future := future } (.child 1 childTarget)
-          rw [hFragmentEq]
-          have hFuelR : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hTargets := compileTypeFuel_futureTargetsInStates signature
-            (max (typeCompilationFuel left) (typeCompilationFuel right)) right hFuelR
-          apply (buildChoiceAutomaton_hasResolvedEdge_right_iff signature
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel signature
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-            (TypeLabel.fair bid true) (TypeLabel.fair bid false) childState
-            childTarget env label
-            { current := current, future := future } hTargets).mpr
-          have hFuel : TypeCompilationFuelSufficient right
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) := by
-            simp [TypeCompilationFuelSufficient]
-          have hStable := compileTypeFuel_eq_of_sufficient signature right
-            hFuel (typeCompilationFuel_sufficient right)
-          rw [hStable]
-          exact hChildEdge
-        · exact TypeCompilationRelation.fair_right bid left right residual'
-            childTarget hChildTarget
-      · rintro ⟨target, hEdge, hTarget⟩
-        have hEdge' : AutomatonFragment.HasResolvedEdge
-            (buildChoiceAutomaton signature
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-              (compileTypeFuel signature
-                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-              (TypeLabel.fair bid true) (TypeLabel.fair bid false))
-            (.child 1 childState) env label
-            { current := current, future := future } target := by
-          rw [← hFragmentEq]; exact hEdge
-        obtain ⟨childTarget, rfl, hChildEdge⟩ :=
-          compileTypeFuel_choiceLike_right_target_cases signature left right
-            (TypeLabel.fair bid true) (TypeLabel.fair bid false) hEdge'
-        cases hTarget with
-        | fair_right _ _ _ _ _ hChildTarget =>
-            exact (hRight.scopedStep hLeftCanonical.2 (residual' := residual')
-              (label := label)
-              (offers := { current := current, future := future })
-              hChildRelated hLocalEnvironment hAvoidsRight).mpr
-              ⟨childTarget, hChildEdge, hChildTarget⟩
+  sorry -- TODO(redevelopment): body relied on the deleted
+  -- buildChoiceAutomaton_*_hasResolvedEdge_* classifier cluster and old
+  -- .HasResolvedEdge arities throughout; .
 
 end
 

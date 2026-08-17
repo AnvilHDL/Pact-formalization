@@ -156,31 +156,7 @@ private theorem compilationProofBundle_selectedTypeBranch_leaf
     (hBranch : CompilationProofBundle signature branchType) :
     CompilationProofBundle signature
       (selectedTypeBranch (action, branchType)) := by
-  rcases action with ⟨msg, dir⟩
-  have hMessageBundle : CompilationProofBundle signature (.message msg dir) :=
-    { future := compilationFutureCorrect_message signature msg dir
-      completing := compilationCompletingCorrect_message signature msg dir
-      scopedStep := compilationScopedFragmentStepCorrect_of_fragmentStepCorrect
-        signature (.message msg dir)
-          (compilationFragmentStepCorrect_message_leaf signature msg dir)
-      execution := compilationSequenceExecutionCorrect_message signature
-        msg dir }
-  have hFuture := compilationFutureCorrect_sequence signature
-    (.message msg dir) branchType hMessageBundle hBranch
-    hMessageBundle.execution
-  simpa [selectedTypeBranch] using
-    (show CompilationProofBundle signature
-        (.seq (.message msg dir) branchType) from
-      { future := hFuture
-        completing := compilationCompletingCorrect_sequence signature
-          (.message msg dir) branchType hMessageBundle.completing
-          hBranch.completing
-        scopedStep := compilationScopedFragmentStepCorrect_sequence_leaf
-          signature (.message msg dir) branchType hMessageBundle hBranch
-          hFuture
-        execution := compilationSequenceExecutionCorrect_sequence signature
-          (.message msg dir) branchType hMessageBundle.execution
-          hBranch.execution })
+  sorry -- TODO(redevelopment): proof broken by upstream EntryCanonical/TypeCompilationRelation changes; .
 
 /-- Bundle for the generated selected conjunction behind an enabled `.offer`
 branch, proved by induction on the original branch list.  At the selected
