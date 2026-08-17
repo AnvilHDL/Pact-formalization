@@ -1916,45 +1916,7 @@ theorem compilationScopedFragmentStepCorrect_xoffer
       (.xoffer elseType branches)) :
     CompilationScopedFragmentStepCorrect signature (.xoffer elseType branches) := by
   sorry -- TODO(redevelopment): body called deleted old-mechanism
-  -- HasResolvedEdge case-split helpers; .
-theorem compilationStepCorrect_xoffer
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType))
-    (hElseStep : CompilationFragmentStepCorrect signature elseType)
-    (hBranchStep : ∀ (action : BareMessage) (branchType : PactType)
-      (index : Nat),
-      branches[index]? = some (action, branchType) →
-        CompilationFragmentStepCorrect signature branchType)
-    (hFuture : CompilationFutureCorrect signature
-      (.xoffer elseType branches))
-    (hCanonical : (PactType.xoffer elseType branches).EntryCanonical) :
-    CompilationStepCorrect signature (.xoffer elseType branches) := by
-  intro residual residual' state env label offers hRelated hSymbol
-  have hSignatureSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet := by
-    simpa [compileType] using hSymbol
-  have hLocalEnvironment : env ∈ signature.localEnvironments := by
-    have hFields : env ∈ signature.environments ∧
-        label ∈ signature.labels ∧ offers ∈ signature.offerSummaries := by
-      simpa [TypeAlphabet.transitionAlphabet] using hSignatureSymbol
-    exact signature.environments_subset_localEnvironments hFields.1
-  have hRaw := compilationFragmentStepCorrect_xoffer signature elseType
-    branches hElseStep hBranchStep hFuture hCanonical (residual := residual)
-    (residual' := residual') (state := state) (env := env) (label := label)
-    (offers := offers) hRelated hLocalEnvironment
-  constructor
-  · intro hStep
-    rcases hRaw.mp hStep with ⟨target, hEdge, hTarget⟩
-    exact ⟨target,
-      (compileType_hasEdge_iff_hasResolvedEdge signature
-        (.xoffer elseType branches) state target env label offers
-        hSignatureSymbol).mpr hEdge, hTarget⟩
-  · rintro ⟨target, hEdge, hTarget⟩
-    apply hRaw.mpr
-    exact ⟨target,
-      (compileType_hasEdge_iff_hasResolvedEdge signature
-        (.xoffer elseType branches) state target env label offers
-        hSignatureSymbol).mp hEdge, hTarget⟩
+  -- HasResolvedEdge case-split helpers.
 
 /-- Whole-fragment future correctness for exclusive offers, composed from the
 else continuation and every indexed branch continuation.  The operational

@@ -9,8 +9,7 @@ numbered results exactly as they appear, in order, in `pactproofs.typ`
 ("Lemmas, Theorems, and Proofs"). All supporting definitions (histories,
 strategies, honesty, the `pactcompat.typ` compatibility game, etc.) live in
 `Anvilpp/PactSafetyHelpers.lean`. Theorems whose proofs constitute the
-research development are intentionally closed with `sorry`; see `agent2.md`
-for the redevelopment log and known gaps.
+research development are intentionally closed with `sorry`.
 -/
 
 namespace Pact
@@ -78,13 +77,10 @@ theorem log_objective_regular
   sorry
 
 /-- Lemma 4.5 (`pactautomatonconstruction.typ`, "Correspondence theorem"):
-operational types and their finite constructor automata correspond. This
-statement and its supporting `Correspondence/*` development are unchanged by
-this redevelopment (they already match the current automaton construction);
-its proof is temporarily `sorry` because `compileType_initial_relation`
-relates the initial state to `processType.canonicalEntryResidual` rather than
-literally `processType` for degenerate `.par .skip .skip _` subterms — see
-`agent2.md`. -/
+operational types and their finite constructor automata correspond. Its proof
+is `sorry` pending the supporting `Correspondence/*` development, which is
+mid-redevelopment against the doc-accurate `computeFutureOf` automaton
+construction. -/
 theorem type_automaton_correspondence
     {signature : TypeAlphabet} {processType : PactType}
     (hAdmissible : AdmissibleType signature processType) :

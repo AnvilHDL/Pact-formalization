@@ -9,7 +9,7 @@ Supporting definitions for `Anvilpp/PactSafety.lean`'s theorem catalog:
 process/type histories, strategies, honesty, safety, liveness, and the
 `pactcompat.typ` honesty-aware compatibility game. `PactSafety.lean` states
 the numbered results from `pactproofs.typ`; this file carries everything
-those statements are built from. See `agent2.md` for the redevelopment log.
+those statements are built from.
 -/
 
 namespace Pact
@@ -460,7 +460,7 @@ def ObjectiveDisjunct.forbid {initial : PactType} :
 /-- The full list of Rabin pairs `R_T`, over the honesty-aware arena for a
 fixed compiled automaton, one pair per disjunct in `D_T`. Left as `sorry`
 pending the play/log correspondence needed to state each `(F_d,B_d)`
-concretely against `CompatibilityVertex` plays; see `agent2.md`. -/
+concretely against `CompatibilityVertex` plays. -/
 def objectiveRabinPairs (automaton : TypeAutomaton) (initial : PactType)
     (progress : Finset ProcId) :
     List (Set (ℕ → CompatibilityVertex) × Set (ℕ → CompatibilityVertex)) := by
@@ -476,7 +476,7 @@ def compatibilityGame (signature : TypeAlphabet) (initial : PactType)
   edge := compatibilityEdge (compileType signature initial)
   rabinPairs := by
     sorry -- TODO(redevelopment): needs the play/log correspondence from
-    -- `objectiveRabinPairs`; see agent2.md.
+    -- `objectiveRabinPairs`.
 
 /-- Definition 4.5/`pactcompat.typ`: the compatibility query for a fixed
 composition `initial` (itself an already-`||_I`-composed `PactType`) and

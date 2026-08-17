@@ -3,9 +3,9 @@
 This directory proves that `DecoratedTypeTransition` and the automaton produced
 by `compileType` have exactly the same public steps at related states.
 
-The table follows the aggregate public assembly path. The finer-grained
-extractions of the two largest aggregate concerns are documented separately in
-[`Core/README.md`](Core/README.md) and [`Offers/README.md`](Offers/README.md).
+The development is mid-redevelopment against a doc-accurate `computeFutureOf`
+automaton construction; most declarations below carry a `sorry` proof with
+their statement kept where it is still a documented, general fact.
 
 | File | Summary |
 |---|---|

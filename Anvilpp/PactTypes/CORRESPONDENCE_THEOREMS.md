@@ -157,13 +157,9 @@ targets with correct future decorations.
 | `ClosedGuardedRegular` | A type has no free variables, uses fresh recursion binders, guards recursive calls by `tock`, uses recursion only in tail-compatible positions, is same-cycle message-linear, and scopes nested parallel interfaces lexically. | Collects the syntax restrictions under which the canonical finite compiler is sound and complete. |
 | `AdmissibleType` | The alphabet is well formed, supports the type, and the type is `ClosedGuardedRegular`. | Public hypothesis of Lemma 4.5. |
 | `TypeAutomatonCorrespondence` | There is a relation between semantic residual types and automaton states; it relates the two initial objects, the initial state belongs to the automaton, and a decorated semantic step exists iff a matching automaton edge reaches a related state. | Formal statement of step-for-step type bisimulation. |
-| `type_automaton_correspondence` | Every admissible type is related to its canonical compiled automaton by a `TypeAutomatonCorrespondence`. | Completed Lemma 4.5. |
+| `type_automaton_correspondence` | Every admissible type is related to its canonical compiled automaton by a `TypeAutomatonCorrespondence`. | Lemma 4.5; statement complete, proof `sorry` pending the `Correspondence/*` redevelopment against the `computeFutureOf` automaton construction. |
 | `ProcessAutomatonCorrespondence` | A related process step can be simulated by an edge of the type automaton, preserving a process/state relation. | Record used to state the separate process simulation. |
-| `process_automaton_correspondence` | A conforming process should simulate into the automaton compiled from its admissible type. | Lemma 4.6; currently admitted and not part of the completed type proof. |
-
-Lean's axiom report for `Pact.type_automaton_correspondence` is
-`[propext, Classical.choice, Quot.sound]`; in particular, the theorem does not
-depend on `sorryAx`.
+| `process_automaton_correspondence` | A conforming process should simulate into the automaton compiled from its admissible type. | Lemma 4.6; `sorry`, not part of the type proof. |
 
 ## 2. Top-down assembly
 
@@ -381,7 +377,6 @@ and [`CorrespondenceCompleting.lean`](Correspondence/CorrespondenceCompleting.le
 | `compileType_choice_*_child_edge_iff` | A tagged child edge exists exactly when the corresponding child fragment edge exists. | Edge transport. |
 | `compileType_choice_*_selection_edge` | The root has the expected silent selection edge into each child. | Root forward direction. |
 | `compileType_choice_*_selection_step_iff` | A root selection semantic step exists exactly when the compiled selection edge exists. | Root step correspondence. |
-| `compilationStepCorrect_choice`, `compilationStepCorrect_fairChoice` | Public step equivalence for the two choice constructors, assuming child correctness. | Public constructor lemmas. |
 | `compilationFragmentStepCorrect_choice_leaf`, `compilationFragmentStepCorrect_fairChoice_leaf` | Raw fragment step equivalence for all root and tagged-child cases. | Bundle `scopedStep` fields. |
 | `compilationCompletingCorrect_choice`, `compilationCompletingCorrect_fairChoice` | A choice state is completing exactly when its represented residual can complete. | Bundle `completing` fields. |
 | `compilationSequenceExecutionCorrect_choice`, `compilationSequenceExecutionCorrect_fairChoice` | Execution-view future and completion reachability are preserved through both tagged alternatives and the root. | Bundle `execution` fields. |
@@ -400,10 +395,6 @@ Sources: [`CorrespondenceSequenceGraph.lean`](Correspondence/CorrespondenceSeque
 | `compileTypeFuel_sequence_right_child_edge_iff` | A tagged right sequence edge is exactly a decorated edge of the right child. | Right edge classifier. |
 | `compileTypeFuel_sequence_bridge_edge_iff` | A bridge edge from a completing left state to the right entry exists exactly under the builder's bridge conditions. | Handoff classifier. |
 | `compileTypeFuel_sequence_left_edge_cases`, `compileTypeFuel_sequence_right_edge_cases` | Every compiled sequence edge belongs to the expected left/right/bridge family. | Reverse step direction. |
-| `SequenceSkipBridgeFutureCorrect` | The bridge from literal left completion carries exactly the right residual's future menu. | Root-to-right decoration contract. |
-| `compileType_sequence_skip_bridge_step_iff` | The semantic `skip ; right` handoff is equivalent to the public bridge edge. | Critical sequence transition. |
-| `compilationFragmentStepCorrect_sequence` | Raw sequence steps and raw sequence edges correspond, assuming child steps and future decoration. | Compositional step theorem. |
-| `compilationStepCorrect_sequence` | Public sequence steps and public edges correspond. | Exported constructor theorem. |
 | `compilationCompletingCorrect_sequence` | A represented sequence state is marked completing exactly when the semantic sequence can complete this cycle. | Bundle `completing`. |
 | `buildSequenceAutomaton_computeFuture_left_formula` | The future of a left state is its left future plus the right entry future when an execution completion witness exists. | Graph half of syntax sequence future. |
 | `buildSequenceAutomaton_computeFuture_right` | The future of a tagged right state is the child's future. | Right future transport. |
@@ -424,16 +415,15 @@ Sources: [`CorrespondenceParallel.lean`](Correspondence/CorrespondenceParallel.l
 | `LocalTypeEnvironment.avoidsInterface_of_disjoint` | Passing into a sibling-local environment preserves avoidance of a disjoint descendant interface. | Nested parallel induction. |
 | `localTypeEnvironments_to_syncAutomatonEdges_local` | Compatible semantic local environments reconstruct the synchronized child edges used by the product builder. | Forward synchronization. |
 | `syncAutomatonEdgeWitnesses_to_localTypeEnvironments` | Synchronized compiled edge witnesses reconstruct semantic local environments. | Reverse synchronization. |
-| `compileTypeFuel_parallel_hasResolvedEdge_iff` | A visible product edge exists exactly when it is built from compatible visible child edge witnesses with the prescribed hidden offers and combined label. | Exact product-edge classifier. |
-| `parallel_semantic_step_to_resolved_edge` | Every semantic parallel step yields a matching resolved product edge. | Forward step direction. |
-| `parallel_resolved_edge_to_semantic_step` | Every resolved product edge yields the corresponding semantic parallel step. | Reverse step direction. |
-| `compilationResolvedEdgeTargetsRelated_parallel` | A resolved product edge from related components reaches a product state representing the semantic targets. | Target preservation. |
-| `compilationScopedResolvedOfferWitnessCorrect_of_step_targets_visible` | Scoped child step correctness plus target visibility gives the semantic offer witness needed by synchronization. | Bridge from child bundles to product reconstruction. |
-| `compilationFutureCorrect_parallel` | Product-state `computeFuture` is the interface-hidden union of the represented component menus. | Bundle `future`. |
+| `parallel_semantic_step_to_resolved_edge` | Every semantic parallel step yields a matching resolved product edge. | Forward step direction; needs re-deriving against `buildParallelAutomaton`'s native `computeFutureOf`-resolved product edges. |
+| `parallel_resolved_edge_to_semantic_step` | Every resolved product edge yields the corresponding semantic parallel step. | Reverse step direction; same redevelopment gap. |
+| `compilationResolvedEdgeTargetsRelated_parallel` | A resolved product edge from related components reaches a product state representing the semantic targets. | Target preservation; same gap. |
+| `compilationScopedResolvedOfferWitnessCorrect_of_step_targets_visible` | Scoped child step correctness plus target visibility gives the semantic offer witness needed by synchronization. | Bridge from child bundles to product reconstruction; same gap. |
+| `compilationFutureCorrect_parallel` | Product-state `computeFuture` is the interface-hidden union of the represented component menus. | Bundle `future`; needs re-deriving against `computeFutureOf`'s native `.pair`-state case, which replaced the deleted synthetic-future-edge mechanism this proof used. |
 | `compilationCompletingCorrect_parallel` | Product completing metadata agrees with semantic parallel completion. | Bundle `completing`. |
 | `compilationFragmentStepCorrect_parallel_leaf` | Scoped semantic parallel steps and resolved product edges are equivalent. | Bundle `scopedStep`. |
 | `compilationSequenceExecutionCorrect_parallel_regular_leaf` | The product execution view has the right future menu and completion reachability for closed components. | Bundle `execution`. |
-| `compileType_parallel_edge_hides_immediate_interface` | Every public parallel edge hides actions belonging to the synchronization interface from its immediate offers. | Paper boundary/internal separation. |
+| `compileType_parallel_edge_hides_immediate_interface` | Every public parallel edge hides actions belonging to the synchronization interface from its immediate offers. | Paper boundary/internal separation; needs re-deriving against `buildParallelAutomaton`'s single-arm edge union (the old two-arm transition/future-edge split it was proved against is gone). |
 
 ## 11. Exclusive and conjunctive offers
 
@@ -470,18 +460,17 @@ and [`BuildRecursionAutomaton.lean`](Automata/BuildRecursionAutomaton.lean).
 | Declaration | English statement | Proof role |
 |---|---|---|
 | `RecursionHeaderFutureCorrect` | The future menu at the tagged body entry in the installed recursion graph equals the syntax menu of the unfolded body. | Decoration required by the header edge. |
-| `compileType_recursion_header_edge` | The compiled recursion root has the silent edge into the tagged body entry with exactly the unfolded body's future menu. | Header forward edge. |
+| `compileType_recursion_header_edge` | The compiled recursion root has the silent edge into the tagged body entry with exactly the unfolded body's future menu. | Header forward edge; needs re-deriving against `compileType`'s native `resolvedAutomatonEdgesNative` resolution. |
 | `compileType_recursion_header_step_iff` | The semantic unfolding step at the recursion root exists exactly when the compiled header edge exists, and its target is related. | Header bisimulation. |
-| `buildRecursionAutomaton_root_hasResolvedEdge_iff` | A resolved edge from the fresh recursion root is exactly the silent header edge to the tagged body initial state. | Header edge classifier. |
-| `buildRecursionAutomaton_variable_marker_hasResolvedEdge` | A matching body variable marker becomes a silent installed backedge to the tagged body entry. | Recursive-call edge constructor. |
-| `buildRecursionAutomaton_body_hasResolvedEdge_iff` | Every resolved edge from a tagged body state is either an installed matching-variable backedge or a lifted non-matching body edge. | Central recursion edge inversion. |
+| `buildRecursionAutomaton_root_hasResolvedEdge_iff` | A resolved edge from the fresh recursion root is exactly the silent header edge to the tagged body initial state. | Header edge classifier; statement's RHS still describes the old local-closure `computeFuture` and needs reconciling against the global `computeFutureOf` fixed point. |
+| `buildRecursionAutomaton_variable_marker_hasResolvedEdge` | A matching body variable marker becomes a silent installed backedge to the tagged body entry. | Recursive-call edge constructor; same reconciling gap. |
+| `buildRecursionAutomaton_body_hasResolvedEdge_iff` | Every resolved edge from a tagged body state is either an installed matching-variable backedge or a lifted non-matching body edge. | Central recursion edge inversion; same reconciling gap. |
 | `RecursionBodyFutureCorrect` | At every body state/residual, future resolution in the installed graph at the tagged state equals the menu of the residual after substituting the recursion binder. | Recursion future contract. |
 | `buildRecursionAutomaton_computeFuture_root` | The fresh recursion root and tagged body entry compute the same future menu. | Lifts body future correctness to the header. |
 | `compilationFutureCorrect_recursion` | Guarded occurrences plus `RecursionBodyFutureCorrect` imply ordinary future correctness of the whole recursion fragment. | Bundle `future`. |
 | `RecursionBodyStepCorrect` | Semantic steps of substituted body residuals correspond to installed edges from tagged body states. | Original unscoped body-step contract. |
 | `decoratedTypeTransition_recur_iff` | A recursion binder's decorated transition is exactly its silent, empty-current unfolding step with the target future menu. | Semantic header inversion. |
 | `compilationFragmentStepCorrect_recursion_root` | The raw recursion header step is correct. | Root half of recursion raw step. |
-| `compilationFragmentStepCorrect_recursion` | Header correctness plus a body-step contract gives whole raw recursion step correctness. | Header/body composition. |
 | `buildRecursionAutomaton_completing_eq` | The installed graph's completing set is the tagged non-clock backward closure of the body seed, plus the root precisely when the body entry completes. | Graph definition exposed as a usable equation. |
 | `computeFuture_buildRecursionAutomaton_child_of_no_marker` | If a body state cannot reach the selected marker, installing the backedge does not add the entry menu. | No-recursive-call fixed-point case. |
 | `computeFuture_buildRecursionAutomaton_child_of_marker` | If a body state reaches the selected marker, installing the backedge adds the recursion-entry menu to that state's future menu. | Recursive-call fixed-point case. |
@@ -496,7 +485,7 @@ and [`CorrespondenceMarkerReachability.lean`](Correspondence/CorrespondenceMarke
 |---|---|---|
 | `not_markerReachable_of_tailOccurrences_false` | If the selected variable has no permitted tail occurrence, its compiler marker is not same-cycle reachable. | Negative base fact. |
 | `buildChoiceAutomaton_markerReachable_root` | Choice-root marker reachability is the disjunction of the reachable child-entry cases. | Choice marker induction. |
-| `compiledFragmentSkipping_represented` | Every skipping state of a sufficient compiled fragment represents literal `skip`. | Turns graph completion witnesses into semantic witnesses. |
+| `compiledFragmentAccepting_represented` | Every skipping state of a sufficient compiled fragment represents literal `skip`. | Turns graph completion witnesses into semantic witnesses. |
 | `completionEval_unfold_recur_of_hygienic` | Under hygiene, the completion valuation of a recursion unfolding agrees with the corresponding body substitution valuation. | Completion/marker interaction. |
 | `markerStopped_sequenceExecution_computeFuture` | Stopping a compiled free-variable marker in the sequence-execution view preserves the execution future menu because the marker has no offers and its target is a sink. | Shadow-graph construction. |
 | `compilationMarkerReachable_iff` | For an ambient bound name occurring only in allowed tail positions, raw compiled marker reachability at a represented state is equivalent to syntax `markerReachableSubst = true`. | Raw graph/syntax marker theorem. |
@@ -598,7 +587,7 @@ exactly.
 For completion reachability, let `C` be the set of execution states that
 represent some residual whose `completionEval (fun _ => false)` is true.
 Skipping and completing metadata lie in `C` by
-`compiledFragmentSkipping_represented` and
+`compiledFragmentAccepting_represented` and
 `compiledFragmentCompleting_represented`. The complement of `C` is closed
 under execution references because every such reference comes from a
 non-clock raw edge and `compiledFragmentNonClockPredecessor_eval` propagates

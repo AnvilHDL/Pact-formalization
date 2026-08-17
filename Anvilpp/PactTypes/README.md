@@ -11,10 +11,13 @@ import Anvilpp.PactTypes
 
 ## Current result
 
-The type-level correspondence is complete. For every `AdmissibleType
-signature processType`, theorem `type_automaton_correspondence` constructs a
-`TypeAutomatonCorrespondence processType (compileType signature processType)`.
-The relation used by that witness is `TypeCompilationRelation`.
+The type-level correspondence is mid-redevelopment. For every `AdmissibleType
+signature processType`, theorem `type_automaton_correspondence` is stated to
+construct a `TypeAutomatonCorrespondence processType (compileType signature
+processType)`, using `TypeCompilationRelation` as the witness relation, but
+its proof is currently `sorry` pending the supporting `Correspondence/*`
+development, which is being brought up to date against the doc-accurate
+`computeFutureOf` automaton construction.
 
 The proof is not merely a top-level step induction. It builds a reusable
 `CompilationProofBundle` for every bounded regular syntax tree. The bundle
@@ -33,20 +36,18 @@ well-founded recursion on syntax size. The closed specialization
 `compilationStepCorrect_of_closedGuardedRegular`, which supplies the `stepIff`
 field of the final correspondence witness.
 
-The separate `process_automaton_correspondence` theorem is still admitted; its
-status must not be conflated with the completed type-level theorem.
+The separate `process_automaton_correspondence` theorem is also `sorry`; its
+status must not be conflated with the type-level theorem once that is
+completed.
 
 For a top-down list of the important declarations and English statements, see
-[`CORRESPONDENCE_THEOREMS.md`](CORRESPONDENCE_THEOREMS.md). For the chronological
-proof-engineering record and failed approaches, see [`AGENT.md`](../../AGENT.md).
+[`CORRESPONDENCE_THEOREMS.md`](CORRESPONDENCE_THEOREMS.md).
 
 Each implementation directory also has a per-file summary:
 
 - [`Syntax/README.md`](Syntax/README.md)
 - [`Automata/README.md`](Automata/README.md)
 - [`Correspondence/README.md`](Correspondence/README.md)
-- [`Correspondence/Core/README.md`](Correspondence/Core/README.md)
-- [`Correspondence/Offers/README.md`](Correspondence/Offers/README.md)
 
 ## Layout
 
@@ -57,20 +58,11 @@ Anvilpp/PactTypes/
 ├── Syntax/                    type language and operational semantics
 ├── Automata/                  graph representation and compiler
 ├── Correspondence/            compiler/semantics proof
-│   ├── Core/                  finer-grained core extraction modules
-│   └── Offers/                finer-grained offer extraction modules
 ├── CORRESPONDENCE_THEOREMS.md theorem-oriented proof guide
 └── README.md                  this structural overview
 ```
 
-The live public assembly path currently ends at
-`Correspondence/CorrespondenceAssembly.lean`. The flat
-`CorrespondenceCore.lean` and `CorrespondenceOffers.lean` modules remain on
-that path. The `Correspondence/Core/` and `Correspondence/Offers/` trees are
-the finer-grained extraction of those large proof concerns and build as
-separate module chains. Until the public assembly is migrated to those chains,
-do not import an aggregate module and its extracted mirror into the same Lean
-module: they expose the same Pact declarations under different module names.
+The public assembly path ends at `Correspondence/CorrespondenceAssembly.lean`.
 
 ## Syntax layer
 
@@ -203,9 +195,9 @@ lake build Anvilpp
 git diff --check
 ```
 
-The completed type-correspondence modules, including
-`CorrespondenceRecursionLeaf.lean`, contain no remaining `sorry`. A successful
-whole-project build still reports admitted declarations elsewhere, most
-notably `process_automaton_correspondence`; consult the root README for the
-repository-wide status. `#print axioms Pact.type_automaton_correspondence`
-reports `[propext, Classical.choice, Quot.sound]` and no `sorryAx`.
+The whole project builds with `lake build Anvilpp` (0 errors), but the
+type-correspondence modules currently carry a substantial number of `sorry`s
+— most left by the ongoing redevelopment against the doc-accurate
+`computeFutureOf` automaton construction. `CORRESPONDENCE_THEOREMS.md`
+documents which statements are believed to still be true and worth keeping
+as proof targets versus which have already been pruned.
