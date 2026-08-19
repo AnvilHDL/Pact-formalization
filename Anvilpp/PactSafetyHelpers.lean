@@ -605,6 +605,283 @@ def CompatibilityGameComplexityBound
     Prop := by
   sorry
 
+/-! ## Section 7 helper-lemma scaffold
+
+These are the named helper lemmas from `pact.pdf`, Section 7, stated against
+the current Lean scaffold.  The substantial proof content is intentionally
+left as redevelopment work. -/
+
+/-- Helper Lemma H1: erasure preserves offers. -/
+lemma helper_h1_erasure_preserves_offers
+    {env : Environment} {process target : Proc} {label : Label}
+    {current : Finset Offer} {future : Finset BareMessage}
+    (hOffers : Offers env process label target current future) :
+    TypeOffers (eraseEnvironment env) (inferProcess process) (eraseLabel label)
+      (inferProcess target) (current.image Offer.bare) future := by
+  sorry -- TODO(section7): prove by induction on `hOffers`.
+
+/-- Helper Lemma H1: erasure preserves sibling-local environments. -/
+lemma helper_h1_erasure_preserves_local_environment
+    {outer siblingEnv localEnv : Environment} {interface : Interface}
+    {sibling : Proc} {label : Label}
+    (hLocal :
+      LocalEnvironment outer interface siblingEnv sibling label localEnv) :
+    LocalTypeEnvironment (eraseEnvironment outer) interface
+      (eraseEnvironment siblingEnv) (inferProcess sibling) (eraseLabel label)
+      (eraseEnvironment localEnv) := by
+  sorry -- TODO(section7): combine local-env inversion with offer erasure.
+
+/-- Helper Lemma H2: every well-formed erased environment has a concrete
+representative preserving availability. -/
+lemma helper_h2_concrete_representative_of_erased_environment
+    (env : TypeEnvironment) (hWellFormed : env.WellFormed) :
+    ∃ concrete : Environment,
+      eraseEnvironment concrete = env ∧
+      concrete.available = typeAvailable env ∧
+      (env = TypeEnvironment.empty → concrete = Environment.empty) := by
+  sorry -- TODO(section7): choose payload representatives for erased sends.
+
+/-- Helper Lemma H3: type strategies can be matched by process strategies
+along conformance. -/
+lemma helper_h3_matching_finite_strategy_histories
+    {process : Proc} {processType : PactType}
+    (hConforms : Conforms process processType)
+    (typeStrategy : TypeStrategy) :
+    ∃ processStrategy : ProcessStrategy process, True := by
+  sorry -- TODO(section7): build the concretizing process strategy.
+
+/-- Helper Lemma H4: completed process logs erase to completed type logs. -/
+lemma helper_h4_completed_process_logs_erase
+    {process : Proc} {processType : PactType}
+    (processStrategy : ProcessStrategy process) (typeStrategy : TypeStrategy)
+    {processLog : ProcessLog}
+    (hCompleted : CompletedProcessLog processStrategy processLog) :
+    ∃ typeLog : TypeLog,
+      CompletedTypeLog processType typeStrategy typeLog ∧
+      eraseProcessLog processLog = typeLog := by
+  sorry -- TODO(section7): use the history matching construction of H3.
+
+/-- Helper Lemma H5: honesty is preserved by concretization. -/
+lemma helper_h5_honesty_preserved_by_concretization
+    {processLog : ProcessLog} {typeLog : TypeLog}
+    (hErase : eraseProcessLog processLog = typeLog)
+    (hHonest : HonestTypeLog typeLog) :
+    HonestProcessLog processLog := by
+  sorry -- TODO(section7): use H2's availability preservation at each index.
+
+/-- Helper Lemma H6: abstraction ignores data substitution. -/
+lemma helper_h6_abstraction_expr_substitution
+    (process : Proc) (name : String) (value : Bool) :
+    inferProcess (Semantics.procExprReplace process name value) =
+      inferProcess process := by
+  sorry -- TODO(section7): structural induction on processes.
+
+/-- Helper Lemma H6: abstraction commutes with recursive process substitution. -/
+lemma helper_h6_abstraction_process_substitution
+    (process replacement : Proc) (name : String) :
+    inferProcess (Semantics.procReplace process name replacement) =
+      (inferProcess process).replaceVar name (inferProcess replacement) := by
+  sorry -- TODO(section7): structural induction with branch cases.
+
+/-- Helper Lemma H6: abstraction reflects literal `skip`. -/
+lemma helper_h6_abstraction_skip_iff (process : Proc) :
+    inferProcess process = .skip ↔ process = .skip := by
+  sorry -- TODO(section7): inspect the abstraction clauses.
+
+/-- Helper Lemma H7: one process step abstracts to one type step. -/
+lemma helper_h7_one_step_abstraction
+    {env : Environment} {process target : Proc} {label : Label}
+    (hStep : ProcessTransition env process label target) :
+    TypeTransition (eraseEnvironment env) (inferProcess process)
+      (eraseLabel label) (inferProcess target) := by
+  sorry -- TODO(section7): induction on the process-step derivation.
+
+/-- Helper Lemma H8: abstraction reflects readiness. -/
+lemma helper_h8_abstraction_reflects_readiness
+    {process : Proc} (hWF : WFProc process) {env : Environment} :
+    TypeReady (eraseEnvironment env) (inferProcess process) →
+      ProcessReady env process := by
+  sorry -- TODO(section7): split on clock/non-clock environments.
+
+/-- Helper Lemma H9: one-step conformance match. -/
+lemma helper_h9_one_step_conformance_match
+    {process process₀ process₁ : Proc} {processType type₀ : PactType}
+    {env : Environment} {label : Label}
+    (witness : ConformanceWitness process processType)
+    (hRelated : witness.relation process₀ type₀)
+    (hStep : ProcessTransition env process₀ label process₁) :
+    ∃ type₁,
+      TypeTransition (eraseEnvironment env) type₀ (eraseLabel label) type₁ ∧
+      witness.relation process₁ type₁ := by
+  exact witness.matchStep hRelated hStep
+
+/-- Helper Lemma H10: refinement response coherence for undecorated steps. -/
+lemma helper_h10_refinement_response_coherence
+    {precise abstract type₀ type₀' type₁ : PactType}
+    {env : TypeEnvironment} {label : TypeLabel}
+    (witness : RefinementWitness precise abstract)
+    (hRelated : witness.relation type₀ type₀')
+    (hStep : TypeTransition env type₀ label type₁) :
+    ∃ type₁',
+      TypeTransition env type₀' label type₁' ∧
+      witness.relation type₁ type₁' := by
+  sorry -- TODO(section7): decorate the step using H17, then use response.
+
+/-- No clock label occurs in the half-open interval `[i,j)`. -/
+def TypeLogNoClockBetween (log : TypeLog) (i j : Nat) : Prop :=
+  ∀ k, i ≤ k → k < j → ¬ (log k).2.isTock
+
+/-- Helper Lemma H11: same-cycle characterization of honesty. -/
+lemma helper_h11_same_cycle_honesty (log : TypeLog) :
+    HonestTypeLog log ↔
+      ∀ i j,
+        i < j →
+        TypeLogNoClockBetween log i j →
+        typeAvailable (log j).1 ⊆ (log i).1.future := by
+  sorry -- TODO(section7): induction on `j - i`.
+
+/-- A non-clock semantic type step. -/
+def TypeNonClockStep (source target : PactType) : Prop :=
+  ∃ env label, TypeTransition env source label target ∧ ¬ label.isTock
+
+/-- Zero or more non-clock semantic type steps. -/
+def TypeSameCycleReaches (source target : PactType) : Prop :=
+  Relation.ReflTransGen TypeNonClockStep source target
+
+/-- A non-clock public automaton edge. -/
+def AutomatonNonClockStep (automaton : TypeAutomaton)
+    (source target : TypeAutomatonState) : Prop :=
+  ∃ env label offers,
+    automaton.HasEdge source env label offers target ∧ ¬ label.isTock
+
+/-- A state reaches an accepting state without crossing a clock edge. -/
+def AutomatonSameCycleReachesAccepting
+    (automaton : TypeAutomaton) (state : TypeAutomatonState) : Prop :=
+  ∃ finalState,
+    Relation.ReflTransGen (AutomatonNonClockStep automaton) state finalState ∧
+    finalState ∈ automaton.accepting
+
+/-- Helper Lemma H12: related compiled states are states of the compiled
+automaton. -/
+lemma helper_h12_compiled_state_shape
+    (signature : TypeAlphabet) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual) :
+    state ∈ (compileType signature processType).states := by
+  sorry -- TODO(section7): strengthen to the constructor-by-constructor shape.
+
+/-- Helper Lemma H13: final states represent completion. -/
+lemma helper_h13_final_states_represent_completion
+    {processType residual : PactType} {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual) :
+    TypeAccepting processType state ↔ residual = .skip := by
+  sorry -- TODO(section7): use `TypeCompilationRelation.residual_eq_skip_iff_typeAccepting`.
+
+/-- Helper Lemma H14: same-cycle completion agrees between residuals and
+automata. -/
+lemma helper_h14_same_cycle_completion
+    (signature : TypeAlphabet) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual) :
+    AutomatonSameCycleReachesAccepting (compileType signature processType) state ↔
+      TypeSameCycleReaches residual .skip := by
+  sorry -- TODO(section7): relate non-clock paths using Lemma 4.5.
+
+/-- Helper Lemma H15: future offers agree. -/
+lemma helper_h15_future_offers_agree
+    (signature : TypeAlphabet) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : TypeCompilationRelation processType state residual) :
+    computeFutureOf signature processType state = typeFutureOffers residual := by
+  sorry -- TODO(section7): prove by the constructor future-correctness bundle.
+
+/-- Helper Lemma H16: erased-step conformance. -/
+lemma helper_h16_erased_step_conformance
+    {process process₀ process₁ : Proc} {processType type₀ : PactType}
+    {env : Environment} {label : Label}
+    (witness : ConformanceWitness process processType)
+    (hRelated : witness.relation process₀ type₀)
+    (hStep : ProcessTransition env process₀ label process₁) :
+    ∃ type₁,
+      TypeTransition (eraseEnvironment env) type₀ (eraseLabel label) type₁ ∧
+      witness.relation process₁ type₁ := by
+  exact witness.matchStep hRelated hStep
+
+/-- Helper Lemma H17: every type step has a decoration. -/
+lemma helper_h17_every_type_step_has_decoration
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    (hStep : TypeTransition env source label target) :
+    ∃ offers, DecoratedTypeTransition env source label offers target := by
+  exact hStep.exists_decorated
+
+/-- Log read from resolving/failure moves of a compatibility-game play. -/
+def compatibilityPlayLog
+    (automaton : TypeAutomaton) (play : ℕ → CompatibilityVertex) : TypeLog :=
+  fun index =>
+    match compatibilityStepLabel automaton (play index) (play (index + 1)) with
+    | some entry => entry
+    | none => (TypeEnvironment.empty, TypeLabel.silent)
+
+/-- Helper Lemma H18: the objective monitor recognizes exactly `Ω_T`. -/
+lemma helper_h18_objective_monitor
+    (signature : TypeAlphabet) (initial : PactType) (progress : Finset ProcId)
+    (play : ℕ → CompatibilityVertex) :
+    RabinGame.Accepts (compatibilityGame signature initial progress) play ↔
+      TypeWinningObjective initial progress
+        (compatibilityPlayLog (compileType signature initial) play) := by
+  sorry -- TODO(section7): unfold the Rabin monitor and play log.
+
+/-- Helper Lemma H19: readiness matches outgoing automaton edges. -/
+lemma helper_h19_readiness_matches_automaton_readiness
+    {processType residual : PactType} {automaton : TypeAutomaton}
+    {state : TypeAutomatonState} {env : TypeEnvironment}
+    (correspondence : TypeAutomatonCorrespondence processType automaton)
+    (hRelated : correspondence.relation residual state) :
+    TypeReady env residual ↔
+      ∃ label state', compiledTypeEdge automaton state env label state' := by
+  sorry -- TODO(section7): use both directions of correspondence.stepIff.
+
+/-- Helper Lemma H20: semantic strategy prefixes and compatibility-game plays
+can be matched. -/
+lemma helper_h20_matching_represented_prefixes_and_plays
+    (signature : TypeAlphabet) (initial : PactType) (progress : Finset ProcId)
+    (strategy : TypeStrategy) :
+    ∃ gameStrategy : CompatibilityVertex → CompatibilityVertex, True := by
+  sorry -- TODO(section7): construct the Player-0 strategy from `strategy`.
+
+/-- Helper Lemma H21: componentwise refinement lifts through a fixed
+composition. -/
+lemma helper_h21_componentwise_product_lifting
+    {precise abstract : List PactType} {interfaces : List Interface}
+    {preciseComposition abstractComposition : PactType}
+    (hComponentwise : ComponentwiseRefines precise abstract)
+    (hPrecise :
+      composeTypes precise interfaces = some preciseComposition)
+    (hAbstract :
+      composeTypes abstract interfaces = some abstractComposition) :
+    Refines preciseComposition abstractComposition := by
+  sorry -- TODO(section7): induction on the parenthesized composition.
+
+/-- Helper Lemma H22: histories can be matched along refinement. -/
+lemma helper_h22_matching_histories_along_refinement
+    {precise abstract : PactType}
+    (hRefines : Refines precise abstract)
+    (abstractStrategy : TypeStrategy) :
+    ∃ preciseStrategy : TypeStrategy, True := by
+  sorry -- TODO(section7): copy environments and answer steps via refinement.
+
+/-- Helper Lemma H23: refinement is reflexive. -/
+lemma helper_h23_refinement_refl (processType : PactType) :
+    Refines processType processType := by
+  sorry -- TODO(section7): identity relation.
+
+/-- Helper Lemma H23: refinement is transitive. -/
+lemma helper_h23_refinement_trans
+    {left middle right : PactType}
+    (hLeft : Refines left middle) (hRight : Refines middle right) :
+    Refines left right := by
+  sorry -- TODO(section7): compose refinement witnesses.
+
 end
 
 end Pact

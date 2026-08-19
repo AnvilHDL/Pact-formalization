@@ -3157,10 +3157,6 @@ structure TypeAutomatonCorrespondence
           automaton.HasEdge state env label offers state' ∧
           relation residual' state')
 
-/-- The atomic `skip` constructor already satisfies the full step correspondence. -/
-theorem compileType_skip_correspondence (signature : TypeAlphabet) :
-    Nonempty (TypeAutomatonCorrespondence .skip (compileType signature .skip)) :=
-  sorry
 theorem compileType_message_action_edge
     (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
     {env : TypeEnvironment}

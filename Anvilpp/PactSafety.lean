@@ -1,4 +1,6 @@
 import Anvilpp.PactSafetyHelpers
+import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
+import Anvilpp.PactTypes.NewCorrespondence.CasesTop
 
 /-!
 # Communication safety: the paper's theorem catalog
@@ -87,7 +89,37 @@ theorem type_automaton_correspondence
     Nonempty
       (TypeAutomatonCorrespondence processType
         (compileType signature processType)) := by
-  sorry
+  -- The automaton
+  let typeAutomaton := compileType signature processType
+  -- The relation set
+  let relation_set : Finset (PactType × TypeAutomatonState) :=
+    buildRelationSet processType typeAutomaton
+  -- proof witness
+  exact ⟨{
+      relation := relationMembership relation_set
+      initial := by
+        simpa [relation_set, typeAutomaton] using
+          buildRelationSet_initial processType typeAutomaton
+      initial_mem := by
+        simpa [typeAutomaton] using compileType_initial_mem signature processType
+      stepIff := by
+        cases processType with
+        | message id dir => sorry
+        | progress id => sorry
+        | tock => sorry
+        | skip =>
+              intro residual residual' state env label offers hRelated hSymbol
+              simpa [relation_set, typeAutomaton] using
+              correspondence_skip_stepIff signature hRelated hSymbol
+        | choice left right => sorry
+        | fairChoice left right => sorry
+        | seq first second => sorry
+        | par left itfc right => sorry
+        | recur id body => sorry
+        | var id => sorry
+        | xoffer id dir => sorry
+        | offer id dir => sorry
+    }⟩
 
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes
 simulate into the type automaton. -/
