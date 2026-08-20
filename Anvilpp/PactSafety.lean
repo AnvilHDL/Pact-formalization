@@ -104,13 +104,22 @@ theorem type_automaton_correspondence
         simpa [typeAutomaton] using compileType_initial_mem signature processType
       stepIff := by
         cases processType with
-        | message id dir => sorry
-        | progress id => sorry
-        | tock => sorry
+        | message id dir =>
+          intro residual residual' state env label offers hRelated hSymbol
+          simpa [relation_set, typeAutomaton] using
+            correspondence_message_stepIff signature id dir hRelated hSymbol
+        | progress id =>
+          intro residual residual' state env label offers hRelated hSymbol
+          simpa [relation_set, typeAutomaton] using
+            correspondence_progress_stepIff signature id hRelated hSymbol
+        | tock =>
+          intro residual residual' state env label offers hRelated hSymbol
+          simpa [relation_set, typeAutomaton] using
+            correspondence_tock_stepIff signature hRelated hSymbol
         | skip =>
-              intro residual residual' state env label offers hRelated hSymbol
-              simpa [relation_set, typeAutomaton] using
-              correspondence_skip_stepIff signature hRelated hSymbol
+          intro residual residual' state env label offers hRelated hSymbol
+          simpa [relation_set, typeAutomaton] using
+            correspondence_skip_stepIff signature hRelated hSymbol
         | choice left right => sorry
         | fairChoice left right => sorry
         | seq first second => sorry
