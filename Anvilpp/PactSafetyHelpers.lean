@@ -1,6 +1,7 @@
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.List.Forall2
 import Anvilpp.PactTypes
+import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 
 /-!
 # Helper definitions for the communication-safety scaffold
@@ -766,23 +767,55 @@ automaton. -/
 lemma helper_h12_compiled_state_shape
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
-    (hRelated : TypeCompilationRelation processType state residual) :
+    (hRelated :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual state) :
     state ∈ (compileType signature processType).states := by
-  sorry -- TODO(section7): strengthen to the constructor-by-constructor shape.
+  -- Now prove the builder invariant: the seed is a state, and edge targets stay states.
+  let automaton := compileType signature processType
+  change (residual, state).2 ∈ automaton.states
+  exact buildRelationSet_preserves processType automaton
+    (fun entry => entry.2 ∈ automaton.states)
+    (by
+      dsimp [automaton]
+      simpa using compileType_initial_mem signature processType)
+    (by
+      intro entry _hEntry successor hSuccessor
+      rcases relationSuccessors_mem_cases automaton entry successor hSuccessor
+        with ⟨edge, hEdge, hSource, hTarget, _hStep⟩
+      rcases edge with ⟨edgeSource, ⟨edgeEnv, edgeLabel, edgeOffers⟩,
+        edgeTarget⟩
+      have hPublicEdge :
+          (compileType signature processType).HasEdge edgeSource edgeEnv
+            edgeLabel edgeOffers edgeTarget := by
+        simpa [automaton, TypeAutomaton.HasEdge] using hEdge
+      have hTargetMem :
+          edgeTarget ∈ (compileType signature processType).states :=
+        compileType_edge_target_mem signature processType hPublicEdge
+      simpa [automaton, hTarget] using hTargetMem)
+    (residual, state) hRelated
 
 /-- Helper Lemma H13: final states represent completion. -/
 lemma helper_h13_final_states_represent_completion
-    {processType residual : PactType} {state : TypeAutomatonState}
-    (hRelated : TypeCompilationRelation processType state residual) :
-    TypeAccepting processType state ↔ residual = .skip := by
-  sorry -- TODO(section7): use `TypeCompilationRelation.residual_eq_skip_iff_typeAccepting`.
+    (signature : TypeAlphabet) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual state) :
+    state ∈ (compileType signature processType).accepting ↔ residual = .skip := by
+  sorry -- TODO(section7): prove accepting states are exactly completed residuals.
 
 /-- Helper Lemma H14: same-cycle completion agrees between residuals and
 automata. -/
 lemma helper_h14_same_cycle_completion
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
-    (hRelated : TypeCompilationRelation processType state residual) :
+    (hRelated :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual state) :
     AutomatonSameCycleReachesAccepting (compileType signature processType) state ↔
       TypeSameCycleReaches residual .skip := by
   sorry -- TODO(section7): relate non-clock paths using Lemma 4.5.
@@ -791,7 +824,10 @@ lemma helper_h14_same_cycle_completion
 lemma helper_h15_future_offers_agree
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
-    (hRelated : TypeCompilationRelation processType state residual) :
+    (hRelated :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual state) :
     computeFutureOf signature processType state = typeFutureOffers residual := by
   sorry -- TODO(section7): prove by the constructor future-correctness bundle.
 

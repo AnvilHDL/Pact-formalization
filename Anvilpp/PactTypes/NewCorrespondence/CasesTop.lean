@@ -1,9 +1,11 @@
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 import Anvilpp.PactTypes.NewCorrespondence.CompileWFHelpers
+import Anvilpp.PactSafetyHelpers
 
 namespace Pact
 
 open Classical
+open Pact.NewCorrespondence
 
 noncomputable section
 /-- Step correspondence for the `skip` constructor, stated for the new
@@ -35,12 +37,12 @@ theorem correspondence_skip_stepIff
         signature.transitionAlphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
   have hLocal := signature.environments_subset_localEnvironments hEnvironment
   have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
   constructor
   · intro hStep
-    rcases relationMembership_skip_cases signature hRelated with
+    rcases NewCorrespondence.relationMembership_skip_cases signature hRelated with
       ⟨hResidual, hState⟩
     subst residual
     subst state
@@ -49,22 +51,27 @@ theorem correspondence_skip_stepIff
     | skip _ conditions =>
         cases hOffers with
         | skip _ _ =>
-            have hEdge := compileType_skip_edge signature hLocal
+            have hEdge := NewCorrespondence.compileType_skip_edge signature hLocal
               conditions.2 hSignatureSymbol
             exact ⟨.root, hEdge, hRelated⟩
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    rcases relationMembership_skip_cases signature hRelated with
+    rcases NewCorrespondence.relationMembership_skip_cases signature hRelated with
       ⟨hResidual, hState⟩
     subst residual
     subst state
-    rcases compileType_skip_edge_cases signature hEdge with
+    rcases NewCorrespondence.compileType_skip_edge_cases signature hEdge with
       ⟨_hSource, hTarget, hLabel, hCurrent, hFuture, hClock⟩
     subst label
     subst current
     subst future
     subst state'
+    have hTargetAccepting :
+        TypeAutomatonState.root ∈ (compileType signature .skip).accepting := by
+      simp [compileType, typeCompilationFuel, compileTypeFuel,
+        finishAutomatonFragment]
     have hResidualTarget : residual' = .skip :=
-      (relationMembership_skip_cases signature hTargetRelated).1
+      (helper_h13_final_states_represent_completion signature
+        hTargetRelated).mp hTargetAccepting
     subst residual'
     exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
       TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
@@ -105,12 +112,13 @@ theorem correspondence_message_stepIff
         signature.transitionAlphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
   have hLocal := signature.environments_subset_localEnvironments hEnvironment
   have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
   constructor
   · intro hStep
-    rcases relationMembership_message_cases signature msg dir hRelated with
+    rcases NewCorrespondence.relationMembership_message_cases signature msg dir
+      hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
@@ -132,7 +140,8 @@ theorem correspondence_message_stepIff
               by
                 simpa [typeFutureOffers, typeFutureOffersFuel] using
                   hOffers⟩
-          have hEdge := compileType_message_action_edge signature msg dir
+          have hEdge := NewCorrespondence.compileType_message_action_edge
+            signature msg dir
             hLocal conditions.2 hSignatureSymbol
           exact ⟨.final, hEdge,
             relationMembership_of_step_edge_unique (.message msg dir)
@@ -155,7 +164,8 @@ theorem correspondence_message_stepIff
               by
                 simpa [typeFutureOffers, typeFutureOffersFuel] using
                   hOffers⟩
-          have hEdge := compileType_message_wait_edge signature msg dir
+          have hEdge := NewCorrespondence.compileType_message_wait_edge
+            signature msg dir
             hLocal conditions.2.1 conditions.2.2 hSignatureSymbol
           exact ⟨.root, hEdge,
             relationMembership_of_step_edge_unique (.message msg dir)
@@ -171,16 +181,19 @@ theorem correspondence_message_stepIff
       | skip _ conditions =>
           cases hOffers with
           | skip _ _ =>
-              have hEdge := compileType_message_final_edge signature msg dir
+              have hEdge := NewCorrespondence.compileType_message_final_edge
+                signature msg dir
                 hLocal conditions.2 hSignatureSymbol
               exact ⟨.final, hEdge, hRelated⟩
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    rcases relationMembership_message_cases signature msg dir hRelated with
+    rcases NewCorrespondence.relationMembership_message_cases signature msg dir
+      hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_message_edge_cases signature msg dir hEdge
+      have hCases := NewCorrespondence.compileType_message_edge_cases
+        signature msg dir hEdge
       rcases hCases with hFire | hWait | hIdle
       · rcases hFire with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
           hNeed⟩
@@ -188,12 +201,14 @@ theorem correspondence_message_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature (.message msg dir)).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_message_cases signature msg dir
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.action env msg dir ⟨hWellFormed, hNeed⟩,
           by
@@ -206,7 +221,8 @@ theorem correspondence_message_stepIff
         subst future
         subst state'
         have hResidualTarget : residual' = .message msg dir := by
-          rcases relationMembership_message_cases signature msg dir
+          rcases NewCorrespondence.relationMembership_message_cases signature
+              msg dir
               hTargetRelated with hTargetRoot | hTargetFinal
           · exact hTargetRoot.1
           · rcases hTargetFinal with ⟨_, hStateTarget⟩
@@ -223,7 +239,8 @@ theorem correspondence_message_stepIff
     · rcases hFinal with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_message_edge_cases signature msg dir hEdge
+      have hCases := NewCorrespondence.compileType_message_edge_cases
+        signature msg dir hEdge
       rcases hCases with hFire | hWait | hIdle
       · rcases hFire with ⟨hSource, _⟩
         simp at hSource
@@ -235,12 +252,14 @@ theorem correspondence_message_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature (.message msg dir)).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_message_cases signature msg dir
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
           TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
@@ -277,12 +296,12 @@ theorem correspondence_tock_stepIff
         signature.transitionAlphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
   have hLocal := signature.environments_subset_localEnvironments hEnvironment
   have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
   constructor
   · intro hStep
-    rcases relationMembership_tock_cases signature hRelated with
+    rcases NewCorrespondence.relationMembership_tock_cases signature hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
@@ -300,7 +319,8 @@ theorem correspondence_tock_stepIff
                 (TypeOfferSummary.mk ∅ ∅) .skip :=
             ⟨TypeTransition.cycle env conditions,
               TypeOffers.cycle env conditions⟩
-          have hEdge := compileType_tock_action_edge signature hLocal
+          have hEdge := NewCorrespondence.compileType_tock_action_edge
+            signature hLocal
             conditions.2 hSignatureSymbol
           exact ⟨.final, hEdge,
             relationMembership_of_step_edge_unique .tock
@@ -318,7 +338,8 @@ theorem correspondence_tock_stepIff
                 (TypeOfferSummary.mk ∅ ∅) .tock :=
             ⟨TypeTransition.cycle_wait env conditions,
               TypeOffers.cycle_wait env conditions⟩
-          have hEdge := compileType_tock_wait_edge signature hLocal
+          have hEdge := NewCorrespondence.compileType_tock_wait_edge
+            signature hLocal
             conditions.2 hSignatureSymbol
           exact ⟨.root, hEdge,
             relationMembership_of_step_edge_unique .tock
@@ -333,16 +354,18 @@ theorem correspondence_tock_stepIff
       | skip _ conditions =>
           cases hOffers with
           | skip _ _ =>
-              have hEdge := compileType_tock_final_edge signature hLocal
+              have hEdge := NewCorrespondence.compileType_tock_final_edge
+                signature hLocal
                 conditions.2 hSignatureSymbol
               exact ⟨.final, hEdge, hRelated⟩
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    rcases relationMembership_tock_cases signature hRelated with
+    rcases NewCorrespondence.relationMembership_tock_cases signature hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_tock_edge_cases signature hEdge
+      have hCases := NewCorrespondence.compileType_tock_edge_cases
+        signature hEdge
       rcases hCases with hFire | hWait | hIdle
       · rcases hFire with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
           hClock⟩
@@ -350,12 +373,14 @@ theorem correspondence_tock_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature .tock).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_tock_cases signature
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.cycle env ⟨hWellFormed, hClock⟩,
           TypeOffers.cycle env ⟨hWellFormed, hClock⟩⟩
@@ -366,7 +391,7 @@ theorem correspondence_tock_stepIff
         subst future
         subst state'
         have hResidualTarget : residual' = .tock := by
-          rcases relationMembership_tock_cases signature
+          rcases NewCorrespondence.relationMembership_tock_cases signature
               hTargetRelated with hTargetRoot | hTargetFinal
           · exact hTargetRoot.1
           · rcases hTargetFinal with ⟨_, hStateTarget⟩
@@ -379,7 +404,8 @@ theorem correspondence_tock_stepIff
     · rcases hFinal with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_tock_edge_cases signature hEdge
+      have hCases := NewCorrespondence.compileType_tock_edge_cases
+        signature hEdge
       rcases hCases with hFire | hWait | hIdle
       · rcases hFire with ⟨hSource, _⟩
         simp at hSource
@@ -391,12 +417,14 @@ theorem correspondence_tock_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature .tock).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_tock_cases signature
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
           TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
@@ -436,12 +464,13 @@ theorem correspondence_progress_stepIff
         signature.transitionAlphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
   have hLocal := signature.environments_subset_localEnvironments hEnvironment
   have hWellFormed := TypeAlphabet.environment_wellFormed hEnvironment
   constructor
   · intro hStep
-    rcases relationMembership_progress_cases signature pid hRelated with
+    rcases NewCorrespondence.relationMembership_progress_cases signature pid
+      hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
@@ -460,7 +489,8 @@ theorem correspondence_progress_stepIff
                 (TypeLabel.progress pid) (TypeOfferSummary.mk ∅ ∅) .skip :=
             ⟨TypeTransition.progress env pid hWellFormed,
               TypeOffers.progress env pid hWellFormed⟩
-          have hEdge := compileType_progress_action_edge signature pid
+          have hEdge := NewCorrespondence.compileType_progress_action_edge
+            signature pid
             hLocal hSignatureSymbol
           exact ⟨.final, hEdge,
             relationMembership_of_step_edge_unique (.progress pid)
@@ -476,16 +506,19 @@ theorem correspondence_progress_stepIff
       | skip _ conditions =>
           cases hOffers with
           | skip _ _ =>
-              have hEdge := compileType_progress_final_edge signature pid
+              have hEdge := NewCorrespondence.compileType_progress_final_edge
+                signature pid
                 hLocal conditions.2 hSignatureSymbol
               exact ⟨.final, hEdge, hRelated⟩
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    rcases relationMembership_progress_cases signature pid hRelated with
+    rcases NewCorrespondence.relationMembership_progress_cases signature pid
+      hRelated with
       hRoot | hFinal
     · rcases hRoot with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_progress_edge_cases signature pid hEdge
+      have hCases := NewCorrespondence.compileType_progress_edge_cases
+        signature pid hEdge
       rcases hCases with hProgress | hIdle
       · rcases hProgress with ⟨_hSource, hTarget, hLabel, hCurrent,
           hFuture⟩
@@ -493,12 +526,14 @@ theorem correspondence_progress_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature (.progress pid)).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_progress_cases signature pid
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.progress env pid hWellFormed,
           TypeOffers.progress env pid hWellFormed⟩
@@ -507,7 +542,8 @@ theorem correspondence_progress_stepIff
     · rcases hFinal with ⟨hResidual, hState⟩
       subst residual
       subst state
-      have hCases := compileType_progress_edge_cases signature pid hEdge
+      have hCases := NewCorrespondence.compileType_progress_edge_cases
+        signature pid hEdge
       rcases hCases with hProgress | hIdle
       · rcases hProgress with ⟨hSource, _⟩
         simp at hSource
@@ -517,15 +553,137 @@ theorem correspondence_progress_stepIff
         subst current
         subst future
         subst state'
+        have hTargetAccepting :
+            TypeAutomatonState.final ∈
+              (compileType signature (.progress pid)).accepting := by
+          simp [compileType, typeCompilationFuel, compileTypeFuel,
+            finishAutomatonFragment]
         have hResidualTarget : residual' = .skip := by
-          rcases relationMembership_progress_cases signature pid
-              hTargetRelated with hTargetRoot | hTargetFinal
-          · rcases hTargetRoot with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-          · exact hTargetFinal.1
+          exact (helper_h13_final_states_represent_completion signature
+            hTargetRelated).mp hTargetAccepting
         subst residual'
         exact ⟨TypeTransition.skip env ⟨hWellFormed, hClock⟩,
           TypeOffers.skip env ⟨hWellFormed, hClock⟩⟩
+
+/-- Defines the one-step correspondence proposition used by the Lemma 4.5 induction. -/
+def StepIffStatement
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  ∀ {residual residual' : PactType} {state : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
+    relationMembership
+      (buildRelationSet processType (compileType signature processType))
+      residual state →
+    ({ environment := env, label := label, offers := offers } :
+        TypeAutomatonSymbol) ∈ (compileType signature processType).alphabet →
+    (DecoratedTypeTransition env residual label offers residual' ↔
+      ∃ state',
+        (compileType signature processType).HasEdge state env label offers
+          state' ∧
+        relationMembership
+          (buildRelationSet processType (compileType signature processType))
+          residual' state')
+
+/-- Step correspondence for all constructors, arranged as the Lemma 4.5 induction. -/
+theorem correspondence_stepIff
+    (signature : TypeAlphabet) :
+    ∀ processType, StepIffStatement signature processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      cases processType with
+      | message msg dir =>
+          intro residual residual' state env label offers hRelated hSymbol
+          -- Now prove the atomic action base case.
+          exact correspondence_message_stepIff signature msg dir hRelated hSymbol
+      | progress pid =>
+          intro residual residual' state env label offers hRelated hSymbol
+          -- Now prove the progress-marker base case.
+          exact correspondence_progress_stepIff signature pid hRelated hSymbol
+      | tock =>
+          intro residual residual' state env label offers hRelated hSymbol
+          -- Now prove the clock base case.
+          exact correspondence_tock_stepIff signature hRelated hSymbol
+      | skip =>
+          intro residual residual' state env label offers hRelated hSymbol
+          -- Now prove the skip base case.
+          exact correspondence_skip_stepIff signature hRelated hSymbol
+      | choice left right =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hLeftIH : StepIffStatement signature left := by
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+          have hRightIH : StepIffStatement signature right := by
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+          -- Now prove the ordinary-choice inductive case from both child hypotheses.
+          sorry
+      | seq first second =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hFirstIH : StepIffStatement signature first := by
+            have hFirstSize : sizeOf first < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf first) hFirstSize first rfl hRelated hSymbol
+          have hSecondIH : StepIffStatement signature second := by
+            have hSecondSize : sizeOf second < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf second) hSecondSize second rfl hRelated hSymbol
+          -- Now prove the sequencing inductive case from both child hypotheses.
+          sorry
+      | par left right interface =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hLeftIH : StepIffStatement signature left := by
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+          have hRightIH : StepIffStatement signature right := by
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+          -- Now prove the parallel inductive case from both child hypotheses.
+          sorry
+      | var id =>
+          intro residual residual' state env label offers hRelated hSymbol
+          -- Now prove the variable marker case.
+          sorry
+      | recur id body =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hBodyIH : StepIffStatement signature body := by
+            have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf body) hBodySize body rfl hRelated hSymbol
+          -- Now prove the recursion inductive case from the body hypothesis.
+          sorry
+      | fairChoice id left right =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hLeftIH : StepIffStatement signature left := by
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+          have hRightIH : StepIffStatement signature right := by
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+          -- Now prove the fair-choice inductive case from both child hypotheses.
+          sorry
+      | xoffer elseType branches =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hElseIH : StepIffStatement signature elseType := by
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
+          -- Now prove the external-offer inductive case from the else and branch hypotheses.
+          sorry
+      | offer elseType branches =>
+          intro residual residual' state env label offers hRelated hSymbol
+          have hElseIH : StepIffStatement signature elseType := by
+            have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
+          -- Now prove the internal-offer inductive case from the else and branch hypotheses.
+          sorry
 
 end
 

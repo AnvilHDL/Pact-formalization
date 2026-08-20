@@ -4,6 +4,8 @@ namespace Pact
 
 open Classical
 
+namespace NewCorrespondence
+
 noncomputable section
 
 /-- Proves that any exported edge of `compileType` uses a symbol from the signature alphabet. -/
@@ -740,6 +742,6 @@ lemma relationMembership_progress_cases
     (progressRelationShape_successor signature pid)
     (residual, state) hRelated
 
-
 end
+end NewCorrespondence
 end Pact

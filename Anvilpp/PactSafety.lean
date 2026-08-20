@@ -101,33 +101,20 @@ theorem type_automaton_correspondence
         simpa [relation_set, typeAutomaton] using
           buildRelationSet_initial processType typeAutomaton
       initial_mem := by
-        simpa [typeAutomaton] using compileType_initial_mem signature processType
+        have hInitialRelated :
+            relationMembership
+              (buildRelationSet processType (compileType signature processType))
+              processType (compileType signature processType).initial := by
+          simpa using
+            buildRelationSet_initial processType
+              (compileType signature processType)
+        simpa [typeAutomaton] using
+          helper_h12_compiled_state_shape signature hInitialRelated
       stepIff := by
-        cases processType with
-        | message id dir =>
-          intro residual residual' state env label offers hRelated hSymbol
-          simpa [relation_set, typeAutomaton] using
-            correspondence_message_stepIff signature id dir hRelated hSymbol
-        | progress id =>
-          intro residual residual' state env label offers hRelated hSymbol
-          simpa [relation_set, typeAutomaton] using
-            correspondence_progress_stepIff signature id hRelated hSymbol
-        | tock =>
-          intro residual residual' state env label offers hRelated hSymbol
-          simpa [relation_set, typeAutomaton] using
-            correspondence_tock_stepIff signature hRelated hSymbol
-        | skip =>
-          intro residual residual' state env label offers hRelated hSymbol
-          simpa [relation_set, typeAutomaton] using
-            correspondence_skip_stepIff signature hRelated hSymbol
-        | choice left right => sorry
-        | fairChoice left right => sorry
-        | seq first second => sorry
-        | par left itfc right => sorry
-        | recur id body => sorry
-        | var id => sorry
-        | xoffer id dir => sorry
-        | offer id dir => sorry
+        intro residual residual' state env label offers hRelated hSymbol
+        -- Now prove step correspondence by the Lemma 4.5 constructor induction.
+        simpa [relation_set, typeAutomaton] using
+          correspondence_stepIff signature processType hRelated hSymbol
     }⟩
 
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes
