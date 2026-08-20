@@ -50,7 +50,21 @@ theorem conformance_closed_under_refinement
     (hConforms : Conforms process precise)
     (hRefines : Refines precise abstract) :
     Conforms process abstract := by
-  sorry
+    let witness_relation_fun :  Proc → PactType → Prop := fun p τ =>
+      ∃ τ', hConforms.some.relation p τ' ∧ hRefines.some.relation τ' τ
+
+
+    exact ⟨{
+      relation := witness_relation_fun
+      initial := by
+        have hPreciseInitial := hConforms.some.initial
+        have hRefinesInitial := hRefines.some.initial
+        sorry
+      readyReflect := by sorry
+      matchStep := by sorry
+    }
+    ⟩
+
 
 /-- Lemma 4.4, "Soundness of type checking":
 `WFProc(P) ∧ checkdo(P,τ) ⟹ P ⊧ τ`. -/
@@ -58,7 +72,11 @@ theorem type_checking_soundness
     {process : Proc} {claimed : PactType} (hWF : WFProc process)
     (hChecks : DataObliviousChecks process claimed) :
     Conforms process claimed := by
-  sorry
+  have hPreciseConfirms : Conforms process (inferProcess process) := by
+    simpa using inferred_type_soundness hWF
+  have hRefines : Refines (inferProcess process) claimed := by
+    simpa using hChecks
+  simpa using conformance_closed_under_refinement hPreciseConfirms hRefines
 
 /-- Theorem 4.1, "Decidability and complexity of type inference and
 checking": inference and checking are decidable; inference runs in `O(|P|)`
