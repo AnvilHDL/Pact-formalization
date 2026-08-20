@@ -831,6 +831,26 @@ lemma helper_h15_future_offers_agree
     computeFutureOf signature processType state = typeFutureOffers residual := by
   sorry -- TODO(section7): prove by the constructor future-correctness bundle.
 
+/-- Helper Lemma H15, edge form: a public edge carries the target menu after removing its current offer. -/
+lemma helper_h15_edge_future_offers_agree
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      (compileType signature processType).HasEdge source env label
+        (TypeOfferSummary.mk current future) target) :
+    future = typeFutureOffers residual' \ current := by
+  sorry -- TODO(section7): derive from global future agreement and edge resolution.
+
 /-- Helper Lemma H16: erased-step conformance. -/
 lemma helper_h16_erased_step_conformance
     {process process₀ process₁ : Proc} {processType type₀ : PactType}

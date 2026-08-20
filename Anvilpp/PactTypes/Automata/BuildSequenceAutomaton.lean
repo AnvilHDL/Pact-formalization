@@ -55,11 +55,11 @@ theorem accepting_of_mem_sequenceDeleted {left : AutomatonFragment}
     {state : TypeAutomatonState} (hDeleted : state ∈ sequenceDeleted left) :
     state ∈ left.accepting := (mem_sequenceDeleted_iff.mp hDeleted).1
 
-/-- Where a left-child state lands in the sequence carrier: dropped states are
-redirected onto `right`'s entry, every other state keeps its `0`-tag. -/
+/-- Where a left-child edge target lands in the sequence carrier: accepting
+targets enter `right`, while non-accepting targets keep their `0`-tag. -/
 def sequenceRedirect (left right : AutomatonFragment)
     (state : TypeAutomatonState) : TypeAutomatonState :=
-  if state ∈ sequenceDeleted left then childState 1 right.initial
+  if state ∈ left.accepting then childState 1 right.initial
   else childState 0 state
 
 /-- A left-child edge as it appears in the sequence.  Note what is *not*
@@ -82,18 +82,19 @@ def sequenceLeftEdge (left right : AutomatonFragment)
     target := sequenceRedirect left right edge.target }
 
 /-- The one edge family the redirect alone cannot produce: `skip_seq`'s own
-step, `TypeTransition env (.seq .skip right) silent right`, unconditional on
-`env` (unlike `.skip`'s self-loop, which needs an idle environment).  This
+step, `TypeTransition env (.seq .skip right) silent right`, under the same
+non-clock environments as `.skip`'s own self-loop.  This
 only arises when `left`'s own entry is already accepting — provably only
 `left = .skip` itself, since every other constructor keeps its entry and its
 accepting states on structurally disjoint tags — so redirecting `left`'s
 in-edges (which `left = .skip` has none of beyond its own idle self-loops)
-never reaches this transition.  One edge per local environment, matching
-`skip_seq`'s guard exactly. -/
+never reaches this transition.  One edge per non-clock local environment,
+matching `skip_seq`'s guard exactly. -/
 def sequenceEntryBridgeEdges (signature : TypeAlphabet)
     (left right : AutomatonFragment) : Finset PendingAutomatonEdge :=
   if left.initial ∈ left.accepting then
-    signature.localEnvironments.image fun environment =>
+    (signature.localEnvironments.filter fun environment =>
+      environment.clock = false).image fun environment =>
       { source := childState 0 left.initial
         environment := environment
         label := .visible TypeLabel.silent
@@ -151,13 +152,13 @@ The two rewrite lemmas below let downstream proofs avoid ever unfolding the
 targets) so that any property depending solely on
 `environment`/`label`/`current` transfers verbatim from the left child. -/
 
-@[simp] theorem sequenceRedirect_of_mem {left right : AutomatonFragment}
-    {state : TypeAutomatonState} (hDeleted : state ∈ sequenceDeleted left) :
+@[simp] theorem sequenceRedirect_of_accepting {left right : AutomatonFragment}
+    {state : TypeAutomatonState} (hAccepting : state ∈ left.accepting) :
     sequenceRedirect left right state = childState 1 right.initial := by
-  simp [sequenceRedirect, hDeleted]
+  simp [sequenceRedirect, hAccepting]
 
-@[simp] theorem sequenceRedirect_of_not_mem {left right : AutomatonFragment}
-    {state : TypeAutomatonState} (hKept : state ∉ sequenceDeleted left) :
+@[simp] theorem sequenceRedirect_of_not_accepting {left right : AutomatonFragment}
+    {state : TypeAutomatonState} (hKept : state ∉ left.accepting) :
     sequenceRedirect left right state = childState 0 state := by
   simp [sequenceRedirect, hKept]
 
@@ -165,9 +166,9 @@ theorem sequenceRedirect_eq_or (left right : AutomatonFragment)
     (state : TypeAutomatonState) :
     sequenceRedirect left right state = childState 1 right.initial ∨
       sequenceRedirect left right state = childState 0 state := by
-  by_cases hDeleted : state ∈ sequenceDeleted left
-  · exact Or.inl (sequenceRedirect_of_mem hDeleted)
-  · exact Or.inr (sequenceRedirect_of_not_mem hDeleted)
+  by_cases hAccepting : state ∈ left.accepting
+  · exact Or.inl (sequenceRedirect_of_accepting hAccepting)
+  · exact Or.inr (sequenceRedirect_of_not_accepting hAccepting)
 
 @[simp] theorem sequenceLeftEdge_source (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
@@ -205,13 +206,15 @@ theorem sequenceRedirect_mem_states (signature : TypeAlphabet)
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, childStates, childState,
     sequenceRedirect]
-  by_cases hDeleted : state ∈ sequenceDeleted left
-  · rw [if_pos hDeleted]
+  by_cases hAccepting : state ∈ left.accepting
+  · rw [if_pos hAccepting]
     exact Or.inr ⟨right.initial, hRightInitial, rfl⟩
-  · rw [if_neg hDeleted]
+  · rw [if_neg hAccepting]
+    have hKept : state ∉ sequenceDeleted left :=
+      not_mem_sequenceDeleted_of_not_accepting hAccepting
     rcases hState with hStates | hEdges
-    · exact Or.inl (Or.inl ⟨state, Finset.mem_sdiff.mpr ⟨hStates, hDeleted⟩, rfl⟩)
-    · exact Or.inl (Or.inr ⟨state, Finset.mem_sdiff.mpr ⟨hEdges, hDeleted⟩, rfl⟩)
+    · exact Or.inl (Or.inl ⟨state, Finset.mem_sdiff.mpr ⟨hStates, hKept⟩, rfl⟩)
+    · exact Or.inl (Or.inr ⟨state, Finset.mem_sdiff.mpr ⟨hEdges, hKept⟩, rfl⟩)
 
 theorem buildSequenceAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (left right : AutomatonFragment)

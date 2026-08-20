@@ -615,7 +615,131 @@ theorem correspondence_seq_stepIff
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove a `τ1`-step from `hFirstIH` matches
   -- `seq`/`seq_fuse` by its target, and `hSecondIH` handles a right state.
-  sorry
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  constructor
+  · intro hStep
+    rcases relationMembership_seq_cases signature first second hRelated with
+      hLeft | hRight
+    · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated⟩
+      cases hEntry
+      cases decoratedTypeTransition_seq_cases hStep with
+      | step leftTarget childFuture hTarget hNonFinal hChildStep hFuture =>
+          subst residual'
+          subst future
+          have hChildSymbol :
+              TypeAutomatonSymbol.mk env label
+                  (TypeOfferSummary.mk current childFuture) ∈
+                (compileType signature first).alphabet := by
+            change TypeAutomatonSymbol.mk env label
+                (TypeOfferSummary.mk current childFuture) ∈
+              signature.transitionAlphabet
+            exact transitionAlphabet_of_typeOffers_target_subset signature
+              hSignatureSymbol hChildStep.2
+              (typeFutureOffers_subset_sequence_left_sdiff_union
+                leftTarget second current)
+          rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
+            ⟨q', hChildEdge, hChildTargetRelated⟩
+          exact compileType_seq_lift_left_step signature first second
+            hRelated hLeftRelated hChildTargetRelated hNonFinal hChildStep
+            hSignatureSymbol hChildEdge
+      | fuse childFuture hTarget hChildStep hFuture =>
+          subst residual'
+          subst future
+          have hChildSymbol :
+              TypeAutomatonSymbol.mk env label
+                  (TypeOfferSummary.mk current childFuture) ∈
+                (compileType signature first).alphabet := by
+            change TypeAutomatonSymbol.mk env label
+                (TypeOfferSummary.mk current childFuture) ∈
+              signature.transitionAlphabet
+            exact transitionAlphabet_of_typeOffers_target_subset signature
+              hSignatureSymbol hChildStep.2
+              (by simp [typeFutureOffers, typeFutureOffersFuel])
+          rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
+            ⟨q', hChildEdge, hChildTargetRelated⟩
+          exact compileType_seq_lift_left_fuse signature first second
+            hRelated hLeftRelated hChildTargetRelated hChildStep
+            hSignatureSymbol hChildEdge
+    · rcases hRight with ⟨q, hState, hRightRelated⟩
+      change relationMembership (buildRelationSet second
+        (compileType signature second)) residual q at hRightRelated
+      have hState' : state = .child 1 q := by
+        simpa using hState
+      subst state
+      have hChildSymbol :
+          TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+            (compileType signature second).alphabet := by
+        change TypeAutomatonSymbol.mk env label
+            (TypeOfferSummary.mk current future) ∈ signature.transitionAlphabet
+        exact hSignatureSymbol
+      rcases (hSecondIH hRightRelated hChildSymbol).mp hStep with
+        ⟨q', hChildEdge, hChildTargetRelated⟩
+      exact compileType_seq_lift_right_step signature first second hRelated
+        hRightRelated hChildTargetRelated hStep hChildEdge
+  · rintro ⟨state', hEdge, hTargetRelated⟩
+    cases compileType_seq_edge_cases signature first second hRelated hEdge
+        hTargetRelated with
+    | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
+        hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
+        hFuture =>
+        subst residual
+        subst residual'
+        subst state
+        subst state'
+        subst future
+        have hChildSymbol :=
+          NewCorrespondence.compileType_hasEdge_symbol_mem signature first
+            hChildEdge
+        have hChildStep :=
+          (hFirstIH hLeftRelated hChildSymbol).mpr
+            ⟨q', hChildEdge, hLeftTargetRelated⟩
+        exact ⟨TypeTransition.seq env leftResidual leftTarget second label
+            hChildStep.1 hNonFinal,
+          TypeOffers.seq env leftResidual leftTarget second label current
+            childFuture hChildStep.2 hNonFinal⟩
+    | leftFuse leftResidual q q' childFuture hResidual hResidual' hState
+        hLeftRelated hLeftTargetRelated hChildEdge hFuture =>
+        subst residual
+        subst residual'
+        subst state
+        subst future
+        have hChildSymbol :=
+          NewCorrespondence.compileType_hasEdge_symbol_mem signature first
+            hChildEdge
+        have hChildStep :=
+          (hFirstIH hLeftRelated hChildSymbol).mpr
+            ⟨q', hChildEdge, hLeftTargetRelated⟩
+        exact ⟨TypeTransition.seq_fuse env leftResidual second label
+            hChildStep.1,
+          TypeOffers.seq_fuse env leftResidual second label current childFuture
+            hChildStep.2⟩
+    | entryFuse hResidual hResidual' hState hState' hLabel hCurrent hFuture
+        hWellFormed hClock =>
+        subst residual
+        subst residual'
+        subst state
+        subst state'
+        subst label
+        subst current
+        subst future
+        exact ⟨TypeTransition.seq_fuse env .skip second TypeLabel.silent
+            (TypeTransition.skip env ⟨hWellFormed, hClock⟩),
+          by
+            simpa using TypeOffers.seq_fuse env .skip second TypeLabel.silent
+              ∅ ∅ (TypeOffers.skip env ⟨hWellFormed, hClock⟩)⟩
+    | rightStep q q' hState hState' hRightRelated hRightTargetRelated
+        hChildEdge =>
+        subst state
+        subst state'
+        have hChildSymbol :=
+          NewCorrespondence.compileType_hasEdge_symbol_mem signature second
+            hChildEdge
+        exact (hSecondIH hRightRelated hChildSymbol).mpr
+          ⟨q', hChildEdge, hRightTargetRelated⟩
 
 /-- Step correspondence for interleaved parallel composition `τ1 ‖_I τ2`. -/
 theorem correspondence_par_stepIff

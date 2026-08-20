@@ -52,15 +52,16 @@ theorem conformance_closed_under_refinement
     Conforms process abstract := by
     let witness_relation_fun :  Proc → PactType → Prop := fun p τ =>
       ∃ τ', hConforms.some.relation p τ' ∧ hRefines.some.relation τ' τ
-
-
     exact ⟨{
       relation := witness_relation_fun
       initial := by
-        have hPreciseInitial := hConforms.some.initial
-        have hRefinesInitial := hRefines.some.initial
+        have hProcPreciseInitial := hConforms.some.initial
+        have hPreciseAbsRefinesInitial := hRefines.some.initial
+        refine ⟨precise, hProcPreciseInitial, hPreciseAbsRefinesInitial⟩
+      readyReflect := by
+        intro p τ hWitnessEnv hWitnessRel hTypeReady
+        rcases hWitnessRel with ⟨τ', hConformRel, hRefineRel⟩
         sorry
-      readyReflect := by sorry
       matchStep := by sorry
     }
     ⟩
