@@ -1,6 +1,7 @@
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 import Anvilpp.PactTypes.NewCorrespondence.CompileWFHelpers
 import Anvilpp.PactSafetyHelpers
+import Anvilpp.PactAdditionalSafetyHelpers
 
 namespace Pact
 
@@ -583,6 +584,113 @@ def StepIffStatement
           (buildRelationSet processType (compileType signature processType))
           residual' state')
 
+/-- Step correspondence for ordinary binary choice `τ1 + τ2`. -/
+theorem correspondence_choice_stepIff
+    (signature : TypeAlphabet) (left right : PactType)
+    (hLeftIH : StepIffStatement signature left)
+    (hRightIH : StepIffStatement signature right) :
+    StepIffStatement signature (.choice left right) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove the root's selection edges match the
+  -- choice rule, and `hLeftIH`/`hRightIH` handle everything below the root.
+  sorry
+
+/-- Step correspondence for fair binary choice `τ1 ⧺η τ2`. -/
+theorem correspondence_fairChoice_stepIff
+    (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
+    (hLeftIH : StepIffStatement signature left)
+    (hRightIH : StepIffStatement signature right) :
+    StepIffStatement signature (.fairChoice bid left right) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove the same argument as ordinary choice,
+  -- with the root edges reconstructing `fair_left`/`fair_right`.
+  sorry
+
+/-- Step correspondence for sequencing `τ1 ; τ2`. -/
+theorem correspondence_seq_stepIff
+    (signature : TypeAlphabet) (first second : PactType)
+    (hFirstIH : StepIffStatement signature first)
+    (hSecondIH : StepIffStatement signature second) :
+    StepIffStatement signature (.seq first second) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove a `τ1`-step from `hFirstIH` matches
+  -- `seq`/`seq_fuse` by its target, and `hSecondIH` handles a right state.
+  sorry
+
+/-- Step correspondence for interleaved parallel composition `τ1 ‖_I τ2`. -/
+theorem correspondence_par_stepIff
+    (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
+    (hLeftIH : StepIffStatement signature left)
+    (hRightIH : StepIffStatement signature right) :
+    StepIffStatement signature (.par left right interface) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove `hLeftIH`/`hRightIH` give two component
+  -- edges that combine into the matching `par`/`par_fuse` product edge.
+  sorry
+
+/-- Step correspondence for recursion `μX.body`. -/
+theorem correspondence_recur_stepIff
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (hBodyIH : StepIffStatement signature body) :
+    StepIffStatement signature (.recur name body) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove the root's unfolding step matches the
+  -- header edge, and `hBodyIH` transported along substitution handles the
+  -- rest of the body, including a marker turning into a backedge.
+  sorry
+
+/-- Step correspondence for exclusive offer `⨁(τ0,B)`. -/
+theorem correspondence_xoffer_stepIff
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    (hElseIH : StepIffStatement signature elseType)
+    (hBranchesIH :
+      ∀ action branchType, (action, branchType) ∈ branches →
+        StepIffStatement signature branchType) :
+    StepIffStatement signature (.xoffer elseType branches) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- Given this, now we need to prove the root's fire/else/wait edges match
+  -- the three offer rules, and `hElseIH`/`hBranchesIH` handle the rest.
+  sorry
+
+/-- Step correspondence for conjunctive offer `⋀(τ0,B)`. -/
+theorem correspondence_offer_stepIff
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    (hElseIH : StepIffStatement signature elseType) :
+    StepIffStatement signature (.offer elseType branches) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  -- A generated branch commit is a finite parallel product already covered
+  -- by the exclusive-offer/sequence/parallel cases, so a finite induction
+  -- over the branch list gives it a correspondence the way `hElseIH` gives
+  -- `τ0`'s. Given this, now we need to prove the root's fire/else/wait edges
+  -- match the three offer rules.
+  sorry
+
+/-- Step correspondence for an open recursion-variable marker `X`, which never has a real step. -/
+theorem correspondence_var_stepIff
+    (signature : TypeAlphabet) (name : String) :
+    StepIffStatement signature (.var name) := by
+  intro residual residual' state env label offers hRelated hSymbol
+  obtain ⟨hResidual, hState⟩ :=
+    relationMembership_var_cases signature name hRelated
+  subst hResidual
+  subst hState
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label offers ∈ signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  constructor
+  · intro hStep
+    cases hStep.1
+  · rintro ⟨state', hEdge, -⟩
+    rw [compileType_hasEdge_iff_hasResolvedEdge signature (.var name)
+      TypeAutomatonState.root state' env label offers hSignatureSymbol] at hEdge
+    obtain ⟨edge, hPending, -, -, hLabel, -, -, -⟩ := hEdge
+    simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      Finset.mem_image] at hPending
+    obtain ⟨environment, -, rfl⟩ := hPending
+    simp at hLabel
+
 /-- Step correspondence for all constructors, arranged as the Lemma 4.5 induction. -/
 theorem correspondence_stepIff
     (signature : TypeAlphabet) :
@@ -619,7 +727,8 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
           -- Now prove the ordinary-choice inductive case from both child hypotheses.
-          sorry
+          exact correspondence_choice_stepIff signature left right hLeftIH
+            hRightIH hRelated hSymbol
       | seq first second =>
           intro residual residual' state env label offers hRelated hSymbol
           have hFirstIH : StepIffStatement signature first := by
@@ -631,7 +740,8 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf second) hSecondSize second rfl hRelated hSymbol
           -- Now prove the sequencing inductive case from both child hypotheses.
-          sorry
+          exact correspondence_seq_stepIff signature first second hFirstIH
+            hSecondIH hRelated hSymbol
       | par left right interface =>
           intro residual residual' state env label offers hRelated hSymbol
           have hLeftIH : StepIffStatement signature left := by
@@ -643,11 +753,12 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
           -- Now prove the parallel inductive case from both child hypotheses.
-          sorry
+          exact correspondence_par_stepIff signature left right interface
+            hLeftIH hRightIH hRelated hSymbol
       | var id =>
           intro residual residual' state env label offers hRelated hSymbol
           -- Now prove the variable marker case.
-          sorry
+          exact correspondence_var_stepIff signature id hRelated hSymbol
       | recur id body =>
           intro residual residual' state env label offers hRelated hSymbol
           have hBodyIH : StepIffStatement signature body := by
@@ -655,7 +766,8 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf body) hBodySize body rfl hRelated hSymbol
           -- Now prove the recursion inductive case from the body hypothesis.
-          sorry
+          exact correspondence_recur_stepIff signature id body hBodyIH hRelated
+            hSymbol
       | fairChoice id left right =>
           intro residual residual' state env label offers hRelated hSymbol
           have hLeftIH : StepIffStatement signature left := by
@@ -667,23 +779,44 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
           -- Now prove the fair-choice inductive case from both child hypotheses.
-          sorry
+          exact correspondence_fairChoice_stepIff signature id left right
+            hLeftIH hRightIH hRelated hSymbol
       | xoffer elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
           have hElseIH : StepIffStatement signature elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
+          have hBranchesIH :
+              ∀ action branchType, (action, branchType) ∈ branches →
+                StepIffStatement signature branchType := by
+            intro action branchType hMember
+            have hBranchSize : sizeOf branchType < n := by
+              have hEntry : sizeOf (action, branchType) < sizeOf branches :=
+                List.sizeOf_lt_of_mem hMember
+              have hComponent : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              rw [← hSize]
+              simp_wf
+              omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf branchType) hBranchSize branchType rfl hRelated
+              hSymbol
           -- Now prove the external-offer inductive case from the else and branch hypotheses.
-          sorry
+          exact correspondence_xoffer_stepIff signature elseType branches
+            hElseIH hBranchesIH hRelated hSymbol
       | offer elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
           have hElseIH : StepIffStatement signature elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
-          -- Now prove the internal-offer inductive case from the else and branch hypotheses.
-          sorry
+          -- Now prove the internal-offer inductive case from the else
+          -- hypothesis; the per-branch generated-conjunction correspondence
+          -- needs its own finite-branch induction, not this constructor's
+          -- structural one (see `correspondence_offer_stepIff`).
+          exact correspondence_offer_stepIff signature elseType branches
+            hElseIH hRelated hSymbol
 
 end
 

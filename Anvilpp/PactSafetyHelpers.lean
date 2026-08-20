@@ -909,7 +909,22 @@ lemma helper_h22_matching_histories_along_refinement
 /-- Helper Lemma H23: refinement is reflexive. -/
 lemma helper_h23_refinement_refl (processType : PactType) :
     Refines processType processType := by
-  sorry -- TODO(section7): identity relation.
+  refine ⟨{
+    relation := Eq
+    initial := rfl
+    skipIff := ?_
+    availability := ?_
+    response := ?_
+  }⟩
+  · intro left right hRelated
+    subst right
+    simp
+  · intro left right right' env label offers hRelated hStep
+    subst right
+    exact ⟨right', hStep⟩
+  · intro left right left' env label offers hRelated hStep
+    subst right
+    exact ⟨left', hStep, rfl⟩
 
 /-- Helper Lemma H23: refinement is transitive. -/
 lemma helper_h23_refinement_trans
