@@ -17,6 +17,15 @@ theorem decoratedTypeTransition_target_unique
     target = target' := by
   sorry
 
+/-- Proves a built relation set relates each automaton state to at most one residual. -/
+lemma relationMembership_functional
+    (ty : PactType) (auto : TypeAutomaton)
+    {residual residual' : PactType} {state : TypeAutomatonState}
+    (hRelated : relationMembership (buildRelationSet ty auto) residual state)
+    (hRelated' : relationMembership (buildRelationSet ty auto) residual' state) :
+    residual = residual' := by
+  sorry
+
 /-- Proves a step's future offer is contained in the target menu together with its current offer. -/
 theorem typeOffers_future_subset_target_union_current
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
@@ -513,6 +522,17 @@ theorem computeFutureOf_recursion_child
       body).states) :
     computeFutureOf signature whole (.child 0 state) =
       computeFutureOf signature body state := by
+  sorry
+
+/-- Proves H15's future agreement for a recursion-tagged state, substituted for the open variable. -/
+lemma helper_h15_recursion_future_offers_agree
+    (signature : TypeAlphabet) (name : String) (body : PactType)
+    {residual : PactType} {q : TypeAutomatonState}
+    (hRelated :
+      relationMembership (buildRelationSet body (compileType signature body))
+        residual q) :
+    computeFutureOf signature (.recur name body) (.child 0 q) =
+      typeFutureOffers (residual.replaceVar name (.recur name body)) := by
   sorry
 
 /-- Defines the related-state shape for a compiled binary choice: the root represents `whole`, a tagged child state represents its own relation's residual. -/

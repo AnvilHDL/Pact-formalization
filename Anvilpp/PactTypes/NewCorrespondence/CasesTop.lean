@@ -775,7 +775,303 @@ theorem correspondence_recur_stepIff
   -- Given this, now we need to prove the root's unfolding step matches the
   -- header edge, and `hBodyIH` transported along substitution handles the
   -- rest of the body, including a marker turning into a backedge.
-  sorry
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hFuelEq : typeCompilationFuel (.recur name body) = typeCompilationFuel body + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hWhole :
+      compileTypeFuel signature (typeCompilationFuel (.recur name body))
+        (.recur name body) =
+        buildRecursionAutomaton signature name
+          (compileTypeFuel signature (typeCompilationFuel body) body) := by
+    rw [hFuelEq]
+    show buildRecursionAutomaton signature name
+        (compileTypeFuel signature (typeCompilationFuel body) body) =
+      buildRecursionAutomaton signature name
+        (compileTypeFuel signature (typeCompilationFuel body) body)
+    rfl
+  rcases relationMembership_recur_cases signature name body hRelated with
+    hRoot | ⟨q, bodyResidual, hEntryEq, hBodyRelated⟩
+  · -- root case: `residual` represents `μX.body` itself
+    simp only [Prod.mk.injEq] at hRoot
+    obtain ⟨hResidualEq, hStateEq⟩ := hRoot
+    subst hResidualEq; subst hStateEq
+    have hEnvMem : env ∈ signature.localEnvironments :=
+      TypeAlphabet.environments_subset_localEnvironments signature
+        (transitionAlphabet_environment_mem signature hSignatureSymbol)
+    have hHeaderPending :
+        ({ source := TypeAutomatonState.root, environment := env,
+            label := AutomatonConstructionLabel.visible TypeLabel.silent,
+            current := (∅ : Finset BareMessage),
+            future := FutureSpec.at (childState 0
+              (compileTypeFuel signature (typeCompilationFuel body) body).initial) ∅,
+            target := childState 0
+              (compileTypeFuel signature (typeCompilationFuel body) body).initial } :
+          PendingAutomatonEdge) ∈
+          (buildRecursionAutomaton signature name
+            (compileTypeFuel signature (typeCompilationFuel body) body)).edges := by
+      simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_image]
+      exact Or.inl ⟨env, hEnvMem, rfl⟩
+    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hRecurStep : DecoratedTypeTransition env (.recur name body) TypeLabel.silent
+        (TypeOfferSummary.mk ∅ (typeFutureOffers (body.replaceVar name (.recur name body))))
+        (body.replaceVar name (.recur name body)) :=
+      ⟨TypeTransition.recur env name body hWF, TypeOffers.recur env name body hWF⟩
+    constructor
+    · intro hStep
+      obtain ⟨hTrans, hOffers⟩ := hStep
+      generalize hLabelEq : label = actualLabel at hTrans
+      generalize hTargetEq : residual' = actualTarget at hTrans
+      cases hTrans
+      rw [hLabelEq, hTargetEq] at hOffers
+      generalize hCurrentEq : current = actualCurrent at hOffers
+      generalize hFutureEq : future = actualFuture at hOffers
+      cases hOffers
+      have hSignatureSymbol' :
+          TypeAutomatonSymbol.mk env TypeLabel.silent
+              (TypeOfferSummary.mk ∅
+                (typeFutureOffers (body.replaceVar name (.recur name body)))) ∈
+            (compileType signature (.recur name body)).alphabet := by
+        rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+        exact hSignatureSymbol
+      have hEdgeFact :
+          (compileType signature (.recur name body)).HasEdge TypeAutomatonState.root
+            env TypeLabel.silent
+            (TypeOfferSummary.mk ∅
+              (typeFutureOffers (body.replaceVar name (.recur name body))))
+            (.child 0 (compileTypeFuel signature (typeCompilationFuel body)
+              body).initial) := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.recur name body)
+          TypeAutomatonState.root (.child 0 (compileTypeFuel signature
+            (typeCompilationFuel body) body).initial) env TypeLabel.silent
+          (TypeOfferSummary.mk ∅
+            (typeFutureOffers (body.replaceVar name (.recur name body))))
+          hSignatureSymbol']
+        rw [hWhole]
+        refine ⟨_, hHeaderPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+        simp only [childState, Finset.sdiff_empty]
+        exact helper_h15_recursion_future_offers_agree signature name body
+          (buildRelationSet_initial body (compileType signature body))
+      refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel body)
+        body).initial, hEdgeFact, ?_⟩
+      exact relationMembership_of_step_edge_unique (.recur name body)
+        (compileType signature (.recur name body)) hRelated
+        hEdgeFact hRecurStep
+        (fun target hTargetStep =>
+          decoratedTypeTransition_target_unique hTargetStep hRecurStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hSymbolMem := compileType_hasEdge_symbol_mem signature (.recur name body)
+        hEdge
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.recur name body) TypeAutomatonState.root state' env label
+        (TypeOfferSummary.mk current future) hSymbolMem).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_image] at hPendingMem
+      rcases hPendingMem with ⟨environment, hEnvironment, hEq⟩ | ⟨bodyEdge, _, hEq⟩
+      · subst hEq
+        simp only [childState] at hPLabel hPTarget
+        have hLabelEq : label = TypeLabel.silent := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hTargetEq : state' = .child 0
+            (compileTypeFuel signature (typeCompilationFuel body) body).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        rcases relationMembership_recur_cases signature name body hTargetRelated with
+          hRootAgain | ⟨qAgain, bodyResidualAgain, hEntryEqAgain, hBodyRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain)
+            (by simp [childState])
+        · simp only [Prod.mk.injEq] at hEntryEqAgain
+          obtain ⟨hResidualEqAgain, hStateEqAgain⟩ := hEntryEqAgain
+          have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel body) body).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hBodyRelatedAgain
+          have hBodyEq : bodyResidualAgain = body :=
+            relationMembership_functional body (compileType signature body)
+              hBodyRelatedAgain (buildRelationSet_initial body (compileType signature body))
+          rw [hBodyEq] at hResidualEqAgain
+          have hPFuture' : computeFutureOf signature (.recur name body)
+              (childState 0 (compileTypeFuel signature (typeCompilationFuel body)
+                body).initial) \ (∅ : Finset BareMessage) = future := hPFuture
+          have hFutureEq : future =
+              typeFutureOffers (body.replaceVar name (.recur name body)) := by
+            rw [← hPFuture', Finset.sdiff_empty, childState]
+            exact helper_h15_recursion_future_offers_agree signature name body
+              (buildRelationSet_initial body (compileType signature body))
+          have hEnvironmentEq : environment = env := hPEnv
+          rw [hResidualEqAgain, hLabelEq]
+          refine ⟨TypeTransition.recur env name body
+            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment)), ?_⟩
+          rw [hCurrentEq, hFutureEq]
+          exact TypeOffers.recur env name body
+            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment))
+      · exfalso
+        have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
+        rw [← hEq] at hRootSource
+        split at hRootSource <;> simp [childState] at hRootSource
+  · -- body case: `residual` represents `bodyResidual` substituted for the open variable
+    simp only [Prod.mk.injEq] at hEntryEq
+    obtain ⟨hResidualEq, hStateEq⟩ := hEntryEq
+    subst hResidualEq; subst hStateEq
+    have hBodySymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature body).alphabet := by
+      simpa [compileType] using hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨residual0, hResidual'Eq, hBodyStep⟩ :=
+        (decoratedTypeTransition_replaceVar_iff name body bodyResidual).mp hStep
+      obtain ⟨q', hBodyEdge, hBodyTargetRelated⟩ :=
+        (hBodyIH hBodyRelated hBodySymbol).mp hBodyStep
+      have hChildSymbol := compileType_hasEdge_symbol_mem signature body hBodyEdge
+      have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature body
+        q q' env label (TypeOfferSummary.mk current future) hChildSymbol).mp hBodyEdge
+      obtain ⟨nativeEdge, hNativeMem, hNSource, hNEnv, hNLabel, hNCurrent, hNFuture,
+        hNTarget⟩ := hChildResolved
+      have hNotMarker : nativeEdge.label ≠ .variable name := by
+        rw [hNLabel]; simp
+      have hOuterEdge : (compileType signature (.recur name body)).HasEdge
+          (.child 0 q) env label
+          (TypeOfferSummary.mk current future)
+          (.child 0 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.recur name body)
+          (.child 0 q) (.child 0 q') env label
+          (TypeOfferSummary.mk current future)
+          hSymbol]
+        rw [hWhole]
+        refine ⟨childPendingEdge 0 nativeEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_image]
+          exact Or.inr ⟨nativeEdge, hNativeMem, by simp [hNotMarker, childPendingEdge]⟩
+        · simp [childPendingEdge, childState, hNSource]
+        · simp [childPendingEdge, hNEnv]
+        · simp [childPendingEdge, hNLabel]
+        · simp [childPendingEdge, hNCurrent]
+        · cases hSpec : nativeEdge.future with
+          | explicit offers =>
+              simpa [childPendingEdge, childFutureSpec, hSpec] using hNFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel body) body le_rfl nativeEdge hNativeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_recursion_child signature name body (.recur name body)
+                hWhole (by omega) t hStateMem]
+              simpa [childFutureSpec, hSpec] using hNFuture
+        · simp [childPendingEdge, childState, hNTarget]
+      refine ⟨.child 0 q', hOuterEdge, ?_⟩
+      rw [hResidual'Eq] at hStep
+      rw [hResidual'Eq]
+      exact relationMembership_of_step_edge_unique (.recur name body)
+        (compileType signature (.recur name body)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hSymbolMem := compileType_hasEdge_symbol_mem signature (.recur name body) hEdge
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature (.recur name body)
+        (.child 0 q) state' env label (TypeOfferSummary.mk current future) hSymbolMem).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_image] at hPendingMem
+      rcases hPendingMem with ⟨environment, _, hEq⟩ | ⟨bodyEdge, hBodyEdgeMem, hEq⟩
+      · exfalso
+        have hChildSource : pendingEdge.source = .child 0 q := hPSource
+        rw [← hEq] at hChildSource
+        simp [childState] at hChildSource
+      · by_cases hMarker : bodyEdge.label = .variable name
+        · -- Given a marker body edge, we need the same unfolding step the
+          -- root case reconstructs, since the source represents the open
+          -- variable and the compiler installs a backedge for it.
+          simp only [hMarker, if_true] at hEq
+          subst hEq
+          simp only [childState] at hPSource hPTarget
+          have hSourceEq : bodyEdge.source = q := by simpa [childState] using hPSource
+          have hResidualEq : bodyResidual = .var name :=
+            compileTypeFuel_marker_represents_var signature name body hBodyRelated
+              hBodyEdgeMem hSourceEq hMarker
+          have hTargetEq : state' = .child 0
+              (compileTypeFuel signature (typeCompilationFuel body) body).initial := by
+            rw [← hPTarget]
+          rw [hTargetEq] at hTargetRelated
+          rcases relationMembership_recur_cases signature name body hTargetRelated with
+            hRootAgain | ⟨qAgain, bodyResidualAgain, hEntryEqAgain, hBodyRelatedAgain⟩
+          · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+          · simp only [Prod.mk.injEq] at hEntryEqAgain
+            obtain ⟨hResidualEqAgain, hStateEqAgain⟩ := hEntryEqAgain
+            have hQAgainEq : qAgain =
+                (compileTypeFuel signature (typeCompilationFuel body) body).initial := by
+              simpa [childState] using hStateEqAgain.symm
+            rw [hQAgainEq] at hBodyRelatedAgain
+            have hBodyEq : bodyResidualAgain = body :=
+              relationMembership_functional body (compileType signature body)
+                hBodyRelatedAgain (buildRelationSet_initial body (compileType signature body))
+            rw [hBodyEq] at hResidualEqAgain
+            have hLabelEq : label = TypeLabel.silent := by
+              have h := hPLabel; simp [childState] at h; exact h.symm
+            have hCurrentEq : current = ∅ := hPCurrent.symm
+            have hPFuture' : computeFutureOf signature (.recur name body)
+                (childState 0 (compileTypeFuel signature (typeCompilationFuel body)
+                  body).initial) \ (∅ : Finset BareMessage) = future := hPFuture
+            have hFutureEq : future =
+                typeFutureOffers (body.replaceVar name (.recur name body)) := by
+              rw [← hPFuture', Finset.sdiff_empty, childState]
+              exact helper_h15_recursion_future_offers_agree signature name body
+                (buildRelationSet_initial body (compileType signature body))
+            have hEnvMem : env ∈ signature.localEnvironments :=
+              TypeAlphabet.environments_subset_localEnvironments signature
+                (transitionAlphabet_environment_mem signature hSignatureSymbol)
+            have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+            rw [hResidualEqAgain, hLabelEq, hResidualEq]
+            simp only [PactType.replaceVar]
+            rw [hCurrentEq, hFutureEq]
+            exact ⟨TypeTransition.recur env name body hWF, TypeOffers.recur env name body hWF⟩
+        · -- Given a copied non-marker body edge, `hBodyIH` reconstructs the
+          -- child step, and the substitution fact lifts it to the residual.
+          simp only [hMarker, if_false] at hEq
+          subst hEq
+          simp only [childState] at hPSource hPTarget
+          have hSourceEq : bodyEdge.source = q := by simpa [childState] using hPSource
+          have hInnerEdgeMem : (compileType signature body).HasEdge q env label
+              (TypeOfferSummary.mk current future) bodyEdge.target := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature body q bodyEdge.target
+              env label (TypeOfferSummary.mk current future) hBodySymbol]
+            refine ⟨bodyEdge, hBodyEdgeMem, hSourceEq, ?_, ?_, ?_, ?_, rfl⟩
+            · rw [← hPEnv]
+            · rw [← hPLabel]
+            · rw [← hPCurrent]
+            · rw [← hPFuture]
+              cases hSpec : bodyEdge.future with
+              | explicit offers => simp [childFutureSpec, hSpec]
+              | «at» t r =>
+                  have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                    (typeCompilationFuel body) body le_rfl bodyEdge hBodyEdgeMem t r hSpec
+                  simp only [childFutureSpec, hSpec, childState]
+                  rw [computeFutureOf_recursion_child signature name body
+                    (.recur name body) hWhole (by omega) t hStateMem]
+          have hTargetEq : state' = .child 0 bodyEdge.target := by rw [← hPTarget]
+          rw [hTargetEq] at hTargetRelated
+          rcases relationMembership_recur_cases signature name body hTargetRelated with
+            hRootAgain | ⟨qAgain, bodyResidualAgain, hEntryEqAgain, hBodyRelatedAgain⟩
+          · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+          · simp only [Prod.mk.injEq] at hEntryEqAgain
+            obtain ⟨hResidualEqAgain, hStateEqAgain⟩ := hEntryEqAgain
+            have hQAgainEq : qAgain = bodyEdge.target := by
+              simpa [childState] using hStateEqAgain.symm
+            rw [hQAgainEq] at hBodyRelatedAgain
+            have hInnerStep : DecoratedTypeTransition env bodyResidual label
+                (TypeOfferSummary.mk current future) bodyResidualAgain :=
+              (hBodyIH hBodyRelated hBodySymbol).mpr
+                ⟨bodyEdge.target, hInnerEdgeMem, hBodyRelatedAgain⟩
+            rw [hResidualEqAgain]
+            exact (decoratedTypeTransition_replaceVar_iff name body bodyResidual).mpr
+              ⟨bodyResidualAgain, rfl, hInnerStep⟩
 
 /-- Step correspondence for exclusive offer `⨁(τ0,B)`. -/
 theorem correspondence_xoffer_stepIff
