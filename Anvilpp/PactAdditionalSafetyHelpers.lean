@@ -756,17 +756,6 @@ def seqRelationShape
       relationMembership (buildRelationSet right (compileType signature right))
         entry.1 q2)
 
-/-- Proves the initial compiled state only represents the source type. -/
-lemma relationMembership_initial_eq
-    (signature : TypeAlphabet) (processType : PactType)
-    {residual : PactType}
-    (hRelated :
-      relationMembership
-        (buildRelationSet processType (compileType signature processType))
-        residual (compileType signature processType).initial) :
-    residual = processType := by
-  sorry
-
 /-- Proves the sufficient-fuel sequence fragment is the sequence builder applied to the sufficient child fragments. -/
 theorem compileTypeFuel_sequence_eq_build
     (signature : TypeAlphabet) (left right : PactType) :
@@ -1121,14 +1110,13 @@ theorem compileType_seq_lift_left_step
     (hChildEdge :
       (compileType signature left).HasEdge q env label
         (TypeOfferSummary.mk current childFuture) q') :
-    ∃ state',
-      (compileType signature (.seq left right)).HasEdge (.child 0 q) env label
+    (compileType signature (.seq left right)).HasEdge (.child 0 q) env label
         (TypeOfferSummary.mk current
-          (typeFutureOffers (.seq leftTarget right) \ current)) state' ∧
+          (typeFutureOffers (.seq leftTarget right) \ current)) (.child 0 q') ∧
       relationMembership
         (buildRelationSet (.seq left right)
           (compileType signature (.seq left right)))
-        (.seq leftTarget right) state' := by
+        (.seq leftTarget right) (.child 0 q') := by
   have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env label
@@ -1186,7 +1174,7 @@ theorem compileType_seq_lift_left_step
         hNonFinal,
       TypeOffers.seq env leftResidual leftTarget right label current childFuture
         hChildStep.2 hNonFinal⟩
-  refine ⟨.child 0 q', hParentEdge, ?_⟩
+  refine ⟨hParentEdge, ?_⟩
   exact relationMembership_of_step_edge_unique (.seq left right)
     (compileType signature (.seq left right)) hParentSource hParentEdge
     hParentStep
@@ -1221,14 +1209,13 @@ theorem compileType_seq_lift_left_fuse
     (hChildEdge :
       (compileType signature left).HasEdge q env label
         (TypeOfferSummary.mk current childFuture) q') :
-    ∃ state',
-      (compileType signature (.seq left right)).HasEdge (.child 0 q) env label
+    (compileType signature (.seq left right)).HasEdge (.child 0 q) env label
         (TypeOfferSummary.mk current (typeFutureOffers right \ current))
-        state' ∧
+        (.child 1 (compileType signature right).initial) ∧
       relationMembership
         (buildRelationSet (.seq left right)
           (compileType signature (.seq left right)))
-        right state' := by
+        right (.child 1 (compileType signature right).initial) := by
   have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env label
@@ -1281,7 +1268,7 @@ theorem compileType_seq_lift_left_fuse
     ⟨TypeTransition.seq_fuse env leftResidual right label hChildStep.1,
       TypeOffers.seq_fuse env leftResidual right label current childFuture
         hChildStep.2⟩
-  refine ⟨.child 1 (compileType signature right).initial, hParentEdge, ?_⟩
+  refine ⟨hParentEdge, ?_⟩
   exact relationMembership_of_step_edge_unique (.seq left right)
     (compileType signature (.seq left right)) hParentSource hParentEdge
     hParentStep
@@ -1364,9 +1351,32 @@ theorem compileType_seq_lift_right_step
     (fun target hTargetStep =>
       decoratedTypeTransition_target_unique hTargetStep hChildStep)
 
-/-- Proves every related sequence pair has the sequence shape. -/
+/-- Proves an automaton edge's target is uniquely determined by its full decorated symbol. -/
+lemma compileType_hasEdge_target_unique
+    (signature : TypeAlphabet) (processType : PactType)
+    {source target target' : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hEdge : (compileType signature processType).HasEdge source env label offers
+      target)
+    (hEdge' : (compileType signature processType).HasEdge source env label offers
+      target') :
+    target = target' := by
+  sorry
+
+/-- Proves every related sequence pair has the sequence shape, given the forward direction of the left child's own step correspondence. -/
 lemma relationMembership_seq_cases
     (signature : TypeAlphabet) (left right : PactType)
+    (hLeftForward :
+      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
+        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
+        relationMembership (buildRelationSet left (compileType signature left))
+          residual' q1 →
+        (TypeAutomatonSymbol.mk env label offers ∈
+          (compileType signature left).alphabet) →
+        DecoratedTypeTransition env residual' label offers target →
+        ∃ q1', (compileType signature left).HasEdge q1 env label offers q1' ∧
+          relationMembership (buildRelationSet left (compileType signature left))
+            target q1')
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
@@ -1374,11 +1384,208 @@ lemma relationMembership_seq_cases
           (compileType signature (.seq left right)))
         residual state) :
     seqRelationShape signature left right (residual, state) := by
-  sorry
+  have hWhole :
+      compileTypeFuel signature (typeCompilationFuel (.seq left right))
+        (.seq left right) =
+        buildSequenceAutomaton signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right) :=
+    compileTypeFuel_sequence_eq_build signature left right
+  have hInit : (compileType signature (.seq left right)).initial =
+      .child 0 (compileType signature left).initial := by
+    show (compileTypeFuel signature (typeCompilationFuel (.seq left right))
+      (.seq left right)).initial = .child 0 (compileTypeFuel signature
+        (typeCompilationFuel left) left).initial
+    rw [hWhole]
+    simp [buildSequenceAutomaton, finishAutomatonFragment, childState]
+  have hResult :=
+    buildRelationSet_preserves (.seq left right)
+    (compileType signature (.seq left right))
+    (fun entry =>
+      relationMembership
+        (buildRelationSet (.seq left right) (compileType signature (.seq left right)))
+        entry.1 entry.2 ∧
+      seqRelationShape signature left right entry)
+    (by
+      refine ⟨buildRelationSet_initial (.seq left right)
+        (compileType signature (.seq left right)), ?_⟩
+      show seqRelationShape signature left right
+        (.seq left right, (compileType signature (.seq left right)).initial)
+      rw [hInit]
+      exact Or.inl ⟨(compileType signature left).initial, left, rfl,
+        buildRelationSet_initial left (compileType signature left)⟩)
+    (by
+      intro entry hEntryAnd successor hSuccessor
+      obtain ⟨hEntryMem, hEntry⟩ := hEntryAnd
+      have hSuccessorMem :
+          relationMembership
+            (buildRelationSet (.seq left right)
+              (compileType signature (.seq left right))) successor.1 successor.2 :=
+        buildRelationSet_saturated (.seq left right)
+          (compileType signature (.seq left right)) entry hEntryMem hSuccessor
+      refine ⟨hSuccessorMem, ?_⟩
+      rcases relationSuccessors_mem_cases (compileType signature (.seq left right))
+        entry successor hSuccessor with ⟨edge, hEdgeMem, hSource, hTarget, hStep⟩
+      have hSymbolMem := compileType_hasEdge_symbol_mem signature (.seq left right)
+        (show (compileType signature (.seq left right)).HasEdge edge.source
+          edge.symbol.environment edge.symbol.label edge.symbol.offers edge.target
+          from hEdgeMem)
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.seq left right) edge.source edge.target edge.symbol.environment
+        edge.symbol.label edge.symbol.offers hSymbolMem).mp hEdgeMem
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      rcases hEntry with ⟨q1, residualLeft, hEntryEq, hMem⟩ | ⟨q2, hStateEq, hMem⟩
+      · -- entry retains a left state, representing `residualLeft ; right`
+        have hEntry1 : entry.1 = .seq residualLeft right := by rw [hEntryEq]
+        have hEntry2 : entry.2 = .child 0 q1 := by rw [hEntryEq]
+        have hParentSource :
+            relationMembership
+              (buildRelationSet (.seq left right)
+                (compileType signature (.seq left right)))
+              (.seq residualLeft right) (.child 0 q1) := by
+          rw [← hEntry1, ← hEntry2]; exact hEntryMem
+        rw [hEntry1] at hStep
+        cases decoratedTypeTransition_seq_cases hStep with
+        | step leftTarget childFuture hTargetEq' hNonFinal hChildStep hFutureEq =>
+            -- Given a genuine left-child step, we need the left forward
+            -- direction to find the matching left edge and target relation.
+            have hOuterMem :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    edge.symbol.offers ∈ signature.transitionAlphabet := by
+              simpa [compileType] using hSymbolMem
+            have hParentSymbol :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    (TypeOfferSummary.mk edge.symbol.offers.current
+                      (typeFutureOffers (.seq leftTarget right) \
+                        edge.symbol.offers.current)) ∈
+                  signature.transitionAlphabet := by
+              rw [← hFutureEq]; exact hOuterMem
+            have hChildSymbol :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    (TypeOfferSummary.mk edge.symbol.offers.current childFuture) ∈
+                  (compileType signature left).alphabet := by
+              change TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                  (TypeOfferSummary.mk edge.symbol.offers.current childFuture) ∈
+                signature.transitionAlphabet
+              refine transitionAlphabet_of_typeOffers_target_subset signature
+                hOuterMem hChildStep.2 ?_
+              rw [hFutureEq]
+              exact typeFutureOffers_subset_sequence_left_sdiff_union
+                leftTarget right edge.symbol.offers.current
+            obtain ⟨q1', hChildEdge, hChildTargetRelated⟩ :=
+              hLeftForward hMem hChildSymbol hChildStep
+            obtain ⟨hParentEdge, -⟩ :=
+              compileType_seq_lift_left_step signature left right hParentSource hMem
+                hChildTargetRelated hNonFinal hChildStep hParentSymbol hChildEdge
+            have hOuterEdge :
+                (compileType signature (.seq left right)).HasEdge entry.2
+                  edge.symbol.environment edge.symbol.label edge.symbol.offers
+                  successor.2 := by
+              rw [← hSource, hTarget]; exact hEdgeMem
+            have hSuccessorEq : successor.2 = .child 0 q1' := by
+              apply compileType_hasEdge_target_unique signature (.seq left right)
+                hOuterEdge
+              rw [hEntry2, show edge.symbol.offers = TypeOfferSummary.mk
+                edge.symbol.offers.current edge.symbol.offers.future from rfl, hFutureEq]
+              exact hParentEdge
+            exact Or.inl ⟨q1', leftTarget, Prod.ext hTargetEq' hSuccessorEq,
+              hChildTargetRelated⟩
+        | fuse childFuture hTargetEq' hChildStep hFutureEq =>
+            -- Given a fused left-child step, we need the left forward
+            -- direction to find the matching left edge into `skip`.
+            have hOuterMem :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    edge.symbol.offers ∈ signature.transitionAlphabet := by
+              simpa [compileType] using hSymbolMem
+            have hChildSymbol :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    (TypeOfferSummary.mk edge.symbol.offers.current childFuture) ∈
+                  (compileType signature left).alphabet := by
+              change TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                  (TypeOfferSummary.mk edge.symbol.offers.current childFuture) ∈
+                signature.transitionAlphabet
+              exact transitionAlphabet_of_typeOffers_target_subset signature
+                hOuterMem hChildStep.2
+                (by simp [typeFutureOffers, typeFutureOffersFuel])
+            obtain ⟨q1', hChildEdge, hChildTargetRelated⟩ :=
+              hLeftForward hMem hChildSymbol hChildStep
+            have hParentSymbol :
+                TypeAutomatonSymbol.mk edge.symbol.environment edge.symbol.label
+                    (TypeOfferSummary.mk edge.symbol.offers.current
+                      (typeFutureOffers right \ edge.symbol.offers.current)) ∈
+                  signature.transitionAlphabet := by
+              rw [← hFutureEq]; exact hOuterMem
+            obtain ⟨hParentEdge, -⟩ :=
+              compileType_seq_lift_left_fuse signature left right hParentSource hMem
+                hChildTargetRelated hChildStep hParentSymbol hChildEdge
+            have hOuterEdge :
+                (compileType signature (.seq left right)).HasEdge entry.2
+                  edge.symbol.environment edge.symbol.label edge.symbol.offers
+                  successor.2 := by
+              rw [← hSource, hTarget]; exact hEdgeMem
+            have hSuccessorEq : successor.2 = .child 1
+                (compileType signature right).initial := by
+              apply compileType_hasEdge_target_unique signature (.seq left right)
+                hOuterEdge
+              rw [hEntry2, show edge.symbol.offers = TypeOfferSummary.mk
+                edge.symbol.offers.current edge.symbol.offers.future from rfl, hFutureEq]
+              exact hParentEdge
+            exact Or.inr ⟨(compileType signature right).initial, hSuccessorEq,
+              hTargetEq' ▸ buildRelationSet_initial right (compileType signature right)⟩
+      · -- entry is a right state, representing its own relation's residual
+        have hEntry2 : entry.2 = .child 1 q2 := by rw [hStateEq]
+        have hChildSource : pendingEdge.source = .child 1 q2 := by
+          rw [hPSource, hSource, hEntry2]
+        obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+          (buildSequenceAutomaton_outgoing_right signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            q2 pendingEdge).mp ⟨hPendingMem, hChildSource⟩
+        have hInnerEdgeMem : (compileType signature right).HasEdge q2
+            edge.symbol.environment edge.symbol.label edge.symbol.offers
+            childEdge.target := by
+          rw [compileType_hasEdge_iff_hasResolvedEdge signature right q2
+            childEdge.target edge.symbol.environment edge.symbol.label
+            edge.symbol.offers hSymbolMem]
+          refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+          · rw [← hPEnv, hChildEdgeEq]; rfl
+          · rw [← hPLabel, hChildEdgeEq]; rfl
+          · rw [← hPCurrent, hChildEdgeEq]; rfl
+          · rw [← hPFuture, hChildEdgeEq]
+            cases hSpec : childEdge.future with
+            | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+            | «at» t r =>
+                have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                  (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem t r
+                  hSpec
+                simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+                rw [computeFutureOf_sequence_right signature left right t hStateMem]
+        have hTargetEq : successor.2 = .child 1 childEdge.target := by
+          rw [hTarget, ← hPTarget, hChildEdgeEq]; rfl
+        have hInnerMem :=
+          relationMembership_of_step_edge_unique right (compileType signature right)
+            hMem hInnerEdgeMem hStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hStep)
+        exact Or.inr ⟨childEdge.target, hTargetEq, hInnerMem⟩)
+  exact (hResult (residual, state) hRelated).2
 
 /-- Proves every public sequence edge leaving a related state belongs to one of the sequence edge families. -/
 theorem compileType_seq_edge_cases
     (signature : TypeAlphabet) (left right : PactType)
+    (hLeftForward :
+      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
+        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
+        relationMembership (buildRelationSet left (compileType signature left))
+          residual' q1 →
+        (TypeAutomatonSymbol.mk env label offers ∈
+          (compileType signature left).alphabet) →
+        DecoratedTypeTransition env residual' label offers target →
+        ∃ q1', (compileType signature left).HasEdge q1 env label offers q1' ∧
+          relationMembership (buildRelationSet left (compileType signature left))
+            target q1')
     {residual residual' : PactType}
     {state state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1398,7 +1605,7 @@ theorem compileType_seq_edge_cases
         residual' state') :
     SeqCompiledEdgeCase signature left right residual residual' state state'
       env label current future := by
-  rcases relationMembership_seq_cases signature left right hRelated with
+  rcases relationMembership_seq_cases signature left right hLeftForward hRelated with
     hLeft | hRight
   · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated⟩
     cases hEntry
@@ -1428,7 +1635,7 @@ theorem compileType_seq_edge_cases
     have hRightTargetRelated :
         relationMembership (buildRelationSet right (compileType signature right))
           residual' childEdge.target := by
-      rcases relationMembership_seq_cases signature left right hTarget with
+      rcases relationMembership_seq_cases signature left right hLeftForward hTarget with
         hTargetLeft | hTargetRight
       · rcases hTargetLeft with ⟨qLeft, leftResidual, hEntry, _hLeftTarget⟩
         have hStateEq := congrArg Prod.snd hEntry

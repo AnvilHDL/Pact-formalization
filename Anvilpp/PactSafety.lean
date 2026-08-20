@@ -61,7 +61,20 @@ theorem conformance_closed_under_refinement
       readyReflect := by
         intro p τ hWitnessEnv hWitnessRel hTypeReady
         rcases hWitnessRel with ⟨τ', hConformRel, hRefineRel⟩
-        sorry
+        have hPreciseReady : TypeReady (eraseEnvironment hWitnessEnv) τ' := by
+          -- Ready abstract type gives us a transition
+          rcases hTypeReady with ⟨label, target, hStep⟩
+          -- H17 decorates that transition
+          obtain ⟨offers, hDecoratedStep⟩ := helper_h17_every_type_step_has_decoration hStep
+          -- Refinement availability transfers the transition
+          -- from τ back to τ'
+          obtain ⟨target', hDecoratedStep'⟩ :=
+            hRefines.some.availability hRefineRel hDecoratedStep
+          -- A decorated transition contains/is backed by an ordinary transition.
+          -- Need to extract it and rebuild TypeReady here.
+          exact ⟨label, target', hDecoratedStep'.1⟩
+        exact hConforms.some.readyReflect
+          hConformRel hPreciseReady
       matchStep := by sorry
     }
     ⟩

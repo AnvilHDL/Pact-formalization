@@ -620,9 +620,22 @@ theorem correspondence_seq_stepIff
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
         signature.transitionAlphabet := by
     simpa [compileType] using hSymbol
+  have hLeftForward :
+      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
+        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
+        relationMembership (buildRelationSet first (compileType signature first))
+          residual' q1 →
+        (TypeAutomatonSymbol.mk env label offers ∈
+          (compileType signature first).alphabet) →
+        DecoratedTypeTransition env residual' label offers target →
+        ∃ q1', (compileType signature first).HasEdge q1 env label offers q1' ∧
+          relationMembership (buildRelationSet first (compileType signature first))
+            target q1' :=
+    fun hMem hSym hStep' => (hFirstIH hMem hSym).mp hStep'
   constructor
   · intro hStep
-    rcases relationMembership_seq_cases signature first second hRelated with
+    rcases relationMembership_seq_cases signature first second
+      (hLeftForward := hLeftForward) hRelated with
       hLeft | hRight
     · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated⟩
       cases hEntry
@@ -643,9 +656,9 @@ theorem correspondence_seq_stepIff
                 leftTarget second current)
           rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
             ⟨q', hChildEdge, hChildTargetRelated⟩
-          exact compileType_seq_lift_left_step signature first second
+          exact ⟨.child 0 q', compileType_seq_lift_left_step signature first second
             hRelated hLeftRelated hChildTargetRelated hNonFinal hChildStep
-            hSignatureSymbol hChildEdge
+            hSignatureSymbol hChildEdge⟩
       | fuse childFuture hTarget hChildStep hFuture =>
           subst residual'
           subst future
@@ -661,9 +674,10 @@ theorem correspondence_seq_stepIff
               (by simp [typeFutureOffers, typeFutureOffersFuel])
           rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
             ⟨q', hChildEdge, hChildTargetRelated⟩
-          exact compileType_seq_lift_left_fuse signature first second
-            hRelated hLeftRelated hChildTargetRelated hChildStep
-            hSignatureSymbol hChildEdge
+          exact ⟨.child 1 (compileType signature second).initial,
+            compileType_seq_lift_left_fuse signature first second
+              hRelated hLeftRelated hChildTargetRelated hChildStep
+              hSignatureSymbol hChildEdge⟩
     · rcases hRight with ⟨q, hState, hRightRelated⟩
       change relationMembership (buildRelationSet second
         (compileType signature second)) residual q at hRightRelated
@@ -681,8 +695,8 @@ theorem correspondence_seq_stepIff
       exact compileType_seq_lift_right_step signature first second hRelated
         hRightRelated hChildTargetRelated hStep hChildEdge
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    cases compileType_seq_edge_cases signature first second hRelated hEdge
-        hTargetRelated with
+    cases compileType_seq_edge_cases signature first second
+        (hLeftForward := hLeftForward) hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
         hFuture =>
