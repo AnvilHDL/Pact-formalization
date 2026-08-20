@@ -1,6 +1,6 @@
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.List.Forall2
-import Anvilpp.PactTypes
+import Anvilpp.PactSafetyStructures
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 
 /-!

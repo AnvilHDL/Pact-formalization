@@ -777,6 +777,80 @@ theorem compileType_skip_has_no_clock_edge
   -- `compileType` unfolding; needs redoing against `resolvedAutomatonEdgesNative`.
   -- .
 
+/-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
+theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      (compileTypeFuel signature fuel processType).initial ∈
+        (compileTypeFuel signature fuel processType).states := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir => simp [compileTypeFuel, finishAutomatonFragment]
+      | progress pid => simp [compileTypeFuel, finishAutomatonFragment]
+      | tock => simp [compileTypeFuel, finishAutomatonFragment]
+      | skip => simp [compileTypeFuel, finishAutomatonFragment]
+      | var name => simp [compileTypeFuel, finishAutomatonFragment]
+      | recur name body =>
+          simp [compileTypeFuel, buildRecursionAutomaton,
+            finishAutomatonFragment]
+      | choice left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | fairChoice bid left right =>
+          simp [compileTypeFuel, buildChoiceAutomaton,
+            finishAutomatonFragment]
+      | seq left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hInitialOrTarget :
+              (compileTypeFuel signature fuel left).initial ∈
+                  (compileTypeFuel signature fuel left).states ∨
+                ∃ edge ∈ (compileTypeFuel signature fuel left).edges,
+                  edge.target =
+                    (compileTypeFuel signature fuel left).initial :=
+            Or.inl (ih left hLeft)
+          simpa [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, childStates, childState,
+            initial_not_mem_sequenceDeleted] using hInitialOrTarget
+      | par left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hLeftMem := ih left hLeft
+          have hRightMem := ih right hRight
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment]
+          apply Finset.mem_biUnion.mpr
+          refine ⟨_, hLeftMem, ?_⟩
+          exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
+      | xoffer elseType branches =>
+          simp [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment]
+      | offer elseType branches =>
+          simp [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment]
+
+/-- The initial state exposed by the public compiler belongs to its state set. -/
+theorem compileType_initial_mem
+    (signature : TypeAlphabet) (processType : PactType) :
+    (compileType signature processType).initial ∈
+      (compileType signature processType).states := by
+  simp only [compileType, Finset.mem_union]
+  left
+  apply compileTypeFuel_initial_mem signature
+  exact typeCompilationFuel_sufficient processType
+
 end
 
 end Pact

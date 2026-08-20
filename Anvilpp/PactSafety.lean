@@ -1,6 +1,7 @@
 import Anvilpp.PactSafetyHelpers
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 import Anvilpp.PactTypes.NewCorrespondence.CasesTop
+import Anvilpp.PactSafetyStructures
 
 /-!
 # Communication safety: the paper's theorem catalog
