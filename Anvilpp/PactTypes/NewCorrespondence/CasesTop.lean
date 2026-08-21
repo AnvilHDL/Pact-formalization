@@ -2605,11 +2605,131 @@ theorem correspondence_xoffer_stepIff
         exact (hBranchesIH action branchType hBranchMem hBranchRelated hBranchSymbol).mpr
           ⟨childEdge.target, hInnerEdgeMem, hBranchRelatedAgain⟩
 
+/-- Step correspondence for the fully-unselected parallel singleton-offer product generated below a conjunctive offer, by induction on the finite branch list. -/
+theorem correspondence_parallelTypeBranches_stepIff
+    (signature : TypeAlphabet) :
+    ∀ (branches : List (BareMessage × PactType)),
+      (∀ action branchType, (action, branchType) ∈ branches →
+        StepIffStatement signature branchType) →
+      StepIffStatement signature (parallelTypeBranches branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _
+      exact correspondence_skip_stepIff signature
+  | cons branch rest ih =>
+      intro hBranchesIH
+      rcases branch with ⟨action, processType⟩
+      have hProcessTypeIH : StepIffStatement signature processType :=
+        hBranchesIH action processType List.mem_cons_self
+      have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
+          StepIffStatement signature b := by
+        intro a b hMem
+        rw [List.mem_singleton] at hMem
+        rw [show b = processType from congrArg Prod.snd hMem]
+        exact hProcessTypeIH
+      have hRestBranchesIH : ∀ a b, (a, b) ∈ rest → StepIffStatement signature b :=
+        fun a b hMem => hBranchesIH a b (List.mem_cons_of_mem _ hMem)
+      cases rest with
+      | nil =>
+          rw [show parallelTypeBranches [(action, processType)] =
+            PactType.xoffer PactType.skip [(action, processType)] by
+              simp [parallelTypeBranches, singletonTypeXOffer]]
+          intro residual residual' state env label offers hRelated hSymbol
+          exact correspondence_xoffer_stepIff signature .skip [(action, processType)]
+            (correspondence_skip_stepIff signature) hSingletonIH hRelated hSymbol
+      | cons next tail =>
+          have hRestIH : StepIffStatement signature (parallelTypeBranches (next :: tail)) :=
+            ih hRestBranchesIH
+          rw [show parallelTypeBranches ((action, processType) :: next :: tail) =
+            .par (PactType.xoffer PactType.skip [(action, processType)])
+              (parallelTypeBranches (next :: tail)) ∅ by
+              simp [parallelTypeBranches, singletonTypeXOffer]]
+          intro residual residual' state env label offers hRelated hSymbol
+          exact correspondence_par_stepIff signature (.xoffer .skip [(action, processType)])
+            (parallelTypeBranches (next :: tail)) ∅
+            (correspondence_xoffer_stepIff signature .skip [(action, processType)]
+              (correspondence_skip_stepIff signature) hSingletonIH)
+            hRestIH hRelated hSymbol
+
+/-- Step correspondence for the parallel singleton-offer product generated for a
+specific enabled branch below a conjunctive offer, by induction on the finite
+branch list, reusing the exclusive-offer/sequence/parallel cases already proved. -/
+theorem correspondence_parallelTypeBranchesSelecting_stepIff
+    (signature : TypeAlphabet) :
+    ∀ (branches : List (BareMessage × PactType)),
+      (∀ action branchType, (action, branchType) ∈ branches →
+        StepIffStatement signature branchType) →
+      ∀ selected ∈ branches,
+        StepIffStatement signature (parallelTypeBranchesSelecting selected branches) := by
+  intro branches
+  induction branches with
+  | nil => intro _ selected hMem; exact absurd hMem List.not_mem_nil
+  | cons branch rest ih =>
+      intro hBranchesIH selected hMem
+      rcases branch with ⟨action, processType⟩
+      have hProcessTypeIH : StepIffStatement signature processType :=
+        hBranchesIH action processType List.mem_cons_self
+      have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
+          StepIffStatement signature b := by
+        intro a b hMem'
+        rw [List.mem_singleton] at hMem'
+        rw [show b = processType from congrArg Prod.snd hMem']
+        exact hProcessTypeIH
+      have hRestBranchesIH : ∀ a b, (a, b) ∈ rest → StepIffStatement signature b :=
+        fun a b hMem' => hBranchesIH a b (List.mem_cons_of_mem _ hMem')
+      rw [List.mem_cons] at hMem
+      cases rest with
+      | nil =>
+          intro residual residual' state env label offers hRelated hSymbol
+          rcases hMem with hEq | hMem
+          · rw [show parallelTypeBranchesSelecting selected [(action, processType)] =
+              .seq (.message action.1 action.2) processType by
+                simp [parallelTypeBranchesSelecting, selectedTypeBranch, ← hEq]] at hRelated ⊢
+            exact correspondence_seq_stepIff signature (.message action.1 action.2) processType
+              (correspondence_message_stepIff signature action.1 action.2)
+              hProcessTypeIH hRelated hSymbol
+          · exact absurd hMem (List.not_mem_nil (a := selected))
+      | cons next tail =>
+          intro residual residual' state env label offers hRelated hSymbol
+          by_cases hSelf : (action, processType) = selected
+          · have hRestPlainIH : StepIffStatement signature (parallelTypeBranches (next :: tail)) :=
+              correspondence_parallelTypeBranches_stepIff signature (next :: tail) hRestBranchesIH
+            rw [show parallelTypeBranchesSelecting selected ((action, processType) :: next :: tail) =
+              .par (.seq (.message action.1 action.2) processType)
+                (parallelTypeBranches (next :: tail)) ∅ by
+                simp [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf]] at hRelated ⊢
+            exact correspondence_par_stepIff signature
+              (.seq (.message action.1 action.2) processType)
+              (parallelTypeBranches (next :: tail)) ∅
+              (correspondence_seq_stepIff signature (.message action.1 action.2) processType
+                (correspondence_message_stepIff signature action.1 action.2)
+                hProcessTypeIH)
+              hRestPlainIH hRelated hSymbol
+          · rcases hMem with hEq | hMemRest
+            · exact absurd hEq.symm hSelf
+            · have hRestIH : StepIffStatement signature
+                  (parallelTypeBranchesSelecting selected (next :: tail)) :=
+                ih hRestBranchesIH selected hMemRest
+              rw [show parallelTypeBranchesSelecting selected ((action, processType) :: next :: tail) =
+                .par (PactType.xoffer PactType.skip [(action, processType)])
+                  (parallelTypeBranchesSelecting selected (next :: tail)) ∅ by
+                  simp [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf]] at hRelated ⊢
+              exact correspondence_par_stepIff signature (.xoffer .skip [(action, processType)])
+                (parallelTypeBranchesSelecting selected (next :: tail)) ∅
+                (correspondence_xoffer_stepIff signature .skip [(action, processType)]
+                  (correspondence_skip_stepIff signature) hSingletonIH)
+                hRestIH hRelated hSymbol
+
+set_option maxHeartbeats 4000000 in
 /-- Step correspondence for conjunctive offer `⋀(τ0,B)`. -/
 theorem correspondence_offer_stepIff
     (signature : TypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (hElseIH : StepIffStatement signature elseType) :
+    (hElseIH : StepIffStatement signature elseType)
+    (hBranchesIH :
+      ∀ action branchType, (action, branchType) ∈ branches →
+        StepIffStatement signature branchType) :
     StepIffStatement signature (.offer elseType branches) := by
   intro residual residual' state env label offers hRelated hSymbol
   -- A generated branch commit is a finite parallel product already covered
@@ -2617,7 +2737,721 @@ theorem correspondence_offer_stepIff
   -- over the branch list gives it a correspondence the way `hElseIH` gives
   -- `τ0`'s. Given this, now we need to prove the root's fire/else/wait edges
   -- match the three offer rules.
-  sorry
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hElseFuelStrict : typeCompilationFuel elseType + 1 ≤
+      typeCompilationFuel (.offer elseType branches) := by
+    simp only [typeCompilationFuel]; omega
+  have hBranchFuelStrict : ∀ selected : BareMessage × PactType,
+      typeCompilationFuel (parallelTypeBranchesSelecting selected branches) + 1 ≤
+        typeCompilationFuel (.offer elseType branches) := by
+    intro selected
+    rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+    simp only [typeCompilationFuel]; omega
+  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+      max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hWhole :
+      compileTypeFuel signature (typeCompilationFuel (.offer elseType branches))
+        (.offer elseType branches) =
+        buildSelectedConjunctiveOfferAutomaton signature branches
+          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+          (branches.map fun selected => (selected.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches))) := by
+    rw [hFuelEq]
+    show buildSelectedConjunctiveOfferAutomaton signature branches
+        (compileTypeFuel signature
+          (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)) elseType)
+        (branches.map fun selected => (selected.1, compileTypeFuel signature
+          (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
+          (parallelTypeBranchesSelecting selected branches))) =
+      buildSelectedConjunctiveOfferAutomaton signature branches
+        (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+        (branches.map fun selected => (selected.1, compileTypeFuel signature
+          (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+          (parallelTypeBranchesSelecting selected branches)))
+    congr 1
+    · exact compileTypeFuel_eq_of_sufficient signature elseType (le_max_left _ _) le_rfl
+    · apply List.map_congr_left
+      intro selected _
+      congr 1
+      exact compileTypeFuel_eq_of_sufficient signature
+        (parallelTypeBranchesSelecting selected branches)
+        (by
+          show typeCompilationFuel (parallelTypeBranchesSelecting selected branches) ≤
+            max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)
+          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+          exact le_max_right _ _)
+        le_rfl
+  rcases relationMembership_offer_cases signature elseType branches hRelated with
+    hRoot | ⟨q, hStateEq, hElseRelated⟩ |
+    ⟨i, selected, q, hSelectedEq, hStateEq, hBranchRelated⟩
+  · -- root case: `residual` represents `⋀(τ0,B)` itself
+    simp only [Prod.mk.injEq] at hRoot
+    obtain ⟨hResidualEq, hStateEq⟩ := hRoot
+    subst hResidualEq; subst hStateEq
+    have hFutureElseEq : computeFutureOf signature (.offer elseType branches)
+        (.child 0 (compileTypeFuel signature (typeCompilationFuel elseType)
+          elseType).initial) = typeFutureOffers elseType := by
+      rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
+        (.offer elseType branches) hWhole hElseFuelStrict
+        (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
+        (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
+          le_rfl)]
+      show computeFutureOf signature elseType (compileType signature elseType).initial =
+        typeFutureOffers elseType
+      exact helper_h15_future_offers_agree signature
+        (buildRelationSet_initial elseType (compileType signature elseType))
+    have hEnvMem : env ∈ signature.localEnvironments :=
+      TypeAlphabet.environments_subset_localEnvironments signature
+        (transitionAlphabet_environment_mem signature hSignatureSymbol)
+    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hRootRelated : relationMembership
+        (buildRelationSet (.offer elseType branches)
+          (compileType signature (.offer elseType branches)))
+        (.offer elseType branches) TypeAutomatonState.root := by
+      simpa using hRelated
+    have hRootFuture : computeFutureOf signature (.offer elseType branches)
+        TypeAutomatonState.root = typeFutureOffers (.offer elseType branches) :=
+      helper_h15_future_offers_agree signature hRootRelated
+    constructor
+    · intro hStep
+      obtain ⟨-, hOffers⟩ := hStep
+      generalize hLabelEq : label = actualLabel at hOffers
+      generalize hTargetEq : residual' = actualTarget at hOffers
+      generalize hCurrentEq : current = actualCurrent at hOffers
+      generalize hFutureEq : future = actualFuture at hOffers
+      cases hOffers with
+      | offer_some _ _ _ enabled hPremise =>
+          obtain ⟨hWF', hEnabledMem, hEnabled⟩ := hPremise
+          obtain ⟨index, hSelectedGet⟩ := List.mem_iff_getElem?.mp hEnabledMem
+          have hFutureBranchEq : computeFutureOf signature (.offer elseType branches)
+              (.child (index + 1) (compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                (parallelTypeBranchesSelecting enabled branches)).initial) =
+              typeFutureOffers (parallelTypeBranchesSelecting enabled branches) := by
+            rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
+              (.offer elseType branches) hWhole index enabled hSelectedGet
+              (hBranchFuelStrict enabled)
+              (compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                (parallelTypeBranchesSelecting enabled branches)).initial
+              (compileTypeFuel_initial_mem signature (typeCompilationFuel
+                (parallelTypeBranchesSelecting enabled branches))
+                (parallelTypeBranchesSelecting enabled branches) le_rfl)]
+            show computeFutureOf signature (parallelTypeBranchesSelecting enabled branches)
+              (compileType signature (parallelTypeBranchesSelecting enabled branches)).initial =
+              typeFutureOffers (parallelTypeBranchesSelecting enabled branches)
+            exact helper_h15_future_offers_agree signature
+              (buildRelationSet_initial (parallelTypeBranchesSelecting enabled branches)
+                (compileType signature (parallelTypeBranchesSelecting enabled branches)))
+          have hSignatureSymbol' :
+              TypeAutomatonSymbol.mk env TypeLabel.silent
+                (TypeOfferSummary.mk ∅ (typeFutureOffers
+                  (parallelTypeBranchesSelecting enabled branches))) ∈
+                signature.transitionAlphabet := by
+            rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+            exact hSignatureSymbol
+          have hEnabledPending :
+              ({ source := TypeAutomatonState.root, environment := env,
+                  label := AutomatonConstructionLabel.visible TypeLabel.silent,
+                  current := (∅ : Finset BareMessage),
+                  future := FutureSpec.at (childState (index + 1) (compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                    (parallelTypeBranchesSelecting enabled branches)).initial) ∅,
+                  target := childState (index + 1) (compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                    (parallelTypeBranchesSelecting enabled branches)).initial } :
+                PendingAutomatonEdge) ∈
+                (buildSelectedConjunctiveOfferAutomaton signature branches
+                  (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+                  (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+                    (parallelTypeBranchesSelecting selected' branches)))).edges := by
+            simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+              Finset.mem_union]
+            refine Or.inl (Or.inl (Or.inr ?_))
+            rw [mem_foldl_union_iff]
+            refine Or.inr ⟨(⟨enabled.1, compileTypeFuel signature
+              (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+              (parallelTypeBranchesSelecting enabled branches)⟩, index), ?_, ?_⟩
+            · exact List.mk_mem_zipIdx_iff_getElem?.mpr
+                ((branches_map_selecting_getElem?_eq_some_iff signature branches index enabled.1
+                  (compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                    (parallelTypeBranchesSelecting enabled branches))).mpr
+                  ⟨enabled.2, hSelectedGet, rfl⟩)
+            · simp only [Finset.mem_image, Finset.mem_filter]
+              exact ⟨env, ⟨hEnvMem, hEnabled⟩, rfl⟩
+          have hEdgeFact : (compileType signature (.offer elseType branches)).HasEdge
+              TypeAutomatonState.root env TypeLabel.silent
+              (TypeOfferSummary.mk ∅ (typeFutureOffers
+                (parallelTypeBranchesSelecting enabled branches)))
+              (.child (index + 1) (compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                (parallelTypeBranchesSelecting enabled branches)).initial) := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer elseType branches)
+              TypeAutomatonState.root (.child (index + 1) (compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+                (parallelTypeBranchesSelecting enabled branches)).initial) env TypeLabel.silent
+              (TypeOfferSummary.mk ∅ (typeFutureOffers
+                (parallelTypeBranchesSelecting enabled branches))) hSignatureSymbol']
+            rw [hWhole]
+            refine ⟨_, hEnabledPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            simpa [childState] using hFutureBranchEq
+          have hEnabledStep : DecoratedTypeTransition env (.offer elseType branches)
+              TypeLabel.silent (TypeOfferSummary.mk ∅ (typeFutureOffers
+                (parallelTypeBranchesSelecting enabled branches)))
+              (parallelTypeBranchesSelecting enabled branches) :=
+            ⟨TypeTransition.offer_some env elseType branches enabled
+              ⟨hWF, hEnabledMem, hEnabled⟩,
+              TypeOffers.offer_some env elseType branches enabled
+                ⟨hWF, hEnabledMem, hEnabled⟩⟩
+          refine ⟨.child (index + 1) (compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
+            (parallelTypeBranchesSelecting enabled branches)).initial, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.offer elseType branches)
+            (compileType signature (.offer elseType branches)) hRelated hEdgeFact hEnabledStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hEnabledStep)
+      | offer_else _ _ _ hPremise =>
+          obtain ⟨hWF', hNoImmediate, hResolvedNeeds⟩ := hPremise
+          have hSignatureSymbol' :
+              TypeAutomatonSymbol.mk env TypeLabel.silent
+                (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType)) ∈
+                signature.transitionAlphabet := by
+            rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+            exact hSignatureSymbol
+          have hElsePending :
+              ({ source := TypeAutomatonState.root, environment := env,
+                  label := AutomatonConstructionLabel.visible TypeLabel.silent,
+                  current := typeBranchActions branches,
+                  future := FutureSpec.at (childState 0 (compileTypeFuel signature
+                    (typeCompilationFuel elseType) elseType).initial) ∅,
+                  target := childState 0 (compileTypeFuel signature
+                    (typeCompilationFuel elseType) elseType).initial } :
+                PendingAutomatonEdge) ∈
+                (buildSelectedConjunctiveOfferAutomaton signature branches
+                  (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+                  (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+                    (parallelTypeBranchesSelecting selected' branches)))).edges := by
+            simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+              Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+            exact Or.inr ⟨env, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
+          have hEdgeFact : (compileType signature (.offer elseType branches)).HasEdge
+              TypeAutomatonState.root env TypeLabel.silent
+              (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType))
+              (.child 0 (compileTypeFuel signature (typeCompilationFuel elseType)
+                elseType).initial) := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer elseType branches)
+              TypeAutomatonState.root (.child 0 (compileTypeFuel signature
+                (typeCompilationFuel elseType) elseType).initial) env TypeLabel.silent
+              (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType))
+              hSignatureSymbol']
+            rw [hWhole]
+            refine ⟨_, hElsePending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            simpa [childState] using hFutureElseEq
+          have hElseStep : DecoratedTypeTransition env (.offer elseType branches)
+              TypeLabel.silent (TypeOfferSummary.mk (typeBranchActions branches)
+                (typeFutureOffers elseType)) elseType :=
+            ⟨TypeTransition.offer_else env elseType branches
+              ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
+              TypeOffers.offer_else env elseType branches
+                ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩
+          refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel elseType)
+            elseType).initial, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.offer elseType branches)
+            (compileType signature (.offer elseType branches)) hRelated hEdgeFact hElseStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hElseStep)
+      | offer_wait _ _ _ hPremise =>
+          obtain ⟨hWF', hNoImmediate, hUnresolved, hClock⟩ := hPremise
+          have hSignatureSymbol' :
+              TypeAutomatonSymbol.mk env TypeLabel.silent
+                (TypeOfferSummary.mk (typeWaitingOffers env branches)
+                  (typeFutureOffers (.offer elseType branches) \
+                    typeWaitingOffers env branches)) ∈ signature.transitionAlphabet := by
+            rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+            exact hSignatureSymbol
+          have hWaitPending :
+              ({ source := TypeAutomatonState.root, environment := env,
+                  label := AutomatonConstructionLabel.visible TypeLabel.silent,
+                  current := typeWaitingOffers env branches,
+                  future := FutureSpec.at TypeAutomatonState.root
+                    (typeWaitingOffers env branches),
+                  target := TypeAutomatonState.root } : PendingAutomatonEdge) ∈
+                (buildSelectedConjunctiveOfferAutomaton signature branches
+                  (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+                  (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+                    (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+                    (parallelTypeBranchesSelecting selected' branches)))).edges := by
+            simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+              Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+            refine Or.inl (Or.inr ⟨env, ⟨hEnvMem, hClock, hNoImmediate, hUnresolved⟩, ?_⟩)
+            simp [typeWaitingOffers]
+          have hEdgeFact : (compileType signature (.offer elseType branches)).HasEdge
+              TypeAutomatonState.root env TypeLabel.silent
+              (TypeOfferSummary.mk (typeWaitingOffers env branches)
+                (typeFutureOffers (.offer elseType branches) \
+                  typeWaitingOffers env branches)) TypeAutomatonState.root := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer elseType branches)
+              TypeAutomatonState.root TypeAutomatonState.root env TypeLabel.silent
+              (TypeOfferSummary.mk (typeWaitingOffers env branches)
+                (typeFutureOffers (.offer elseType branches) \
+                  typeWaitingOffers env branches)) hSignatureSymbol']
+            rw [hWhole]
+            refine ⟨_, hWaitPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            show computeFutureOf signature (.offer elseType branches) TypeAutomatonState.root \
+              typeWaitingOffers env branches = typeFutureOffers (.offer elseType branches) \
+                typeWaitingOffers env branches
+            rw [hRootFuture]
+          have hWaitStep : DecoratedTypeTransition env (.offer elseType branches)
+              TypeLabel.silent (TypeOfferSummary.mk (typeWaitingOffers env branches)
+                (typeFutureOffers (.offer elseType branches) \
+                  typeWaitingOffers env branches)) (.offer elseType branches) :=
+            ⟨TypeTransition.offer_wait env elseType branches
+              ⟨hWF, hNoImmediate, hUnresolved, hClock⟩,
+              TypeOffers.offer_wait env elseType branches
+                ⟨hWF, hNoImmediate, hUnresolved, hClock⟩⟩
+          refine ⟨TypeAutomatonState.root, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.offer elseType branches)
+            (compileType signature (.offer elseType branches)) hRelated hEdgeFact hWaitStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hWaitStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.offer elseType branches) TypeAutomatonState.root state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.offer elseType branches) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
+      simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union] at hPendingMem
+      rcases hPendingMem with ((((hElse | hIndexed) | hEnabledFamily) | hWait) | hResolved2)
+      · exfalso
+        simp only [childPendingEdges, Finset.mem_image] at hElse
+        obtain ⟨childEdge, _, hEq⟩ := hElse
+        rw [← hEq] at hRootSource
+        simp [childPendingEdge, childState] at hRootSource
+      · exfalso
+        rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+        rcases hIndexed with hEmpty | ⟨indexed, _, hNewEdge⟩
+        · simp at hEmpty
+        · simp only [childPendingEdges, Finset.mem_image] at hNewEdge
+          obtain ⟨childEdge, _, hEq⟩ := hNewEdge
+          rw [← hEq] at hRootSource
+          simp [childPendingEdge, childState] at hRootSource
+      · -- fire family: reconstructs `offer_some`
+        rw [mem_foldl_union_iff] at hEnabledFamily
+        rcases hEnabledFamily with hEmpty | ⟨indexed, hIndexedEntry, hNewEdge⟩
+        · simp at hEmpty
+        · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+          obtain ⟨⟨branchAction, automaton⟩, index⟩ := indexed
+          rcases hNewEdge with ⟨environment, ⟨hEnvMem, hEnabled⟩, rfl⟩
+          have hEnvEq : environment = env := hPEnv
+          subst environment
+          have hIndexedGet :
+              (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+                (parallelTypeBranchesSelecting selected' branches)))[index]? =
+                some (branchAction, automaton) :=
+            List.mk_mem_zipIdx_iff_getElem?.mp hIndexedEntry
+          obtain ⟨branchType', hSelectedGet, hAutEq⟩ :=
+            (branches_map_selecting_getElem?_eq_some_iff signature branches index branchAction
+              automaton).mp hIndexedGet
+          have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+          have hEnabledMem : (branchAction, branchType') ∈ branches :=
+            List.mem_iff_getElem?.mpr ⟨index, hSelectedGet⟩
+          simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+          have hLabelEq : label = TypeLabel.silent := by
+            have h := hPLabel; simp at h; exact h.symm
+          have hCurrentEq : current = ∅ := hPCurrent.symm
+          have hTargetEq : state' = .child (index + 1)
+              (compileTypeFuel signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting (branchAction, branchType')
+                  branches))
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial := by
+            rw [← hPTarget, ← hAutEq]
+          rw [hTargetEq] at hTargetRelated
+          have hFutureEq : future =
+              typeFutureOffers (parallelTypeBranchesSelecting
+                (branchAction, branchType') branches) := by
+            rw [← hPFuture, Finset.sdiff_empty, ← hAutEq]
+            rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
+              (.offer elseType branches) hWhole index (branchAction, branchType') hSelectedGet
+              (hBranchFuelStrict (branchAction, branchType'))
+              (compileTypeFuel signature (typeCompilationFuel
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches))
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial
+              (compileTypeFuel_initial_mem signature (typeCompilationFuel
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches))
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches) le_rfl)]
+            show computeFutureOf signature
+              (parallelTypeBranchesSelecting (branchAction, branchType') branches)
+              (compileType signature
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial =
+              typeFutureOffers (parallelTypeBranchesSelecting
+                (branchAction, branchType') branches)
+            exact helper_h15_future_offers_agree signature
+              (buildRelationSet_initial
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches)
+                (compileType signature
+                  (parallelTypeBranchesSelecting (branchAction, branchType') branches)))
+          rcases relationMembership_offer_cases signature elseType branches hTargetRelated
+            with hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
+              ⟨iAgain, selectedAgain, qAgain, hSelectedEqAgain, hStateEqAgain,
+                hBranchRelatedAgain⟩
+          · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+          · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) =
+              index + 1) (by omega)
+          · have hSndEq : (TypeAutomatonState.child (iAgain + 1) qAgain) =
+                .child (index + 1) (compileTypeFuel signature (typeCompilationFuel
+                  (parallelTypeBranchesSelecting (branchAction, branchType') branches))
+                  (parallelTypeBranchesSelecting (branchAction, branchType')
+                    branches)).initial := by
+              simpa [childState] using hStateEqAgain.symm
+            injection hSndEq with hIEq hQEq
+            have hIAgainEq : iAgain = index := by omega
+            subst hIAgainEq
+            have hPairEq : selectedAgain = (branchAction, branchType') := by
+              have h := hSelectedEqAgain.symm.trans hSelectedGet
+              simpa using h
+            rw [hPairEq, hQEq] at hBranchRelatedAgain
+            have hResidualEq : residual' =
+                parallelTypeBranchesSelecting (branchAction, branchType') branches :=
+              relationMembership_functional
+                (parallelTypeBranchesSelecting (branchAction, branchType') branches)
+                (compileType signature
+                  (parallelTypeBranchesSelecting (branchAction, branchType') branches))
+                hBranchRelatedAgain
+                (buildRelationSet_initial
+                  (parallelTypeBranchesSelecting (branchAction, branchType') branches)
+                  (compileType signature
+                    (parallelTypeBranchesSelecting (branchAction, branchType') branches)))
+            rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+            exact ⟨TypeTransition.offer_some env elseType branches (branchAction, branchType')
+              ⟨hWF, hEnabledMem, hEnabled⟩,
+              TypeOffers.offer_some env elseType branches (branchAction, branchType')
+                ⟨hWF, hEnabledMem, hEnabled⟩⟩
+      · -- wait family: reconstructs `offer_wait`
+        simp only [Finset.mem_image, Finset.mem_filter] at hWait
+        rcases hWait with ⟨environment, ⟨hEnvMem, hClock, hNoImmediate, hUnresolved⟩, rfl⟩
+        have hEnvEq : environment = env := hPEnv
+        subst environment
+        have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.silent := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = typeWaitingOffers env branches := hPCurrent.symm
+        have hTargetEq : state' = TypeAutomatonState.root := by rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers (.offer elseType branches) \
+            typeWaitingOffers env branches := by
+          rw [← hPFuture, hRootFuture]
+          rfl
+        rcases relationMembership_offer_cases signature elseType branches hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
+            ⟨iAgain, selectedAgain, qAgain, hSelectedEqAgain, hStateEqAgain,
+              hBranchRelatedAgain⟩
+        · simp only [Prod.mk.injEq] at hRootAgain
+          have hResidualEq : residual' = .offer elseType branches := hRootAgain.1
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.offer_wait env elseType branches
+            ⟨hWF, hNoImmediate, hUnresolved, hClock⟩,
+            TypeOffers.offer_wait env elseType branches
+              ⟨hWF, hNoImmediate, hUnresolved, hClock⟩⟩
+        · exact absurd (by simpa [childState] using hStateEqAgain :
+            (TypeAutomatonState.root : TypeAutomatonState) = .child 0 qAgain) (by simp)
+        · exact absurd (by simpa [childState] using hStateEqAgain :
+            (TypeAutomatonState.root : TypeAutomatonState) = .child (iAgain + 1) qAgain)
+            (by simp)
+      · -- else family: reconstructs `offer_else`
+        simp only [Finset.mem_image, Finset.mem_filter] at hResolved2
+        rcases hResolved2 with ⟨environment, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
+        have hEnvEq : environment = env := hPEnv
+        subst environment
+        have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.silent := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = typeBranchActions branches := hPCurrent.symm
+        have hTargetEq : state' = .child 0
+            (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers elseType := by
+          rw [← hPFuture, Finset.sdiff_empty]
+          exact hFutureElseEq ▸ rfl
+        rcases relationMembership_offer_cases signature elseType branches hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
+            ⟨iAgain, selectedAgain, qAgain, hSelectedEqAgain, hStateEqAgain,
+              hBranchRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+        · have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hElseRelatedAgain
+          have hResidualEq : residual' = elseType :=
+            relationMembership_functional elseType (compileType signature elseType)
+              hElseRelatedAgain (buildRelationSet_initial elseType
+                (compileType signature elseType))
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.offer_else env elseType branches
+            ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
+            TypeOffers.offer_else env elseType branches
+              ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩
+        · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) =
+            iAgain + 1) (by omega)
+  · -- else-child case: `hElseIH` reconstructs the step directly
+    have hState' : state = .child 0 q := by simpa using hStateEq
+    subst state
+    have hElseSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature elseType).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
+        (hElseIH hElseRelated hElseSymbol).mp hStep
+      have hOuterEdge : (compileType signature (.offer elseType branches)).HasEdge
+          (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer elseType branches)
+          (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hElseSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature elseType q q'
+          env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature elseType hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+            Finset.mem_union, childPendingEdges, Finset.mem_image]
+          exact Or.inl (Or.inl (Or.inl (Or.inl ⟨childEdge, hChildEdgeMem, rfl⟩)))
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
+                (.offer elseType branches) hWhole hElseFuelStrict t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child 0 q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.offer elseType branches)
+        (compileType signature (.offer elseType branches)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.offer elseType branches) (.child 0 q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.offer elseType branches) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child 0 q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildSelectedConjunctiveOfferAutomaton_outgoing_else signature branches
+          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+          (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+            (parallelTypeBranchesSelecting selected' branches))) q pendingEdge).mp
+          ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature elseType).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target env
+          label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.offer elseType branches) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
+                (.offer elseType branches) hWhole hElseFuelStrict t hStateMem]
+      have hTargetEq : state' = .child 0 childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_offer_cases signature elseType branches hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
+        ⟨iAgain, selectedAgain, qAgain, hSelectedEqAgain, hStateEqAgain, hBranchRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · have hQAgainEq : qAgain = childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        rw [hQAgainEq] at hElseRelatedAgain
+        exact (hElseIH hElseRelated hElseSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hElseRelatedAgain⟩
+      · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) =
+          iAgain + 1) (by omega)
+  · -- branch-child case: the generated commit type's own correspondence (from
+    -- the exclusive-offer/sequence/parallel cases) reconstructs the step directly
+    have hState' : state = .child (i + 1) q := by simpa using hStateEq
+    subst state
+    have hSelectedMem : selected ∈ branches :=
+      List.mem_iff_getElem?.mpr ⟨i, hSelectedEq⟩
+    have hBranchIH : StepIffStatement signature
+        (parallelTypeBranchesSelecting selected branches) :=
+      correspondence_parallelTypeBranchesSelecting_stepIff signature branches hBranchesIH
+        selected hSelectedMem
+    have hBranchSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈
+        (compileType signature (parallelTypeBranchesSelecting selected branches)).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
+        (hBranchIH hBranchRelated hBranchSymbol).mp hStep
+      have hAutomataGet :
+          (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+            (parallelTypeBranchesSelecting selected' branches)))[i]? =
+            some (selected.1, compileTypeFuel signature (typeCompilationFuel
+              (parallelTypeBranchesSelecting selected branches))
+              (parallelTypeBranchesSelecting selected branches)) := by
+        rw [List.getElem?_map, hSelectedEq]
+        rfl
+      have hOuterEdge : (compileType signature (.offer elseType branches)).HasEdge
+          (.child (i + 1) q) env label (TypeOfferSummary.mk current future)
+          (.child (i + 1) q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer elseType branches)
+          (.child (i + 1) q) (.child (i + 1) q') env label
+          (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hBranchSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+          (parallelTypeBranchesSelecting selected branches)
+          q q' env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature
+            (parallelTypeBranchesSelecting selected branches) hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge (i + 1) childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+            Finset.mem_union]
+          refine Or.inl (Or.inl (Or.inl (Or.inr ?_)))
+          rw [indexedFragmentEdges, mem_foldl_union_iff]
+          refine Or.inr ⟨(⟨selected.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches)⟩, i), ?_, ?_⟩
+          · exact List.mk_mem_zipIdx_iff_getElem?.mpr hAutomataGet
+          · simp only [childPendingEdges, Finset.mem_image]
+            exact ⟨childEdge, hChildEdgeMem, rfl⟩
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+                (parallelTypeBranchesSelecting selected branches) le_rfl childEdge hChildEdgeMem
+                t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
+                (.offer elseType branches) hWhole i selected hSelectedEq
+                (hBranchFuelStrict selected) t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child (i + 1) q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.offer elseType branches)
+        (compileType signature (.offer elseType branches)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hAutomataGet :
+          (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+            (parallelTypeBranchesSelecting selected' branches)))[i]? =
+            some (selected.1, compileTypeFuel signature (typeCompilationFuel
+              (parallelTypeBranchesSelecting selected branches))
+              (parallelTypeBranchesSelecting selected branches)) := by
+        rw [List.getElem?_map, hSelectedEq]
+        rfl
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.offer elseType branches) (.child (i + 1) q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.offer elseType branches) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child (i + 1) q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildSelectedConjunctiveOfferAutomaton_outgoing_branch signature branches
+          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+          (branches.map fun selected' => (selected'.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
+            (parallelTypeBranchesSelecting selected' branches)))
+          i selected.1 (compileTypeFuel signature (typeCompilationFuel
+            (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches))
+          hAutomataGet q pendingEdge).mp ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature
+          (parallelTypeBranchesSelecting selected branches)).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature
+          (parallelTypeBranchesSelecting selected branches) q childEdge.target
+          env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.offer elseType branches) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+                (parallelTypeBranchesSelecting selected branches) le_rfl childEdge hChildEdgeMem
+                t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
+                (.offer elseType branches) hWhole i selected hSelectedEq
+                (hBranchFuelStrict selected) t hStateMem]
+      have hTargetEq : state' = .child (i + 1) childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_offer_cases signature elseType branches hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
+        ⟨iAgain, selectedAgain, qAgain, hSelectedEqAgain, hStateEqAgain, hBranchRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) =
+          i + 1) (by omega)
+      · have hSndEq : (TypeAutomatonState.child (iAgain + 1) qAgain) =
+            .child (i + 1) childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        injection hSndEq with hIEq hQEq
+        have hIAgainEq : iAgain = i := by omega
+        subst hIAgainEq
+        have hPairEq : selectedAgain = selected := by
+          have h := hSelectedEqAgain.symm.trans hSelectedEq
+          simpa using h
+        rw [hPairEq, hQEq] at hBranchRelatedAgain
+        exact (hBranchIH hBranchRelated hBranchSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hBranchRelatedAgain⟩
 
 /-- Step correspondence for an open recursion-variable marker `X`, which never has a real step. -/
 theorem correspondence_var_stepIff
@@ -2763,12 +3597,27 @@ theorem correspondence_stepIff
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
-          -- Now prove the internal-offer inductive case from the else
-          -- hypothesis; the per-branch generated-conjunction correspondence
-          -- needs its own finite-branch induction, not this constructor's
-          -- structural one (see `correspondence_offer_stepIff`).
+          have hBranchesIH :
+              ∀ action branchType, (action, branchType) ∈ branches →
+                StepIffStatement signature branchType := by
+            intro action branchType hMember
+            have hBranchSize : sizeOf branchType < n := by
+              have hEntry : sizeOf (action, branchType) < sizeOf branches :=
+                List.sizeOf_lt_of_mem hMember
+              have hComponent : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              rw [← hSize]
+              simp_wf
+              omega
+            intro residual residual' state env label offers hRelated hSymbol
+            exact ih (sizeOf branchType) hBranchSize branchType rfl hRelated
+              hSymbol
+          -- Now prove the internal-offer inductive case from the else and
+          -- branch hypotheses; the per-branch generated-conjunction
+          -- correspondence needs its own finite-branch induction, not this
+          -- constructor's structural one (see `correspondence_offer_stepIff`).
           exact correspondence_offer_stepIff signature elseType branches
-            hElseIH hRelated hSymbol
+            hElseIH hBranchesIH hRelated hSymbol
 
 end
 

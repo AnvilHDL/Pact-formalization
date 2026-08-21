@@ -689,6 +689,22 @@ lemma helper_h6_abstraction_skip_iff (process : Proc) :
     inferProcess process = .skip ↔ process = .skip := by
   sorry -- TODO(section7): inspect the abstraction clauses.
 
+
+/-- Helper Lemma H6: abstraction preserves the selected conjunctive-offer
+transformation from the process semantics.  This is the Lean counterpart of
+the paper's `abs(C^P_{B,a_j}) = C^{absB(B)}_{Msg(a_j)}` obligation. -/
+lemma helper_h6_abstraction_offer_transformation_preserved
+    (selected : ChoiceBranch) (branches : List ChoiceBranch) :
+    inferProcess
+        (parallelProcessBranchesSelecting (inferBranch selected) branches) =
+      parallelTypeBranchesSelecting (inferBranch selected)
+        (branches.map inferBranch) := by
+  sorry
+
+-- Need to define the helper lemma h6 for offer transformation.
+-- lemma helper_h6_abstraction_offer_transformation_preserved
+-- For this we have to define or give name to offer transformation structure
+
 /-- Helper Lemma H7: one process step abstracts to one type step. -/
 lemma helper_h7_one_step_abstraction
     {env : Environment} {process target : Proc} {label : Label}
