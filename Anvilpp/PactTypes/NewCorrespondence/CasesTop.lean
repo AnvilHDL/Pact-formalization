@@ -593,7 +593,429 @@ theorem correspondence_choice_stepIff
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove the root's selection edges match the
   -- choice rule, and `hLeftIH`/`hRightIH` handle everything below the root.
-  sorry
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hFuelEq : typeCompilationFuel (.choice left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hWhole :
+      compileTypeFuel signature (typeCompilationFuel (.choice left right))
+        (.choice left right) =
+        buildChoiceAutomaton signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          TypeLabel.silent TypeLabel.silent := by
+    rw [hFuelEq]
+    show buildChoiceAutomaton signature
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+        TypeLabel.silent TypeLabel.silent =
+      buildChoiceAutomaton signature (compileTypeFuel signature
+        (typeCompilationFuel left) left) (compileTypeFuel signature
+        (typeCompilationFuel right) right) TypeLabel.silent TypeLabel.silent
+    rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+      compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+  have hFuelLeft :
+      typeCompilationFuel left + 1 ≤ typeCompilationFuel (.choice left right) := by
+    simp only [typeCompilationFuel]; omega
+  have hFuelRight :
+      typeCompilationFuel right + 1 ≤ typeCompilationFuel (.choice left right) := by
+    simp only [typeCompilationFuel]; omega
+  rcases relationMembership_choice_cases signature left right hRelated with
+    hRoot | ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
+  · -- root case: `residual` represents `τ1 + τ2` itself
+    simp only [Prod.mk.injEq] at hRoot
+    obtain ⟨hResidualEq, hStateEq⟩ := hRoot
+    subst hResidualEq; subst hStateEq
+    have hFutureLeftEq : computeFutureOf signature (.choice left right)
+        (.child 0 (compileTypeFuel signature (typeCompilationFuel left) left).initial) =
+        typeFutureOffers left := by
+      rw [computeFutureOf_binaryChoice_left signature left right TypeLabel.silent
+        TypeLabel.silent (.choice left right) hWhole hFuelLeft
+        (compileTypeFuel signature (typeCompilationFuel left) left).initial
+        (compileTypeFuel_initial_mem signature (typeCompilationFuel left) left le_rfl)]
+      show computeFutureOf signature left (compileType signature left).initial =
+        typeFutureOffers left
+      exact helper_h15_future_offers_agree signature
+        (buildRelationSet_initial left (compileType signature left))
+    have hFutureRightEq : computeFutureOf signature (.choice left right)
+        (.child 1 (compileTypeFuel signature (typeCompilationFuel right) right).initial) =
+        typeFutureOffers right := by
+      rw [computeFutureOf_binaryChoice_right signature left right TypeLabel.silent
+        TypeLabel.silent (.choice left right) hWhole hFuelRight
+        (compileTypeFuel signature (typeCompilationFuel right) right).initial
+        (compileTypeFuel_initial_mem signature (typeCompilationFuel right) right le_rfl)]
+      show computeFutureOf signature right (compileType signature right).initial =
+        typeFutureOffers right
+      exact helper_h15_future_offers_agree signature
+        (buildRelationSet_initial right (compileType signature right))
+    have hEnvMem : env ∈ signature.localEnvironments :=
+      TypeAlphabet.environments_subset_localEnvironments signature
+        (transitionAlphabet_environment_mem signature hSignatureSymbol)
+    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hLeftPending :
+        ({ source := TypeAutomatonState.root, environment := env,
+            label := AutomatonConstructionLabel.visible TypeLabel.silent,
+            current := (∅ : Finset BareMessage),
+            future := FutureSpec.at (childState 0 (compileTypeFuel signature
+              (typeCompilationFuel left) left).initial) ∅,
+            target := childState 0 (compileTypeFuel signature (typeCompilationFuel left)
+              left).initial } : PendingAutomatonEdge) ∈
+          (buildChoiceAutomaton signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            TypeLabel.silent TypeLabel.silent).edges := by
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inr ⟨env, hEnvMem, Or.inl rfl⟩
+    have hRightPending :
+        ({ source := TypeAutomatonState.root, environment := env,
+            label := AutomatonConstructionLabel.visible TypeLabel.silent,
+            current := (∅ : Finset BareMessage),
+            future := FutureSpec.at (childState 1 (compileTypeFuel signature
+              (typeCompilationFuel right) right).initial) ∅,
+            target := childState 1 (compileTypeFuel signature (typeCompilationFuel right)
+              right).initial } : PendingAutomatonEdge) ∈
+          (buildChoiceAutomaton signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            TypeLabel.silent TypeLabel.silent).edges := by
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inr ⟨env, hEnvMem, Or.inr rfl⟩
+    constructor
+    · intro hStep
+      obtain ⟨-, hOffers⟩ := hStep
+      -- `TypeOffers`'s own constructors already pin the label and target the
+      -- same way `TypeTransition`'s do, so casing on the offers judgment
+      -- alone (with every one of its output positions kept opaque first)
+      -- determines everything without a second, redundant case split.
+      generalize hLabelEq : label = actualLabel at hOffers
+      generalize hTargetEq : residual' = actualTarget at hOffers
+      generalize hCurrentEq : current = actualCurrent at hOffers
+      generalize hFutureEq : future = actualFuture at hOffers
+      cases hOffers with
+      | choice_left _ _ _ _ =>
+        have hSignatureSymbol' :
+            TypeAutomatonSymbol.mk env TypeLabel.silent
+              (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
+              signature.transitionAlphabet := by
+          rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+          exact hSignatureSymbol
+        have hEdgeFact : (compileType signature (.choice left right)).HasEdge
+            TypeAutomatonState.root env TypeLabel.silent
+            (TypeOfferSummary.mk ∅ (typeFutureOffers left))
+            (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
+              left).initial) := by
+          rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice left right)
+            TypeAutomatonState.root (.child 0 (compileTypeFuel signature
+              (typeCompilationFuel left) left).initial) env TypeLabel.silent
+            (TypeOfferSummary.mk ∅ (typeFutureOffers left)) hSignatureSymbol']
+          rw [hWhole]
+          refine ⟨_, hLeftPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+          simpa [childState] using hFutureLeftEq
+        have hChoiceLeftStep : DecoratedTypeTransition env (.choice left right)
+            TypeLabel.silent (TypeOfferSummary.mk ∅ (typeFutureOffers left)) left :=
+          ⟨TypeTransition.choice_left env left right hWF,
+            TypeOffers.choice_left env left right hWF⟩
+        refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel left)
+          left).initial, hEdgeFact, ?_⟩
+        exact relationMembership_of_step_edge_unique (.choice left right)
+          (compileType signature (.choice left right)) hRelated hEdgeFact hChoiceLeftStep
+          (fun target hTargetStep =>
+            decoratedTypeTransition_target_unique hTargetStep hChoiceLeftStep)
+      | choice_right _ _ _ _ =>
+        have hSignatureSymbol' :
+            TypeAutomatonSymbol.mk env TypeLabel.silent
+              (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
+              signature.transitionAlphabet := by
+          rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+          exact hSignatureSymbol
+        have hEdgeFact : (compileType signature (.choice left right)).HasEdge
+            TypeAutomatonState.root env TypeLabel.silent
+            (TypeOfferSummary.mk ∅ (typeFutureOffers right))
+            (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
+              right).initial) := by
+          rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice left right)
+            TypeAutomatonState.root (.child 1 (compileTypeFuel signature
+              (typeCompilationFuel right) right).initial) env TypeLabel.silent
+            (TypeOfferSummary.mk ∅ (typeFutureOffers right)) hSignatureSymbol']
+          rw [hWhole]
+          refine ⟨_, hRightPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+          simpa [childState] using hFutureRightEq
+        have hChoiceRightStep : DecoratedTypeTransition env (.choice left right)
+            TypeLabel.silent (TypeOfferSummary.mk ∅ (typeFutureOffers right)) right :=
+          ⟨TypeTransition.choice_right env left right hWF,
+            TypeOffers.choice_right env left right hWF⟩
+        refine ⟨.child 1 (compileTypeFuel signature (typeCompilationFuel right)
+          right).initial, hEdgeFact, ?_⟩
+        exact relationMembership_of_step_edge_unique (.choice left right)
+          (compileType signature (.choice left right)) hRelated hEdgeFact hChoiceRightStep
+          (fun target hTargetStep =>
+            decoratedTypeTransition_target_unique hTargetStep hChoiceRightStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.choice left right) TypeAutomatonState.root state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.choice left right) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+        Finset.mem_image] at hPendingMem
+      have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
+      rcases hPendingMem with (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
+        ⟨environment, hEnvironment, hEq | hEq⟩
+      · exfalso; rw [← hEq] at hRootSource; simp [childPendingEdge, childState] at hRootSource
+      · exfalso; rw [← hEq] at hRootSource; simp [childPendingEdge, childState] at hRootSource
+      · subst hEq
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.silent := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hTargetEq : state' = .child 0
+            (compileTypeFuel signature (typeCompilationFuel left) left).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers left := by
+          rw [← hPFuture, Finset.sdiff_empty]; exact hFutureLeftEq
+        rcases relationMembership_choice_cases signature left right hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+            ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+        · have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel left) left).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hLeftRelatedAgain
+          have hResidualEq : residual' = left :=
+            relationMembership_functional left (compileType signature left)
+              hLeftRelatedAgain (buildRelationSet_initial left (compileType signature left))
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.choice_left env left right hWF,
+            TypeOffers.choice_left env left right hWF⟩
+        · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
+      · subst hEq
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.silent := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hTargetEq : state' = .child 1
+            (compileTypeFuel signature (typeCompilationFuel right) right).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers right := by
+          rw [← hPFuture, Finset.sdiff_empty]; exact hFutureRightEq
+        rcases relationMembership_choice_cases signature left right hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+            ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+        · exact absurd (by simpa [childState] using hStateEqAgain : (1 : Nat) = 0) (by decide)
+        · have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel right) right).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hRightRelatedAgain
+          have hResidualEq : residual' = right :=
+            relationMembership_functional right (compileType signature right)
+              hRightRelatedAgain
+              (buildRelationSet_initial right (compileType signature right))
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.choice_right env left right hWF,
+            TypeOffers.choice_right env left right hWF⟩
+  · -- left-child case: `hLeftIH` reconstructs the step directly
+    have hState' : state = .child 0 q := by simpa using hStateEq
+    subst state
+    have hLeftSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature left).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ := (hLeftIH hLeftRelated hLeftSymbol).mp hStep
+      have hOuterEdge : (compileType signature (.choice left right)).HasEdge
+          (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice left right)
+          (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hLeftSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature left q q'
+          env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature left hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+            Finset.mem_image]
+          exact Or.inl (Or.inl ⟨childEdge, hChildEdgeMem, rfl⟩)
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel left) left le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_left signature left right
+                TypeLabel.silent TypeLabel.silent
+                (.choice left right) hWhole hFuelLeft t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child 0 q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.choice left right)
+        (compileType signature (.choice left right)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.choice left right) (.child 0 q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.choice left right) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child 0 q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildChoiceAutomaton_outgoing_left signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          TypeLabel.silent TypeLabel.silent q pendingEdge).mp
+          ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature left).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature left q childEdge.target env
+          label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.choice left right) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel left) left le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_left signature left right
+                TypeLabel.silent TypeLabel.silent
+                (.choice left right) hWhole hFuelLeft t hStateMem]
+      have hTargetEq : state' = .child 0 childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_choice_cases signature left right hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+        ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · have hQAgainEq : qAgain = childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        rw [hQAgainEq] at hLeftRelatedAgain
+        exact (hLeftIH hLeftRelated hLeftSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hLeftRelatedAgain⟩
+      · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
+  · -- right-child case: symmetric to the left-child case
+    have hState' : state = .child 1 q := by simpa using hStateEq
+    subst state
+    have hRightSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature right).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
+        (hRightIH hRightRelated hRightSymbol).mp hStep
+      have hOuterEdge : (compileType signature (.choice left right)).HasEdge
+          (.child 1 q) env label (TypeOfferSummary.mk current future) (.child 1 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice left right)
+          (.child 1 q) (.child 1 q') env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hRightSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature right q q'
+          env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature right hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge 1 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+            Finset.mem_image]
+          exact Or.inl (Or.inr ⟨childEdge, hChildEdgeMem, rfl⟩)
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_right signature left right
+                TypeLabel.silent TypeLabel.silent
+                (.choice left right) hWhole hFuelRight t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child 1 q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.choice left right)
+        (compileType signature (.choice left right)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.choice left right) (.child 1 q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.choice left right) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child 1 q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildChoiceAutomaton_outgoing_right signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          TypeLabel.silent TypeLabel.silent q pendingEdge).mp
+          ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature right).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature right q childEdge.target env
+          label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.choice left right) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_right signature left right
+                TypeLabel.silent TypeLabel.silent
+                (.choice left right) hWhole hFuelRight t hStateMem]
+      have hTargetEq : state' = .child 1 childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_choice_cases signature left right hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+        ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · exact absurd (by simpa [childState] using hStateEqAgain : (1 : Nat) = 0) (by decide)
+      · have hQAgainEq : qAgain = childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        rw [hQAgainEq] at hRightRelatedAgain
+        exact (hRightIH hRightRelated hRightSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hRightRelatedAgain⟩
 
 /-- Step correspondence for fair binary choice `τ1 ⧺η τ2`. -/
 theorem correspondence_fairChoice_stepIff
@@ -602,9 +1024,440 @@ theorem correspondence_fairChoice_stepIff
     (hRightIH : StepIffStatement signature right) :
     StepIffStatement signature (.fairChoice bid left right) := by
   intro residual residual' state env label offers hRelated hSymbol
-  -- Given this, now we need to prove the same argument as ordinary choice,
-  -- with the root edges reconstructing `fair_left`/`fair_right`.
-  sorry
+  -- Given this, now we need to prove the root's two selection edges match
+  -- `fair_left`/`fair_right`, and `hLeftIH`/`hRightIH` handle the children.
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hFuelEq : typeCompilationFuel (.fairChoice bid left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hWhole :
+      compileTypeFuel signature (typeCompilationFuel (.fairChoice bid left right))
+        (.fairChoice bid left right) =
+        buildChoiceAutomaton signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
+    rw [hFuelEq]
+    show buildChoiceAutomaton signature
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+        (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
+      buildChoiceAutomaton signature (compileTypeFuel signature
+        (typeCompilationFuel left) left) (compileTypeFuel signature
+        (typeCompilationFuel right) right) (TypeLabel.fair bid true)
+        (TypeLabel.fair bid false)
+    rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+      compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+  have hFuelLeft :
+      typeCompilationFuel left + 1 ≤ typeCompilationFuel (.fairChoice bid left right) := by
+    simp only [typeCompilationFuel]; omega
+  have hFuelRight :
+      typeCompilationFuel right + 1 ≤ typeCompilationFuel (.fairChoice bid left right) := by
+    simp only [typeCompilationFuel]; omega
+  rcases relationMembership_fairChoice_cases signature bid left right hRelated with
+    hRoot | ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
+  · -- root case: `residual` represents `τ1 ⧺η τ2` itself
+    simp only [Prod.mk.injEq] at hRoot
+    obtain ⟨hResidualEq, hStateEq⟩ := hRoot
+    subst hResidualEq; subst hStateEq
+    have hFutureLeftEq : computeFutureOf signature (.fairChoice bid left right)
+        (.child 0 (compileTypeFuel signature (typeCompilationFuel left) left).initial) =
+        typeFutureOffers left := by
+      rw [computeFutureOf_binaryChoice_left signature left right (TypeLabel.fair bid true)
+        (TypeLabel.fair bid false) (.fairChoice bid left right) hWhole hFuelLeft
+        (compileTypeFuel signature (typeCompilationFuel left) left).initial
+        (compileTypeFuel_initial_mem signature (typeCompilationFuel left) left le_rfl)]
+      show computeFutureOf signature left (compileType signature left).initial =
+        typeFutureOffers left
+      exact helper_h15_future_offers_agree signature
+        (buildRelationSet_initial left (compileType signature left))
+    have hFutureRightEq : computeFutureOf signature (.fairChoice bid left right)
+        (.child 1 (compileTypeFuel signature (typeCompilationFuel right) right).initial) =
+        typeFutureOffers right := by
+      rw [computeFutureOf_binaryChoice_right signature left right (TypeLabel.fair bid true)
+        (TypeLabel.fair bid false) (.fairChoice bid left right) hWhole hFuelRight
+        (compileTypeFuel signature (typeCompilationFuel right) right).initial
+        (compileTypeFuel_initial_mem signature (typeCompilationFuel right) right le_rfl)]
+      show computeFutureOf signature right (compileType signature right).initial =
+        typeFutureOffers right
+      exact helper_h15_future_offers_agree signature
+        (buildRelationSet_initial right (compileType signature right))
+    have hEnvMem : env ∈ signature.localEnvironments :=
+      TypeAlphabet.environments_subset_localEnvironments signature
+        (transitionAlphabet_environment_mem signature hSignatureSymbol)
+    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hLeftPending :
+        ({ source := TypeAutomatonState.root, environment := env,
+            label := AutomatonConstructionLabel.visible (TypeLabel.fair bid true),
+            current := (∅ : Finset BareMessage),
+            future := FutureSpec.at (childState 0 (compileTypeFuel signature
+              (typeCompilationFuel left) left).initial) ∅,
+            target := childState 0 (compileTypeFuel signature (typeCompilationFuel left)
+              left).initial } : PendingAutomatonEdge) ∈
+          (buildChoiceAutomaton signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false)).edges := by
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inr ⟨env, hEnvMem, Or.inl rfl⟩
+    have hRightPending :
+        ({ source := TypeAutomatonState.root, environment := env,
+            label := AutomatonConstructionLabel.visible (TypeLabel.fair bid false),
+            current := (∅ : Finset BareMessage),
+            future := FutureSpec.at (childState 1 (compileTypeFuel signature
+              (typeCompilationFuel right) right).initial) ∅,
+            target := childState 1 (compileTypeFuel signature (typeCompilationFuel right)
+              right).initial } : PendingAutomatonEdge) ∈
+          (buildChoiceAutomaton signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false)).edges := by
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+      exact Or.inr ⟨env, hEnvMem, Or.inr rfl⟩
+    constructor
+    · intro hStep
+      obtain ⟨hTrans, hOffers⟩ := hStep
+      generalize hLabelEq : label = actualLabel at hTrans
+      generalize hTargetEq : residual' = actualTarget at hTrans
+      cases hTrans
+      · rw [hLabelEq, hTargetEq] at hOffers
+        generalize hLabel2Eq : TypeLabel.fair bid true = actualLabel2 at hOffers
+        generalize hCurrentEq : current = actualCurrent at hOffers
+        generalize hFutureEq : future = actualFuture at hOffers
+        cases hOffers
+        · have hSignatureSymbol' :
+              TypeAutomatonSymbol.mk env (TypeLabel.fair bid true)
+                (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
+                signature.transitionAlphabet := by
+            rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+            exact hSignatureSymbol
+          have hEdgeFact : (compileType signature (.fairChoice bid left right)).HasEdge
+              TypeAutomatonState.root env (TypeLabel.fair bid true)
+              (TypeOfferSummary.mk ∅ (typeFutureOffers left))
+              (.child 0 (compileTypeFuel signature (typeCompilationFuel left)
+                left).initial) := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice bid left right)
+              TypeAutomatonState.root (.child 0 (compileTypeFuel signature
+                (typeCompilationFuel left) left).initial) env (TypeLabel.fair bid true)
+              (TypeOfferSummary.mk ∅ (typeFutureOffers left)) hSignatureSymbol']
+            rw [hWhole]
+            refine ⟨_, hLeftPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            simpa [childState] using hFutureLeftEq
+          have hFairLeftStep : DecoratedTypeTransition env (.fairChoice bid left right)
+              (TypeLabel.fair bid true) (TypeOfferSummary.mk ∅ (typeFutureOffers left)) left :=
+            ⟨TypeTransition.fair_left env bid left right hWF,
+              TypeOffers.fair_left env bid left right hWF⟩
+          refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel left)
+            left).initial, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.fairChoice bid left right)
+            (compileType signature (.fairChoice bid left right)) hRelated hEdgeFact
+            hFairLeftStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hFairLeftStep)
+        · simp [TypeLabel.fair, Finset.ext_iff] at hLabel2Eq
+      · rw [hLabelEq, hTargetEq] at hOffers
+        generalize hLabel2Eq : TypeLabel.fair bid false = actualLabel2 at hOffers
+        generalize hCurrentEq : current = actualCurrent at hOffers
+        generalize hFutureEq : future = actualFuture at hOffers
+        cases hOffers
+        · simp [TypeLabel.fair, Finset.ext_iff] at hLabel2Eq
+        · have hSignatureSymbol' :
+              TypeAutomatonSymbol.mk env (TypeLabel.fair bid false)
+                (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
+                signature.transitionAlphabet := by
+            rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
+            exact hSignatureSymbol
+          have hEdgeFact : (compileType signature (.fairChoice bid left right)).HasEdge
+              TypeAutomatonState.root env (TypeLabel.fair bid false)
+              (TypeOfferSummary.mk ∅ (typeFutureOffers right))
+              (.child 1 (compileTypeFuel signature (typeCompilationFuel right)
+                right).initial) := by
+            rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice bid left right)
+              TypeAutomatonState.root (.child 1 (compileTypeFuel signature
+                (typeCompilationFuel right) right).initial) env (TypeLabel.fair bid false)
+              (TypeOfferSummary.mk ∅ (typeFutureOffers right)) hSignatureSymbol']
+            rw [hWhole]
+            refine ⟨_, hRightPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            simpa [childState] using hFutureRightEq
+          have hFairRightStep : DecoratedTypeTransition env (.fairChoice bid left right)
+              (TypeLabel.fair bid false) (TypeOfferSummary.mk ∅ (typeFutureOffers right))
+              right :=
+            ⟨TypeTransition.fair_right env bid left right hWF,
+              TypeOffers.fair_right env bid left right hWF⟩
+          refine ⟨.child 1 (compileTypeFuel signature (typeCompilationFuel right)
+            right).initial, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.fairChoice bid left right)
+            (compileType signature (.fairChoice bid left right)) hRelated hEdgeFact
+            hFairRightStep
+            (fun target hTargetStep =>
+              decoratedTypeTransition_target_unique hTargetStep hFairRightStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.fairChoice bid left right) TypeAutomatonState.root state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.fairChoice bid left right) hEdge)).mp
+        hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+        Finset.mem_image] at hPendingMem
+      have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
+      rcases hPendingMem with (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
+        ⟨environment, hEnvironment, hEq | hEq⟩
+      · exfalso; rw [← hEq] at hRootSource; simp [childPendingEdge, childState] at hRootSource
+      · exfalso; rw [← hEq] at hRootSource; simp [childPendingEdge, childState] at hRootSource
+      · subst hEq
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.fair bid true := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hTargetEq : state' = .child 0
+            (compileTypeFuel signature (typeCompilationFuel left) left).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers left := by
+          rw [← hPFuture, Finset.sdiff_empty]; exact hFutureLeftEq
+        rcases relationMembership_fairChoice_cases signature bid left right hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+            ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+        · have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel left) left).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hLeftRelatedAgain
+          have hResidualEq : residual' = left :=
+            relationMembership_functional left (compileType signature left)
+              hLeftRelatedAgain (buildRelationSet_initial left (compileType signature left))
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.fair_left env bid left right hWF,
+            TypeOffers.fair_left env bid left right hWF⟩
+        · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
+      · subst hEq
+        simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
+        have hLabelEq : label = TypeLabel.fair bid false := by
+          have h := hPLabel; simp at h; exact h.symm
+        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hTargetEq : state' = .child 1
+            (compileTypeFuel signature (typeCompilationFuel right) right).initial := by
+          rw [← hPTarget]
+        rw [hTargetEq] at hTargetRelated
+        have hFutureEq : future = typeFutureOffers right := by
+          rw [← hPFuture, Finset.sdiff_empty]; exact hFutureRightEq
+        rcases relationMembership_fairChoice_cases signature bid left right hTargetRelated
+          with hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+            ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+        · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+        · exact absurd (by simpa [childState] using hStateEqAgain : (1 : Nat) = 0) (by decide)
+        · have hQAgainEq : qAgain =
+              (compileTypeFuel signature (typeCompilationFuel right) right).initial := by
+            simpa [childState] using hStateEqAgain.symm
+          rw [hQAgainEq] at hRightRelatedAgain
+          have hResidualEq : residual' = right :=
+            relationMembership_functional right (compileType signature right)
+              hRightRelatedAgain
+              (buildRelationSet_initial right (compileType signature right))
+          rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.fair_right env bid left right hWF,
+            TypeOffers.fair_right env bid left right hWF⟩
+  · -- left-child case: `hLeftIH` reconstructs the step directly
+    have hState' : state = .child 0 q := by simpa using hStateEq
+    subst state
+    have hLeftSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature left).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ := (hLeftIH hLeftRelated hLeftSymbol).mp hStep
+      have hOuterEdge : (compileType signature (.fairChoice bid left right)).HasEdge
+          (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice bid left right)
+          (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hLeftSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature left q q'
+          env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature left hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+            Finset.mem_image]
+          exact Or.inl (Or.inl ⟨childEdge, hChildEdgeMem, rfl⟩)
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel left) left le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_left signature left right
+                (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+                (.fairChoice bid left right) hWhole hFuelLeft t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child 0 q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.fairChoice bid left right)
+        (compileType signature (.fairChoice bid left right)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.fairChoice bid left right) (.child 0 q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.fairChoice bid left right) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child 0 q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildChoiceAutomaton_outgoing_left signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (TypeLabel.fair bid true) (TypeLabel.fair bid false) q pendingEdge).mp
+          ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature left).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature left q childEdge.target env
+          label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.fairChoice bid left right) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel left) left le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_left signature left right
+                (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+                (.fairChoice bid left right) hWhole hFuelLeft t hStateMem]
+      have hTargetEq : state' = .child 0 childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_fairChoice_cases signature bid left right hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+        ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · have hQAgainEq : qAgain = childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        rw [hQAgainEq] at hLeftRelatedAgain
+        exact (hLeftIH hLeftRelated hLeftSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hLeftRelatedAgain⟩
+      · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
+  · -- right-child case: symmetric to the left-child case
+    have hState' : state = .child 1 q := by simpa using hStateEq
+    subst state
+    have hRightSymbol : TypeAutomatonSymbol.mk env label
+        (TypeOfferSummary.mk current future) ∈ (compileType signature right).alphabet := by
+      change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet
+      exact hSignatureSymbol
+    constructor
+    · intro hStep
+      obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
+        (hRightIH hRightRelated hRightSymbol).mp hStep
+      have hOuterEdge : (compileType signature (.fairChoice bid left right)).HasEdge
+          (.child 1 q) env label (TypeOfferSummary.mk current future) (.child 1 q') := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice bid left right)
+          (.child 1 q) (.child 1 q') env label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using hRightSymbol)]
+        rw [hWhole]
+        have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature right q q'
+          env label (TypeOfferSummary.mk current future)
+          (compileType_hasEdge_symbol_mem signature right hChildEdge)).mp hChildEdge
+        obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
+          hCTarget⟩ := hChildResolved
+        refine ⟨childPendingEdge 1 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
+            Finset.mem_image]
+          exact Or.inl (Or.inr ⟨childEdge, hChildEdgeMem, rfl⟩)
+        · simp [childPendingEdge, childState, hCSource]
+        · simp [childPendingEdge, hCEnv]
+        · simp [childPendingEdge, hCLabel]
+        · simp [childPendingEdge, hCCurrent]
+        · cases hSpec : childEdge.future with
+          | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_right signature left right
+                (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+                (.fairChoice bid left right) hWhole hFuelRight t hStateMem]
+              simpa [childFutureSpec, hSpec] using hCFuture
+        · simp [childPendingEdge, childState, hCTarget]
+      refine ⟨.child 1 q', hOuterEdge, ?_⟩
+      exact relationMembership_of_step_edge_unique (.fairChoice bid left right)
+        (compileType signature (.fairChoice bid left right)) hRelated hOuterEdge hStep
+        (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+        (.fairChoice bid left right) (.child 1 q) state' env label
+        (TypeOfferSummary.mk current future)
+        (compileType_hasEdge_symbol_mem signature (.fairChoice bid left right) hEdge)).mp hEdge
+      rw [hWhole] at hResolved
+      obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
+        hPTarget⟩ := hResolved
+      have hChildSource : pendingEdge.source = .child 1 q := hPSource
+      obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
+        (buildChoiceAutomaton_outgoing_right signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (TypeLabel.fair bid true) (TypeLabel.fair bid false) q pendingEdge).mp
+          ⟨hPendingMem, hChildSource⟩
+      have hInnerEdgeMem : (compileType signature right).HasEdge q env label
+          (TypeOfferSummary.mk current future) childEdge.target := by
+        rw [compileType_hasEdge_iff_hasResolvedEdge signature right q childEdge.target env
+          label (TypeOfferSummary.mk current future)
+          (by simpa [compileType] using
+            compileType_hasEdge_symbol_mem signature (.fairChoice bid left right) hEdge)]
+        refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
+        · rw [← hPEnv, hChildEdgeEq]; rfl
+        · rw [← hPLabel, hChildEdgeEq]; rfl
+        · rw [← hPCurrent, hChildEdgeEq]; rfl
+        · rw [← hPFuture, hChildEdgeEq]
+          cases hSpec : childEdge.future with
+          | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
+          | «at» t r =>
+              have hStateMem := compileTypeFuel_futureTargetsInStates signature
+                (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem t r hSpec
+              simp only [childPendingEdge, childFutureSpec, hSpec, childState]
+              rw [computeFutureOf_binaryChoice_right signature left right
+                (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+                (.fairChoice bid left right) hWhole hFuelRight t hStateMem]
+      have hTargetEq : state' = .child 1 childEdge.target := by
+        rw [← hPTarget, hChildEdgeEq]; rfl
+      rw [hTargetEq] at hTargetRelated
+      rcases relationMembership_fairChoice_cases signature bid left right hTargetRelated with
+        hRootAgain | ⟨qAgain, hStateEqAgain, hLeftRelatedAgain⟩ |
+        ⟨qAgain, hStateEqAgain, hRightRelatedAgain⟩
+      · exact absurd (congrArg Prod.snd hRootAgain) (by simp [childState])
+      · exact absurd (by simpa [childState] using hStateEqAgain : (1 : Nat) = 0) (by decide)
+      · have hQAgainEq : qAgain = childEdge.target := by
+          simpa [childState] using hStateEqAgain.symm
+        rw [hQAgainEq] at hRightRelatedAgain
+        exact (hRightIH hRightRelated hRightSymbol).mpr
+          ⟨childEdge.target, hInnerEdgeMem, hRightRelatedAgain⟩
 
 /-- Step correspondence for sequencing `τ1 ; τ2`. -/
 theorem correspondence_seq_stepIff
