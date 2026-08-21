@@ -75,7 +75,20 @@ theorem conformance_closed_under_refinement
           exact ⟨label, target', hDecoratedStep'.1⟩
         exact hConforms.some.readyReflect
           hConformRel hPreciseReady
-      matchStep := by sorry
+      matchStep := by
+        intro p p' τ hWitnessEnv label hConformWitnessRel hProcessStep
+        -- Given p ⊧ τ there exists τ₀ such that p ⊧ τ₀ and τ τ₀ in R
+        rcases hConformWitnessRel with ⟨τₒ , hConformRel, hRefineRel⟩
+        obtain ⟨τ₁, hPrecTypeStep, hPrecConformRel'⟩ :=
+          helper_h9_one_step_conformance_match
+          hConforms.some
+          hConformRel hProcessStep
+        -- Given τ τ₀ in R and τ₀ -> τ₁, then we can use h10 to
+        --  obtain τ' such that τ -> τ' and τ₁ τ' in R
+        obtain ⟨τ', hTypeTrans, hRefineRel'⟩ :=
+          helper_h10_refinement_response_coherence
+            hRefines.some hRefineRel hPrecTypeStep
+        exact ⟨τ', hTypeTrans, ⟨τ₁, hPrecConformRel', hRefineRel'⟩⟩
     }
     ⟩
 
