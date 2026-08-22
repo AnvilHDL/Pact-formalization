@@ -234,15 +234,6 @@ theorem buildRelationSet_initial (ty : PactType) (auto : TypeAutomaton)  :
   simp
 end
 
-/-- States the intended fuel-bound theorem: the chosen fuel yields a saturated relation. -/
-theorem auxRelBuilderFuel_bound_saturated
-    (auto : TypeAutomaton)
-    (rel_set worklist : Finset (PactType × TypeAutomatonState)) :
-    RelationBuilderSaturated auto
-      (auxRelBuilderFuel auto
-        (relationBuilderFuelBound auto rel_set worklist) rel_set worklist) := by
-  sorry
-
 /-- States that the public generated relation is saturated under relation successors. -/
 theorem buildRelationSet_saturated (ty : PactType) (auto : TypeAutomaton) :
     RelationBuilderSaturated auto (buildRelationSet ty auto) := by

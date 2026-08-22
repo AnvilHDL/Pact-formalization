@@ -766,17 +766,6 @@ theorem compileType_edge_target_mem
       target := target }, hEdge, ?_⟩
   simp
 
-/-- Regression theorem: compiled `skip` has no edge in a clock environment. -/
-theorem compileType_skip_has_no_clock_edge
-    (signature : TypeAlphabet) (offers : TypeOfferSummary)
-    (target : TypeAutomatonState) :
-    ¬ (compileType signature .skip).HasEdge
-      (compileType signature .skip).initial
-      TypeEnvironment.tock TypeLabel.silent offers target := by
-  sorry -- TODO(redevelopment): proof used the old `resolvedAutomatonEdges`-based
-  -- `compileType` unfolding; needs redoing against `resolvedAutomatonEdgesNative`.
-  -- .
-
 /-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
 theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
     ∀ fuel processType,

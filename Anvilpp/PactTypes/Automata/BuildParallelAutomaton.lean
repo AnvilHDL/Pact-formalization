@@ -45,10 +45,12 @@ private def restrictReachableFragment (automaton : AutomatonFragment) :
 /--
 Build a synchronized parallel product.
 
-`Q = Q₁ × Q₂ ∪ {q_done}`, the initial state is `(i₁,i₂)`, and accepting
-states are pairs of accepting component states together with `q_done`
-(reused as `.final`, the same dedicated completion marker every atomic base
-case already compiles to). Pairs of synchronizing transition edges are
+`Q = Q₁ × Q₂ ∪ {q_done}`, the initial state is `(i₁,i₂)`, and `F_τ =
+{q_done}` exactly (`q_done` reused as `.final`, the same dedicated
+completion marker every atomic base case already compiles to) — a raw
+product state is never itself accepting, even when both components are,
+matching the paper's own construction verbatim rather than a broader
+"one hop from done" notion. Pairs of synchronizing transition edges are
 retained as semantic edges, with their interface actions hidden — *except*
 when both raw targets are accepting, in which case the compiler redirects
 the edge to `q_done` directly rather than leaving the raw completed pair as
@@ -81,11 +83,11 @@ def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
       (left.states.biUnion fun leftState =>
         right.states.image fun rightState =>
           TypeAutomatonState.pair leftState rightState)
-  let accepting : Finset TypeAutomatonState :=
-    insert TypeAutomatonState.final
-      (left.accepting.biUnion fun leftState =>
-        right.accepting.image fun rightState =>
-          TypeAutomatonState.pair leftState rightState)
+  -- `F_τ = {q_done}` exactly (paper p.33): a raw product state is *never*
+  -- accepting on its own, even when both components are, since the compiler
+  -- always redirects a both-accepting synchronized edge to `q_done` instead
+  -- of leaving the raw pair as its own state (see `helper_h13_final_states_represent_completion`).
+  let accepting : Finset TypeAutomatonState := {TypeAutomatonState.final}
   let completing : Finset TypeAutomatonState :=
     insert TypeAutomatonState.final
       (left.completing.biUnion fun leftState =>
