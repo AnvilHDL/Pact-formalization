@@ -42,7 +42,11 @@ theorem strategy_transfer
 /-- Lemma 4.2, "Soundness of inferred types": `WFProc(P) ⟹ P ⊧ abs(P)`. -/
 theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
     Conforms process (inferProcess process) := by
-    sorry
+  induction hSize : sizeOf process using Nat.strong_induction_on
+      generalizing process with
+    | _ n ih =>
+      cases process with
+      | _ => sorry
 /-- Lemma 4.3, "Conformance is closed under refinement". -/
 theorem conformance_closed_under_refinement
     {process : Proc} {precise abstract : PactType}

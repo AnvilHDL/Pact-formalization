@@ -1608,6 +1608,7 @@ theorem correspondence_seq_stepIff
         exact (hSecondIH hRightRelated hChildSymbol).mpr
           ⟨q', hChildEdge, hRightTargetRelated⟩
 
+set_option maxHeartbeats 4000000 in
 /-- Step correspondence for interleaved parallel composition `τ1 ‖_I τ2`. -/
 theorem correspondence_par_stepIff
     (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
@@ -1617,7 +1618,258 @@ theorem correspondence_par_stepIff
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove `hLeftIH`/`hRightIH` give two component
   -- edges that combine into the matching `par`/`par_fuse` product edge.
-  sorry
+  rcases offers with ⟨current, future⟩
+  have hSignatureSymbol :
+      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabet := by
+    simpa [compileType] using hSymbol
+  have hLeftForward :
+      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
+        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
+        relationMembership (buildRelationSet left (compileType signature left))
+          residual' q1 →
+        (TypeAutomatonSymbol.mk env label offers ∈
+          (compileType signature left).alphabet) →
+        DecoratedTypeTransition env residual' label offers target →
+        ∃ q1', (compileType signature left).HasEdge q1 env label offers q1' ∧
+          relationMembership (buildRelationSet left (compileType signature left))
+            target q1' :=
+    fun hMem hSym hStep' => (hLeftIH hMem hSym).mp hStep'
+  have hRightForward :
+      ∀ {residual' : PactType} {q2 : TypeAutomatonState} {env : TypeEnvironment}
+        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
+        relationMembership (buildRelationSet right (compileType signature right))
+          residual' q2 →
+        (TypeAutomatonSymbol.mk env label offers ∈
+          (compileType signature right).alphabet) →
+        DecoratedTypeTransition env residual' label offers target →
+        ∃ q2', (compileType signature right).HasEdge q2 env label offers q2' ∧
+          relationMembership (buildRelationSet right (compileType signature right))
+            target q2' :=
+    fun hMem hSym hStep' => (hRightIH hMem hSym).mp hStep'
+  rcases relationMembership_par_cases signature left right interface
+    (hLeftForward := hLeftForward) (hRightForward := hRightForward) hRelated with
+    ⟨q1, q2, residualLeft, residualRight, hEntryEq, hLeftRelated, hRightRelated⟩ | hEntryEq
+  · -- general product case: `residual` represents `residualLeft ‖_I residualRight`
+    injection hEntryEq with hResidualEq hStateEq
+    subst hResidualEq; subst hStateEq
+    constructor
+    · intro hStep
+      cases decoratedTypeTransition_par_cases hStep with
+      | step leftEnv rightEnv leftLabel rightLabel leftTarget rightTarget
+          leftCurrent leftFuture rightCurrent rightFuture hTargetEq hNonFinal
+          hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq hCurrentEq hFutureEq =>
+          obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
+            transitionAlphabet_of_par_component signature residualLeft residualRight
+              interface hWF hLocal1 hLocal2 hSync hLabelEq
+              (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol)
+          have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
+              (TypeOfferSummary.mk leftCurrent leftFuture) ∈
+              (compileType signature left).alphabet := by
+            simpa [compileType] using hLeftSymbolMem0
+          have hRightSymbolMem : TypeAutomatonSymbol.mk rightEnv rightLabel
+              (TypeOfferSummary.mk rightCurrent rightFuture) ∈
+              (compileType signature right).alphabet := by
+            simpa [compileType] using hRightSymbolMem0
+          obtain ⟨q1', hLeftEdge, hLeftTargetRelated⟩ :=
+            (hLeftIH hLeftRelated hLeftSymbolMem).mp hLeftStep
+          obtain ⟨q2', hRightEdge, hRightTargetRelated⟩ :=
+            (hRightIH hRightRelated hRightSymbolMem).mp hRightStep
+          -- H13: a child remains (`hNonFinal`), so the compiler does not
+          -- redirect this edge to `q_done`.
+          have hNotBothAccept :
+              ¬ (q1' ∈ (compileType signature left).accepting ∧
+                 q2' ∈ (compileType signature right).accepting) := by
+            rintro ⟨hAccept1, hAccept2⟩
+            exact hNonFinal
+              ⟨(helper_h13_final_states_represent_completion signature
+                  hLeftTargetRelated).mp hAccept1,
+                (helper_h13_final_states_represent_completion signature
+                  hRightTargetRelated).mp hAccept2⟩
+          have hEdgeFact : (compileType signature (.par left right interface)).HasEdge
+              (.pair q1 q2) env label (TypeOfferSummary.mk current future)
+              (.pair q1' q2') := by
+            rw [buildParallelAutomaton_pair_hasEdge_iff]
+            refine ⟨residualLeft, residualRight, leftEnv, rightEnv, leftLabel, rightLabel,
+              TypeOfferSummary.mk leftCurrent leftFuture,
+              TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
+              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated, hWF, hLocal1, hLocal2,
+              hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
+            simp [hNotBothAccept]
+          refine ⟨.pair q1' q2', hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.par left right interface)
+            (compileType signature (.par left right interface)) hRelated hEdgeFact hStep
+            (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+      | fuse leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture rightCurrent
+          rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq
+          hCurrentEq hFutureEq =>
+          obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
+            transitionAlphabet_of_par_component signature residualLeft residualRight
+              interface hWF hLocal1 hLocal2 hSync hLabelEq
+              (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol)
+          have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
+              (TypeOfferSummary.mk leftCurrent leftFuture) ∈
+              (compileType signature left).alphabet := by
+            simpa [compileType] using hLeftSymbolMem0
+          have hRightSymbolMem : TypeAutomatonSymbol.mk rightEnv rightLabel
+              (TypeOfferSummary.mk rightCurrent rightFuture) ∈
+              (compileType signature right).alphabet := by
+            simpa [compileType] using hRightSymbolMem0
+          obtain ⟨q1', hLeftEdge, hLeftTargetRelated⟩ :=
+            (hLeftIH hLeftRelated hLeftSymbolMem).mp hLeftStep
+          obtain ⟨q2', hRightEdge, hRightTargetRelated⟩ :=
+            (hRightIH hRightRelated hRightSymbolMem).mp hRightStep
+          -- H13: both children finish here, so the compiler redirects to `q_done`.
+          have hBothAccept :
+              q1' ∈ (compileType signature left).accepting ∧
+              q2' ∈ (compileType signature right).accepting :=
+            ⟨(helper_h13_final_states_represent_completion signature
+                hLeftTargetRelated).mpr rfl,
+              (helper_h13_final_states_represent_completion signature
+                hRightTargetRelated).mpr rfl⟩
+          have hEdgeFact : (compileType signature (.par left right interface)).HasEdge
+              (.pair q1 q2) env label (TypeOfferSummary.mk current future)
+              TypeAutomatonState.final := by
+            rw [buildParallelAutomaton_pair_hasEdge_iff]
+            refine ⟨residualLeft, residualRight, leftEnv, rightEnv, leftLabel, rightLabel,
+              TypeOfferSummary.mk leftCurrent leftFuture,
+              TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
+              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated, hWF, hLocal1, hLocal2,
+              hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
+            simp [hBothAccept]
+          refine ⟨.final, hEdgeFact, ?_⟩
+          exact relationMembership_of_step_edge_unique (.par left right interface)
+            (compileType signature (.par left right interface)) hRelated hEdgeFact hStep
+            (fun target hTargetStep => decoratedTypeTransition_target_unique hTargetStep hStep)
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      rw [buildParallelAutomaton_pair_hasEdge_iff] at hEdge
+      obtain ⟨childLeft, childRight, leftEnv, rightEnv, leftLabel, rightLabel,
+        leftOffers, rightOffers, q1', q2', hLeftEdge, hRightEdge,
+        hChildLeftRelated, hChildRightRelated, hWF, hLocal1, hLocal2, hSync, hLabelEq,
+        hCurrentEq, hFutureEq, hRedirect⟩ := hEdge
+      have hChildLeftEq : residualLeft = childLeft :=
+        relationMembership_functional left (compileType signature left)
+          hLeftRelated hChildLeftRelated
+      have hChildRightEq : residualRight = childRight :=
+        relationMembership_functional right (compileType signature right)
+          hRightRelated hChildRightRelated
+      subst hChildLeftEq; subst hChildRightEq
+      have hSymbolMem' :
+          TypeAutomatonSymbol.mk env label
+              (TypeOfferSummary.mk
+                (hideTypeOffers interface (leftOffers.current ∪ rightOffers.current))
+                (hideTypeOffers interface (leftOffers.future ∪ rightOffers.future))) ∈
+            signature.transitionAlphabet := by
+        rw [← hCurrentEq, ← hFutureEq]; exact hSignatureSymbol
+      obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
+        transitionAlphabet_of_par_component signature residualLeft residualRight
+          interface hWF hLocal1 hLocal2 hSync hLabelEq hSymbolMem'
+      have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel leftOffers ∈
+          (compileType signature left).alphabet := by
+        simpa [compileType] using hLeftSymbolMem0
+      have hRightSymbolMem : TypeAutomatonSymbol.mk rightEnv rightLabel rightOffers ∈
+          (compileType signature right).alphabet := by
+        simpa [compileType] using hRightSymbolMem0
+      by_cases hBothAccept : q1' ∈ (compileType signature left).accepting ∧
+          q2' ∈ (compileType signature right).accepting
+      · -- redirected edge: the compiler already sent this edge straight to
+        -- `q_done`, so the reconstructed semantic step is `par_fuse`.
+        rw [if_pos hBothAccept] at hRedirect
+        subst hRedirect
+        have hLeftStep : DecoratedTypeTransition leftEnv residualLeft leftLabel
+            leftOffers PactType.skip :=
+          (hLeftIH hLeftRelated hLeftSymbolMem).mpr
+            ⟨q1', hLeftEdge, relationMembership_of_accepting signature left hBothAccept.1⟩
+        have hRightStep : DecoratedTypeTransition rightEnv residualRight rightLabel
+            rightOffers PactType.skip :=
+          (hRightIH hRightRelated hRightSymbolMem).mpr
+            ⟨q2', hRightEdge, relationMembership_of_accepting signature right hBothAccept.2⟩
+        rcases relationMembership_par_cases signature left right interface
+          (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
+          ⟨qq1, qq2, resL, resR, hEqAgain, _, _⟩ | hEqAgain
+        · simp at hEqAgain
+        · injection hEqAgain with hResidualEqAgain hStateEqAgain
+          subst hResidualEqAgain
+          obtain ⟨lc, lf⟩ := leftOffers
+          obtain ⟨rc, rf⟩ := rightOffers
+          simp only [] at hCurrentEq hFutureEq
+          rw [hLabelEq, hCurrentEq, hFutureEq]
+          exact ⟨TypeTransition.par_fuse env leftEnv rightEnv interface residualLeft
+              residualRight leftLabel rightLabel hLeftStep.1 hRightStep.1
+              ⟨hWF, hLocal1, hLocal2, hSync⟩,
+            TypeOffers.par_fuse env leftEnv rightEnv interface residualLeft residualRight
+              leftLabel rightLabel lc lf rc rf hLeftStep.2 hRightStep.2 hLocal1 hLocal2
+              ⟨hWF, hSync⟩⟩
+      · -- kept edge: the raw target `.pair q1' q2'` survives as its own
+        -- state, representing a genuine `.par` continuation.
+        rw [if_neg hBothAccept] at hRedirect
+        subst hRedirect
+        rcases relationMembership_par_cases signature left right interface
+          (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
+          ⟨qq1, qq2, leftTarget, rightTarget, hEqAgain, hLeftTargetRelated,
+            hRightTargetRelated⟩ | hEqAgain
+        · injection hEqAgain with hResidualEqAgain hPairEqAgain
+          injection hPairEqAgain with hQ1EqAgain hQ2EqAgain
+          subst hQ1EqAgain; subst hQ2EqAgain
+          have hLeftStep : DecoratedTypeTransition leftEnv residualLeft leftLabel
+              leftOffers leftTarget :=
+            (hLeftIH hLeftRelated hLeftSymbolMem).mpr ⟨q1', hLeftEdge, hLeftTargetRelated⟩
+          have hRightStep : DecoratedTypeTransition rightEnv residualRight rightLabel
+              rightOffers rightTarget :=
+            (hRightIH hRightRelated hRightSymbolMem).mpr ⟨q2', hRightEdge, hRightTargetRelated⟩
+          have hNonFinal : ¬(leftTarget = PactType.skip ∧ rightTarget = PactType.skip) := by
+            rintro ⟨hL, hR⟩
+            exact hBothAccept
+              ⟨(helper_h13_final_states_represent_completion signature
+                  hLeftTargetRelated).mpr hL,
+                (helper_h13_final_states_represent_completion signature
+                  hRightTargetRelated).mpr hR⟩
+          obtain ⟨lc, lf⟩ := leftOffers
+          obtain ⟨rc, rf⟩ := rightOffers
+          simp only [] at hCurrentEq hFutureEq
+          rw [hLabelEq, hCurrentEq, hFutureEq, hResidualEqAgain]
+          exact ⟨TypeTransition.par env leftEnv rightEnv interface residualLeft leftTarget
+              residualRight rightTarget leftLabel rightLabel hLeftStep.1 hRightStep.1
+              hNonFinal ⟨hWF, hLocal1, hLocal2, hSync⟩,
+            TypeOffers.par env leftEnv rightEnv interface residualLeft leftTarget
+              residualRight rightTarget leftLabel rightLabel lc lf rc rf
+              hLeftStep.2 hRightStep.2 hNonFinal hLocal1 hLocal2 ⟨hWF, hSync⟩⟩
+        · simp at hEqAgain
+  · -- `q_done` case: `residual` already represents literal `.skip`, whose
+    -- only rule is `T-Skip`; matches `.final`'s own non-clock silent idle
+    -- self-loop (paper's "Forward direction at the done state" / third
+    -- backward-direction bullet).
+    injection hEntryEq with hResidualEq hStateEq
+    subst hResidualEq; subst hStateEq
+    have hFinalAccepting : TypeAutomatonState.final ∈
+        (compileType signature (.par left right interface)).accepting :=
+      (helper_h13_final_states_represent_completion signature hRelated).mpr rfl
+    constructor
+    · intro hStep
+      obtain ⟨hTransition, hOffers⟩ := hStep
+      cases hTransition with
+      | skip _ hSide =>
+          obtain ⟨hWF, hClock⟩ := hSide
+          cases hOffers with
+          | skip _ _ =>
+              have hEdge : (compileType signature (.par left right interface)).HasEdge
+                  TypeAutomatonState.final env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅)
+                  TypeAutomatonState.final := by
+                rw [buildParallelAutomaton_final_hasEdge_iff]
+                exact ⟨hWF, hClock, rfl, rfl, rfl⟩
+              exact ⟨.final, hEdge, hRelated⟩
+    · rintro ⟨state', hEdge, hTargetRelated⟩
+      rw [buildParallelAutomaton_final_hasEdge_iff] at hEdge
+      obtain ⟨hWF, hClock, hLabelEq, hOffersEq, hTargetEq⟩ := hEdge
+      subst hLabelEq
+      injection hOffersEq with hCurrentEq hFutureEq
+      subst hCurrentEq; subst hFutureEq
+      subst hTargetEq
+      have hResidualTarget : residual' = .skip :=
+        (helper_h13_final_states_represent_completion signature hTargetRelated).mp
+          hFinalAccepting
+      subst hResidualTarget
+      exact ⟨TypeTransition.skip env ⟨hWF, hClock⟩, TypeOffers.skip env ⟨hWF, hClock⟩⟩
 
 /-- Step correspondence for recursion `μX.body`. -/
 theorem correspondence_recur_stepIff

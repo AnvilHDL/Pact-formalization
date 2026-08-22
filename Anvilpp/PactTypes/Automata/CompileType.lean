@@ -322,7 +322,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
 
       -- parallel: form the reachable synchronized product on `interface`.
       | .par left right interface =>
-          exact buildParallelAutomaton interface
+          exact buildParallelAutomaton signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
 
@@ -415,10 +415,10 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
               simp [typeCompilationFuel] at hFuel
               omega)]
       | par left right interface =>
-          change buildParallelAutomaton interface
+          change buildParallelAutomaton signature interface
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right) =
-            buildParallelAutomaton interface
+            buildParallelAutomaton signature interface
               (compileTypeFuel signature fuel left)
               (compileTypeFuel signature fuel right)
           rw [ih left (by
@@ -830,9 +830,8 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
           have hLeftMem := ih left hLeft
           have hRightMem := ih right hRight
           simp only [compileTypeFuel, buildParallelAutomaton,
-            finishAutomatonFragment]
-          apply Finset.mem_biUnion.mpr
-          refine ⟨_, hLeftMem, ?_⟩
+            finishAutomatonFragment, Finset.mem_insert]
+          refine Or.inr (Finset.mem_biUnion.mpr ⟨_, hLeftMem, ?_⟩)
           exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
       | xoffer elseType branches =>
           simp [compileTypeFuel, buildExclusiveOfferAutomaton,
