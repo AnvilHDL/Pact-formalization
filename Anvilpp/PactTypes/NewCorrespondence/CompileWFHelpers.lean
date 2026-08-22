@@ -487,33 +487,10 @@ def skipRelationShape (entry : PactType × TypeAutomatonState) :
     Prop :=
   entry.1 = .skip ∧ entry.2 = .root
 
-/-- Proves that the `skip` relation shape is preserved by generated successors. -/
-lemma skipRelationShape_successor
-    (signature : TypeAlphabet)
-    (entry : PactType × TypeAutomatonState)
-    (hEntry : skipRelationShape entry)
-    {successor : PactType × TypeAutomatonState}
-    (hSuccessor : successor ∈ relationSuccessors
-      (compileType signature .skip) entry) :
-    skipRelationShape successor := by
-  rcases relationSuccessors_mem_cases _ entry successor hSuccessor with
-    ⟨edge, hEdge, hSource, hTarget, hStep⟩
-  rcases edge with ⟨_edgeSource, ⟨edgeEnv, edgeLabel, ⟨current, future⟩⟩,
-    _edgeTarget⟩
-  have hPublicEdge :
-      (compileType signature .skip).HasEdge entry.2 edgeEnv edgeLabel
-        (TypeOfferSummary.mk current future) successor.2 := by
-    simpa [TypeAutomaton.HasEdge, ← hSource, hTarget] using hEdge
-  have hCases := compileType_skip_edge_cases signature hPublicEdge
-  rcases hEntry with ⟨hResidual, hState⟩
-  rw [hResidual] at hStep
-  rw [hState] at hCases
-  rcases hCases with ⟨_hSource, hTargetEq, _hLabel, _hCurrent, _hFuture,
-    _hClock⟩
-  have hResidualTarget := decorated_skip_target hStep
-  exact ⟨hResidualTarget, hTargetEq⟩
-
-/-- Proves that any generated `skip` relation member has the `skip` relation shape. -/
+/-- Proves that any generated `skip` relation member has the `skip` relation
+shape. Provenance-directed relation (Task 4): `buildRelationSetCoreFuel`'s
+`.skip` case is the literal singleton `{(.skip, .root)}`, so this is now a
+direct `Finset` unfold, no worklist-closure induction needed. -/
 lemma relationMembership_skip_cases
     (signature : TypeAlphabet)
     {residual : PactType} {state : TypeAutomatonState}
@@ -522,13 +499,10 @@ lemma relationMembership_skip_cases
         (buildRelationSet .skip (compileType signature .skip))
         residual state) :
     residual = .skip ∧ state = .root := by
-  exact buildRelationSet_preserves .skip
-    (compileType signature .skip)
-    skipRelationShape
-    (by simp [skipRelationShape, compileType, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment])
-    (skipRelationShape_successor signature)
-    (residual, state) hRelated
+  unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
+  simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_singleton,
+    Prod.mk.injEq] at hRelated
+  exact hRelated
 
 /-- Defines the message relation shape as `(a, root)` or `(skip, final)`. -/
 def messageRelationShape
@@ -537,55 +511,9 @@ def messageRelationShape
   (entry.1 = .message msg dir ∧ entry.2 = .root) ∨
     (entry.1 = .skip ∧ entry.2 = .final)
 
-/-- Proves that the message relation shape is preserved by generated successors. -/
-lemma messageRelationShape_successor
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
-    (entry : PactType × TypeAutomatonState)
-    (hEntry : messageRelationShape msg dir entry)
-    {successor : PactType × TypeAutomatonState}
-    (hSuccessor : successor ∈ relationSuccessors
-      (compileType signature (.message msg dir)) entry) :
-    messageRelationShape msg dir successor := by
-  rcases relationSuccessors_mem_cases _ entry successor hSuccessor with
-    ⟨edge, hEdge, hSource, hTarget, hStep⟩
-  rcases edge with ⟨_edgeSource, ⟨edgeEnv, edgeLabel, ⟨current, future⟩⟩,
-    _edgeTarget⟩
-  have hPublicEdge :
-      (compileType signature (.message msg dir)).HasEdge entry.2
-        edgeEnv edgeLabel (TypeOfferSummary.mk current future) successor.2 := by
-    simpa [TypeAutomaton.HasEdge, ← hSource, hTarget] using hEdge
-  have hCases := compileType_message_edge_cases signature msg dir hPublicEdge
-  rcases hEntry with hRoot | hFinal
-  · rcases hRoot with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hFire | hWait | hIdle
-    · rcases hFire with ⟨_hSource, hTargetEq, hLabel, _hCurrent, _hFuture,
-        _hNeed⟩
-      rw [hLabel] at hStep
-      have hResidualTarget := decorated_message_action_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-    · rcases hWait with ⟨_hSource, hTargetEq, hLabel, _hCurrent, _hFuture,
-        _hClock, _hNoNeed⟩
-      rw [hLabel] at hStep
-      have hResidualTarget := decorated_message_wait_target hStep
-      exact Or.inl ⟨hResidualTarget, hTargetEq⟩
-    · rcases hIdle with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-  · rcases hFinal with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hFire | hWait | hIdle
-    · rcases hFire with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-    · rcases hWait with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-    · rcases hIdle with ⟨_hSource, hTargetEq, _hLabel, _hCurrent, _hFuture,
-        _hClock⟩
-      have hResidualTarget := decorated_skip_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-
-/-- Proves that any generated message relation member is one of the two PDF pairs. -/
+/-- Proves that any generated message relation member is one of the two PDF
+pairs. See `relationMembership_skip_cases`'s doc comment for the
+Task-4-enabled proof shape. -/
 lemma relationMembership_message_cases
     (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
     {residual : PactType} {state : TypeAutomatonState}
@@ -596,13 +524,10 @@ lemma relationMembership_message_cases
         residual state) :
     (residual = .message msg dir ∧ state = .root) ∨
       (residual = .skip ∧ state = .final) := by
-  exact buildRelationSet_preserves (.message msg dir)
-    (compileType signature (.message msg dir))
-    (messageRelationShape msg dir)
-    (by simp [messageRelationShape, compileType, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment])
-    (messageRelationShape_successor signature msg dir)
-    (residual, state) hRelated
+  unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
+  simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_singleton, Prod.mk.injEq] at hRelated
+  exact hRelated
 
 /-- Defines the `#` relation shape as `(#, root)` or `(skip, final)`. -/
 def tockRelationShape
@@ -610,55 +535,9 @@ def tockRelationShape
   (entry.1 = .tock ∧ entry.2 = .root) ∨
     (entry.1 = .skip ∧ entry.2 = .final)
 
-/-- Proves that the `#` relation shape is preserved by generated successors. -/
-lemma tockRelationShape_successor
-    (signature : TypeAlphabet)
-    (entry : PactType × TypeAutomatonState)
-    (hEntry : tockRelationShape entry)
-    {successor : PactType × TypeAutomatonState}
-    (hSuccessor : successor ∈ relationSuccessors
-      (compileType signature .tock) entry) :
-    tockRelationShape successor := by
-  rcases relationSuccessors_mem_cases _ entry successor hSuccessor with
-    ⟨edge, hEdge, hSource, hTarget, hStep⟩
-  rcases edge with ⟨_edgeSource, ⟨edgeEnv, edgeLabel, ⟨current, future⟩⟩,
-    _edgeTarget⟩
-  have hPublicEdge :
-      (compileType signature .tock).HasEdge entry.2
-        edgeEnv edgeLabel (TypeOfferSummary.mk current future) successor.2 := by
-    simpa [TypeAutomaton.HasEdge, ← hSource, hTarget] using hEdge
-  have hCases := compileType_tock_edge_cases signature hPublicEdge
-  rcases hEntry with hRoot | hFinal
-  · rcases hRoot with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hFire | hWait | hIdle
-    · rcases hFire with ⟨_hSource, hTargetEq, hLabel, _hCurrent, _hFuture,
-        _hClock⟩
-      rw [hLabel] at hStep
-      have hResidualTarget := decorated_tock_action_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-    · rcases hWait with ⟨_hSource, hTargetEq, hLabel, _hCurrent, _hFuture,
-        _hClock⟩
-      rw [hLabel] at hStep
-      have hResidualTarget := decorated_tock_wait_target hStep
-      exact Or.inl ⟨hResidualTarget, hTargetEq⟩
-    · rcases hIdle with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-  · rcases hFinal with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hFire | hWait | hIdle
-    · rcases hFire with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-    · rcases hWait with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-    · rcases hIdle with ⟨_hSource, hTargetEq, _hLabel, _hCurrent, _hFuture,
-        _hClock⟩
-      have hResidualTarget := decorated_skip_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-
-/-- Proves that any generated `#` relation member is one of the two PDF pairs. -/
+/-- Proves that any generated `#` relation member is one of the two PDF
+pairs. See `relationMembership_skip_cases`'s doc comment for the
+Task-4-enabled proof shape. -/
 lemma relationMembership_tock_cases
     (signature : TypeAlphabet)
     {residual : PactType} {state : TypeAutomatonState}
@@ -668,13 +547,10 @@ lemma relationMembership_tock_cases
         residual state) :
     (residual = .tock ∧ state = .root) ∨
       (residual = .skip ∧ state = .final) := by
-  exact buildRelationSet_preserves .tock
-    (compileType signature .tock)
-    tockRelationShape
-    (by simp [tockRelationShape, compileType, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment])
-    (tockRelationShape_successor signature)
-    (residual, state) hRelated
+  unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
+  simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_singleton, Prod.mk.injEq] at hRelated
+  exact hRelated
 
 /-- Defines the progress relation shape as `($t, root)` or `(skip, final)`. -/
 def progressRelationShape
@@ -682,48 +558,9 @@ def progressRelationShape
   (entry.1 = .progress pid ∧ entry.2 = .root) ∨
     (entry.1 = .skip ∧ entry.2 = .final)
 
-/-- Proves that the progress relation shape is preserved by generated successors. -/
-lemma progressRelationShape_successor
-    (signature : TypeAlphabet) (pid : ProcId)
-    (entry : PactType × TypeAutomatonState)
-    (hEntry : progressRelationShape pid entry)
-    {successor : PactType × TypeAutomatonState}
-    (hSuccessor : successor ∈ relationSuccessors
-      (compileType signature (.progress pid)) entry) :
-    progressRelationShape pid successor := by
-  rcases relationSuccessors_mem_cases _ entry successor hSuccessor with
-    ⟨edge, hEdge, hSource, hTarget, hStep⟩
-  rcases edge with ⟨_edgeSource, ⟨edgeEnv, edgeLabel, ⟨current, future⟩⟩,
-    _edgeTarget⟩
-  have hPublicEdge :
-      (compileType signature (.progress pid)).HasEdge entry.2
-        edgeEnv edgeLabel (TypeOfferSummary.mk current future) successor.2 := by
-    simpa [TypeAutomaton.HasEdge, ← hSource, hTarget] using hEdge
-  have hCases := compileType_progress_edge_cases signature pid hPublicEdge
-  rcases hEntry with hRoot | hFinal
-  · rcases hRoot with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hProgress | hIdle
-    · rcases hProgress with ⟨_hSource, hTargetEq, hLabel, _hCurrent,
-        _hFuture⟩
-      rw [hLabel] at hStep
-      have hResidualTarget := decorated_progress_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-    · rcases hIdle with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-  · rcases hFinal with ⟨hResidual, hState⟩
-    rw [hResidual] at hStep
-    rw [hState] at hCases
-    rcases hCases with hProgress | hIdle
-    · rcases hProgress with ⟨hSourceEq, _⟩
-      simp at hSourceEq
-    · rcases hIdle with ⟨_hSource, hTargetEq, _hLabel, _hCurrent, _hFuture,
-        _hClock⟩
-      have hResidualTarget := decorated_skip_target hStep
-      exact Or.inr ⟨hResidualTarget, hTargetEq⟩
-
-/-- Proves that any generated progress relation member is one of the two PDF pairs. -/
+/-- Proves that any generated progress relation member is one of the two PDF
+pairs. See `relationMembership_skip_cases`'s doc comment for the
+Task-4-enabled proof shape. -/
 lemma relationMembership_progress_cases
     (signature : TypeAlphabet) (pid : ProcId)
     {residual : PactType} {state : TypeAutomatonState}
@@ -734,13 +571,10 @@ lemma relationMembership_progress_cases
         residual state) :
     (residual = .progress pid ∧ state = .root) ∨
       (residual = .skip ∧ state = .final) := by
-  exact buildRelationSet_preserves (.progress pid)
-    (compileType signature (.progress pid))
-    (progressRelationShape pid)
-    (by simp [progressRelationShape, compileType, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment])
-    (progressRelationShape_successor signature pid)
-    (residual, state) hRelated
+  unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
+  simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_singleton, Prod.mk.injEq] at hRelated
+  exact hRelated
 
 end
 end NewCorrespondence
