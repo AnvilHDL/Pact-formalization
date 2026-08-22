@@ -1,7 +1,7 @@
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 import Anvilpp.PactTypes.NewCorrespondence.CompileWFHelpers
-import Anvilpp.PactSafetyHelpers
-import Anvilpp.PactAdditionalSafetyHelpers
+import Anvilpp.ProofHelpers
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.Top
 
 namespace Pact
 

@@ -1,4 +1,4 @@
-import Anvilpp.PactSafetyHelpers
+import Anvilpp.ProofHelpers
 import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
 import Anvilpp.PactTypes.NewCorrespondence.CasesTop
 import Anvilpp.PactSafetyStructures
@@ -11,7 +11,7 @@ earlier, now-superseded uppercase `Pact.pdf` scaffold. This file states the
 numbered results exactly as they appear, in order, in `pactproofs.typ`
 ("Lemmas, Theorems, and Proofs"). All supporting definitions (histories,
 strategies, honesty, the `pactcompat.typ` compatibility game, etc.) live in
-`Anvilpp/PactSafetyHelpers.lean`. Theorems whose proofs constitute the
+`Anvilpp/ProofHelpers.lean`. Theorems whose proofs constitute the
 research development are intentionally closed with `sorry`.
 -/
 
