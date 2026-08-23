@@ -54,18 +54,17 @@ def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
       syncAutomatonEdges interface leftEdge rightEdge).image fun rightEdge =>
         let bothAccept :=
           leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
+        let target : TypeAutomatonState :=
+          if bothAccept then .final
+          else .pair leftEdge.target rightEdge.target
         { source := .pair leftEdge.source rightEdge.source
           environment := combineAutomatonEnvironment interface
             leftEdge.environment rightEdge.environment
           label := AutomatonConstructionLabel.combine interface
             leftEdge.label rightEdge.label
           current := hideOffers interface (leftEdge.current ∪ rightEdge.current)
-          future :=
-            if bothAccept then .at TypeAutomatonState.final ∅
-            else .explicit (hideOffers interface (leftEdge.future ∪ rightEdge.future))
-          target :=
-            if bothAccept then .final
-            else .pair leftEdge.target rightEdge.target }
+          future := .at target ∅
+          target := target }
   let doneEdges : Finset PendingAutomatonEdge :=
     let idleEnvironments := signature.localEnvironments.filter fun environment =>
       environment.clock = false
@@ -102,6 +101,9 @@ theorem buildParallelAutomaton_futureTargetsInStates
       subst target
       simp [buildParallelAutomaton, finishAutomatonFragment]
     · simp [hAccept] at hFuture
+      obtain ⟨hTarget, _⟩ := hFuture
+      subst target
+      sorry -- needs `left`/`right` edge-target-in-states, not yet threaded here
   · simp at hFuture
 
 end
