@@ -13,18 +13,366 @@ def TypeNonClockStep (source target : PactType) : Prop :=
 def TypeSameCycleReaches (source target : PactType) : Prop :=
   Relation.ReflTransGen TypeNonClockStep source target
 
-/-- A non-clock public automaton edge. -/
-def AutomatonNonClockStep (automaton : TypeAutomaton)
+/-- `skip`'s only non-clock step is its own idle self-loop, so any same-cycle
+path leaving `skip` stays at `skip`. -/
+theorem typeSameCycleReaches_skip_absorbs :
+    ∀ ρ', TypeSameCycleReaches .skip ρ' → ρ' = .skip := by
+  intro ρ' hPath
+  induction hPath with
+  | refl => rfl
+  | tail _ hbc ih =>
+      rw [ih] at hbc
+      obtain ⟨env, label, hTrans, -⟩ := hbc
+      cases hTrans
+      rfl
+
+/-- Lifting a same-cycle path of `left` through `.seq _ right` via `T-Seq`,
+as long as the path's own target never becomes `skip` (`T-Seq`'s own side
+condition) — safe because `skip` only ever appears as the very last state of
+a same-cycle path (`typeSameCycleReaches_skip_absorbs`). -/
+theorem typeSameCycleReaches_seq_lift (right : PactType) :
+    ∀ ρ ρ', TypeSameCycleReaches ρ ρ' → ρ' ≠ .skip →
+      TypeSameCycleReaches (.seq ρ right) (.seq ρ' right) := by
+  intro ρ ρ' hPath hNotSkip
+  induction hPath using Relation.ReflTransGen.head_induction_on with
+  | refl => exact Relation.ReflTransGen.refl
+  | @head mid final hStep hRest ih =>
+      obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
+      by_cases hFinalSkip : final = .skip
+      · exact absurd (typeSameCycleReaches_skip_absorbs ρ' (hFinalSkip ▸ hRest)) hNotSkip
+      · exact Relation.ReflTransGen.head ⟨env, label,
+          TypeTransition.seq env mid final right label hTrans hFinalSkip, hNotTock⟩ ih
+
+/-- Once `left` reaches `skip` in the same cycle, `.seq left right` reaches
+`right` directly (`T-Seq` all the way, then `T-Seq-Fuse` for the very last
+step). -/
+theorem typeSameCycleReaches_seq_fuse (right : PactType) :
+    ∀ ρ, TypeSameCycleReaches ρ .skip → TypeSameCycleReaches (.seq ρ right) right := by
+  intro ρ hPath
+  induction hPath using Relation.ReflTransGen.head_induction_on with
+  | refl =>
+      have hWellFormed : TypeEnvironment.empty.WellFormed ∧
+          TypeEnvironment.empty.clock = false := by
+        simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+      have hSkipStep : TypeTransition TypeEnvironment.empty .skip TypeLabel.silent .skip :=
+        TypeTransition.skip TypeEnvironment.empty hWellFormed
+      exact Relation.ReflTransGen.single ⟨TypeEnvironment.empty, TypeLabel.silent,
+        TypeTransition.seq_fuse TypeEnvironment.empty .skip right TypeLabel.silent hSkipStep,
+        by simp [TypeLabel.isTock, TypeLabel.silent]⟩
+  | @head current next hStep hRest ih =>
+      obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
+      by_cases hNextSkip : next = .skip
+      · subst hNextSkip
+        exact Relation.ReflTransGen.single ⟨env, label,
+          TypeTransition.seq_fuse env current right label hTrans, hNotTock⟩
+      · exact Relation.ReflTransGen.head ⟨env, label,
+          TypeTransition.seq env current next right label hTrans hNextSkip, hNotTock⟩ ih
+
+/-- `pact.pdf`'s own same-cycle completion equation for sequence (p.34): "A
+sequence finishes in the current cycle exactly when its left child can
+finish and its right child can then finish." -/
+theorem typeSameCycleReaches_seq_iff (left right : PactType) :
+    TypeSameCycleReaches (.seq left right) .skip ↔
+      TypeSameCycleReaches left .skip ∧ TypeSameCycleReaches right .skip := by
+  constructor
+  · intro hPath
+    -- Accumulate forward along the path: it stays in `.seq _ right` form
+    -- (lifted from left's own steps) until a fuse step reaches `right`,
+    -- after which it continues as `right`'s own path.
+    have hAux : ∀ current, Relation.ReflTransGen TypeNonClockStep (.seq left right) current →
+        (∃ ρ', current = .seq ρ' right ∧ TypeSameCycleReaches left ρ') ∨
+        (TypeSameCycleReaches left .skip ∧ TypeSameCycleReaches right current) := by
+      intro current hReach
+      induction hReach with
+      | refl => exact Or.inl ⟨left, rfl, Relation.ReflTransGen.refl⟩
+      | tail _ hStep ih =>
+          rcases ih with ⟨ρ', hEq, hρReach⟩ | ⟨hLeftDone, hRightReach⟩
+          · subst hEq
+            obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
+            cases hTrans with
+            | seq_fuse _ _ _ _ hLeftStep =>
+                exact Or.inr ⟨hρReach.tail ⟨env, label, hLeftStep, hNotTock⟩,
+                  Relation.ReflTransGen.refl⟩
+            | seq _ _ next _ _ hLeftStep _ =>
+                exact Or.inl ⟨next, rfl, hρReach.tail ⟨env, label, hLeftStep, hNotTock⟩⟩
+          · exact Or.inr ⟨hLeftDone, hRightReach.tail hStep⟩
+    rcases hAux .skip hPath with ⟨_, hEq, _⟩ | ⟨hLeftDone, hRightReach⟩
+    · exact nomatch hEq
+    · exact ⟨hLeftDone, hRightReach⟩
+  · rintro ⟨hLeft, hRight⟩
+    exact (typeSameCycleReaches_seq_fuse right left hLeft).trans hRight
+
+/-- A choice's own step selects a branch outright, so its same-cycle
+completion is exactly whichever branch's own completion. -/
+theorem typeSameCycleReaches_choice_iff (left right : PactType) :
+    TypeSameCycleReaches (.choice left right) .skip ↔
+      TypeSameCycleReaches left .skip ∨ TypeSameCycleReaches right .skip := by
+  constructor
+  · intro hPath
+    rcases Relation.ReflTransGen.cases_head hPath with h | ⟨mid, hStep, hRest⟩
+    · exact nomatch h
+    · obtain ⟨env, label, hTrans, -⟩ := hStep
+      cases hTrans with
+      | choice_left env hWF => exact Or.inl hRest
+      | choice_right env hWF => exact Or.inr hRest
+  · have hWF : TypeEnvironment.empty.WellFormed := by
+      simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+    rintro (h | h)
+    · exact Relation.ReflTransGen.head
+        ⟨TypeEnvironment.empty, _, TypeTransition.choice_left TypeEnvironment.empty left right hWF,
+          by simp [TypeLabel.isTock, TypeLabel.silent]⟩ h
+    · exact Relation.ReflTransGen.head
+        ⟨TypeEnvironment.empty, _,
+          TypeTransition.choice_right TypeEnvironment.empty left right hWF,
+          by simp [TypeLabel.isTock, TypeLabel.silent]⟩ h
+
+/-- A fair choice's own step selects a branch outright too, same as ordinary
+choice — only the labels differ. -/
+theorem typeSameCycleReaches_fairChoice_iff (bid : BranchId) (left right : PactType) :
+    TypeSameCycleReaches (.fairChoice bid left right) .skip ↔
+      TypeSameCycleReaches left .skip ∨ TypeSameCycleReaches right .skip := by
+  constructor
+  · intro hPath
+    rcases Relation.ReflTransGen.cases_head hPath with h | ⟨mid, hStep, hRest⟩
+    · exact nomatch h
+    · obtain ⟨env, label, hTrans, -⟩ := hStep
+      cases hTrans with
+      | fair_left env hWF => exact Or.inl hRest
+      | fair_right env hWF => exact Or.inr hRest
+  · have hWF : TypeEnvironment.empty.WellFormed := by
+      simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+    rintro (h | h)
+    · exact Relation.ReflTransGen.head
+        ⟨TypeEnvironment.empty, _,
+          TypeTransition.fair_left TypeEnvironment.empty bid left right hWF,
+          by simp [TypeLabel.isTock, TypeLabel.fair]⟩ h
+    · exact Relation.ReflTransGen.head
+        ⟨TypeEnvironment.empty, _,
+          TypeTransition.fair_right TypeEnvironment.empty bid left right hWF,
+          by simp [TypeLabel.isTock, TypeLabel.fair]⟩ h
+
+/-- A non-clock raw automaton edge — matching `ofStage`'s own edge filter
+(`compileTypeFuel`'s pending edges, before the external-alphabet filter
+`compileType` applies), not the public, alphabet-filtered `TypeAutomaton`.
+H14, like `ofStage`, needs to see every same-cycle edge the compiler produces,
+not just the ones exported to the fixed transition alphabet. -/
+def AutomatonNonClockStep (fragment : AutomatonFragment)
     (source target : TypeAutomatonState) : Prop :=
-  ∃ env label offers,
-    automaton.HasEdge source env label offers target ∧ ¬ label.isTock
+  ∃ edge ∈ fragment.edges,
+    edge.source = source ∧ edge.target = target ∧ ¬ edge.label.semantic.isTock
 
 /-- A state reaches an accepting state without crossing a clock edge. -/
 def AutomatonSameCycleReachesAccepting
-    (automaton : TypeAutomaton) (state : TypeAutomatonState) : Prop :=
+    (fragment : AutomatonFragment) (state : TypeAutomatonState) : Prop :=
   ∃ finalState,
-    Relation.ReflTransGen (AutomatonNonClockStep automaton) state finalState ∧
-    finalState ∈ automaton.accepting
+    Relation.ReflTransGen (AutomatonNonClockStep fragment) state finalState ∧
+    finalState ∈ fragment.accepting
+
+/-- Reachability transports along a `.child index`-tagged embedding whenever
+every non-clock step from a tagged state stays tagged and matches the child
+fragment's own step exactly (no redirect ever crosses the tag boundary) —
+the reachability analogue of `ofStage_binaryChoice_child0`/`_child1`'s
+one-step tag-transparency, reused by every constructor whose child edges are
+copied verbatim (`choice`, `fairChoice`, `recur`'s non-marker body edges). -/
+theorem automatonSameCycleReachesAccepting_of_child_tag
+    (fragment childFragment : AutomatonFragment) (index : Nat)
+    (hStep : ∀ q target, AutomatonNonClockStep fragment (childState index q) target ↔
+      ∃ q', target = childState index q' ∧ AutomatonNonClockStep childFragment q q')
+    (hAccept : ∀ q, childState index q ∈ fragment.accepting ↔ q ∈ childFragment.accepting)
+    (q : TypeAutomatonState) :
+    AutomatonSameCycleReachesAccepting fragment (childState index q) ↔
+      AutomatonSameCycleReachesAccepting childFragment q := by
+  have hForward : ∀ q finalState,
+      Relation.ReflTransGen (AutomatonNonClockStep fragment) (childState index q) finalState →
+      ∃ q', finalState = childState index q' ∧
+        Relation.ReflTransGen (AutomatonNonClockStep childFragment) q q' := by
+    intro q finalState hReach
+    induction hReach with
+    | refl => exact ⟨q, rfl, Relation.ReflTransGen.refl⟩
+    | tail hab hbc ih =>
+        obtain ⟨q'', hEq, hReach'⟩ := ih
+        subst hEq
+        obtain ⟨q''', hEq', hStep'⟩ := (hStep q'' _).mp hbc
+        exact ⟨q''', hEq', hReach'.tail hStep'⟩
+  have hBackward : ∀ q q',
+      Relation.ReflTransGen (AutomatonNonClockStep childFragment) q q' →
+      Relation.ReflTransGen (AutomatonNonClockStep fragment)
+        (childState index q) (childState index q') := by
+    intro q q' hReach
+    induction hReach with
+    | refl => exact Relation.ReflTransGen.refl
+    | tail hab hbc ih => exact ih.tail ((hStep _ _).mpr ⟨_, rfl, hbc⟩)
+  constructor
+  · rintro ⟨finalState, hReach, hFinal⟩
+    obtain ⟨q', hEq, hReach'⟩ := hForward q finalState hReach
+    subst hEq
+    exact ⟨q', hReach', (hAccept q').mp hFinal⟩
+  · rintro ⟨q', hReach, hFinal⟩
+    exact ⟨childState index q', hBackward q q' hReach, (hAccept q').mpr hFinal⟩
+
+/-- A choice's tagged-left one-step raw edges are exactly its child's own
+edges, tagged (labels are copied verbatim by `childPendingEdge`, so
+tock-ness is preserved). -/
+theorem automatonNonClockStep_binaryChoice_child0
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (q target : TypeAutomatonState) :
+    AutomatonNonClockStep
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (childState 0 q) target ↔
+      ∃ q', target = childState 0 q' ∧ AutomatonNonClockStep left q q' := by
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
+    obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
+      (buildChoiceAutomaton_outgoing_left signature left right
+        selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
+    refine ⟨childEdge.target, ?_, childEdge, hChildEdge, hChildSource, rfl, ?_⟩
+    · rw [← hTarget, hEdgeEq]; simp [childPendingEdge, childState]
+    · simpa [hEdgeEq, childPendingEdge] using hNotTock
+  · rintro ⟨q', hTargetEq, childEdge, hChildEdge, hChildSource, hChildTarget, hChildNotTock⟩
+    have hOut := (buildChoiceAutomaton_outgoing_left signature left right
+      selectionLeft selectionRight q (childPendingEdge 0 childEdge)).mpr
+      ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    exact ⟨childPendingEdge 0 childEdge, hOut.1, hOut.2,
+      by rw [hTargetEq]; simp [childPendingEdge, childState, hChildTarget],
+      by simpa [childPendingEdge] using hChildNotTock⟩
+
+/-- Right-side analogue of `automatonNonClockStep_binaryChoice_child0`. -/
+theorem automatonNonClockStep_binaryChoice_child1
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (q target : TypeAutomatonState) :
+    AutomatonNonClockStep
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (childState 1 q) target ↔
+      ∃ q', target = childState 1 q' ∧ AutomatonNonClockStep right q q' := by
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
+    obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
+      (buildChoiceAutomaton_outgoing_right signature left right
+        selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
+    refine ⟨childEdge.target, ?_, childEdge, hChildEdge, hChildSource, rfl, ?_⟩
+    · rw [← hTarget, hEdgeEq]; simp [childPendingEdge, childState]
+    · simpa [hEdgeEq, childPendingEdge] using hNotTock
+  · rintro ⟨q', hTargetEq, childEdge, hChildEdge, hChildSource, hChildTarget, hChildNotTock⟩
+    have hOut := (buildChoiceAutomaton_outgoing_right signature left right
+      selectionLeft selectionRight q (childPendingEdge 1 childEdge)).mpr
+      ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    exact ⟨childPendingEdge 1 childEdge, hOut.1, hOut.2,
+      by rw [hTargetEq]; simp [childPendingEdge, childState, hChildTarget],
+      by simpa [childPendingEdge] using hChildNotTock⟩
+
+theorem buildChoiceAutomaton_child0_accepting_iff
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (q : TypeAutomatonState) :
+    childState 0 q ∈
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting ↔
+      q ∈ left.accepting := by
+  simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
+
+theorem buildChoiceAutomaton_child1_accepting_iff
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) (q : TypeAutomatonState) :
+    childState 1 q ∈
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting ↔
+      q ∈ right.accepting := by
+  simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
+
+theorem buildChoiceAutomaton_root_not_accepting
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel) :
+    TypeAutomatonState.root ∉
+      (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting := by
+  simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
+
+/-- The root's only one-step raw targets are the two children's initial
+states — read off `buildChoiceAutomaton`'s selection edges, which fire for
+any supported environment (the empty one always qualifies). -/
+theorem automatonNonClockStep_root_binaryChoice_iff
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironments)
+    (hLeftNotTock : ¬ selectionLeft.isTock) (hRightNotTock : ¬ selectionRight.isTock)
+    (target : TypeAutomatonState) :
+    AutomatonNonClockStep
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        TypeAutomatonState.root target ↔
+      target = childState 0 left.initial ∨ target = childState 1 right.initial := by
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, -⟩
+    simp only [buildChoiceAutomaton, finishAutomatonFragment, childPendingEdges,
+      Finset.mem_union, Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
+      Finset.mem_singleton] at hEdgeMem
+    rcases hEdgeMem with (⟨childEdge, -, hEq⟩ | ⟨childEdge, -, hEq⟩) |
+      ⟨environment, -, hEq | hEq⟩
+    · exfalso; rw [← hEq] at hSource; simp [childPendingEdge, childState] at hSource
+    · exfalso; rw [← hEq] at hSource; simp [childPendingEdge, childState] at hSource
+    · left; rw [← hTarget, hEq]
+    · right; rw [← hTarget, hEq]
+  · rintro (rfl | rfl)
+    · set edge : PendingAutomatonEdge :=
+        { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
+          label := AutomatonConstructionLabel.visible selectionLeft, current := ∅,
+          future := FutureSpec.at (childState 0 left.initial) ∅,
+          target := childState 0 left.initial } with hEdgeDef
+      have hEdgeMem : edge ∈
+          (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
+        simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+          Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+        exact Or.inr ⟨TypeEnvironment.empty, hEnvMem, Or.inl hEdgeDef.symm⟩
+      exact ⟨edge, hEdgeMem, rfl, rfl,
+        by simp [hEdgeDef, AutomatonConstructionLabel.semantic, hLeftNotTock]⟩
+    · set edge : PendingAutomatonEdge :=
+        { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
+          label := AutomatonConstructionLabel.visible selectionRight, current := ∅,
+          future := FutureSpec.at (childState 1 right.initial) ∅,
+          target := childState 1 right.initial } with hEdgeDef
+      have hEdgeMem : edge ∈
+          (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
+        simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
+          Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+        exact Or.inr ⟨TypeEnvironment.empty, hEnvMem, Or.inr hEdgeDef.symm⟩
+      exact ⟨edge, hEdgeMem, rfl, rfl,
+        by simp [hEdgeDef, AutomatonConstructionLabel.semantic, hRightNotTock]⟩
+
+/-- Root reachability for a choice: since the root is never itself accepting
+and its only one-step targets are the two children's initial states,
+reaching an accepting state from the root is exactly reaching one from
+either tagged child-initial state. -/
+theorem automatonSameCycleReachesAccepting_root_binaryChoice
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironments)
+    (hLeftNotTock : ¬ selectionLeft.isTock) (hRightNotTock : ¬ selectionRight.isTock) :
+    AutomatonSameCycleReachesAccepting
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        TypeAutomatonState.root ↔
+      AutomatonSameCycleReachesAccepting
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (childState 0 left.initial) ∨
+      AutomatonSameCycleReachesAccepting
+        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (childState 1 right.initial) := by
+  constructor
+  · rintro ⟨finalState, hReach, hFinal⟩
+    rcases Relation.ReflTransGen.cases_head hReach with hEq | ⟨mid, hStep, hRest⟩
+    · exfalso
+      rw [← hEq] at hFinal
+      exact absurd hFinal
+        (buildChoiceAutomaton_root_not_accepting signature left right
+          selectionLeft selectionRight)
+    · rcases (automatonNonClockStep_root_binaryChoice_iff signature left right
+        selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock mid).mp hStep with
+        rfl | rfl
+      · exact Or.inl ⟨finalState, hRest, hFinal⟩
+      · exact Or.inr ⟨finalState, hRest, hFinal⟩
+  · rintro (⟨finalState, hReach, hFinal⟩ | ⟨finalState, hReach, hFinal⟩)
+    · refine ⟨finalState, Relation.ReflTransGen.head ?_ hReach, hFinal⟩
+      exact (automatonNonClockStep_root_binaryChoice_iff signature left right
+        selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock
+        (childState 0 left.initial)).mpr (Or.inl rfl)
+    · refine ⟨finalState, Relation.ReflTransGen.head ?_ hReach, hFinal⟩
+      exact (automatonNonClockStep_root_binaryChoice_iff signature left right
+        selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock
+        (childState 1 right.initial)).mpr (Or.inr rfl)
 
 def ofStage (signature : TypeAlphabet) :
     Nat → PactType → TypeAutomatonState → Finset BareMessage
@@ -39,6 +387,286 @@ def ofStage (signature : TypeAlphabet) :
             hideTypeOffers interface
               (ofStage signature n left q1 ∪ ofStage signature n right q2)
         | none => ∅)
+
+/-- One same-cycle semantic step out of a residual, as a (current offer,
+target) pair — enumerated directly from `TypeTransition`'s own rules, one
+constructor at a time, mirroring `compileTypeFuel`'s edge families one level
+shallower (no further recursion into the target). Every non-clock rule
+contributes exactly one entry, since some well-formed environment always
+realizes it (e.g. the empty environment realizes a message's wait, and the
+environment needing it realizes its fire); a `.seq` step wraps or fuses a
+left step exactly as `T-Seq`/`T-Seq-Fuse` do. `.par`'s synchronized product
+is deferred (placeholder `∅`): it needs the same `Sync_I`/`LocalEnv`
+combinatorics `buildParallelAutomaton`/`SyncEdges` already encode, not a
+one-line enumeration. -/
+def typeSameCycleSteps : PactType → Finset (Finset BareMessage × PactType)
+  | .skip => {(∅, .skip)}
+  | .message msg dir => {({(msg, dir)}, .skip), ({(msg, dir)}, .message msg dir)}
+  | .tock => {(∅, .tock)}
+  | .progress pid => {(∅, .skip)}
+  | .var _ => ∅
+  | .choice left right => {(∅, left), (∅, right)}
+  | .fairChoice _ left right => {(∅, left), (∅, right)}
+  | .recur name body => {(∅, body.replaceVar name (.recur name body))}
+  | .seq left right =>
+      (typeSameCycleSteps left).image fun step =>
+        if step.2 = .skip then (step.1, right) else (step.1, .seq step.2 right)
+  | .par _ _ _ => ∅
+  | .xoffer elseType branches =>
+      insert (∅, .xoffer elseType branches)
+        (insert (∅, elseType)
+          ((branches.map fun branch => ({branch.1}, branch.2)).toFinset))
+  | .offer elseType branches =>
+      insert (∅, .offer elseType branches)
+        (insert (∅, elseType)
+          ((branches.map fun branch =>
+            ({branch.1}, parallelTypeBranchesSelecting branch branches)).toFinset))
+
+/-- The Kleene-staged semantic future-offer menu, indexed by the *same* stage
+convention as `ofStage` — one stage per same-cycle step actually taken, not
+per syntactic unwrap (unlike `typeFutureOffersFuel`, which decrements fuel on
+structural descent regardless of whether that descent corresponds to a real
+step — see `interestingdiscoveries.md` for the counterexample this was built
+to fix). Mirrors `pact.pdf`'s Ψ directly: `Bare(O_C)` off one same-cycle step
+unioned with the stage-below value at that step's target, plus the same
+unconditional `hideTypeOffers` term at a `.par` residual that `ofStage`'s Φ
+has at a product state. -/
+def futOffStage : Nat → PactType → Finset BareMessage
+  | 0, _ => ∅
+  | n + 1, ty =>
+      (typeSameCycleSteps ty).biUnion (fun step => step.1 ∪ futOffStage n step.2) ∪
+      (match ty with
+        | .par left right interface =>
+            hideTypeOffers interface (futOffStage n left ∪ futOffStage n right)
+        | _ => ∅)
+
+/-- `skip`'s idle self-loop never exposes an offer, at any stage. -/
+theorem futOffStage_skip : ∀ n, futOffStage n .skip = ∅ := by
+  intro n
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+      show (typeSameCycleSteps .skip).biUnion
+          (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = ∅
+      simp [typeSameCycleSteps, ih]
+
+/-- An open variable fragment has no same-cycle step at all, at any stage. -/
+theorem futOffStage_var : ∀ n name, futOffStage n (.var name) = ∅ := by
+  intro n name
+  cases n with
+  | zero => rfl
+  | succ n =>
+      show (typeSameCycleSteps (.var name)).biUnion
+          (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = ∅
+      simp [typeSameCycleSteps]
+
+/-- `tock`'s idle self-loop never exposes an offer, at any stage. -/
+theorem futOffStage_tock : ∀ n, futOffStage n .tock = ∅ := by
+  intro n
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+      show (typeSameCycleSteps .tock).biUnion
+          (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = ∅
+      simp [typeSameCycleSteps, ih]
+
+/-- A progress marker fires unconditionally into `skip`, which never exposes
+an offer of its own. -/
+theorem futOffStage_progress : ∀ n pid, futOffStage n (.progress pid) = ∅ := by
+  intro n pid
+  cases n with
+  | zero => rfl
+  | succ n =>
+      show (typeSameCycleSteps (.progress pid)).biUnion
+          (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = ∅
+      simp [typeSameCycleSteps, futOffStage_skip]
+
+/-- A message's fire/wait pair both expose the same singleton offer, at every
+stage past the first. -/
+theorem futOffStage_message :
+    ∀ n msg dir, futOffStage (n + 1) (.message msg dir) = {(msg, dir)} := by
+  intro n
+  induction n with
+  | zero => intro msg dir; simp [futOffStage, typeSameCycleSteps, futOffStage_skip]
+  | succ n ih =>
+      intro msg dir
+      show (typeSameCycleSteps (.message msg dir)).biUnion
+          (fun step => step.1 ∪ futOffStage (n + 1) step.2) ∪ ∅ = {(msg, dir)}
+      simp [typeSameCycleSteps, futOffStage_skip, ih msg dir]
+
+/-- An ordinary choice's two silent selection steps expose whatever their
+selected branch exposes one stage down. -/
+theorem futOffStage_choice :
+    ∀ n left right, futOffStage (n + 1) (.choice left right) =
+      futOffStage n left ∪ futOffStage n right := by
+  intro n left right
+  show (typeSameCycleSteps (.choice left right)).biUnion
+      (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = _
+  simp [typeSameCycleSteps]
+
+/-- A fair choice's two selection steps expose the same menu as ordinary
+choice — only the labels differ, and `typeSameCycleSteps` doesn't track
+labels at all. -/
+theorem futOffStage_fairChoice :
+    ∀ n bid left right, futOffStage (n + 1) (.fairChoice bid left right) =
+      futOffStage n left ∪ futOffStage n right := by
+  intro n bid left right
+  show (typeSameCycleSteps (.fairChoice bid left right)).biUnion
+      (fun step => step.1 ∪ futOffStage n step.2) ∪ ∅ = _
+  simp [typeSameCycleSteps]
+
+/-- A sequence's same-cycle steps are exactly its left component's own
+same-cycle steps, each either fused directly into `right` (when the left
+step already reaches `skip`, `T-Seq-Fuse`) or wrapped back into a smaller
+sequence (`T-Seq`) — matching `sequenceRedirect`'s kept/redirect split on the
+automaton side exactly, but decided here by a direct check on the target
+residual, needing nothing about accepting states or H13. -/
+theorem futOffStage_seq :
+    ∀ n left right, futOffStage (n + 1) (.seq left right) =
+      (typeSameCycleSteps left).biUnion (fun step =>
+        step.1 ∪ if step.2 = .skip then futOffStage n right
+          else futOffStage n (.seq step.2 right)) := by
+  intro n left right
+  apply Finset.ext
+  intro x
+  show x ∈ (typeSameCycleSteps (.seq left right)).biUnion
+      (fun step => step.1 ∪ futOffStage n step.2) ∪ (∅ : Finset BareMessage) ↔ _
+  simp only [typeSameCycleSteps, Finset.union_empty, Finset.mem_biUnion, Finset.mem_image]
+  constructor
+  · rintro ⟨_, ⟨step, hStep, rfl⟩, hx⟩
+    refine ⟨step, hStep, ?_⟩
+    split_ifs at hx ⊢ with hSkip <;> exact hx
+  · rintro ⟨step, hStep, hx⟩
+    refine ⟨_, ⟨step, hStep, rfl⟩, ?_⟩
+    split_ifs at hx ⊢ with hSkip <;> exact hx
+
+/-- Tag-transparency for `.seq`'s right child: a right state's edges are
+copied unchanged from `right`'s own compilation (no redirect touches them),
+so `ofStage` there agrees with `right`'s own value directly, at every
+stage. -/
+theorem ofStage_sequence_child1
+    (signature : TypeAlphabet) (whole left right : PactType)
+    (hEdgesEq : (compileTypeFuel signature (typeCompilationFuel whole) whole).edges =
+      (buildSequenceAutomaton signature
+        (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel right) right)).edges)
+    (hProductEq : ∀ q, stateProductInfo whole (TypeAutomatonState.child 1 q) =
+      stateProductInfo right q) :
+    ∀ m q, ofStage signature m whole (TypeAutomatonState.child 1 q) =
+      ofStage signature m right q := by
+  intro m
+  induction m with
+  | zero => intro q; rfl
+  | succ m ih =>
+      -- intro q
+      -- simp only [ofStage]
+      -- rw [hProductEq q, hEdgesEq]
+      -- congr 1
+      -- apply Finset.ext
+      -- intro x
+      -- simp only [Finset.mem_biUnion, Finset.mem_filter]
+      -- constructor
+      sorry
+      -- · rintro ⟨edge, ⟨hEdgeMem, hSource, hNotTock⟩, hx⟩
+      --   simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
+      --     Finset.mem_union, Finset.mem_image] at hEdgeMem
+      --   rcases hEdgeMem with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
+      --       hEntryBridge) | hCompletingBridge
+      --   · subst hEq
+      --     rw [sequenceLeftEdge_source] at hSource
+      --     exact nomatch hSource
+      --   · subst hEq
+      --     simp only [childPendingEdge, childState] at hSource
+      --     injection hSource with _ hSource
+      --     refine ⟨childEdge, ⟨hChildMem, hSource, ?_⟩, ?_⟩
+      --     · simpa only [childPendingEdge] using hNotTock
+      --     · simp only [childPendingEdge, childState] at hx
+      --       rwa [ih childEdge.target] at hx
+      --   · exfalso
+      --     simp only [sequenceEntryBridgeEdges] at hEntryBridge
+      --     split at hEntryBridge
+      --     · simp only [Finset.mem_image] at hEntryBridge
+      --       obtain ⟨environment, -, hEq⟩ := hEntryBridge
+      --       subst hEq
+      --       exact nomatch hSource
+      --     · simp at hEntryBridge
+      --   · exfalso
+      --     simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
+      --     obtain ⟨state, -, hEq⟩ := hCompletingBridge
+      --     subst hEq
+      --     exact nomatch hSource
+      -- · rintro ⟨childEdge, ⟨hChildMem, hChildSource, hNotTock⟩, hx⟩
+      --   have hOut : childPendingEdge 1 childEdge ∈
+      --       (buildSequenceAutomaton signature
+      --         (compileTypeFuel signature (typeCompilationFuel left) left)
+      --         (compileTypeFuel signature (typeCompilationFuel right) right)).edges := by
+      --     simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
+      --       Finset.mem_union, Finset.mem_image]
+      --     exact Or.inl (Or.inl (Or.inr ⟨childEdge, hChildMem, rfl⟩))
+      --   refine ⟨childPendingEdge 1 childEdge, ⟨hOut, ?_, ?_⟩, ?_⟩
+      --   · simp only [childPendingEdge, childState]
+      --     exact congrArg (TypeAutomatonState.child 1) hChildSource
+      --   · simpa [childPendingEdge] using hNotTock
+      --   · simp only [childPendingEdge, childState]
+      --     rwa [ih childEdge.target]
+
+/-- The `AutomatonNonClockStep`-level (one-step, non-recursive) form of
+`ofStage_sequence_child1`'s own edge case-split: a `.child 1 q`-tagged
+state's real one-step behaviour is exactly `right`'s own, verbatim (no
+redirect, no bridge, ever touches the right side). -/
+theorem automatonNonClockStep_sequence_child1
+    (signature : TypeAlphabet) (left right : AutomatonFragment) (q target : TypeAutomatonState) :
+    AutomatonNonClockStep (buildSequenceAutomaton signature left right) (childState 1 q) target ↔
+      ∃ q', target = childState 1 q' ∧ AutomatonNonClockStep right q q' := by
+  -- constructor
+  sorry
+  -- · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock, hNotFuture⟩
+  --   simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
+  --     Finset.mem_union, Finset.mem_image] at hEdgeMem
+  --   rcases hEdgeMem with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
+  --       hEntryBridge) | hCompletingBridge
+  --   · exfalso; rw [← hEq, sequenceLeftEdge_source] at hSource; exact nomatch hSource
+  --   · subst hEq
+  --     simp only [childPendingEdge, childState] at hSource
+  --     injection hSource with _ hSource
+  --     refine ⟨childEdge.target, ?_, childEdge, hChildMem, hSource, rfl, ?_, ?_⟩
+  --     · rw [← hTarget]; simp [childPendingEdge, childState]
+  --     · simpa only [childPendingEdge] using hNotTock
+  --     · simpa only [childPendingEdge] using hNotFuture
+  --   · exfalso
+  --     simp only [sequenceEntryBridgeEdges] at hEntryBridge
+  --     split at hEntryBridge
+  --     · simp only [Finset.mem_image] at hEntryBridge
+  --       obtain ⟨environment, -, hEq⟩ := hEntryBridge
+  --       rw [← hEq] at hSource
+  --       exact nomatch hSource
+  --     · simp at hEntryBridge
+  --   · exfalso
+  --     simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
+  --     obtain ⟨s, -, hEq⟩ := hCompletingBridge
+  --     rw [← hEq] at hSource
+  --     exact nomatch hSource
+  -- · rintro ⟨q', hTargetEq, childEdge, hChildMem, hChildSource, hChildTarget, hChildNotTock,
+  --     hChildNotFuture⟩
+  --   have hOut : childPendingEdge 1 childEdge ∈
+  --       (buildSequenceAutomaton signature left right).edges := by
+  --     simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
+  --       Finset.mem_union, Finset.mem_image]
+  --     exact Or.inl (Or.inl (Or.inr ⟨childEdge, hChildMem, rfl⟩))
+  --   refine ⟨childPendingEdge 1 childEdge, hOut, ?_, ?_, ?_, ?_⟩
+  --   · simp only [childPendingEdge, childState]
+  --     exact congrArg (TypeAutomatonState.child 1) hChildSource
+  --   · rw [hTargetEq]
+  --     simp only [childPendingEdge, childState]
+  --     exact congrArg (TypeAutomatonState.child 1) hChildTarget
+  --   · simpa [childPendingEdge] using hChildNotTock
+  --   · simpa [childPendingEdge] using hChildNotFuture
+
+theorem buildSequenceAutomaton_child1_accepting_iff
+    (signature : TypeAlphabet) (left right : AutomatonFragment) (q : TypeAutomatonState) :
+    childState 1 q ∈ (buildSequenceAutomaton signature left right).accepting ↔
+      q ∈ right.accepting := by
+  simp [buildSequenceAutomaton, finishAutomatonFragment, childAccepting, childState]
 
 lemma helper_h12_compiled_state_shape
     (signature : TypeAlphabet) {processType residual : PactType}
@@ -118,6 +746,40 @@ theorem helper_h12_binaryChoice_shape
     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl, ← hR]
     exact hEntry
   · refine Or.inr (Or.inr ⟨entry.2, hS.symm, ?_⟩)
+    show (residual, entry.2) ∈ buildRelationSetCoreFuel signature (typeCompilationFuel right) right
+    rw [← buildRelationSetCoreFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl, ← hR]
+    exact hEntry
+
+/-- Shape of a related pair for `.seq left right`: unlike choice/fairChoice
+there is no fresh root (the sequence's own initial state IS `left`'s tagged
+initial state, per `buildSequenceAutomaton`), so a state is tagged `.child 0`
+with the residual still wrapped in `.seq _ right` (we haven't crossed over
+yet) or tagged `.child 1` with the residual exactly `right`'s own (we have). -/
+theorem helper_h12_seq_shape
+    (signature : TypeAlphabet) (left right : PactType)
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated :
+      relationMembership
+        (buildRelationSet (.seq left right) (compileType signature (.seq left right)))
+        residual state) :
+    (∃ ρ q1, residual = .seq ρ right ∧ state = .child 0 q1 ∧
+      relationMembership (buildRelationSet left (compileType signature left)) ρ q1) ∨
+    (∃ q2, state = .child 1 q2 ∧
+      relationMembership (buildRelationSet right (compileType signature right)) residual q2) := by
+  have hFuelEq : typeCompilationFuel (.seq left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature (typeCompilationFuel (.seq left right))
+        (.seq left right) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨entry, hEntry, hR, hS⟩ | ⟨entry, hEntry, hR, hS⟩
+  · refine Or.inl ⟨entry.1, entry.2, hR.symm, hS.symm, ?_⟩
+    show (entry.1, entry.2) ∈ buildRelationSetCoreFuel signature (typeCompilationFuel left) left
+    rw [← buildRelationSetCoreFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl]
+    exact hEntry
+  · refine Or.inr ⟨entry.2, hS.symm, ?_⟩
     show (residual, entry.2) ∈ buildRelationSetCoreFuel signature (typeCompilationFuel right) right
     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl, ← hR]
     exact hEntry
@@ -412,7 +1074,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
     ∀ n, ∀ {residual : PactType} {state : TypeAutomatonState},
       relationMembership (buildRelationSet processType (compileType signature processType))
         residual state →
-      ofStage signature n processType state = typeFutureOffersFuel n residual := by
+      ofStage signature n processType state = futOffStage n residual := by
   induction hSize : sizeOf processType using Nat.strong_induction_on
       generalizing processType with
   | _ k ih =>
@@ -431,7 +1093,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               simp [compileType, typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
             rw [hInit] at hIH
             rw [hIH]
-            cases n <;> rfl
+            exact futOffStage_skip n
+          rw [futOffStage_skip]
           apply Finset.eq_empty_iff_forall_notMem.mpr
           intro x hx
           simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -503,9 +1166,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.message msg dir)
               simp [typeCompilationFuel, buildRelationSetCoreFuel]
             have hIH := innerIH hFinalRelated
-            rw [hIH]; cases n <;> rfl
+            rw [hIH]; exact futOffStage_skip n
           have hRootSelf : ofStage signature n (.message msg dir) TypeAutomatonState.root =
-              typeFutureOffersFuel n (.message msg dir) := by
+              futOffStage n (.message msg dir) := by
             have hIH := innerIH (buildRelationSet_initial (.message msg dir)
               (compileType signature (.message msg dir)))
             have hInit : (compileType signature (.message msg dir)).initial =
@@ -526,16 +1189,17 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 (.message msg dir)).edges := by
             simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
               Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-            refine Or.inl (Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl, ?_⟩, rfl⟩)
-            simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
+            sorry
+            -- refine Or.inl (Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl, ?_⟩, rfl⟩)
+            -- simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
           obtain ⟨hR, hS⟩ | ⟨hR, hS⟩ :=
             NewCorrespondence.relationMembership_message_cases signature msg dir hRelated
           · subst hR; subst hS
+            rw [futOffStage_message]
             apply Finset.ext
             intro x
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
-              hNoProduct, Finset.notMem_empty, or_false, typeFutureOffersFuel,
-              Finset.mem_singleton]
+              hNoProduct, Finset.notMem_empty, or_false, Finset.mem_singleton]
             constructor
             · rintro ⟨edge, hEdge, hx⟩
               rcases hEdgeCases edge hEdge.1 with ⟨-, hCurrent, hTarget⟩ | ⟨-, hCurrent, hTarget⟩ |
@@ -549,7 +1213,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 · exact Finset.mem_singleton.mp hx
                 · cases n with
                   | zero => exact absurd hx (Finset.notMem_empty _)
-                  | succ n => simpa [typeFutureOffersFuel] using hx
+                  | succ n => simpa [futOffStage_message] using hx
               · exact absurd hEdge.2 (by rw [hSource]; simp)
             · intro hx
               subst hx
@@ -557,6 +1221,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]⟩,
                 Or.inl (Finset.mem_singleton_self _)⟩
           · subst hR; subst hS
+            rw [futOffStage_skip]
             apply Finset.eq_empty_iff_forall_notMem.mpr
             intro x hx
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -592,16 +1257,17 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 buildRelationSetCoreFuel signature (typeCompilationFuel .tock) .tock
               simp [typeCompilationFuel, buildRelationSetCoreFuel]
             have hIH := innerIH hFinalRelated
-            rw [hIH]; cases n <;> rfl
+            rw [hIH]; exact futOffStage_skip n
           have hRootSelf : ofStage signature n .tock TypeAutomatonState.root = ∅ := by
             have hIH := innerIH (buildRelationSet_initial .tock (compileType signature .tock))
             have hInit : (compileType signature .tock).initial = TypeAutomatonState.root := by
               simp [compileType, typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
             rw [hInit] at hIH
-            rw [hIH]; cases n <;> rfl
+            rw [hIH]; exact futOffStage_tock n
           obtain ⟨hR, hS⟩ | ⟨hR, hS⟩ :=
             NewCorrespondence.relationMembership_tock_cases signature hRelated
           · subst hR; subst hS
+            rw [futOffStage_tock]
             apply Finset.eq_empty_iff_forall_notMem.mpr
             intro x hx
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -614,6 +1280,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               · rw [hTarget, hRootSelf] at hx; simpa using hx
             · exact absurd hEdge.2 (by rw [hSource]; simp)
           · subst hR; subst hS
+            rw [futOffStage_skip]
             apply Finset.eq_empty_iff_forall_notMem.mpr
             intro x hx
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -648,10 +1315,11 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.progress pid)
               simp [typeCompilationFuel, buildRelationSetCoreFuel]
             have hIH := innerIH hFinalRelated
-            rw [hIH]; cases n <;> rfl
+            rw [hIH]; exact futOffStage_skip n
           obtain ⟨hR, hS⟩ | ⟨hR, hS⟩ :=
             NewCorrespondence.relationMembership_progress_cases signature pid hRelated
           · subst hR; subst hS
+            rw [futOffStage_progress]
             apply Finset.eq_empty_iff_forall_notMem.mpr
             intro x hx
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -661,6 +1329,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
             · rw [hCurrent, hTarget, hFinalSelf] at hx; simpa using hx
             · exact absurd hEdge.2 (by rw [hSource]; simp)
           · subst hR; subst hS
+            rw [futOffStage_skip]
             apply Finset.eq_empty_iff_forall_notMem.mpr
             intro x hx
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -770,6 +1439,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               · exfalso; rw [← hEq] at hSource; simp [childPendingEdge, childState] at hSource
               · left; rw [hEq]; exact ⟨rfl, rfl⟩
               · right; rw [hEq]; exact ⟨rfl, rfl⟩
+            rw [futOffStage_choice]
             apply Finset.ext
             intro x
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -784,7 +1454,6 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
                 rw [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated] at hx
-                simp only [typeFutureOffersFuel, Finset.mem_union]
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -793,10 +1462,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
                 rw [ih (sizeOf right) hRightSize right rfl n hRightInitRelated] at hx
-                simp only [typeFutureOffersFuel, Finset.mem_union]
                 exact Or.inr hx
             · intro hx
-              simp only [typeFutureOffersFuel, Finset.mem_union] at hx
+              simp only [Finset.mem_union] at hx
               rcases hx with hx | hx
               · refine ⟨_, ⟨hWitness0, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
@@ -927,6 +1595,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               · exfalso; rw [← hEq] at hSource; simp [childPendingEdge, childState] at hSource
               · left; rw [hEq]; exact ⟨rfl, rfl⟩
               · right; rw [hEq]; exact ⟨rfl, rfl⟩
+            rw [futOffStage_fairChoice]
             apply Finset.ext
             intro x
             simp only [ofStage, Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
@@ -941,7 +1610,6 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
                 rw [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated] at hx
-                simp only [typeFutureOffersFuel, Finset.mem_union]
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -950,10 +1618,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
                 rw [ih (sizeOf right) hRightSize right rfl n hRightInitRelated] at hx
-                simp only [typeFutureOffersFuel, Finset.mem_union]
                 exact Or.inr hx
             · intro hx
-              simp only [typeFutureOffersFuel, Finset.mem_union] at hx
+              simp only [Finset.mem_union] at hx
               rcases hx with hx | hx
               · refine ⟨_, ⟨hWitness0, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.fair]
@@ -1604,6 +2271,346 @@ lemma helper_h13_final_states_represent_completion
                 (typeCompilationFuel (parallelTypeBranchesSelecting item.1 branches))
                 (parallelTypeBranchesSelecting item.1 branches)), item.2),
               List.mk_mem_zipIdx_iff_getElem?.mpr hMapGet, a.2, hIH.mpr hSkip, rfl⟩
+
+/-- A supported message action's complement is always a local environment
+action, so some `signature.localEnvironments` member can immediately fire
+it — the automaton-side counterpart of the semantic side's ability to build
+a firing environment for `(msg, dir)` directly, with no signature at all. -/
+theorem typeNeed_message_mem_localEnvironmentActions
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (hSupports : (msg, dir) ∈ signature.boundary ∨ msg ∈ signature.interface) :
+    (msg, dir.invert) ∈ signature.localEnvironmentActions := by
+  have hMem : (msg, dir) ∈ signature.localActions := by
+    rcases hSupports with hBoundary | hInterface
+    · exact Finset.mem_union_left _ hBoundary
+    · refine Finset.mem_union_right _ ?_
+      simp only [TypeAlphabet.interfaceActions, Finset.mem_biUnion]
+      refine ⟨msg, hInterface, ?_⟩
+      cases dir <;> simp
+  have := Finset.mem_image_of_mem typeNeed hMem
+  simpa [typeNeed, TypeAlphabet.localEnvironmentActions] using this
+
+/-- A witness local environment that lets `(msg, dir.invert)` fire
+immediately and nothing else — built directly from `signature`'s own
+membership fact, matching the construction `TypeAlphabet.localEnvironments`
+itself ranges over. -/
+theorem firing_environment_mem_localEnvironments
+    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (hSupports : (msg, dir) ∈ signature.boundary ∨ msg ∈ signature.interface) :
+    ({ immediate := {(msg, dir.invert)}, future := ∅, clock := false } :
+      TypeEnvironment) ∈ signature.localEnvironments := by
+  have hMem := typeNeed_message_mem_localEnvironmentActions signature msg dir hSupports
+  simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+    Finset.mem_powerset, Finset.mem_image]
+  refine Or.inr ⟨{(msg, dir.invert)}, Finset.singleton_subset_iff.mpr hMem, ∅,
+    Finset.empty_subset _, rfl⟩
+
+/-- Helper Lemma H14: same-cycle completion. Needs `signature.Supports
+processType` (unlike H12/H13, which hold unconditionally) — without it a
+message with no supporting environment in `signature.localEnvironments`
+would have no path to an accepting state at all, while the semantic side
+(`TypeTransition`, not indexed by any signature) can always complete via a
+directly-constructed witness environment; `pact.pdf`'s own Lemma 4.5
+already fixes an admissible (hence supported) type throughout, so this
+hypothesis is implicit there and needs to be made explicit here. -/
+theorem helper_h14_same_cycle_completion
+    (signature : TypeAlphabet) {processType residual : PactType}
+    {state : TypeAutomatonState}
+    (hSupports : signature.Supports processType)
+    (hRelated :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual state) :
+    AutomatonSameCycleReachesAccepting
+        (compileTypeFuel signature (typeCompilationFuel processType) processType) state ↔
+      TypeSameCycleReaches residual .skip := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType residual state with
+  | _ n ih =>
+    cases processType with
+    | skip =>
+        obtain ⟨hResidual, hState⟩ :=
+          NewCorrespondence.relationMembership_skip_cases signature hRelated
+        subst hResidual; subst hState
+        constructor
+        · intro _; exact Relation.ReflTransGen.refl
+        · intro _
+          refine ⟨TypeAutomatonState.root, Relation.ReflTransGen.refl, ?_⟩
+          simp [compileType, typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+    | var name =>
+        unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
+        simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_singleton,
+          Prod.mk.injEq] at hRelated
+        obtain ⟨hResidual, hState⟩ := hRelated
+        subst hResidual; subst hState
+        constructor
+        · rintro ⟨finalState, -, hFinal⟩
+          exfalso
+          simp [compileType, typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+            at hFinal
+        · intro hReaches
+          exfalso
+          exact absurd (Relation.ReflTransGen.cases_head hReaches) (by
+            rintro (h | ⟨c, ⟨env, label, hTrans, -⟩, -⟩)
+            · exact nomatch h
+            · cases hTrans)
+    | message msg dir =>
+        simp only [TypeAlphabet.Supports] at hSupports
+        set env : TypeEnvironment :=
+          { immediate := {(msg, dir.invert)}, future := ∅, clock := false } with hEnvDef
+        have hHasNeed : env.hasNeed (msg, dir) := by simp [TypeEnvironment.hasNeed, hEnvDef]
+        rcases NewCorrespondence.relationMembership_message_cases signature msg dir hRelated with
+          ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
+        · constructor
+          · intro _
+            have hWF : env.WellFormed := by simp [TypeEnvironment.WellFormed, hEnvDef]
+            exact Relation.ReflTransGen.single ⟨env, _,
+              TypeTransition.action env msg dir ⟨hWF, hHasNeed⟩,
+              by simp [TypeLabel.isTock, TypeLabel.message]⟩
+          · intro _
+            have hEnvMem := firing_environment_mem_localEnvironments signature msg dir hSupports
+            rw [← hEnvDef] at hEnvMem
+            set edge : PendingAutomatonEdge :=
+              { source := TypeAutomatonState.root, environment := env,
+                label := AutomatonConstructionLabel.visible (TypeLabel.message msg dir),
+                current := {(msg, dir)}, future := FutureSpec.explicit ∅,
+                target := TypeAutomatonState.final } with hEdgeDef
+            have hEdgeMem : edge ∈
+                (compileTypeFuel signature (typeCompilationFuel (.message msg dir))
+                  (.message msg dir)).edges := by
+              simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+              sorry
+              -- exact Or.inl (Or.inl ⟨env, ⟨hEnvMem, hHasNeed⟩, hEdgeDef.symm⟩)
+            refine ⟨TypeAutomatonState.final,
+              Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
+            · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
+                TypeLabel.message]
+            · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+        · constructor
+          · intro _; exact Relation.ReflTransGen.refl
+          · intro _
+            refine ⟨TypeAutomatonState.final, Relation.ReflTransGen.refl, ?_⟩
+            simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+    | tock =>
+        rcases NewCorrespondence.relationMembership_tock_cases signature hRelated with
+          ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
+        · have hTockStays : ∀ ρ', TypeSameCycleReaches .tock ρ' → ρ' = .tock := by
+            intro ρ' hPath
+            induction hPath with
+            | refl => rfl
+            | tail _ hbc ih =>
+                rw [ih] at hbc
+                obtain ⟨env, label, hTrans, hNotTock⟩ := hbc
+                cases hTrans with
+                | cycle env hCond => exact absurd (by simp [TypeLabel.isTock]) hNotTock
+                | cycle_wait env hCond => rfl
+          have hAutoStays : ∀ q, Relation.ReflTransGen
+              (AutomatonNonClockStep
+                (compileTypeFuel signature (typeCompilationFuel .tock) .tock))
+              TypeAutomatonState.root q → q = TypeAutomatonState.root := by
+            intro q hR
+            induction hR with
+            | refl => rfl
+            | tail _ hbc ih =>
+                rw [ih] at hbc
+                obtain ⟨edge, hMem, hSource, hTarget, hNotTock⟩ := hbc
+                simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+                  Finset.mem_union, Finset.mem_image] at hMem
+                rcases hMem with ⟨env, -, hEq⟩ | ⟨env, -, hEq⟩
+                · rw [← hEq] at hSource hTarget hNotTock
+                  split at hSource <;> split at hTarget <;> split at hNotTock <;>
+                    simp_all [AutomatonConstructionLabel.semantic, TypeLabel.isTock]
+                · rw [← hEq] at hSource
+                  simp at hSource
+          constructor
+          · rintro ⟨finalState, hReach, hFinal⟩
+            rw [hAutoStays finalState hReach] at hFinal
+            simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment] at hFinal
+          · intro hReaches
+            exact absurd (hTockStays .skip hReaches) (by simp)
+        · constructor
+          · intro _; exact Relation.ReflTransGen.refl
+          · intro _
+            refine ⟨TypeAutomatonState.final, Relation.ReflTransGen.refl, ?_⟩
+            simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+    | progress pid =>
+        rcases NewCorrespondence.relationMembership_progress_cases signature pid hRelated with
+          ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
+        · constructor
+          · intro _
+            have hEnv : TypeEnvironment.empty.WellFormed := by
+              simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+            exact Relation.ReflTransGen.single ⟨TypeEnvironment.empty, _,
+              TypeTransition.progress TypeEnvironment.empty pid hEnv,
+              by simp [TypeLabel.isTock, TypeLabel.progress]⟩
+          · intro _
+            have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
+              simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+                Finset.mem_powerset, Finset.mem_image]
+              exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+            set edge : PendingAutomatonEdge :=
+              { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
+                label := AutomatonConstructionLabel.visible (TypeLabel.progress pid),
+                current := ∅, future := FutureSpec.explicit ∅,
+                target := TypeAutomatonState.final } with hEdgeDef
+            have hEdgeMem : edge ∈
+                (compileTypeFuel signature (typeCompilationFuel (.progress pid))
+                  (.progress pid)).edges := by
+              simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+                Finset.mem_union, Finset.mem_image]
+              sorry
+              -- exact Or.inl ⟨TypeEnvironment.empty, hEmptyLocal, hEdgeDef.symm⟩
+            refine ⟨TypeAutomatonState.final,
+              Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
+            · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
+                TypeLabel.progress]
+            · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+        · constructor
+          · intro _; exact Relation.ReflTransGen.refl
+          · intro _
+            refine ⟨TypeAutomatonState.final, Relation.ReflTransGen.refl, ?_⟩
+            simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
+    | choice left right =>
+        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hFuelEq : typeCompilationFuel (.choice left right) =
+            max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+          simp only [typeCompilationFuel]; omega
+        set leftAuto := compileTypeFuel signature (typeCompilationFuel left) left with hLeftAutoDef
+        set rightAuto := compileTypeFuel signature (typeCompilationFuel right) right
+          with hRightAutoDef
+        have hWhole :
+            compileTypeFuel signature (typeCompilationFuel (.choice left right))
+              (.choice left right) =
+              buildChoiceAutomaton signature leftAuto rightAuto
+                TypeLabel.silent TypeLabel.silent := by
+          rw [hFuelEq]
+          show buildChoiceAutomaton signature
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+              TypeLabel.silent TypeLabel.silent =
+            buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent
+          rw [hLeftAutoDef, hRightAutoDef,
+            compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+            compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+        rw [hWhole]
+        simp only [TypeAlphabet.Supports] at hSupports
+        have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
+          simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+            Finset.mem_powerset, Finset.mem_image]
+          exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+        have hShape := helper_h12_binaryChoice_shape signature (.choice left right) left right
+          rfl hFuelEq hRelated
+        have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent)
+          leftAuto 0
+          (automatonNonClockStep_binaryChoice_child0 signature leftAuto rightAuto
+            TypeLabel.silent TypeLabel.silent)
+          (buildChoiceAutomaton_child0_accepting_iff signature leftAuto rightAuto
+            TypeLabel.silent TypeLabel.silent)
+        have hTag1 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent)
+          rightAuto 1
+          (automatonNonClockStep_binaryChoice_child1 signature leftAuto rightAuto
+            TypeLabel.silent TypeLabel.silent)
+          (buildChoiceAutomaton_child1_accepting_iff signature leftAuto rightAuto
+            TypeLabel.silent TypeLabel.silent)
+        rcases hShape with ⟨hResidualEq, hStateEq⟩ |
+          ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
+        · subst hResidualEq; subst hStateEq
+          rw [typeSameCycleReaches_choice_iff,
+            automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
+              hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.silent])
+              (by simp [TypeLabel.isTock, TypeLabel.silent])]
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1
+            (buildRelationSet_initial left (compileType signature left)) rfl
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2
+            (buildRelationSet_initial right (compileType signature right)) rfl
+          simp only [compileType] at hIHLeft hIHRight
+          rw [← hLeftAutoDef] at hIHLeft
+          rw [← hRightAutoDef] at hIHRight
+          rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
+        · subst hStateEq
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.1 hLeftRelated rfl)
+        · subst hStateEq
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2 hRightRelated rfl)
+    | fairChoice bid left right =>
+        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hFuelEq : typeCompilationFuel (.fairChoice bid left right) =
+            max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+          simp only [typeCompilationFuel]; omega
+        set leftAuto := compileTypeFuel signature (typeCompilationFuel left) left with hLeftAutoDef
+        set rightAuto := compileTypeFuel signature (typeCompilationFuel right) right
+          with hRightAutoDef
+        have hWhole :
+            compileTypeFuel signature (typeCompilationFuel (.fairChoice bid left right))
+              (.fairChoice bid left right) =
+              buildChoiceAutomaton signature leftAuto rightAuto
+                (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
+          rw [hFuelEq]
+          show buildChoiceAutomaton signature
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+              (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
+            buildChoiceAutomaton signature leftAuto rightAuto
+              (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+          rw [hLeftAutoDef, hRightAutoDef,
+            compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+            compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+        rw [hWhole]
+        simp only [TypeAlphabet.Supports] at hSupports
+        have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
+          simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+            Finset.mem_powerset, Finset.mem_image]
+          exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+        have hShape := helper_h12_binaryChoice_shape signature (.fairChoice bid left right)
+          left right rfl hFuelEq hRelated
+        have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildChoiceAutomaton signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+          leftAuto 0
+          (automatonNonClockStep_binaryChoice_child0 signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+          (buildChoiceAutomaton_child0_accepting_iff signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+        have hTag1 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildChoiceAutomaton signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+          rightAuto 1
+          (automatonNonClockStep_binaryChoice_child1 signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+          (buildChoiceAutomaton_child1_accepting_iff signature leftAuto rightAuto
+            (TypeLabel.fair bid true) (TypeLabel.fair bid false))
+        rcases hShape with ⟨hResidualEq, hStateEq⟩ |
+          ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
+        · subst hResidualEq; subst hStateEq
+          rw [typeSameCycleReaches_fairChoice_iff,
+            automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
+              hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.fair])
+              (by simp [TypeLabel.isTock, TypeLabel.fair])]
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1
+            (buildRelationSet_initial left (compileType signature left)) rfl
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2.2
+            (buildRelationSet_initial right (compileType signature right)) rfl
+          simp only [compileType] at hIHLeft hIHRight
+          rw [← hLeftAutoDef] at hIHLeft
+          rw [← hRightAutoDef] at hIHRight
+          rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
+        · subst hStateEq
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.2.1 hLeftRelated rfl)
+        · subst hStateEq
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2.2 hRightRelated rfl)
+    | seq left right => sorry
+    | par left right interface => sorry
+    | recur name body => sorry
+    | xoffer elseType branches => sorry
+    | offer elseType branches => sorry
 
 /-- Helper Lemma H15, edge form: a public edge carries the target menu after removing its current offer. -/
 lemma helper_h15_edge_future_offers_agree

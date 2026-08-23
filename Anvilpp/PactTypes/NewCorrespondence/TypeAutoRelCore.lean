@@ -7,14 +7,8 @@ open Classical
 
 noncomputable section
 
-/-! ### Provenance-directed relation (Task 4)
 
-Replaces the old `Classical.choose`-over-decoration relation (unsound — see
-`AGENT.md`, Task 4) with a structural one, matching `pact.pdf`'s own H12:
-built by compilation rule, threading each child's own relation membership
-through directly. Fuel-indexed like `compileTypeFuel`, for the same reason
-(`.offer`'s generated commit type isn't `sizeOf`-smaller than `.offer`
-itself). -/
+/-- Relation Set Builder, related type to its compiled automaton state --/
 def buildRelationSetCoreFuel (signature : TypeAlphabet) :
     Nat → PactType → Finset (PactType × TypeAutomatonState)
   | 0, ty => {(ty, .root)}
@@ -594,6 +588,236 @@ theorem buildRelationSetCoreFuel_eq_of_sufficient
     obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
     exact buildRelationSetCoreFuel_add_stable signature processType rightFuel extra hRight
 
+/-- Every automaton edge's target either relates to something under `ty`'s own
+relation, or the edge is a still-dangling recursion marker — one whose label
+is `.variable name` because it has not yet been crossed by the `.recur name`
+that binds it (a marker is consumed, turned into a real backedge, only by its
+*own* binder; copying it through `.choice`/`.seq`/`.recur`/`.xoffer`/`.offer`
+preserves the label unchanged). In that case the target is provably inert: no
+further edge is sourced there and it is not a product state either, so
+`ofStage`'s value there is `∅` regardless of what (if anything) it
+represents. Replaces the old (deleted) `relationSuccessors_mem_cases` for the
+new, provenance-directed relation. `.par`/`.xoffer`/`.offer` deferred, matching
+`typeSameCycleSteps`'s own scope so far. -/
+theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
+    ∀ fuel ty, TypeCompilationFuelSufficient ty fuel →
+      ∀ edge ∈ (compileTypeFuel signature fuel ty).edges,
+      (∃ residual, (residual, edge.target) ∈ buildRelationSetCoreFuel signature fuel ty) ∨
+      (∃ name, edge.label = AutomatonConstructionLabel.variable name) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro ty hFuel edge hEdge
+      exact (Nat.not_lt_zero _ (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro ty hFuel edge hEdge
+      cases ty with
+      | skip =>
+          left
+          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image,
+            Finset.mem_filter] at hEdge
+          obtain ⟨env, -, hEq⟩ := hEdge
+          exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+      | message msg dir =>
+          left
+          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with (⟨env, -, hEq⟩ | ⟨env, -, hEq⟩) | ⟨env, -, hEq⟩
+          · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+          · exact ⟨.message msg dir, by simp [← hEq, buildRelationSetCoreFuel]⟩
+          · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+      | tock =>
+          left
+          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_image] at hEdge
+          rcases hEdge with ⟨env, -, hEq⟩ | ⟨env, -, hEq⟩
+          · split at hEq
+            · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+            · exact ⟨.tock, by simp [← hEq, buildRelationSetCoreFuel]⟩
+          · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+      | progress pid =>
+          left
+          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
+            Finset.mem_image] at hEdge
+          rcases hEdge with ⟨env, -, hEq⟩ | ⟨env, -, hEq⟩
+          · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+          · exact ⟨.skip, by simp [← hEq, buildRelationSetCoreFuel]⟩
+      | var name =>
+          right
+          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image] at hEdge
+          obtain ⟨env, -, hEq⟩ := hEdge
+          exact ⟨name, by subst hEq; rfl⟩
+      | choice left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          simp only [compileTypeFuel, buildChoiceAutomaton, finishAutomatonFragment,
+            childPendingEdges, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion,
+            Finset.mem_insert, Finset.mem_singleton] at hEdge
+          rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
+            ⟨environment, -, hEq | hEq⟩
+          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              subst hEq
+              simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              subst hEq
+              simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          · left
+            refine ⟨left, ?_⟩
+            subst hEq
+            simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
+            exact Or.inr (Or.inl (Finset.mem_image.mpr
+              ⟨(left, (compileTypeFuel signature fuel left).initial),
+                buildRelationSetCoreFuel_initial_mem signature fuel left hLeft, rfl⟩))
+          · left
+            refine ⟨right, ?_⟩
+            subst hEq
+            simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
+            exact Or.inr (Or.inr (Finset.mem_image.mpr
+              ⟨(right, (compileTypeFuel signature fuel right).initial),
+                buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩))
+      | fairChoice bid left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          simp only [compileTypeFuel, buildChoiceAutomaton, finishAutomatonFragment,
+            childPendingEdges, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion,
+            Finset.mem_insert, Finset.mem_singleton] at hEdge
+          rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
+            ⟨environment, -, hEq | hEq⟩
+          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              subst hEq
+              simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              subst hEq
+              simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          · left
+            refine ⟨left, ?_⟩
+            subst hEq
+            simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
+            exact Or.inr (Or.inl (Finset.mem_image.mpr
+              ⟨(left, (compileTypeFuel signature fuel left).initial),
+                buildRelationSetCoreFuel_initial_mem signature fuel left hLeft, rfl⟩))
+          · left
+            refine ⟨right, ?_⟩
+            subst hEq
+            simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
+            exact Or.inr (Or.inr (Finset.mem_image.mpr
+              ⟨(right, (compileTypeFuel signature fuel right).initial),
+                buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩))
+      | seq left right =>
+          sorry
+          -- have hLeft : TypeCompilationFuelSufficient left fuel := by
+          --   simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          -- have hRight : TypeCompilationFuelSufficient right fuel := by
+          --   simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          -- simp only [compileTypeFuel, buildSequenceAutomaton, finishAutomatonFragment,
+          --   childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
+          -- rcases hEdge with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
+          --     hEntryBridge) | hCompletingBridge
+          -- · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          --   · left
+          --     by_cases hAccept : childEdge.target ∈ (compileTypeFuel signature fuel left).accepting
+          --     · refine ⟨right, ?_⟩
+          --       subst hEq
+          --       rw [sequenceLeftEdge_target, sequenceRedirect_of_accepting hAccept]
+          --       simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
+          --         Finset.mem_image]
+          --       exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
+          --         buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
+          --     · refine ⟨.seq residual right, ?_⟩
+          --       subst hEq
+          --       rw [sequenceLeftEdge_target, sequenceRedirect_of_not_accepting hAccept]
+          --       simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
+          --         Finset.mem_image, Prod.mk.injEq]
+          --       exact Or.inl ⟨(residual, childEdge.target), hResidual, rfl, rfl⟩
+          --   · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          -- · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          --   · left
+          --     refine ⟨residual, ?_⟩
+          --     subst hEq
+          --     simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
+          --       Finset.mem_union, Finset.mem_image]
+          --     exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
+          --   · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
+          -- · left
+          --   refine ⟨right, ?_⟩
+          --   simp only [sequenceEntryBridgeEdges] at hEntryBridge
+          --   split at hEntryBridge
+          --   · simp only [Finset.mem_image] at hEntryBridge
+          --     obtain ⟨environment, -, hEq⟩ := hEntryBridge
+          --     subst hEq
+          --     simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
+          --       Finset.mem_image]
+          --     exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
+          --       buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
+          --   · simp at hEntryBridge
+          -- · left
+          --   refine ⟨right, ?_⟩
+          --   simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
+          --   obtain ⟨state, -, hEq⟩ := hCompletingBridge
+          --   subst hEq
+          --   simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
+          --     Finset.mem_image]
+          --   exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
+          --     buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
+      | recur name body =>
+          have hBody : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
+          simp only [compileTypeFuel, buildRecursionAutomaton, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image] at hEdge
+          rcases hEdge with ⟨environment, -, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩
+          · left
+            refine ⟨body.replaceVar name (.recur name body), ?_⟩
+            subst hEq
+            simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert,
+              Finset.mem_image]
+            exact Or.inr ⟨(body, (compileTypeFuel signature fuel body).initial),
+              buildRelationSetCoreFuel_initial_mem signature fuel body hBody, rfl⟩
+          · by_cases hMarker : childEdge.label = AutomatonConstructionLabel.variable name
+            · left
+              refine ⟨body.replaceVar name (.recur name body), ?_⟩
+              subst hEq
+              rw [if_pos hMarker]
+              simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_image]
+              exact Or.inr ⟨(body, (compileTypeFuel signature fuel body).initial),
+                buildRelationSetCoreFuel_initial_mem signature fuel body hBody, rfl⟩
+            · rw [if_neg hMarker] at hEq
+              rcases ih body hBody childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name', hLabel⟩
+              · left
+                refine ⟨residual.replaceVar name (.recur name body), ?_⟩
+                subst hEq
+                simp only [childState, buildRelationSetCoreFuel,
+                  Finset.mem_insert, Finset.mem_image]
+                exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
+              · exact Or.inr ⟨name', by subst hEq; exact hLabel⟩
+      | par left right interface => sorry
+      | xoffer elseType branches => sorry
+      | offer elseType branches => sorry
+
 /-- Defines relation membership as occurrence of the residual/state pair in the relation set. -/
 def relationMembership
     (relation_set : Finset (PactType × TypeAutomatonState))
@@ -616,4 +840,17 @@ theorem buildRelationSet_initial (ty : PactType) (auto : TypeAutomaton)
 
 end
 
-end Pact
+
+theorem relationMembership_of_step_edge_unique
+    (ty : PactType) (auto : TypeAutomaton)
+    {residual residual' : PactType} {state state' : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hRelated : relationMembership (buildRelationSet ty auto) residual state)
+    (hEdge : auto.HasEdge state env label offers state')
+    (hStep : DecoratedTypeTransition env residual label offers residual')
+    (hUnique :
+      ∀ target,
+        DecoratedTypeTransition env residual label offers target →
+          target = residual') :
+    relationMembership (buildRelationSet ty auto) residual' state' := by
+    sorry

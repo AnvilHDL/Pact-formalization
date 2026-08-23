@@ -175,7 +175,6 @@ def compileTypeFuel (signature : TypeAlphabet) :
       { states := {.root}
         initial := .root
         accepting := ∅
-        completing := ∅
         edges := ∅ }
   | fuel + 1, processType => by
       classical
@@ -184,7 +183,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       | .skip =>
           let idleEnvironments := signature.localEnvironments.filter fun environment =>
             environment.clock = false
-          exact finishAutomatonFragment {.root} .root {.root} {.root} <|
+          exact finishAutomatonFragment {.root} .root {.root} <|
             idleEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -203,7 +202,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   environment := environment
                   label := .visible (TypeLabel.message msg dir)
                   current := {action}
-                  future := .explicit ∅
+                  future := .at .final ∅
                   target := .final }
           let waitingEdges : Finset PendingAutomatonEdge :=
             (signature.localEnvironments.filter fun environment =>
@@ -213,7 +212,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   environment := environment
                   label := .visible TypeLabel.silent
                   current := {action}
-                  future := .explicit ∅
+                  future := .at .root {action}
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
@@ -226,7 +225,6 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
-            {.root, .final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
@@ -258,7 +256,6 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
-            {.final}
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
@@ -269,7 +266,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 environment := environment
                 label := .visible (TypeLabel.progress pid)
                 current := ∅
-                future := .explicit ∅
+                future := .at .final ∅
                 target := .final }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments := signature.localEnvironments.filter fun environment =>
@@ -282,12 +279,11 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .explicit ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
-            {.root, .final}
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
       | .var name =>
-          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ <|
+          exact finishAutomatonFragment {.root, .final} .root ∅  <|
             signature.localEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -523,15 +519,12 @@ theorem compileTypeFuel_eq_of_sufficient
 ### Native product-aware future resolution (`pactautomatonconstruction.typ`, "Future menus are global")
 
 `OF(q) = μX.Φ(X)` is a single global least fixed point over the whole
-compiled automaton, whose product-state case `hide_I(X(q₁)∪X(q₂))` is read
-directly off the two component states, not off any transition. `computeFuture`
-(`PendingAutomatonFuture.lean`) only ever follows real graph edges, so it has
-no native way to see that contribution; `BuildParallelAutomaton.lean` used to
-patch this by inserting synthetic `.future`-labelled edges carrying a
-precomputed value. `stateProductInfo`/`computeFutureOf` replace that: they
+compiled automaton.  For a product state, the equation reads the two component
+menus directly as `hide_I(X(q₁) ∪ X(q₂))`; this is a clause of the future
+equation, not an extra transition.  `stateProductInfo`/`computeFutureOf`
 recover, purely from a state's shape and the originating `PactType`, which
 `.par` node (if any) a state's core `.pair q₁ q₂` came from, and fold in
-`q₁`/`q₂`'s own (recursively native) future menus natively.
+`q₁`/`q₂`'s own future menus natively.
 
 Fuel-bounded throughout, matching `compileTypeFuel`'s own convention: a
 conjunctive `.offer`'s generated `parallelTypeBranchesSelecting` type is not
@@ -692,7 +685,6 @@ def compileType
   let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
     | .variable _ => ∅
-    | .future => ∅
     | .visible label =>
         let symbol : TypeAutomatonSymbol :=
           { environment := edge.environment
@@ -799,16 +791,12 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hInitialOrTarget :
+          have hInitial :
               (compileTypeFuel signature fuel left).initial ∈
-                  (compileTypeFuel signature fuel left).states ∨
-                ∃ edge ∈ (compileTypeFuel signature fuel left).edges,
-                  edge.target =
-                    (compileTypeFuel signature fuel left).initial :=
-            Or.inl (ih left hLeft)
+                (compileTypeFuel signature fuel left).states := ih left hLeft
           simpa [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, childStates, childState,
-            initial_not_mem_sequenceDeleted] using hInitialOrTarget
+            initial_not_mem_sequenceDeleted] using hInitial
       | par left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢

@@ -469,7 +469,6 @@ def taggedFragment (index : Nat) (body : AutomatonFragment) :
   { states := childStates index body
     initial := childState index body.initial
     accepting := ∅
-    completing := ∅
     edges := body.edges.image fun edge =>
       { source := childState index edge.source
         environment := edge.environment

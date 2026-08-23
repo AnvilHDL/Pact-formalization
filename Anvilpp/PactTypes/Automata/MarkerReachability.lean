@@ -55,7 +55,6 @@ def markerStoppedFragment (fragment : AutomatonFragment) (name : String) :
   { states := fragment.states
     initial := fragment.initial
     accepting := fragment.accepting
-    completing := fragment.completing
     edges := fragment.edges.image fun edge =>
       if edge.label = AutomatonConstructionLabel.variable name then
         { edge with current := ∅, future := .explicit ∅ }
@@ -826,12 +825,11 @@ theorem computeFuture_changes_when_recursion_backedge_is_installed :
 /-- Package a constructor graph without resolving its future references. -/
 def finishAutomatonFragment
     (states : Finset TypeAutomatonState) (initial : TypeAutomatonState)
-    (accepting completing : Finset TypeAutomatonState)
+    (accepting : Finset TypeAutomatonState)
     (edges : Finset PendingAutomatonEdge) : AutomatonFragment :=
   { states := states
     initial := initial
     accepting := accepting
-    completing := completing
     edges := edges }
 
 /-- Resolve future fields against all states and edges currently in a fragment. -/
@@ -907,10 +905,6 @@ def childStates (index : Nat) (automaton : AutomatonFragment) :
 def childAccepting (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=
   automaton.accepting.image (childState index)
-
-def childCompleting (index : Nat) (automaton : AutomatonFragment) :
-    Finset TypeAutomatonState :=
-  automaton.completing.image (childState index)
 
 def childFutureSpec (index : Nat) : FutureSpec → FutureSpec
   | .explicit offers => .explicit offers

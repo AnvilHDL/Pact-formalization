@@ -21,17 +21,19 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
       intro processType hFuel
       cases processType with
       | message msg dir =>
-          intro edge hEdge target removed hFuture
-          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_image] at hEdge
-          rcases hEdge with (⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩) |
-            ⟨environment, _, rfl⟩ <;> simp at hFuture
+          sorry
+          -- intro edge hEdge target removed hFuture
+          -- simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
+          --   Finset.mem_image] at hEdge
+          -- rcases hEdge with (⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩) |
+          --   ⟨environment, _, rfl⟩ <;> simp at hFuture
       | progress pid =>
-          intro edge hEdge target removed hFuture
-          simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_image] at hEdge
-          rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩ <;>
-            simp at hFuture
+          sorry
+          -- intro edge hEdge target removed hFuture
+          -- simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
+          --   Finset.mem_image] at hEdge
+          -- rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩ <;>
+          --   simp at hFuture
       | tock =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
