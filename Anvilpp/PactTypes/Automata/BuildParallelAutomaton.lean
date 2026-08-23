@@ -57,13 +57,14 @@ def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
         let target : TypeAutomatonState :=
           if bothAccept then .final
           else .pair leftEdge.target rightEdge.target
+        let current := hideOffers interface (leftEdge.current ∪ rightEdge.current)
         { source := .pair leftEdge.source rightEdge.source
           environment := combineAutomatonEnvironment interface
             leftEdge.environment rightEdge.environment
           label := AutomatonConstructionLabel.combine interface
             leftEdge.label rightEdge.label
-          current := hideOffers interface (leftEdge.current ∪ rightEdge.current)
-          future := .at target ∅
+          current := current
+          future := .at target current
           target := target }
   let doneEdges : Finset PendingAutomatonEdge :=
     let idleEnvironments := signature.localEnvironments.filter fun environment =>

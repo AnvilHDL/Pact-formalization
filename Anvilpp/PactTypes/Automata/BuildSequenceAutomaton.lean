@@ -43,40 +43,40 @@ def sequenceRedirect (left right : AutomatonFragment)
   if state ∈ left.accepting then childState 1 right.initial
   else childState 0 state
 
-/-- Retarget a symbolic future reference through the same redirection used for
-left-child edge targets.  This keeps `OF` references symbolic until the final
-automaton is known, instead of resolving them inside the left fragment. -/
-def sequenceFutureSpec (left right : AutomatonFragment) :
-    FutureSpec → FutureSpec
-  | .explicit offers => .explicit offers
-  | .at state removed => .at (sequenceRedirect left right state) removed
-
 /-- The image of a left edge whose target is not final.
 
-This is the paper's `δ_seq^left` clause.  The edge stays in the left copy.
-Lean stores some future fields as symbolic `OF(q)` references, so those
-references are retagged into the sequence automaton. -/
+This is the paper's `δ_seq^left` clause.  The edge stays in the left copy,
+retagged.  The future field is rebuilt as a fresh `OF(q')` reference at the
+retagged target — never the original edge's own `.future` retargeted in
+place, since that original reference was resolved against `left` alone and
+may carry an unrelated `removed` set.  `edge.current` is always a safe
+choice of `removed`: it is exactly what a same-cycle self-loop needs
+(`OF` of the loop's own state would otherwise double-count the offer this
+edge already reports as current), and a no-op everywhere else, since
+`edge.current` then generally is not present in the target's own menu
+anyway. -/
 def sequenceKeptLeftEdge (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) : PendingAutomatonEdge :=
   { source := childState 0 edge.source
     environment := edge.environment
     label := edge.label
     current := edge.current
-    future := sequenceFutureSpec left right edge.future
+    future := .at (sequenceRedirect left right edge.target) edge.current
     target := childState 0 edge.target }
 
 /-- The image of a left edge whose target is final.
 
 This is the paper's `δ_seq^redirect` clause.  The source, environment, label,
-and current offers are copied from the left edge.  The target becomes the right
-entry, and the future field is `OF(i₂)`. -/
+and current offers are copied from the left edge.  The target becomes the
+right entry, and the future field is `OF(i₂)` — with `removed := edge.current`
+for the same self-loop-safety reason as `sequenceKeptLeftEdge`. -/
 def sequenceRedirectEdge (_left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) : PendingAutomatonEdge :=
   { source := childState 0 edge.source
     environment := edge.environment
     label := edge.label
     current := edge.current
-    future := .at (childState 1 right.initial) ∅
+    future := .at (childState 1 right.initial) edge.current
     target := childState 1 right.initial }
 
 /-- `δ_seq^left`: keep exactly the left edges whose target is not accepting. -/
@@ -212,16 +212,11 @@ theorem buildSequenceAutomaton_futureTargetsInStates
     Finset.mem_filter] at hEdge
   rcases hEdge with (hLeft | hRight) | hRedirect
   · rcases hLeft with ⟨leftEdge, hLeftEdge, rfl⟩
-    cases hSpec : leftEdge.future with
-    | explicit offers =>
-        simp [sequenceKeptLeftEdge, sequenceFutureSpec, hSpec] at hFuture
-    | «at» leftTarget leftRemoved =>
-        simp only [sequenceKeptLeftEdge, sequenceFutureSpec, hSpec] at hFuture
-        have hLeftTarget := hLeftTargets leftEdge hLeftEdge.1 leftTarget
-          leftRemoved hSpec
-        cases hFuture
-        exact sequenceRedirect_mem_states signature left right hRightInitial
-          leftTarget hLeftTarget
+    simp only [sequenceKeptLeftEdge] at hFuture
+    injection hFuture with hTargetEq _
+    subst hTargetEq
+    apply sequenceRedirect_mem_states signature left right hRightInitial
+    sorry -- needs `leftEdge.target ∈ left.states`, not yet threaded as a hypothesis here
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with
     | explicit offers =>

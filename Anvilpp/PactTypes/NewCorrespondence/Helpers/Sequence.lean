@@ -49,36 +49,29 @@ theorem buildSequenceAutomaton_outgoing_right
       ∃ childEdge ∈ right.edges,
         childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
   classical
-  sorry
-  -- constructor
-  -- · rintro ⟨hEdge, hSource⟩
-  --   simp only [buildSequenceAutomaton, finishAutomatonFragment,
-  --     childPendingEdges, sequenceEntryBridgeEdges,
-  --     sequenceCompletingBridgeEdges, Finset.mem_union, Finset.mem_image] at hEdge
-  --   rcases hEdge with ((hLeft | hRight) | hEntry) | hCompleting
-  --   · rcases hLeft with ⟨childEdge, _hChildEdge, hEdgeEq⟩
-  --     rw [← hEdgeEq] at hSource
-  --     simp [sequenceLeftEdge, childState] at hSource
-  --   · rcases hRight with ⟨childEdge, hChildEdge, hEdgeEq⟩
-  --     have hChildSource := hSource
-  --     rw [← hEdgeEq] at hChildSource
-  --     simp [childPendingEdge, childState] at hChildSource
-  --     exact ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
-  --   · split at hEntry
-  --     · simp only [Finset.mem_image] at hEntry
-  --       rcases hEntry with ⟨environment, _hEnvironment, hEdgeEq⟩
-  --       rw [← hEdgeEq] at hSource
-  --       simp [childState] at hSource
-  --     · simp at hEntry
-  --   · rcases hCompleting with ⟨source, _hSource, hEdgeEq⟩
-  --     rw [← hEdgeEq] at hSource
-  --     simp [childState] at hSource
-  -- · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
-  --   constructor
-  --   · simp only [buildSequenceAutomaton, finishAutomatonFragment,
-  --       childPendingEdges, Finset.mem_union, Finset.mem_image]
-  --     exact Or.inl (Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩))
-  --   · simp [childPendingEdge, childState, hChildSource]
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
+      sequenceRightEdges, sequenceRedirectEdges, childPendingEdges,
+      Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with (hLeft | hRight) | hRedirect
+    · rcases hLeft with ⟨childEdge, _, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [sequenceKeptLeftEdge, childState] at hSource
+    · rcases hRight with ⟨childEdge, hChildEdge, hEdgeEq⟩
+      have hChildSource := hSource
+      rw [← hEdgeEq] at hChildSource
+      simp [childPendingEdge, childState] at hChildSource
+      exact ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
+    · rcases hRedirect with ⟨childEdge, _, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [sequenceRedirectEdge, childState] at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRightEdges,
+        childPendingEdges, Finset.mem_union, Finset.mem_image]
+      exact Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩)
+    · simp [childPendingEdge, childState, hChildSource]
 
 private theorem buildSequenceAutomaton_referencedStates_right
     (signature : TypeAlphabet) (left right : AutomatonFragment)
@@ -291,53 +284,33 @@ theorem buildSequenceAutomaton_outgoing_left_visible
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge)
     {label : TypeLabel}
-    (hVisible : edge.label = .visible label)
+    (_hVisible : edge.label = .visible label)
     (hOutgoing :
       edge ∈ (buildSequenceAutomaton signature left right).edges ∧
         edge.source = .child 0 state) :
-    (∃ childEdge ∈ left.edges,
-        childEdge.source = state ∧
-          edge = sequenceLeftEdge left right childEdge) ∨
-      (state = left.initial ∧ left.initial ∈ left.accepting ∧
-        ∃ environment ∈ signature.localEnvironments,
-          environment.clock = false ∧
-            edge =
-              { source := childState 0 left.initial
-                environment := environment
-                label := .visible TypeLabel.silent
-                current := ∅
-                future := .at (childState 1 right.initial) ∅
-                target := childState 1 right.initial }) := by
-  sorry
-  -- classical
-  -- rcases hOutgoing with ⟨hEdge, hSource⟩
-
-  -- simp only [buildSequenceAutomaton, finishAutomatonFragment,
-  --   childPendingEdges, sequenceCompletingBridgeEdges, Finset.mem_union,
-  --   Finset.mem_image] at hEdge
-  -- rcases hEdge with ((hLeft | hRight) | hEntry) | hCompleting
-  -- · rcases hLeft with ⟨childEdge, hChildEdge, hEdgeEq⟩
-  --   have hChildSource := hSource
-  --   rw [← hEdgeEq] at hChildSource
-  --   simp [sequenceLeftEdge, childState] at hChildSource
-  --   exact Or.inl ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
-  -- · rcases hRight with ⟨childEdge, _hChildEdge, hEdgeEq⟩
-  --   rw [← hEdgeEq] at hSource
-  --   simp [childPendingEdge, childState] at hSource
-  -- · by_cases hAccepting : left.initial ∈ left.accepting
-  --   · simp [sequenceEntryBridgeEdges, hAccepting, Finset.mem_image,
-  --       Finset.mem_filter] at hEntry
-  --     rcases hEntry with ⟨environment, hEnvironment, hEdgeEq⟩
-  --     have hStateEq := hSource
-  --     rw [← hEdgeEq] at hStateEq
-  --     simp [childState] at hStateEq
-  --     exact Or.inr ⟨hStateEq.symm, hAccepting, environment, hEnvironment.1,
-  --       hEnvironment.2, hEdgeEq.symm⟩
-  --   · simp [sequenceEntryBridgeEdges, hAccepting] at hEntry
-  -- · rcases hCompleting with ⟨source, _hSource, hEdgeEq⟩
-  --   have hLabel := hVisible
-  --   rw [← hEdgeEq] at hLabel
-  --   simp at hLabel
+    ∃ childEdge ∈ left.edges,
+      childEdge.source = state ∧ edge = sequenceLeftEdge left right childEdge := by
+  classical
+  rcases hOutgoing with ⟨hEdge, hSource⟩
+  simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
+    sequenceRightEdges, sequenceRedirectEdges, childPendingEdges,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with (hLeft | hRight) | hRedirect
+  · rcases hLeft with ⟨childEdge, ⟨hChildMem, hNotAccepting⟩, hEdgeEq⟩
+    have hChildSource := hSource
+    rw [← hEdgeEq] at hChildSource
+    simp [sequenceKeptLeftEdge, childState] at hChildSource
+    exact ⟨childEdge, hChildMem, hChildSource,
+      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting]⟩
+  · rcases hRight with ⟨childEdge, _, hEdgeEq⟩
+    rw [← hEdgeEq] at hSource
+    simp [childPendingEdge, childState] at hSource
+  · rcases hRedirect with ⟨childEdge, ⟨hChildMem, hAccepting⟩, hEdgeEq⟩
+    have hChildSource := hSource
+    rw [← hEdgeEq] at hChildSource
+    simp [sequenceRedirectEdge, childState] at hChildSource
+    exact ⟨childEdge, hChildMem, hChildSource,
+      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting]⟩
 
 /-- Proves H15's future agreement for a retained left target of a sequence step. -/
 lemma helper_h15_sequence_left_step_future_offers_agree
@@ -592,27 +565,28 @@ theorem compileType_seq_lift_left_step
       (TypeOfferSummary.mk current
         (typeFutureOffers (.seq leftTarget right) \ current)) hParentSymbol]
     rw [compileTypeFuel_sequence_eq_build signature left right]
-    refine ⟨sequenceLeftEdge
+    have hNotAcceptingPending :
+        pendingEdge.target ∉
+          (compileTypeFuel signature (typeCompilationFuel left) left).accepting := by
+      rw [hPendingTarget]; exact hNotAccepting
+    refine ⟨sequenceKeptLeftEdge
       (compileTypeFuel signature (typeCompilationFuel left) left)
       (compileTypeFuel signature (typeCompilationFuel right) right)
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simp only [buildSequenceAutomaton, finishAutomatonFragment,
-        Finset.mem_union, Finset.mem_image]
-      sorry
-      -- exact Or.inl (Or.inl (Or.inl ⟨pendingEdge, hPendingMem, rfl⟩))
-    · simp [sequenceLeftEdge, childState, hPendingSource]
-    · simp [sequenceLeftEdge, hPendingEnv]
-    · simp [sequenceLeftEdge, hPendingLabel]
-    · simp [sequenceLeftEdge, hPendingCurrent]
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
+        Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+      exact Or.inl (Or.inl ⟨pendingEdge, ⟨hPendingMem, hNotAcceptingPending⟩, rfl⟩)
+    · simp [sequenceKeptLeftEdge, childState, hPendingSource]
+    · simp [sequenceKeptLeftEdge, hPendingEnv]
+    · simp [sequenceKeptLeftEdge, hPendingLabel]
+    · simp [sequenceKeptLeftEdge, hPendingCurrent]
     · have hSeqFuture' :
           computeFutureOf signature (.seq left right) (childState 0 q') =
             typeFutureOffers (.seq leftTarget right) := by
         simpa [childState] using hSeqFuture
-      simp [sequenceLeftEdge, hPendingLabel, hPendingCurrent,
-        hPendingTarget, sequenceRedirect_of_not_accepting hNotAccepting,
-        hSeqFuture']
-    · simp [sequenceLeftEdge, childState, hPendingTarget,
-        sequenceRedirect_of_not_accepting hNotAccepting]
+      simp [sequenceKeptLeftEdge, hPendingCurrent, hPendingTarget,
+        sequenceRedirect_of_not_accepting hNotAccepting, hSeqFuture']
+    · simp [sequenceKeptLeftEdge, childState, hPendingTarget]
   have hParentStep :
       DecoratedTypeTransition env (.seq leftResidual right) label
         (TypeOfferSummary.mk current
@@ -623,12 +597,11 @@ theorem compileType_seq_lift_left_step
       TypeOffers.seq env leftResidual leftTarget right label current childFuture
         hChildStep.2 hNonFinal⟩
   refine ⟨hParentEdge, ?_⟩
-  sorry
-  -- exact relationMembership_of_step_edge_unique (.seq left right)
-  --   (compileType signature (.seq left right)) hParentSource hParentEdge
-  --   hParentStep
-  --   (fun target hTargetStep =>
-  --     decoratedTypeTransition_target_unique hTargetStep hParentStep)
+  exact relationMembership_of_step_edge_unique (.seq left right)
+    (compileType signature (.seq left right)) hParentSource hParentEdge
+    hParentStep
+    (fun target hTargetStep =>
+      decoratedTypeTransition_target_unique hTargetStep hParentStep)
 
 /-- Lifts a final left-child edge to the redirected public sequence edge. -/
 theorem compileType_seq_lift_left_fuse
@@ -688,29 +661,25 @@ theorem compileType_seq_lift_left_fuse
       (TypeOfferSummary.mk current (typeFutureOffers right \ current))
       hParentSymbol]
     rw [compileTypeFuel_sequence_eq_build signature left right]
-    refine ⟨sequenceLeftEdge
+    refine ⟨sequenceRedirectEdge
       (compileTypeFuel signature (typeCompilationFuel left) left)
       (compileTypeFuel signature (typeCompilationFuel right) right)
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simp only [buildSequenceAutomaton, finishAutomatonFragment,
-        Finset.mem_union, Finset.mem_image]
-      sorry
-      -- exact Or.inl (Or.inl (Or.inl ⟨pendingEdge, hPendingMem, rfl⟩))
-    · simp [sequenceLeftEdge, childState, hPendingSource]
-    · simp [sequenceLeftEdge, hPendingEnv]
-    · simp [sequenceLeftEdge, hPendingLabel]
-    · simp [sequenceLeftEdge, hPendingCurrent]
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRedirectEdges,
+        Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+      exact Or.inr ⟨pendingEdge, ⟨hPendingMem, hPendingTarget ▸ hAccepting⟩, rfl⟩
+    · simp [sequenceRedirectEdge, childState, hPendingSource]
+    · simp [sequenceRedirectEdge, hPendingEnv]
+    · simp [sequenceRedirectEdge, hPendingLabel]
+    · simp [sequenceRedirectEdge, hPendingCurrent]
     · have hSeqFuture' :
           computeFutureOf signature (.seq left right)
               (childState 1
                 (compileTypeFuel signature (typeCompilationFuel right) right).initial) =
             typeFutureOffers right := by
         simpa [compileType, childState] using hSeqFuture
-      simp [sequenceLeftEdge, hPendingLabel, hPendingCurrent,
-        hPendingTarget, sequenceRedirect_of_accepting hAccepting,
-        hSeqFuture']
-    · simp [sequenceLeftEdge, compileType, childState, hPendingTarget,
-        sequenceRedirect_of_accepting hAccepting]
+      simp [sequenceRedirectEdge, hPendingCurrent, hSeqFuture']
+    · simp [sequenceRedirectEdge, compileType, childState]
   have hParentStep :
       DecoratedTypeTransition env (.seq leftResidual right) label
         (TypeOfferSummary.mk current (typeFutureOffers right \ current))
@@ -719,12 +688,11 @@ theorem compileType_seq_lift_left_fuse
       TypeOffers.seq_fuse env leftResidual right label current childFuture
         hChildStep.2⟩
   refine ⟨hParentEdge, ?_⟩
-  sorry
-  -- exact relationMembership_of_step_edge_unique (.seq left right)
-  --   (compileType signature (.seq left right)) hParentSource hParentEdge
-  --   hParentStep
-  --   (fun target hTargetStep =>
-  --     decoratedTypeTransition_target_unique hTargetStep hParentStep)
+  exact relationMembership_of_step_edge_unique (.seq left right)
+    (compileType signature (.seq left right)) hParentSource hParentEdge
+    hParentStep
+    (fun target hTargetStep =>
+      decoratedTypeTransition_target_unique hTargetStep hParentStep)
 
 /-- Lifts a right-child edge to a copied public sequence edge. -/
 theorem compileType_seq_lift_right_step
@@ -769,10 +737,9 @@ theorem compileType_seq_lift_right_step
       (.child 1 q) (.child 1 q') env label offers hChildSymbol]
     rw [compileTypeFuel_sequence_eq_build signature left right]
     refine ⟨childPendingEdge 1 pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · simp only [buildSequenceAutomaton, finishAutomatonFragment,
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRightEdges,
         childPendingEdges, Finset.mem_union, Finset.mem_image]
-      sorry
-      -- exact Or.inl (Or.inl (Or.inr ⟨pendingEdge, hPendingMem, rfl⟩))
+      exact Or.inl (Or.inr ⟨pendingEdge, hPendingMem, rfl⟩)
     · simp [childPendingEdge, childState, hPendingSource]
     · simp [childPendingEdge, hPendingEnv]
     · simp [childPendingEdge, hPendingLabel]
@@ -797,12 +764,11 @@ theorem compileType_seq_lift_right_step
             hPendingFuture
     · simp [childPendingEdge, childState, hPendingTarget]
   refine ⟨.child 1 q', hParentEdge, ?_⟩
-  sorry
-  -- exact relationMembership_of_step_edge_unique (.seq left right)
-  --   (compileType signature (.seq left right)) hParentSource hParentEdge
-  --   hChildStep
-  --   (fun target hTargetStep =>
-  --     decoratedTypeTransition_target_unique hTargetStep hChildStep)
+  exact relationMembership_of_step_edge_unique (.seq left right)
+    (compileType signature (.seq left right)) hParentSource hParentEdge
+    hChildStep
+    (fun target hTargetStep =>
+      decoratedTypeTransition_target_unique hTargetStep hChildStep)
 
 /-- Proves an automaton edge's target is uniquely determined by its full decorated symbol. -/
 lemma compileType_hasEdge_target_unique
