@@ -168,6 +168,43 @@ theorem typeCompilationFuel_le_typeBranchCompilationFuel
       · exact le_trans (ih hRest) (by
           simp [typeBranchCompilationFuel])
 
+/-- Recover the parallel subterm represented by a product-shaped state after
+peeling the constructor tags introduced by compilation. -/
+def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
+    Option (Interface × PactType × PactType × TypeAutomatonState ×
+      TypeAutomatonState)
+  | 0, _, _ => none
+  | fuel + 1, processType, state =>
+      match processType, state with
+      | .par left right interface, .pair q1 q2 =>
+          some (interface, left, right, q1, q2)
+      | .choice left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .choice _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .fairChoice _ left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .fairChoice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .seq left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .seq _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .recur _ body, .child 0 q => stateProductInfoFuel fuel body q
+      | .xoffer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
+      | .xoffer _ branches, .child (i + 1) q =>
+          match branches[i]? with
+          | some (_, branchType) => stateProductInfoFuel fuel branchType q
+          | none => none
+      | .offer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
+      | .offer _ branches, .child (i + 1) q =>
+          match branches[i]? with
+          | some selected =>
+              stateProductInfoFuel fuel
+                (parallelTypeBranchesSelecting selected branches) q
+          | none => none
+      | _, _ => none
+
+def stateProductInfo (processType : PactType) (state : TypeAutomatonState) :
+    Option (Interface × PactType × PactType × TypeAutomatonState ×
+      TypeAutomatonState) :=
+  stateProductInfoFuel (typeCompilationFuel processType) processType state
+
+mutual
 def compileTypeFuel (signature : TypeAlphabet) :
     Nat → PactType → AutomatonFragment
   -- Exhausted fuel is an unreachable defensive case for the public compiler.
@@ -321,6 +358,10 @@ def compileTypeFuel (signature : TypeAlphabet) :
           exact buildParallelAutomaton signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
+            (computeFutureOfFuel signature
+              (min fuel (typeCompilationFuel left)) left)
+            (computeFutureOfFuel signature
+              (min fuel (typeCompilationFuel right)) right)
 
       -- exclusive offer: compile else and every branch independently first.
       | .xoffer elseType branches =>
@@ -339,6 +380,48 @@ def compileTypeFuel (signature : TypeAlphabet) :
           exact buildSelectedConjunctiveOfferAutomaton
             signature branches elseAutomaton selectedConjunctions
 
+termination_by fuel processType => (fuel, 0)
+
+/-- The paper's global future-menu fixed point. The graph closure and every
+product-state contribution are computed from the same type-aware compiler. -/
+def computeFutureOfFuel (signature : TypeAlphabet) :
+    Nat → PactType → TypeAutomatonState → Finset BareMessage
+  | 0, _, _ => ∅
+  | fuel + 1, processType, state =>
+      let fragment := compileTypeFuel signature (fuel + 1) processType
+      let pending : PendingAutomaton :=
+        { states := fragment.states, edges := fragment.edges }
+      (pending.futureReachable state).biUnion fun visited =>
+        pending.offersAt visited ∪
+          match stateProductInfo processType visited with
+          | some (interface, left, right, q1, q2) =>
+              hideTypeOffers interface
+                (computeFutureOfFuel signature fuel left q1 ∪
+                  computeFutureOfFuel signature fuel right q2)
+          | none => ∅
+termination_by fuel processType state => (fuel, 1)
+decreasing_by
+  all_goals omega
+end
+
+/-- The type-aware future function used when `processType` is compiled as a
+child with the parent's remaining fuel. -/
+def compiledChildFutureFuel (signature : TypeAlphabet) (fuel : Nat)
+    (processType : PactType) : TypeAutomatonState → Finset BareMessage :=
+  computeFutureOfFuel signature (min fuel (typeCompilationFuel processType))
+    processType
+
+/-- A sufficient parent budget gives a child exactly its public, type-aware
+future function. -/
+theorem compiledChildFutureFuel_eq_computeFutureOf
+    (signature : TypeAlphabet) (fuel : Nat) (processType : PactType)
+    (hFuel : typeCompilationFuel processType ≤ fuel) :
+    compiledChildFutureFuel signature fuel processType =
+      computeFutureOfFuel signature (typeCompilationFuel processType)
+        processType := by
+  unfold compiledChildFutureFuel
+  rw [Nat.min_eq_right hFuel]
+
 /-- Once fuel covers the custom compilation budget, one more unit leaves the
 constructor fragment unchanged. -/
 private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
@@ -353,6 +436,8 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
       omega
   | succ fuel ih =>
       intro processType hFuel
+      conv_lhs => rw [compileTypeFuel.eq_def]
+      conv_rhs => rw [compileTypeFuel.eq_def]
       cases processType with
       | message msg dir => rfl
       | progress pid => rfl
@@ -413,16 +498,30 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
       | par left right interface =>
           change buildParallelAutomaton signature interface
               (compileTypeFuel signature (fuel + 1) left)
-              (compileTypeFuel signature (fuel + 1) right) =
+              (compileTypeFuel signature (fuel + 1) right)
+              (computeFutureOfFuel signature
+                (min (fuel + 1) (typeCompilationFuel left)) left)
+              (computeFutureOfFuel signature
+                (min (fuel + 1) (typeCompilationFuel right)) right) =
             buildParallelAutomaton signature interface
               (compileTypeFuel signature fuel left)
               (compileTypeFuel signature fuel right)
+              (computeFutureOfFuel signature
+                (min fuel (typeCompilationFuel left)) left)
+              (computeFutureOfFuel signature
+                (min fuel (typeCompilationFuel right)) right)
+          have hLeft : typeCompilationFuel left ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          have hRight : typeCompilationFuel right ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          simp only [Nat.min_eq_right hLeft, Nat.min_eq_right (Nat.le.step hLeft),
+            Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight)]
           rw [ih left (by
-              simp [typeCompilationFuel] at hFuel
-              omega),
+              exact hLeft),
             ih right (by
-              simp [typeCompilationFuel] at hFuel
-              omega)]
+              exact hRight)]
       | xoffer elseType branches =>
           change buildExclusiveOfferAutomaton signature branches
               (compileTypeFuel signature (fuel + 1) elseType)
@@ -533,69 +632,6 @@ branch into a `.par` chain), so plain structural recursion on `PactType` does
 not terminate here the way it does for every other constructor.
 -/
 
-/-- If `state` is (once its `.child` wrappers are peeled back) a product-core
-state `.pair q₁ q₂` arising from a `.par _ _ interface` subterm reached by
-walking `processType` alongside those wrappers, return that interface, the
-two component types, and the two component states. Mirrors exactly the
-`.child`-tagging convention each `Build*Automaton.lean` constructor uses
-(`compileTypeFuel`'s own dispatch), not an independent guess at it. -/
-def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
-    Option (Interface × PactType × PactType × TypeAutomatonState ×
-      TypeAutomatonState)
-  | 0, _, _ => none
-  | fuel + 1, processType, state =>
-      match processType, state with
-      | .par left right interface, .pair q1 q2 =>
-          some (interface, left, right, q1, q2)
-      | .choice left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .choice _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .fairChoice _ left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .fairChoice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .seq left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .seq _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .recur _ body, .child 0 q => stateProductInfoFuel fuel body q
-      | .xoffer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
-      | .xoffer _ branches, .child (i + 1) q =>
-          match branches[i]? with
-          | some (_, branchType) => stateProductInfoFuel fuel branchType q
-          | none => none
-      | .offer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
-      | .offer _ branches, .child (i + 1) q =>
-          match branches[i]? with
-          | some selected =>
-              stateProductInfoFuel fuel
-                (parallelTypeBranchesSelecting selected branches) q
-          | none => none
-      | _, _ => none
-
-def stateProductInfo (processType : PactType) (state : TypeAutomatonState) :
-    Option (Interface × PactType × PactType × TypeAutomatonState ×
-      TypeAutomatonState) :=
-  stateProductInfoFuel (typeCompilationFuel processType) processType state
-
-/-- `OF`'s native computation against `processType`'s own compiled fragment:
-the usual local edge-closure (`computeFuture`, real same-cycle references),
-plus, at every product-core state (however deeply `.child`-nested), the
-interface-hidden union of both components' own (recursively native) future
-menus, read directly off the two component states per `Φ`'s second disjunct —
-no synthetic edge involved. -/
-def computeFutureOfFuel (signature : TypeAlphabet) :
-    Nat → PactType → TypeAutomatonState → Finset BareMessage
-  | 0, _, _ => ∅
-  | fuel + 1, processType, state =>
-      let fragment :=
-        compileTypeFuel signature (typeCompilationFuel processType) processType
-      let pending : PendingAutomaton :=
-        { states := fragment.states, edges := fragment.edges }
-      (pending.futureReachable state).biUnion fun visited =>
-        pending.offersAt visited ∪
-          match stateProductInfo processType visited with
-          | some (interface, left, right, q1, q2) =>
-              hideTypeOffers interface
-                (computeFutureOfFuel signature fuel left q1 ∪
-                  computeFutureOfFuel signature fuel right q2)
-          | none => ∅
-
 /-- All same-cycle offers reachable from `state` in `processType`'s own
 compiled automaton, computed against the doc-accurate global `OF`. -/
 def computeFutureOf (signature : TypeAlphabet) (processType : PactType)
@@ -655,20 +691,12 @@ def AutomatonFragment.HasResolvedEdge (signature : TypeAlphabet)
         = offers.future ∧
       edge.target = target
 
-private def resolvedAutomatonEdgesNative (signature : TypeAlphabet)
+/-- Resolve every symbolic future reference with the paper's global,
+product-aware `computeFutureOf` function. -/
+def resolvedAutomatonEdges (signature : TypeAlphabet)
     (processType : PactType) (fragment : AutomatonFragment) :
     Finset AutomatonFragmentEdge :=
-  fragment.edges.image fun edge =>
-    let resolvedFuture :=
-      match edge.future with
-      | .explicit offers => offers
-      | .at state removed => computeFutureOf signature processType state \ removed
-    { source := edge.source
-      environment := edge.environment
-      label := edge.label
-      current := edge.current
-      future := resolvedFuture
-      target := edge.target }
+  resolveAutomatonEdgesWith fragment (computeFutureOf signature processType)
 
 /--
 Compile a type by composing its constructor automata,
@@ -680,7 +708,7 @@ def compileType
   let fuel := typeCompilationFuel processType
   let constructed := compileTypeFuel signature fuel processType
   let constructedEdges :=
-    resolvedAutomatonEdgesNative signature processType constructed
+    resolvedAutomatonEdges signature processType constructed
   let transitionAlphabet := signature.transitionAlphabet
   let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
@@ -717,7 +745,8 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
         source env label offers target := by
   classical
   simp [TypeAutomaton.HasEdge, compileType,
-    AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdgesNative, hSymbol]
+    AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdges,
+    resolveAutomatonEdgesWith, hSymbol]
   aesop
 
 /-- The source of every compiled transition belongs to the exported state

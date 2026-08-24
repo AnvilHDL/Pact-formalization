@@ -13,19 +13,7 @@ def AutomatonFragment.toPending (fragment : AutomatonFragment) :
     PendingAutomaton :=
   { states := fragment.states, edges := fragment.edges }
 
-/-! ### Marker-augmented future resolution
 
-A `.variable name` marker edge produced by the compiler carries no offers of
-its own (`current = ∅`, `future = .explicit ∅`), so it contributes nothing to
-`computeFuture` until an enclosing recursion binder installs its backedge.
-`markerAugmentedPending` activates every such marker with a fixed menu.
-
-The point of the construction is that markers stay `.explicit`, so the
-*reference* structure — and therefore same-cycle reachability — is completely
-unchanged; only `offersAt` grows, and only at marker sources.  Consequently the
-recursion future leaf can reuse the ordinary `CompilationFutureCorrect`
-invariant plus a reachability side condition, instead of redeveloping the
-entire future correspondence inside the installed recursion graph. -/
 def markerAugmentedPending (fragment : AutomatonFragment) (name : String)
     (menu : Finset BareMessage) : PendingAutomaton :=
   { states := fragment.states
@@ -204,82 +192,13 @@ theorem markerAugmentedPending_futureReachable
     hAugClosed state hState (by simp [markerAugmentedPending])
   simpa using hResult.symm
 
-/-- Exact decomposition of a marker-augmented future menu: the ordinary menu,
-plus the activation menu exactly when some reachable state is a marker
-source. -/
-theorem mem_computeFuture_markerAugmented
-    (fragment : AutomatonFragment) (name : String) (menu : Finset BareMessage)
-    (hMarkers : MarkerEdgesInert fragment name)
-    (hClosed : (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).ReferencesClosed)
-    (state : TypeAutomatonState) (hState : state ∈ fragment.states)
-    (action : BareMessage) :
-    action ∈ computeFuture (markerAugmentedPending fragment name menu) state ↔
-      action ∈ computeFuture
-          (⟨fragment.states, fragment.edges⟩ : PendingAutomaton) state ∨
-        (action ∈ menu ∧
-          ∃ reached ∈ (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).futureReachable
-                state,
-            MarkerSource fragment name reached) := by
-  classical
-  simp only [computeFuture, Finset.mem_biUnion,
-    markerAugmentedPending_futureReachable fragment name menu hMarkers hClosed
-      state hState]
-  constructor
-  · rintro ⟨reached, hReached, hOffer⟩
-    simp only [PendingAutomaton.offersAt, markerAugmentedPending,
-      Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image] at hOffer
-    rcases hOffer with ⟨edge, ⟨⟨original, hOriginal, rfl⟩, hSource⟩, hAction⟩
-    by_cases hMarker :
-        original.label = AutomatonConstructionLabel.variable name
-    · right
-      simp only [hMarker, if_pos rfl] at hSource hAction
-      have hFields := hMarkers original hOriginal hMarker
-      simp only [hFields.1, Finset.empty_union] at hAction
-      have hNotTock : ¬ (AutomatonConstructionLabel.variable name).semantic =
-          TypeLabel.tock := by
-        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
-      rw [if_neg (by simpa [hMarker] using hNotTock)] at hAction
-      exact ⟨by simpa using hAction,
-        reached, hReached, ⟨original, hOriginal, hSource, hMarker⟩⟩
-    · left
-      simp only [if_neg hMarker] at hSource hAction
-      exact ⟨reached, hReached, by
-        simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
-          Finset.mem_filter]
-        exact ⟨original, ⟨hOriginal, hSource⟩, hAction⟩⟩
-  · rintro (⟨reached, hReached, hOffer⟩ | ⟨hMenu, reached, hReached,
-      ⟨edge, hEdge, hSource, hLabel⟩⟩)
-    · refine ⟨reached, hReached, ?_⟩
-      simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
-        Finset.mem_filter] at hOffer
-      rcases hOffer with ⟨original, ⟨hOriginal, hOriginalSource⟩, hAction⟩
-      by_cases hMarker :
-          original.label = AutomatonConstructionLabel.variable name
-      · exfalso
-        have hFields := hMarkers original hOriginal hMarker
-        rw [hFields.1, hFields.2] at hAction
-        simp at hAction
-      · simp only [PendingAutomaton.offersAt, markerAugmentedPending,
-          Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
-        exact ⟨original, ⟨⟨original, hOriginal, by simp [hMarker]⟩,
-          by simp [hMarker, hOriginalSource]⟩, by simp [hMarker, hAction]⟩
-    · refine ⟨reached, hReached, ?_⟩
-      simp only [PendingAutomaton.offersAt, markerAugmentedPending,
-        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
-      refine ⟨{ edge with future := .explicit menu },
-        ⟨⟨edge, hEdge, by simp [hLabel]⟩, by simp [hSource]⟩, ?_⟩
-      have hFields := hMarkers edge hEdge hLabel
-      have hNotTock : ¬ edge.label.semantic = TypeLabel.tock := by
-        simp [hLabel, AutomatonConstructionLabel.semantic, TypeLabel.silent]
-      simp only [if_neg hNotTock, hFields.1, Finset.empty_union]
-      simpa using hMenu
 
 /-! ### Same-cycle marker reachability
 
-`mem_computeFuture_markerAugmented` reduces an activated marker menu to one
-Boolean side condition: whether any same-cycle reachable state still carries an
-outgoing `.variable name` edge.  The predicate is named here, together with the
-transport lemmas used to compute it constructor by constructor. -/
+The relevant side condition is whether any same-cycle reachable state still
+carries an outgoing `.variable name` edge. The predicate is named here,
+together with the transport lemmas used to compute it constructor by
+constructor. -/
 
 /-- Some state reachable in the same cycle still calls the enclosing binder. -/
 def MarkerReachable (fragment : AutomatonFragment) (name : String)
@@ -476,156 +395,6 @@ theorem markerStoppedFragment_markerReachable_of_target_sinks
       apply hSinks marker hMarkerFields.1 hMarkerFields.2 edge hEdge
       exact hEdgeSource.trans hMarkerTarget.symm
 
-/-- Stopping marker references to sink bookkeeping states also preserves the
-computed offer menu.  The matching marker edge itself contributes no offers;
-the only states removed from the reference closure are its offerless sinks. -/
-theorem markerStoppedFragment_computeFuture_of_target_sinks
-    (fragment : AutomatonFragment) (name : String)
-    (hClosed : fragment.toPending.ReferencesClosed)
-    (hMarkerShape : ∀ marker ∈ fragment.edges,
-      marker.label = AutomatonConstructionLabel.variable name →
-        marker.current = ∅ ∧ marker.future = .at marker.target ∅)
-    (hSinks : ∀ marker ∈ fragment.edges,
-      marker.label = AutomatonConstructionLabel.variable name →
-      ∀ edge ∈ fragment.edges, edge.source ≠ marker.target)
-    (state : TypeAutomatonState) (hState : state ∈ fragment.states) :
-    computeFuture (markerStoppedFragment fragment name).toPending state =
-      computeFuture fragment.toPending state := by
-  classical
-  let stopped := markerStoppedFragment fragment name
-  let sinkTargets := (fragment.edges.filter fun edge =>
-    edge.label = AutomatonConstructionLabel.variable name).image
-      PendingAutomatonEdge.target
-  have hStoppedClosed : stopped.toPending.ReferencesClosed := by
-    intro source hSource target hReference
-    exact hClosed source (by simpa [stopped, markerStoppedFragment] using hSource)
-      (markerStoppedFragment_referencedStates_subset fragment name source
-        hReference)
-  have hStoppedState : state ∈ stopped.states := by
-    simpa [stopped, markerStoppedFragment] using hState
-  have hOffers : ∀ source,
-      stopped.toPending.offersAt source = fragment.toPending.offersAt source := by
-    intro source
-    ext action
-    simp only [PendingAutomaton.offersAt, AutomatonFragment.toPending,
-      stopped, markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
-      Finset.mem_image]
-    constructor
-    · rintro ⟨edge, ⟨⟨original, hOriginal, hEdge⟩, hSource⟩, hAction⟩
-      rw [← hEdge] at hSource hAction
-      by_cases hMarker : original.label =
-          AutomatonConstructionLabel.variable name
-      · have hShape := hMarkerShape original hOriginal hMarker
-        simp [hMarker, hShape.1] at hAction
-      · exact ⟨original, ⟨hOriginal, by simpa [hMarker] using hSource⟩,
-          by simpa [hMarker] using hAction⟩
-    · rintro ⟨original, ⟨hOriginal, hSource⟩, hAction⟩
-      by_cases hMarker : original.label =
-          AutomatonConstructionLabel.variable name
-      · have hShape := hMarkerShape original hOriginal hMarker
-        rw [hMarker, hShape.1, hShape.2] at hAction
-        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hAction
-      · refine ⟨original, ⟨⟨original, hOriginal, by simp [hMarker]⟩, ?_⟩, ?_⟩
-        · simpa [hMarker] using hSource
-        · simpa [hMarker] using hAction
-  have hStoppedSubset : stopped.toPending.futureReachable state ⊆
-      fragment.toPending.futureReachable state := by
-    let allowed := fragment.toPending.futureReachable state
-    have hInitial : state ∈ allowed :=
-      fragment.toPending.mem_futureReachable_self state
-    have hAllowedClosed : ∀ source ∈ allowed,
-        stopped.toPending.referencedStates source ⊆ allowed := by
-      intro source hSource target hReference
-      have hSourceInStates :=
-        fragment.toPending.futureReachable_subset_of_reference_closed state
-          fragment.states hState hClosed hSource
-      exact (fragment.toPending.futureReachable_subset_of_mem hClosed hState
-        hSource)
-        (fragment.toPending.referencedStates_subset_futureReachable source
-          hClosed hSourceInStates
-          (markerStoppedFragment_referencedStates_subset fragment name source
-            hReference))
-    exact stopped.toPending.futureReachable_subset_of_reference_closed state
-      allowed hInitial hAllowedClosed
-  have hOriginalSubset : fragment.toPending.futureReachable state ⊆
-      stopped.toPending.futureReachable state ∪ sinkTargets := by
-    let allowed := stopped.toPending.futureReachable state ∪ sinkTargets
-    have hInitial : state ∈ allowed := Finset.mem_union_left _
-      (stopped.toPending.mem_futureReachable_self state)
-    have hAllowedClosed : ∀ source ∈ allowed,
-        fragment.toPending.referencedStates source ⊆ allowed := by
-      intro source hSource target hReference
-      rcases Finset.mem_union.mp hSource with hStoppedReach | hSink
-      · simp only [PendingAutomaton.referencedStates,
-          AutomatonFragment.toPending, Finset.mem_biUnion,
-          Finset.mem_filter] at hReference
-        rcases hReference with
-          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩,
-            hReferenceTarget⟩
-        by_cases hMarkerEdge : referenceEdge.label =
-            AutomatonConstructionLabel.variable name
-        · apply Finset.mem_union_right
-          have hShape := hMarkerShape referenceEdge hReferenceEdge hMarkerEdge
-          have hTarget : target = referenceEdge.target := by
-            simpa [hMarkerEdge, hShape.2,
-              AutomatonConstructionLabel.semantic, TypeLabel.silent] using
-                hReferenceTarget
-          subst target
-          exact Finset.mem_image.mpr ⟨referenceEdge,
-            Finset.mem_filter.mpr ⟨hReferenceEdge, hMarkerEdge⟩, rfl⟩
-        · apply Finset.mem_union_left
-          have hStoppedReference : target ∈
-              stopped.toPending.referencedStates source := by
-            simp only [PendingAutomaton.referencedStates,
-              AutomatonFragment.toPending, stopped, markerStoppedFragment,
-              Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
-            exact ⟨referenceEdge,
-              ⟨⟨referenceEdge, hReferenceEdge, by simp [hMarkerEdge]⟩,
-                by simp [hMarkerEdge, hReferenceSource]⟩,
-              by simpa [hMarkerEdge] using hReferenceTarget⟩
-          have hSourceInStates :=
-            stopped.toPending.futureReachable_subset_of_reference_closed state
-              stopped.states hStoppedState hStoppedClosed hStoppedReach
-          exact (stopped.toPending.futureReachable_subset_of_mem hStoppedClosed
-            hStoppedState hStoppedReach)
-            (stopped.toPending.referencedStates_subset_futureReachable source
-              hStoppedClosed hSourceInStates hStoppedReference)
-      · rcases Finset.mem_image.mp hSink with
-          ⟨marker, hMarkerFiltered, hMarkerTarget⟩
-        have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
-        simp only [PendingAutomaton.referencedStates,
-          AutomatonFragment.toPending, Finset.mem_biUnion,
-          Finset.mem_filter] at hReference
-        rcases hReference with
-          ⟨referenceEdge, ⟨hReferenceEdge, hReferenceSource⟩, _⟩
-        exfalso
-        apply hSinks marker hMarkerFields.1 hMarkerFields.2 referenceEdge
-          hReferenceEdge
-        exact hReferenceSource.trans hMarkerTarget.symm
-    exact fragment.toPending.futureReachable_subset_of_reference_closed state
-      allowed hInitial hAllowedClosed
-  ext action
-  simp only [computeFuture, Finset.mem_biUnion]
-  constructor
-  · rintro ⟨reached, hReached, hAction⟩
-    refine ⟨reached, hStoppedSubset hReached, ?_⟩
-    rw [hOffers reached] at hAction
-    exact hAction
-  · rintro ⟨reached, hReached, hAction⟩
-    rcases Finset.mem_union.mp (hOriginalSubset hReached) with
-        hStoppedReach | hSink
-    · refine ⟨reached, hStoppedReach, ?_⟩
-      rw [hOffers reached]
-      exact hAction
-    · rcases Finset.mem_image.mp hSink with
-        ⟨marker, hMarkerFiltered, hMarkerTarget⟩
-      have hMarkerFields := Finset.mem_filter.mp hMarkerFiltered
-      simp only [PendingAutomaton.offersAt, AutomatonFragment.toPending,
-        Finset.mem_biUnion, Finset.mem_filter] at hAction
-      rcases hAction with ⟨edge, ⟨hEdge, hSource⟩, _⟩
-      exfalso
-      apply hSinks marker hMarkerFields.1 hMarkerFields.2 edge hEdge
-      exact hSource.trans hMarkerTarget.symm
 
 /-- Marker reachability depends only on a closed graph's edge set; additional
 bookkeeping states merely add redundant saturation rounds. -/
@@ -761,66 +530,6 @@ theorem markerReachable_root_of_entries
       exact Finset.mem_union_right _
         (Finset.mem_biUnion.mpr ⟨entry, hEntry, hReached⟩)
 
-/-- Regression for the clock boundary in future resolution.  Although the
-edge out of `root` is decorated with the offers available at `final`, those
-offers belong to the next cycle and are therefore not reachable from `root`
-for the purpose of `OF(root)`.  This is the graph shape produced by the left
-side of `tock ; a!`. -/
-theorem computeFuture_stops_at_clock_regression :
-    let action : BareMessage := ("a", .send)
-    let clockEdge : PendingAutomatonEdge :=
-      { source := .root
-        environment := .tock
-        label := .visible .tock
-        current := ∅
-        future := .at .final ∅
-        target := .final }
-    let messageEdge : PendingAutomatonEdge :=
-      { source := .final
-        environment := .empty
-        label := .visible .silent
-        current := {action}
-        future := .explicit ∅
-        target := .final }
-    let graph : PendingAutomaton :=
-      { states := {.root, .final}, edges := {clockEdge, messageEdge} }
-    computeFuture graph .root = ∅ := by
-  native_decide
-
-/-- A recursion marker has no future menu until its binder installs the
-back-edge.  Resolving a child fragment before that installation therefore
-loses information: this is the small graph phenomenon that constructor
-combinators (notably parallel product) must preserve symbolically. -/
-theorem computeFuture_changes_when_recursion_backedge_is_installed :
-    let action : BareMessage := ("a", .send)
-    let variableEdge : PendingAutomatonEdge :=
-      { source := .root
-        environment := .empty
-        label := .variable "x"
-        current := ∅
-        future := .explicit ∅
-        target := .final }
-    let backEdge : PendingAutomatonEdge :=
-      { source := .root
-        environment := .empty
-        label := .visible .silent
-        current := ∅
-        future := .at .final ∅
-        target := .final }
-    let messageEdge : PendingAutomatonEdge :=
-      { source := .final
-        environment := .empty
-        label := .visible .silent
-        current := {action}
-        future := .explicit ∅
-        target := .final }
-    let openGraph : PendingAutomaton :=
-      { states := {.root, .final}, edges := {variableEdge, messageEdge} }
-    let closedGraph : PendingAutomaton :=
-      { states := {.root, .final}, edges := {backEdge, messageEdge} }
-    computeFuture openGraph .root = ∅ ∧
-      computeFuture closedGraph .root = {action} := by
-  native_decide
 
 /-- Package a constructor graph without resolving its future references. -/
 def finishAutomatonFragment
@@ -832,68 +541,24 @@ def finishAutomatonFragment
     accepting := accepting
     edges := edges }
 
-/-- Resolve future fields against all states and edges currently in a fragment. -/
-def resolvedAutomatonEdges
-    (automaton : AutomatonFragment) : Finset AutomatonFragmentEdge :=
-  let pending : PendingAutomaton :=
-    { states := automaton.states, edges := automaton.edges }
+/-- Resolve symbolic future fields with the supplied global future-menu
+function. Constructor code instantiates this with the type-aware
+`computeFutureOf` function. -/
+def resolveAutomatonEdgesWith
+    (automaton : AutomatonFragment)
+    (futureAt : TypeAutomatonState → Finset BareMessage) :
+    Finset AutomatonFragmentEdge :=
   automaton.edges.image fun edge =>
       let resolvedFuture :=
         match edge.future with
         | .explicit offers => offers
-        | .at state removed => computeFuture pending state \ removed
+        | .at state removed => futureAt state \ removed
       { source := edge.source
         environment := edge.environment
         label := edge.label
         current := edge.current
         future := resolvedFuture
         target := edge.target }
-
-/-- The current and resolved future fields of a non-clock edge are already
-contained in the same-cycle menu at its source.  Removing offers from an
-`at` decoration can only make the resolved edge smaller than the graph
-fixed point. -/
-theorem resolvedAutomatonEdge_offers_subset_computeFuture
-    (fragment : AutomatonFragment) (edge : AutomatonFragmentEdge)
-    (hEdge : edge ∈ resolvedAutomatonEdges fragment)
-    (hClosed : ({ states := fragment.states, edges := fragment.edges } :
-      PendingAutomaton).ReferencesClosed)
-    (hSource : edge.source ∈ fragment.states)
-    (hNonClock : edge.label.semantic ≠ TypeLabel.tock) :
-    edge.current ∪ edge.future ⊆
-      computeFuture { states := fragment.states, edges := fragment.edges }
-        edge.source := by
-  classical
-  let pending : PendingAutomaton :=
-    { states := fragment.states, edges := fragment.edges }
-  rw [computeFuture_unfold pending edge.source hClosed hSource]
-  simp only [resolvedAutomatonEdges, Finset.mem_image] at hEdge
-  rcases hEdge with ⟨raw, hRaw, rfl⟩
-  intro action hAction
-  simp only [Finset.mem_union, Finset.mem_biUnion]
-  cases hSpec : raw.future with
-  | explicit future =>
-      simp only [hSpec] at hAction hNonClock ⊢
-      left
-      simp only [pending, PendingAutomaton.offersAt,
-        Finset.mem_biUnion, Finset.mem_filter]
-      refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
-      simpa [hSpec, hNonClock] using hAction
-  | «at» target removed =>
-      simp only [hSpec] at hAction hNonClock ⊢
-      rcases Finset.mem_union.mp hAction with hCurrent | hFuture
-      · left
-        simp only [pending, PendingAutomaton.offersAt,
-          Finset.mem_biUnion, Finset.mem_filter]
-        refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
-        simp [hSpec, hNonClock, hCurrent]
-      · right
-        refine ⟨target, ?_, ?_⟩
-        · simp only [pending, PendingAutomaton.referencedStates,
-            Finset.mem_biUnion, Finset.mem_filter]
-          refine ⟨raw, ⟨hRaw, rfl⟩, ?_⟩
-          simp [hSpec, hNonClock]
-        · exact (Finset.mem_sdiff.mp hFuture).1
 
 def childState (index : Nat) (state : TypeAutomatonState) :
     TypeAutomatonState := .child index state

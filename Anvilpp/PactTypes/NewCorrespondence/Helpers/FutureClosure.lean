@@ -113,11 +113,14 @@ private theorem buildSequenceAutomaton_edgeTargetsInStates
 private theorem buildParallelAutomaton_edgeTargetsInStates
     (signature : TypeAlphabet) (interface : Interface)
     (left right : AutomatonFragment)
+    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
     (hLeftTargets : left.EdgeTargetsInStates)
     (hRightTargets : right.EdgeTargetsInStates) :
-    (buildParallelAutomaton signature interface left right).EdgeTargetsInStates := by
+    (buildParallelAutomaton signature interface left right
+      leftFuture rightFuture).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildParallelAutomaton, finishAutomatonFragment,
+    parallelRawTransitionEdges, parallelDoneEdges,
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
     Finset.mem_filter] at hEdge
   rcases hEdge with
@@ -125,8 +128,9 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
-    · simp [hAccept, buildParallelAutomaton, finishAutomatonFragment]
-    · simp only [resolvedAutomatonEdges, Finset.mem_image]
+    · simp [hAccept, buildParallelAutomaton, finishAutomatonFragment,
+        parallelRawTransitionEdges, parallelDoneEdges]
+    · simp only [resolveAutomatonEdgesWith, Finset.mem_image]
         at hLeftEdge hRightEdge
       obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
       obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
@@ -140,9 +144,11 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
       rw [← hLeftEq, ← hRightEq]
       simp only [if_neg hAcceptRaw]
       simp [buildParallelAutomaton, finishAutomatonFragment,
+        parallelRawTransitionEdges, parallelDoneEdges,
         hLeftTargets leftRaw hLeftRaw,
         hRightTargets rightRaw hRightRaw]
-  · simp [buildParallelAutomaton, finishAutomatonFragment]
+  · simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelDoneEdges]
 
 private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
     (signature : TypeAlphabet)
@@ -297,6 +303,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildRecursionAutomaton_edgeTargetsInStates signature name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
@@ -307,6 +314,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_edgeTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) .silent .silent
@@ -320,6 +328,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_edgeTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (.fair bid true)
@@ -333,6 +342,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildSequenceAutomaton_edgeTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (ih left hLeft)
@@ -345,9 +355,12 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildParallelAutomaton_edgeTargetsInStates signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
+            (compiledChildFutureFuel signature fuel left)
+            (compiledChildFutureFuel signature fuel right)
             (ih left hLeft) (ih right hRight)
       | xoffer elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
@@ -361,6 +374,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             simp only [TypeCompilationFuelSufficient]
             omega
+          rw [compileTypeFuel.eq_def]
           apply buildExclusiveOfferAutomaton_edgeTargetsInStates
           · exact ih elseType hElse
           · intro entry hEntry
@@ -385,6 +399,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
               typeCompilationFuel_parallelTypeBranchesSelecting]
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
+          rw [compileTypeFuel.eq_def]
           apply buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
           · exact ih elseType hElse
           · intro entry hEntry
@@ -455,6 +470,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildRecursionAutomaton_futureTargetsInStates signature name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
@@ -465,6 +481,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_futureTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) TypeLabel.silent
@@ -478,6 +495,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_futureTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (TypeLabel.fair bid true)
@@ -491,6 +509,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildSequenceAutomaton_futureTargetsInStates signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (ih right hRight)
@@ -503,9 +522,12 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          rw [compileTypeFuel.eq_def]
           exact buildParallelAutomaton_futureTargetsInStates signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
+            (compiledChildFutureFuel signature fuel left)
+            (compiledChildFutureFuel signature fuel right)
             (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
             (compileTypeFuel_edgeTargetsInStates signature fuel right hRight)
       | xoffer elseType branches =>
@@ -520,6 +542,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             simp only [TypeCompilationFuelSufficient]
             omega
+          rw [compileTypeFuel.eq_def]
           have hResult := buildExclusiveOfferAutomaton_futureTargetsInStates
             signature branches (compileTypeFuel signature fuel elseType)
             (branches.map fun branch =>
@@ -550,6 +573,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
               typeCompilationFuel_parallelTypeBranchesSelecting]
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
+          rw [compileTypeFuel.eq_def]
           have hResult :=
             buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
               signature branches (compileTypeFuel signature fuel elseType)
@@ -960,6 +984,15 @@ private theorem computeFutureOfFuel_succ_stable :
       intro signature processType state hFuel
       conv_lhs => rw [computeFutureOfFuel]
       conv_rhs => rw [computeFutureOfFuel]
+      have hCompile :
+          compileTypeFuel signature (fuel + 1 + 1) processType =
+            compileTypeFuel signature (fuel + 1) processType :=
+        compileTypeFuel_eq_of_sufficient signature processType
+          (by
+            simp only [TypeCompilationFuelSufficient] at hFuel ⊢
+            omega)
+          hFuel
+      rw [hCompile]
       apply Finset.biUnion_congr rfl
       intro visited _hVisited
       cases hInfo : stateProductInfo processType visited with

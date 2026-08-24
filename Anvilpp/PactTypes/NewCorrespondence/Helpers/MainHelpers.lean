@@ -1324,6 +1324,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel right) right)
                   TypeLabel.silent TypeLabel.silent := by
             rw [hFuelEq]
+            rw [compileTypeFuel.eq_def]
             show buildChoiceAutomaton signature
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -1476,6 +1477,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel right) right)
                   (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
             rw [hFuelEq]
+            rw [compileTypeFuel.eq_def]
             show buildChoiceAutomaton signature
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -1659,10 +1661,15 @@ theorem helper_h13_par_case
     show (compileTypeFuel signature (typeCompilationFuel (.par left right interface))
       (.par left right interface)).accepting = _
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show (buildParallelAutomaton signature interface
       (compileTypeFuel signature
         (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
       (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compiledChildFutureFuel signature
         (max (typeCompilationFuel left) (typeCompilationFuel right)) right)).accepting = _
     simp [buildParallelAutomaton, finishAutomatonFragment]
   rw [hAcceptEq]
@@ -1696,6 +1703,7 @@ theorem helper_h13_seq_case
     show (compileTypeFuel signature (typeCompilationFuel (.seq first second))
       (.seq first second)).accepting = _
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show (buildSequenceAutomaton signature
       (compileTypeFuel signature
         (max (typeCompilationFuel first) (typeCompilationFuel second)) first)
@@ -1770,6 +1778,7 @@ theorem helper_h13_xoffer_case
     show (compileTypeFuel signature (typeCompilationFuel (.xoffer elseType branches))
       (.xoffer elseType branches)).accepting = _
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show (buildExclusiveOfferAutomaton signature branches
       (compileTypeFuel signature
         (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches)) elseType)
@@ -1960,6 +1969,7 @@ lemma helper_h13_final_states_represent_completion
                 (compileTypeFuel signature (typeCompilationFuel right) right)
                 TypeLabel.silent TypeLabel.silent := by
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show buildChoiceAutomaton signature
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -2016,6 +2026,7 @@ lemma helper_h13_final_states_represent_completion
                 (compileTypeFuel signature (typeCompilationFuel right) right)
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show buildChoiceAutomaton signature
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -2068,6 +2079,7 @@ lemma helper_h13_final_states_represent_completion
           show (compileTypeFuel signature (typeCompilationFuel (.recur name body))
             (.recur name body)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildRecursionAutomaton signature name
             (compileTypeFuel signature (typeCompilationFuel body) body)).accepting = _
           simp [buildRecursionAutomaton, finishAutomatonFragment]
@@ -2145,6 +2157,7 @@ lemma helper_h13_final_states_represent_completion
           show (compileTypeFuel signature (typeCompilationFuel (.offer elseType branches))
             (.offer elseType branches)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildSelectedConjunctiveOfferAutomaton signature branches
             (compileTypeFuel signature
               (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)) elseType)
@@ -2462,6 +2475,7 @@ theorem helper_h14_same_cycle_completion
               buildChoiceAutomaton signature leftAuto rightAuto
                 TypeLabel.silent TypeLabel.silent := by
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show buildChoiceAutomaton signature
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -2528,6 +2542,7 @@ theorem helper_h14_same_cycle_completion
               buildChoiceAutomaton signature leftAuto rightAuto
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show buildChoiceAutomaton signature
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)

@@ -90,6 +90,7 @@ theorem compileTypeFuel_sequence_eq_build
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
   rw [hFuelEq]
+  rw [compileTypeFuel.eq_def]
   show buildSequenceAutomaton signature
       (compileTypeFuel signature
         (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -248,14 +249,25 @@ theorem computeFutureOf_sequence_right
       ∃ fuel, typeCompilationFuel right = fuel + 1 := by
     have hPositive := typeCompilationFuel_positive right
     exact ⟨typeCompilationFuel right - 1, by omega⟩
+  have hCompileSequence :
+      compileTypeFuel signature
+          (max (typeCompilationFuel left) (rightFuel + 1) + 1)
+          (.seq left right) = sequence := by
+    rw [← hRightFuel, ← hSequenceFuel]
+    exact compileTypeFuel_sequence_eq_build signature left right
+  have hCompileRight :
+      compileTypeFuel signature (rightFuel + 1) right = rightFragment := by
+    rw [← hRightFuel]
   unfold computeFutureOf
   rw [hSequenceFuel]
   conv_lhs => rw [computeFutureOfFuel]
   rw [hRightFuel]
   conv_rhs => rw [computeFutureOfFuel]
-  rw [compileTypeFuel_sequence_eq_build]
-  change (parent.futureReachable (.child 1 state)).biUnion _ =
-    (child.futureReachable state).biUnion _
+  rw [hCompileSequence, hCompileRight]
+  change (parent.futureReachable (.child 1 state)).biUnion
+      (_ : TypeAutomatonState → Finset BareMessage) =
+    (child.futureReachable state).biUnion
+      (_ : TypeAutomatonState → Finset BareMessage)
   rw [hReachable, Finset.image_biUnion]
   apply Finset.biUnion_congr rfl
   intro visited _hVisited

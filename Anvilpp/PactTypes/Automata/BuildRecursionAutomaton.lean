@@ -296,35 +296,6 @@ theorem futureReachable_buildRecursionAutomaton_child_of_no_marker
   · exact futureReachable_buildRecursionAutomaton_child_superset signature name
       body hMarkers hBodyClosed hParentClosed state hState
 
-/-- Marker-free half of the recursion future bridge, at the level of menus:
-if no recursive call is reachable inside the body, the installed graph
-resolves exactly the body's own future menu. -/
-theorem computeFuture_buildRecursionAutomaton_child_of_no_marker
-    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
-    (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
-    (hParentClosed :
-      (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-        PendingAutomaton).ReferencesClosed)
-    (state : TypeAutomatonState) (hState : state ∈ body.states)
-    (hNoMarker : ∀ q ∈ (⟨body.states, body.edges⟩ :
-        PendingAutomaton).futureReachable state,
-      ¬ MarkerSource body name q) :
-    computeFuture
-        (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-          PendingAutomaton)
-        (childState 0 state) =
-      computeFuture (⟨body.states, body.edges⟩ : PendingAutomaton) state := by
-  classical
-  unfold computeFuture
-  rw [futureReachable_buildRecursionAutomaton_child_of_no_marker signature name
-    body hMarkers hBodyClosed hParentClosed state hState hNoMarker,
-    Finset.image_biUnion]
-  exact Finset.biUnion_congr rfl (fun q _ =>
-    buildRecursionAutomaton_offersAt_child signature name body hMarkers q)
 
 /-- When a recursive-call marker *is* reachable inside the body, the installed
 graph additionally reaches exactly what the tagged body entry reaches, and
@@ -421,52 +392,6 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
     · exact (parent.futureReachable_subset_of_mem hParentClosed hTaggedState
         hInitialReach) hInZ
 
-/-- Marker-reachable half at the level of menus: the installed graph resolves
-the body's own menu together with whatever the tagged body entry resolves.
-Together with `mem_computeFuture_markerAugmented` this is the recursion future
-bridge; the entry's own menu is then pinned by guardedness. -/
-theorem computeFuture_buildRecursionAutomaton_child_of_marker
-    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
-    (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
-    (hParentClosed :
-      (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-        PendingAutomaton).ReferencesClosed)
-    (hBodyInitial : body.initial ∈ body.states)
-    (state : TypeAutomatonState) (hState : state ∈ body.states)
-    (hMarker : ∃ m ∈ (⟨body.states, body.edges⟩ :
-        PendingAutomaton).futureReachable state,
-      MarkerSource body name m) :
-    computeFuture
-        (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-          PendingAutomaton)
-        (childState 0 state) =
-      computeFuture (⟨body.states, body.edges⟩ : PendingAutomaton) state ∪
-        computeFuture
-          (⟨(buildRecursionAutomaton signature name body).states,
-            (buildRecursionAutomaton signature name body).edges⟩ :
-            PendingAutomaton)
-          (childState 0 body.initial) := by
-  classical
-  unfold computeFuture
-  rw [futureReachable_buildRecursionAutomaton_child_of_marker signature name
-    body hMarkers hBodyClosed hParentClosed hBodyInitial state hState hMarker]
-  ext action
-  simp only [Finset.mem_biUnion, Finset.mem_union]
-  constructor
-  · rintro ⟨reached, (hInT | hInZ), hAction⟩
-    · obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hInT
-      refine Or.inl ⟨q, hq, ?_⟩
-      rwa [buildRecursionAutomaton_offersAt_child signature name body hMarkers
-        q] at hAction
-    · exact Or.inr ⟨reached, hInZ, hAction⟩
-  · rintro (⟨q, hq, hAction⟩ | ⟨reached, hInZ, hAction⟩)
-    · refine ⟨childState 0 q, Or.inl (Finset.mem_image.mpr ⟨q, hq, rfl⟩), ?_⟩
-      rwa [buildRecursionAutomaton_offersAt_child signature name body hMarkers q]
-    · exact ⟨reached, Or.inr hInZ, hAction⟩
 
 /-- **The recursion fixed point.**  At the tagged body entry the installed
 backedge is not an escape: it points back to the entry, which is already
@@ -523,32 +448,6 @@ theorem futureReachable_buildRecursionAutomaton_child_at_initial
   · exact futureReachable_buildRecursionAutomaton_child_superset signature name
       body hMarkers hBodyClosed hParentClosed body.initial hBodyInitial
 
-/-- Menu form of the fixed point: the tagged body entry resolves exactly the
-body's own entry menu, however many recursive calls lead back to it. -/
-theorem computeFuture_buildRecursionAutomaton_child_at_initial
-    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
-    (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
-    (hParentClosed :
-      (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-        PendingAutomaton).ReferencesClosed)
-    (hBodyInitial : body.initial ∈ body.states) :
-    computeFuture
-        (⟨(buildRecursionAutomaton signature name body).states,
-          (buildRecursionAutomaton signature name body).edges⟩ :
-          PendingAutomaton)
-        (childState 0 body.initial) =
-      computeFuture (⟨body.states, body.edges⟩ : PendingAutomaton)
-        body.initial := by
-  classical
-  unfold computeFuture
-  rw [futureReachable_buildRecursionAutomaton_child_at_initial signature name
-    body hMarkers hBodyClosed hParentClosed hBodyInitial,
-    Finset.image_biUnion]
-  exact Finset.biUnion_congr rfl (fun q _ =>
-    buildRecursionAutomaton_offersAt_child signature name body hMarkers q)
 
 /-- Installing backedges for `name` leaves markers of any *other* still-open
 binder untouched: only `.variable name` edges are rewritten, and the rewrite

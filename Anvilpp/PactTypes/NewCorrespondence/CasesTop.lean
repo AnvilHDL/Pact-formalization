@@ -596,6 +596,7 @@ theorem correspondence_choice_stepIff
           (compileTypeFuel signature (typeCompilationFuel right) right)
           TypeLabel.silent TypeLabel.silent := by
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -1022,6 +1023,7 @@ theorem correspondence_fairChoice_stepIff
           (compileTypeFuel signature (typeCompilationFuel right) right)
           (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -1628,7 +1630,7 @@ theorem correspondence_par_stepIff
     hMessageOwnership hProgIdsOwnership hFairIdOwnership
     (hLeftForward := hLeftForward) (hRightForward := hRightForward) hRelated with
     ⟨q1, q2, residualLeft, residualRight, hEntryEq, hLeftRelated,
-      hRightRelated, hResidualMessageActionsDisjoint,
+      hRightRelated, hSourceReachable, hResidualMessageActionsDisjoint,
       hResidualProgressIdsDisjoint, hResidualFairIdsDisjoint⟩ | hEntryEq
   · -- general product case: `residual` represents `residualLeft ‖_I residualRight`
     injection hEntryEq with hResidualEq hStateEq
@@ -1674,13 +1676,17 @@ theorem correspondence_par_stepIff
             refine ⟨residualLeft, residualRight, leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
-              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated, hWF, hLocal1, hLocal2,
+              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated,
+              hSourceReachable, hWF, hLocal1, hLocal2,
               hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
             simp [hNotBothAccept]
+          have hTargetReachable :=
+            compiledParallel_pair_edge_target_reachable signature left right interface
+              hSignatureSymbol hEdgeFact
           refine ⟨.pair q1' q2', hEdgeFact, ?_⟩
           rw [hTargetEq]
           exact relationMembership_par_pair signature left right interface
-            hLeftTargetRelated hRightTargetRelated
+            hLeftTargetRelated hRightTargetRelated hTargetReachable
       | fuse leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture rightCurrent
           rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq
           hCurrentEq hFutureEq =>
@@ -1715,7 +1721,8 @@ theorem correspondence_par_stepIff
             refine ⟨residualLeft, residualRight, leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
-              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated, hWF, hLocal1, hLocal2,
+              hLeftEdge, hRightEdge, hLeftRelated, hRightRelated,
+              hSourceReachable, hWF, hLocal1, hLocal2,
               hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
             simp [hBothAccept]
           refine ⟨.final, hEdgeFact, ?_⟩
@@ -1725,8 +1732,9 @@ theorem correspondence_par_stepIff
       rw [buildParallelAutomaton_pair_hasEdge_iff] at hEdge
       obtain ⟨childLeft, childRight, leftEnv, rightEnv, leftLabel, rightLabel,
         leftOffers, rightOffers, q1', q2', hLeftEdge, hRightEdge,
-        hChildLeftRelated, hChildRightRelated, hWF, hLocal1, hLocal2, hSync, hLabelEq,
-        hCurrentEq, hFutureEq, hRedirect⟩ := hEdge
+        hChildLeftRelated, hChildRightRelated, _hEdgeSourceReachable,
+        hWF, hLocal1, hLocal2, hSync, hLabelEq, hCurrentEq, hFutureEq,
+        hRedirect⟩ := hEdge
       let leftCurrent := leftOffers.current
       let leftFuture := leftOffers.future
       let rightCurrent := rightOffers.current
@@ -1778,7 +1786,7 @@ theorem correspondence_par_stepIff
           hLeftTailRecursive hRightTailRecursive
           hMessageOwnership hProgIdsOwnership hFairIdOwnership
           (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
-          ⟨qq1, qq2, resL, resR, hEqAgain, _, _, _, _, _⟩ | hEqAgain
+          ⟨qq1, qq2, resL, resR, hEqAgain, _, _, _, _, _, _⟩ | hEqAgain
         · simp at hEqAgain
         · injection hEqAgain with hResidualEqAgain hStateEqAgain
           subst hResidualEqAgain
@@ -1800,7 +1808,7 @@ theorem correspondence_par_stepIff
           hMessageOwnership hProgIdsOwnership hFairIdOwnership
           (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
           ⟨qq1, qq2, leftTarget, rightTarget, hEqAgain, hLeftTargetRelated,
-            hRightTargetRelated, _, _, _⟩ | hEqAgain
+            hRightTargetRelated, _hTargetReachable, _, _, _⟩ | hEqAgain
         · injection hEqAgain with hResidualEqAgain hPairEqAgain
           injection hPairEqAgain with hQ1EqAgain hQ2EqAgain
           subst hQ1EqAgain; subst hQ2EqAgain
@@ -1889,11 +1897,7 @@ theorem correspondence_recur_stepIff
         buildRecursionAutomaton signature name
           (compileTypeFuel signature (typeCompilationFuel body) body) := by
     rw [hFuelEq]
-    show buildRecursionAutomaton signature name
-        (compileTypeFuel signature (typeCompilationFuel body) body) =
-      buildRecursionAutomaton signature name
-        (compileTypeFuel signature (typeCompilationFuel body) body)
-    rfl
+    rw [compileTypeFuel.eq_def]
   rcases relationMembership_recur_cases signature name body hRelated with
     hRoot | ⟨q, bodyResidual, hEntryEq, hBodyRelated⟩
   · -- root case: `residual` represents `μX.body` itself
@@ -2197,6 +2201,7 @@ theorem correspondence_xoffer_stepIff
           (branches.map fun branch => (branch.1, compileTypeFuel signature
             (typeCompilationFuel branch.2) branch.2)) := by
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show buildExclusiveOfferAutomaton signature branches
         (compileTypeFuel signature
           (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches)) elseType)
@@ -3107,6 +3112,7 @@ theorem correspondence_offer_stepIff
             (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
             (parallelTypeBranchesSelecting selected branches))) := by
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show buildSelectedConjunctiveOfferAutomaton signature branches
         (compileTypeFuel signature
           (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)) elseType)

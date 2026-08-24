@@ -195,6 +195,12 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
           childLeft q1 ∧
         relationMembership (buildRelationSet right (compileType signature right))
           childRight q2 ∧
+        ParallelReachable signature interface
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature left)
+          (computeFutureOf signature right)
+          (.pair q1 q2) ∧
         env.WellFormed ∧
         LocalTypeEnvironment env interface rightEnv childRight rightLabel leftEnv ∧
         LocalTypeEnvironment env interface leftEnv childLeft leftLabel rightEnv ∧
@@ -255,17 +261,30 @@ theorem buildParallelAutomaton_final_hasEdge_iff
         (.par left right interface) =
         buildParallelAutomaton signature interface
           (compileTypeFuel signature (typeCompilationFuel left) left)
-          (compileTypeFuel signature (typeCompilationFuel right) right) := by
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature left)
+          (computeFutureOf signature right) := by
       rw [hFuelEq]
+      rw [compileTypeFuel.eq_def]
       show buildParallelAutomaton signature interface
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
         (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+        (compiledChildFutureFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+        (compiledChildFutureFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
       rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
         compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+      rw [compiledChildFutureFuel_eq_computeFutureOf signature _ left
+          (le_max_left _ _),
+        compiledChildFutureFuel_eq_computeFutureOf signature _ right
+          (le_max_right _ _)]
+      rfl
     rw [hWhole] at hPending
-    simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
+    simp only [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelDoneEdges, Finset.mem_union,
       Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image] at hPending
     rcases hPending with ⟨⟨leftEdge, -, rightEdge, -, hEq⟩, -⟩ | ⟨environment, hEnvironment, hEq⟩
     · exfalso
@@ -295,15 +314,27 @@ theorem buildParallelAutomaton_final_hasEdge_iff
         (.par left right interface) =
         buildParallelAutomaton signature interface
           (compileTypeFuel signature (typeCompilationFuel left) left)
-          (compileTypeFuel signature (typeCompilationFuel right) right) := by
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature left)
+          (computeFutureOf signature right) := by
       rw [hFuelEq]
+      rw [compileTypeFuel.eq_def]
       show buildParallelAutomaton signature interface
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
         (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+        (compiledChildFutureFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+        (compiledChildFutureFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
       rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
         compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+      rw [compiledChildFutureFuel_eq_computeFutureOf signature _ left
+          (le_max_left _ _),
+        compiledChildFutureFuel_eq_computeFutureOf signature _ right
+          (le_max_right _ _)]
+      rfl
     refine ⟨
       { source := TypeAutomatonState.final
         environment := env
@@ -312,7 +343,71 @@ theorem buildParallelAutomaton_final_hasEdge_iff
         future := .explicit ∅
         target := TypeAutomatonState.final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
     rw [hWhole]
-    simp [buildParallelAutomaton, finishAutomatonFragment, hLocal, hClock]
+    simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelDoneEdges, hLocal, hClock]
+
+/-- Every public edge leaving a parallel product state extends the paper's
+joint `Reach` path to its target. -/
+theorem compiledParallel_pair_edge_target_reachable
+    (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
+    {q1 q2 target : TypeAutomatonState} {env : TypeEnvironment}
+    {label : TypeLabel} {offers : TypeOfferSummary}
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      (compileType signature (.par left right interface)).alphabet)
+    (hEdge : (compileType signature (.par left right interface)).HasEdge
+      (.pair q1 q2) env label offers target) :
+    ParallelReachable signature interface
+      (compileTypeFuel signature (typeCompilationFuel left) left)
+      (compileTypeFuel signature (typeCompilationFuel right) right)
+      (computeFutureOf signature left)
+      (computeFutureOf signature right) target := by
+  have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+    (.par left right interface) (.pair q1 q2) target env label offers hSymbol).mp hEdge
+  obtain ⟨edge, hPending, hSource, _, _, _, _, hTarget⟩ := hResolved
+  have hFuelEq : typeCompilationFuel (.par left right interface) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hWhole : compileTypeFuel signature
+      (typeCompilationFuel (.par left right interface))
+      (.par left right interface) =
+      buildParallelAutomaton signature interface
+        (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel right) right)
+        (computeFutureOf signature left)
+        (computeFutureOf signature right) := by
+    rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
+    show buildParallelAutomaton signature interface
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
+    rw [compileTypeFuel_eq_of_sufficient signature left
+        (le_max_left _ _) le_rfl,
+      compileTypeFuel_eq_of_sufficient signature right
+        (le_max_right _ _) le_rfl]
+    rw [compiledChildFutureFuel_eq_computeFutureOf signature _ left
+        (le_max_left _ _),
+      compiledChildFutureFuel_eq_computeFutureOf signature _ right
+        (le_max_right _ _)]
+    rfl
+  rw [hWhole] at hPending
+  simp only [buildParallelAutomaton, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_filter] at hPending
+  rcases hPending with ⟨hRawEdge, hReachable⟩ | hDone
+  · have hTargetReachable := hReachable.target_of_rawTransition hRawEdge
+    rw [hTarget] at hTargetReachable
+    exact hTargetReachable
+  · have hDoneSource : edge.source = TypeAutomatonState.final := by
+      simp only [parallelDoneEdges, Finset.mem_image, Finset.mem_filter] at hDone
+      obtain ⟨environment, _, hEq⟩ := hDone
+      rw [← hEq]
+    rw [hDoneSource] at hSource
+    exact nomatch hSource
 
 private theorem interface_action_mem_localActions
     (signature : TypeAlphabet) {interface : Interface}
@@ -531,7 +626,13 @@ lemma relationMembership_par_pair
       leftResidual leftState)
     (hRight : relationMembership
       (buildRelationSet right (compileType signature right))
-      rightResidual rightState) :
+      rightResidual rightState)
+    (hReachable : ParallelReachable signature interface
+      (compileTypeFuel signature (typeCompilationFuel left) left)
+      (compileTypeFuel signature (typeCompilationFuel right) right)
+      (computeFutureOf signature left)
+      (computeFutureOf signature right)
+      (.pair leftState rightState)) :
     relationMembership
       (buildRelationSet (.par left right interface)
         (compileType signature (.par left right interface)))
@@ -550,14 +651,33 @@ lemma relationMembership_par_pair
   apply Finset.mem_insert_of_mem
   apply Finset.mem_image.mpr
   refine ⟨((leftResidual, leftState), (rightResidual, rightState)), ?_, rfl⟩
-  apply Finset.mem_product.mpr
+  apply Finset.mem_filter.mpr
   constructor
-  · rw [buildRelationSetCoreFuel_eq_of_sufficient signature left
-      (le_max_left _ _) le_rfl]
-    exact hLeft
-  · rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
-      (le_max_right _ _) le_rfl]
-    exact hRight
+  · apply Finset.mem_product.mpr
+    constructor
+    · rw [buildRelationSetCoreFuel_eq_of_sufficient signature left
+        (le_max_left _ _) le_rfl]
+      exact hLeft
+    · rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
+        (le_max_right _ _) le_rfl]
+      exact hRight
+  · change ParallelReachable signature interface
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (.pair leftState rightState)
+    rw [compileTypeFuel_eq_of_sufficient signature left
+        (le_max_left _ _) le_rfl,
+      compileTypeFuel_eq_of_sufficient signature right
+        (le_max_right _ _) le_rfl]
+    simpa [compiledChildFutureFuel, computeFutureOf,
+      Nat.min_eq_right (le_max_left _ _),
+      Nat.min_eq_right (le_max_right _ _)] using hReachable
 
 /-- The dedicated completed state of a parallel product represents `skip`. -/
 lemma relationMembership_par_final
@@ -678,6 +798,7 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (.choice left right))
             (.choice left right)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildChoiceAutomaton signature
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -719,6 +840,7 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (.fairChoice bid left right))
             (.fairChoice bid left right)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildChoiceAutomaton signature
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -757,6 +879,7 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (.seq left right))
             (.seq left right)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildSequenceAutomaton signature
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
@@ -786,10 +909,15 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (.par left right interface))
             (.par left right interface)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildParallelAutomaton signature interface
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
             (compileTypeFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+            (compiledChildFutureFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+            (compiledChildFutureFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) right)).accepting = _
           simp [buildParallelAutomaton, finishAutomatonFragment]
         rw [hAcceptEq, Finset.mem_singleton] at hAccept
@@ -810,6 +938,7 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (.recur name body))
             (.recur name body)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildRecursionAutomaton signature name
             (compileTypeFuel signature (typeCompilationFuel body) body)).accepting = _
           simp [buildRecursionAutomaton, finishAutomatonFragment]
@@ -851,6 +980,7 @@ theorem relationMembership_of_accepting
           show (compileTypeFuel signature (typeCompilationFuel (PactType.xoffer elseType branches))
             (PactType.xoffer elseType branches)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildExclusiveOfferAutomaton signature branches
             (compileTypeFuel signature (max (typeCompilationFuel elseType)
               (typeBranchCompilationFuel branches)) elseType)
@@ -944,6 +1074,7 @@ theorem relationMembership_of_accepting
             (typeCompilationFuel (PactType.offer elseType branches))
             (PactType.offer elseType branches)).accepting = _
           rw [hFuelEq]
+          rw [compileTypeFuel.eq_def]
           show (buildSelectedConjunctiveOfferAutomaton signature branches
             (compileTypeFuel signature
               (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
@@ -1362,12 +1493,13 @@ private theorem buildRelationSetCoreFuel_footprintSubset
               footprintSubset_right (left := left) (ih right entry.1 entry.2 hEntry)
       | par left right interface =>
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
-            Finset.mem_image, Prod.mk.injEq] at hMem
+            Finset.mem_image, Finset.mem_filter, Prod.mk.injEq] at hMem
           rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩
           · simp [footprintSubset, PactType.MessageIds,
               PactType.MessageActions, PactType.ProgressIds,
               PactType.FairChoiceIds]
-          · obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hEntry
+          · obtain ⟨hProduct, _hReachable⟩ := hEntry
+            obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hProduct
             have hLeft := ih left entry.1.1 entry.1.2 hLeftEntry
             have hRight := ih right entry.2.1 entry.2.2 hRightEntry
             simp only [footprintSubset, PactType.MessageIds,
@@ -1466,6 +1598,12 @@ def parRelationShape
         residualLeft q1 ∧
       relationMembership (buildRelationSet right (compileType signature right))
         residualRight q2 ∧
+      ParallelReachable signature interface
+        (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel right) right)
+        (computeFutureOf signature left)
+        (computeFutureOf signature right)
+        (.pair q1 q2) ∧
       Disjoint residualLeft.MessageActions residualRight.MessageActions ∧
       Disjoint residualLeft.ProgressIds residualRight.ProgressIds ∧
       Disjoint residualLeft.FairChoiceIds residualRight.FairChoiceIds) ∨
@@ -1538,11 +1676,12 @@ lemma relationMembership_par_cases
         (.par left right interface) := hRelated
   rw [hFuelEq] at hMem
   simp only [buildRelationSetCoreFuel, Finset.mem_insert,
-    Finset.mem_image, Prod.mk.injEq] at hMem
+    Finset.mem_image, Finset.mem_filter, Prod.mk.injEq] at hMem
   rcases hMem with ⟨hResidual, hState⟩ |
       ⟨entry, hEntry, hResidual, hState⟩
   · exact Or.inr (Prod.ext hResidual hState)
-  · obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hEntry
+  · obtain ⟨hProduct, hReachable⟩ := hEntry
+    obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hProduct
     have hLeftRelated : relationMembership
         (buildRelationSet left (compileType signature left))
         entry.1.1 entry.1.2 := by
@@ -1559,6 +1698,19 @@ lemma relationMembership_par_cases
       rw [← buildRelationSetCoreFuel_eq_of_sufficient signature right
         (le_max_right _ _) le_rfl]
       exact hRightEntry
+    have hPublicReachable : ParallelReachable signature interface
+        (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel right) right)
+        (computeFutureOf signature left)
+        (computeFutureOf signature right)
+        (.pair entry.1.2 entry.2.2) := by
+      rw [← compileTypeFuel_eq_of_sufficient signature left
+          (le_max_left _ _) le_rfl,
+        ← compileTypeFuel_eq_of_sufficient signature right
+          (le_max_right _ _) le_rfl]
+      simpa [compiledChildFutureFuel, computeFutureOf,
+        Nat.min_eq_right (le_max_left _ _),
+        Nat.min_eq_right (le_max_right _ _)] using hReachable
     have hLeftFootprint := buildRelationSetCoreFuel_footprintSubset signature
       _ left entry.1.1 entry.1.2 hLeftEntry
     have hRightFootprint := buildRelationSetCoreFuel_footprintSubset signature
@@ -1577,7 +1729,8 @@ lemma relationMembership_par_cases
         left.ParallelFairChoiceOwnership ∧ right.ParallelFairChoiceOwnership := by
       simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
     refine Or.inl ⟨entry.1.2, entry.2.2, entry.1.1, entry.2.1,
-      Prod.ext hResidual.symm hState.symm, hLeftRelated, hRightRelated, ?_, ?_, ?_⟩
+      Prod.ext hResidual.symm hState.symm, hLeftRelated, hRightRelated,
+      hPublicReachable, ?_, ?_, ?_⟩
     · exact hMessageOwnershipPieces.2.1.mono
         hLeftFootprint.2.1 hRightFootprint.2.1
     · exact hProgressOwnershipPieces.1.mono

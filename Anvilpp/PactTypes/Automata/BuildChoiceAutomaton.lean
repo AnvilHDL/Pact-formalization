@@ -192,73 +192,7 @@ private theorem buildChoiceAutomaton_offersAt_right
   simp [childPendingEdge, childFutureSpec, childState]
   grind
 
-/-- Future resolution inside the left tagged child of a choice is exactly the
-child fragment's own future resolution. -/
-theorem buildChoiceAutomaton_computeFuture_left
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
-    (selectionLeft selectionRight : TypeLabel)
-    (state : TypeAutomatonState)
-    (hClosed : ({ states := left.states, edges := left.edges } :
-      PendingAutomaton).ReferencesClosed)
-    (hState : state ∈ left.states)
-    (hCard : left.states.card ≤
-      (buildChoiceAutomaton signature left right
-        selectionLeft selectionRight).states.card) :
-    let choice := buildChoiceAutomaton signature left right
-      selectionLeft selectionRight
-    let parent : PendingAutomaton :=
-      { states := choice.states, edges := choice.edges }
-    let child : PendingAutomaton :=
-      { states := left.states, edges := left.edges }
-    computeFuture parent (.child 0 state) = computeFuture child state := by
-  let choice := buildChoiceAutomaton signature left right
-    selectionLeft selectionRight
-  let parent : PendingAutomaton :=
-    { states := choice.states, edges := choice.edges }
-  let child : PendingAutomaton :=
-    { states := left.states, edges := left.edges }
-  apply computeFuture_eq_of_embedding child parent (.child 0)
-  · exact buildChoiceAutomaton_referencedStates_left signature left right
-      selectionLeft selectionRight
-  · exact buildChoiceAutomaton_offersAt_left signature left right
-      selectionLeft selectionRight
-  · exact hClosed
-  · exact hState
-  · exact hCard
 
-/-- Future resolution inside the right tagged child of a choice is exactly the
-child fragment's own future resolution. -/
-theorem buildChoiceAutomaton_computeFuture_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
-    (selectionLeft selectionRight : TypeLabel)
-    (state : TypeAutomatonState)
-    (hClosed : ({ states := right.states, edges := right.edges } :
-      PendingAutomaton).ReferencesClosed)
-    (hState : state ∈ right.states)
-    (hCard : right.states.card ≤
-      (buildChoiceAutomaton signature left right
-        selectionLeft selectionRight).states.card) :
-    let choice := buildChoiceAutomaton signature left right
-      selectionLeft selectionRight
-    let parent : PendingAutomaton :=
-      { states := choice.states, edges := choice.edges }
-    let child : PendingAutomaton :=
-      { states := right.states, edges := right.edges }
-    computeFuture parent (.child 1 state) = computeFuture child state := by
-  let choice := buildChoiceAutomaton signature left right
-    selectionLeft selectionRight
-  let parent : PendingAutomaton :=
-    { states := choice.states, edges := choice.edges }
-  let child : PendingAutomaton :=
-    { states := right.states, edges := right.edges }
-  apply computeFuture_eq_of_embedding child parent (.child 1)
-  · exact buildChoiceAutomaton_referencedStates_right signature left right
-      selectionLeft selectionRight
-  · exact buildChoiceAutomaton_offersAt_right signature left right
-      selectionLeft selectionRight
-  · exact hClosed
-  · exact hState
-  · exact hCard
 
 /-- Marker reachability inside the left tagged child of a choice is exactly the
 child fragment's own marker reachability. -/

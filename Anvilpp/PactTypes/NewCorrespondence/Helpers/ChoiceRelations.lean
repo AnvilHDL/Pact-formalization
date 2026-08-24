@@ -212,6 +212,7 @@ lemma relationMembership_fairChoice_cases
           (compileTypeFuel signature (typeCompilationFuel right) right)
           (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
     rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
     show buildChoiceAutomaton signature
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
