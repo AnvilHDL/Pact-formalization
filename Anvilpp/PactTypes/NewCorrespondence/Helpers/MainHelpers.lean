@@ -3635,7 +3635,65 @@ theorem parallelTypeBranchesSelecting_fairChoiceOwnership
                 PactType.BranchFairChoiceIds, parallelTypeBranchesSelecting_fairChoiceIds] using hPieces.2.1
             · simpa [singletonTypeXOffer, PactType.ParallelFairChoiceOwnership,
                 PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
-                using hPieces.1
+              using hPieces.1
+
+/-- The generated parallel product of conjunctive-offer branches remains tail
+recursive when every source branch is tail recursive. -/
+theorem parallelTypeBranches_tailRecursive
+    (branches : List (BareMessage × PactType))
+    (hTail : PactType.TailRecursiveBranches branches) :
+    PactType.TailRecursive (parallelTypeBranches branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.TailRecursive]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces : PactType.TailRecursive processType ∧
+          PactType.TailRecursiveBranches rest := by
+        simpa [PactType.TailRecursiveBranches] using hTail
+      have hSingletonTail : PactType.TailRecursive
+          (singletonTypeXOffer (action, processType)) := by
+        simpa [singletonTypeXOffer, PactType.TailRecursive,
+          PactType.TailRecursiveBranches] using hPieces.1
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches] using hSingletonTail
+      | cons next tail =>
+          simpa [parallelTypeBranches, PactType.TailRecursive] using
+            And.intro hSingletonTail (ih hPieces.2)
+
+/-- Selecting one conjunctive-offer branch also preserves tail recursion of
+the generated parallel product. -/
+theorem parallelTypeBranchesSelecting_tailRecursive
+    (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hTail : PactType.TailRecursiveBranches branches) :
+    PactType.TailRecursive (parallelTypeBranchesSelecting selected branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.TailRecursive]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces : PactType.TailRecursive processType ∧
+          PactType.TailRecursiveBranches rest := by
+        simpa [PactType.TailRecursiveBranches] using hTail
+      have hSingletonTail : PactType.TailRecursive
+          (singletonTypeXOffer (action, processType)) := by
+        simpa [singletonTypeXOffer, PactType.TailRecursive,
+          PactType.TailRecursiveBranches] using hPieces.1
+      cases rest with
+      | nil =>
+          by_cases hSelf : (action, processType) = selected
+          · simpa [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf,
+              PactType.TailRecursive] using hPieces.1
+          · simpa [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf,
+              PactType.TailRecursive] using hSingletonTail
+      | cons next tail =>
+          by_cases hSelf : (action, processType) = selected
+          · simpa [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf,
+              PactType.TailRecursive] using
+              And.intro hPieces.1
+                (parallelTypeBranches_tailRecursive (next :: tail) hPieces.2)
+          · simpa [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf,
+              PactType.TailRecursive] using And.intro hSingletonTail (ih hPieces.2)
 
 end
 

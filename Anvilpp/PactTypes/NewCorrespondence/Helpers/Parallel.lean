@@ -76,9 +76,9 @@ theorem par_witnesses_agree
     {leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage}
     (hLeftTrans : TypeTransition leftEnv left leftLabel leftTarget)
     (hRightTrans : TypeTransition rightEnv right rightLabel rightTarget)
-    (hMessageOwnership : PactType.ParallelMessageOwnership (.par left right interface))
-    (hProgIdsOwnership : PactType.ParallelProgressOwnership (.par left right interface))
-    (hFairIdOwnership : PactType.ParallelFairChoiceOwnership (.par left right interface))
+    (hMessageActions : Disjoint left.MessageActions right.MessageActions)
+    (hProgressIds : Disjoint left.ProgressIds right.ProgressIds)
+    (hFairIds : Disjoint left.FairChoiceIds right.FairChoiceIds)
     (hWF : env.WellFormed)
     (hLocal1 : LocalTypeEnvironment env interface rightEnv right rightLabel leftEnv)
     (hLocal2 : LocalTypeEnvironment env interface leftEnv left leftLabel rightEnv)
@@ -93,25 +93,12 @@ theorem par_witnesses_agree
       TypeLabel.combine interface leftLabel rightLabel =
         TypeLabel.combine interface leftLabel' rightLabel') :
       leftLabel = leftLabel' ∧ rightLabel = rightLabel' := by
-  have hMessagePieces :
-      Disjoint (left.MessageIds \ interface) (right.MessageIds \ interface) ∧
-        Disjoint left.MessageActions right.MessageActions ∧
-        left.ParallelMessageOwnership ∧ right.ParallelMessageOwnership := by
-    simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
-  have hProgressPieces :
-      Disjoint left.ProgressIds right.ProgressIds ∧
-        left.ParallelProgressOwnership ∧ right.ParallelProgressOwnership := by
-    simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
-  have hFairPieces :
-      Disjoint left.FairChoiceIds right.FairChoiceIds ∧
-        left.ParallelFairChoiceOwnership ∧ right.ParallelFairChoiceOwnership := by
-    simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
   exact supported_labels_recover
     (transition_label_supported hLeftTrans)
     (transition_label_supported hRightTrans)
     (offers_label_supported hLeftOffers)
     (offers_label_supported hRightOffers)
-    hMessagePieces.2.1 hProgressPieces.1 hFairPieces.1
+    hMessageActions hProgressIds hFairIds
     hSync hSync' hCombineEq
 
 
@@ -122,9 +109,9 @@ theorem decoratedTypeTransition_par_cases
     {env : TypeEnvironment} {label : TypeLabel}
     {left right target : PactType} {interface : Interface}
     {current future : Finset BareMessage}
-    (hMessageOwnership : PactType.ParallelMessageOwnership (.par left right interface))
-    (hProgIdsOwnership : PactType.ParallelProgressOwnership (.par left right interface))
-    (hFairIdOwnership : PactType.ParallelFairChoiceOwnership (.par left right interface))
+    (hMessageActions : Disjoint left.MessageActions right.MessageActions)
+    (hProgressIds : Disjoint left.ProgressIds right.ProgressIds)
+    (hFairIds : Disjoint left.FairChoiceIds right.FairChoiceIds)
     (hStep :
       DecoratedTypeTransition env (.par left right interface) label
         (TypeOfferSummary.mk current future) target) :
@@ -145,7 +132,7 @@ theorem decoratedTypeTransition_par_cases
           hLeftOffers hRightOffers _hNonFinal' hLocal1' hLocal2' hWFSync' =>
           obtain ⟨hWF', hSync'⟩ := hWFSync'
           obtain ⟨hLabelEq1, hLabelEq2⟩ :=
-            par_witnesses_agree hLeftTrans hRightTrans hMessageOwnership hProgIdsOwnership hFairIdOwnership hWF hLocal1 hLocal2 hSync
+            par_witnesses_agree hLeftTrans hRightTrans hMessageActions hProgressIds hFairIds hWF hLocal1 hLocal2 hSync
               hLeftOffers hRightOffers hWF' hLocal1' hLocal2' hSync' hCombineEq
           subst hLabelEq1; subst hLabelEq2
           have hLeftOffersEnv := typeOffers_of_typeTransition_env hLeftTrans hLeftOffers
@@ -167,7 +154,7 @@ theorem decoratedTypeTransition_par_cases
           hLeftOffers hRightOffers hLocal1' hLocal2' hWFSync' =>
           obtain ⟨hWF', hSync'⟩ := hWFSync'
           obtain ⟨hLabelEq1, hLabelEq2⟩ :=
-            par_witnesses_agree hLeftTrans hRightTrans hMessageOwnership hProgIdsOwnership hFairIdOwnership hWF hLocal1 hLocal2 hSync
+            par_witnesses_agree hLeftTrans hRightTrans hMessageActions hProgressIds hFairIds hWF hLocal1 hLocal2 hSync
               hLeftOffers hRightOffers hWF' hLocal1' hLocal2' hSync' hCombineEq
           subst hLabelEq1; subst hLabelEq2
           have hLeftOffersEnv := typeOffers_of_typeTransition_env hLeftTrans hLeftOffers
@@ -674,6 +661,446 @@ theorem relationMembership_of_accepting
                 exact le_trans hLeBranch (le_max_right _ _)
     | offer elseType branches => sorry
 
+private def footprintWithinReplacement
+    (result original replacement : PactType) : Prop :=
+  result.MessageIds ⊆ original.MessageIds ∪ replacement.MessageIds ∧
+  result.MessageActions ⊆ original.MessageActions ∪ replacement.MessageActions ∧
+  result.ProgressIds ⊆ original.ProgressIds ∪ replacement.ProgressIds ∧
+  result.FairChoiceIds ⊆ original.FairChoiceIds ∪ replacement.FairChoiceIds
+
+private def branchFootprintWithinReplacement
+    (result original : List (BareMessage × PactType))
+    (replacement : PactType) : Prop :=
+  PactType.BranchMessageIds result ⊆
+      PactType.BranchMessageIds original ∪ replacement.MessageIds ∧
+  PactType.BranchMessageActions result ⊆
+      PactType.BranchMessageActions original ∪ replacement.MessageActions ∧
+  PactType.BranchProgressIds result ⊆
+      PactType.BranchProgressIds original ∪ replacement.ProgressIds ∧
+  PactType.BranchFairChoiceIds result ⊆
+      PactType.BranchFairChoiceIds original ∪ replacement.FairChoiceIds
+
+private theorem union_subset_union_union
+    {alpha : Type} [DecidableEq alpha]
+    {left' right' left right replacement : Finset alpha}
+    (hLeft : left' ⊆ left ∪ replacement)
+    (hRight : right' ⊆ right ∪ replacement) :
+    left' ∪ right' ⊆ (left ∪ right) ∪ replacement := by
+  intro item hItem
+  simp only [Finset.mem_union] at hItem ⊢
+  rcases hItem with hItem | hItem
+  · rcases Finset.mem_union.mp (hLeft hItem) with hItem | hItem
+    · exact Or.inl (Or.inl hItem)
+    · exact Or.inr hItem
+  · rcases Finset.mem_union.mp (hRight hItem) with hItem | hItem
+    · exact Or.inl (Or.inr hItem)
+    · exact Or.inr hItem
+
+private theorem insert_union_subset_insert_union_union
+    {alpha : Type} [DecidableEq alpha]
+    (head : alpha) {left' right' left right replacement : Finset alpha}
+    (hLeft : left' ⊆ left ∪ replacement)
+    (hRight : right' ⊆ right ∪ replacement) :
+    {head} ∪ left' ∪ right' ⊆
+      {head} ∪ left ∪ right ∪ replacement := by
+  intro item hItem
+  simp only [Finset.mem_singleton, Finset.mem_union] at hItem ⊢
+  rcases hItem with (rfl | hItem) | hItem
+  · exact Or.inl (Or.inl (Or.inl rfl))
+  · rcases Finset.mem_union.mp (hLeft hItem) with hItem | hItem
+    · exact Or.inl (Or.inl (Or.inr hItem))
+    · exact Or.inr hItem
+  · rcases Finset.mem_union.mp (hRight hItem) with hItem | hItem
+    · exact Or.inl (Or.inr hItem)
+    · exact Or.inr hItem
+
+/-- Substitution can introduce only observables already present in the
+substituted syntax or in the replacement. -/
+private theorem replaceVar_footprintWithinReplacement
+    (name : String) (replacement : PactType) :
+    ∀ processType,
+      footprintWithinReplacement
+        (processType.replaceVar name replacement) processType replacement := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          branchFootprintWithinReplacement
+            (PactType.replaceBranches branches name replacement)
+            branches replacement := by
+        intro branches hBranchesSize
+        induction branches with
+        | nil =>
+            simp [branchFootprintWithinReplacement, PactType.replaceBranches,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hTail : sizeOf rest < sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hBranch := ih (sizeOf branchType) hBranchSize branchType rfl
+            have hRest := restIH hRestSize
+            simp only [PactType.replaceBranches, branchFootprintWithinReplacement,
+              PactType.BranchMessageIds,
+              PactType.BranchMessageActions, PactType.BranchProgressIds,
+              PactType.BranchFairChoiceIds] at hRest ⊢
+            exact ⟨insert_union_subset_insert_union_union action.1
+                hBranch.1 hRest.1,
+              insert_union_subset_insert_union_union action
+                hBranch.2.1 hRest.2.1,
+              union_subset_union_union hBranch.2.2.1 hRest.2.2.1,
+              union_subset_union_union hBranch.2.2.2 hRest.2.2.2⟩
+      cases processType with
+      | message msg dir | progress msg | tock | skip =>
+          simp [footprintWithinReplacement, PactType.replaceVar,
+            PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds]
+      | var other =>
+          by_cases hName : name = other
+          · subst other
+            simp [footprintWithinReplacement, PactType.replaceVar,
+              PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds]
+          · simp [footprintWithinReplacement, PactType.replaceVar, hName,
+              PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds]
+      | recur binder body =>
+          by_cases hName : name = binder
+          · subst binder
+            simp [footprintWithinReplacement, PactType.replaceVar,
+              PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds]
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]; simp_wf; omega
+            simpa [footprintWithinReplacement, PactType.replaceVar, hName,
+              PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using
+              ih (sizeOf body) hBodySize body rfl
+      | choice left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hLeft := ih (sizeOf left) hLeftSize left rfl
+          have hRight := ih (sizeOf right) hRightSize right rfl
+          simp only [footprintWithinReplacement, PactType.replaceVar,
+            PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds] at hLeft hRight ⊢
+          exact ⟨union_subset_union_union hLeft.1 hRight.1,
+            union_subset_union_union hLeft.2.1 hRight.2.1,
+            union_subset_union_union hLeft.2.2.1 hRight.2.2.1,
+            union_subset_union_union hLeft.2.2.2 hRight.2.2.2⟩
+      | fairChoice bid left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hLeft := ih (sizeOf left) hLeftSize left rfl
+          have hRight := ih (sizeOf right) hRightSize right rfl
+          simp only [footprintWithinReplacement, PactType.replaceVar,
+            PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds] at hLeft hRight ⊢
+          exact ⟨union_subset_union_union hLeft.1 hRight.1,
+            union_subset_union_union hLeft.2.1 hRight.2.1,
+            union_subset_union_union hLeft.2.2.1 hRight.2.2.1,
+            insert_union_subset_insert_union_union bid
+              hLeft.2.2.2 hRight.2.2.2⟩
+      | seq left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hLeft := ih (sizeOf left) hLeftSize left rfl
+          have hRight := ih (sizeOf right) hRightSize right rfl
+          simp only [footprintWithinReplacement, PactType.replaceVar,
+            PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds] at hLeft hRight ⊢
+          exact ⟨union_subset_union_union hLeft.1 hRight.1,
+            union_subset_union_union hLeft.2.1 hRight.2.1,
+            union_subset_union_union hLeft.2.2.1 hRight.2.2.1,
+            union_subset_union_union hLeft.2.2.2 hRight.2.2.2⟩
+      | par left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hLeft := ih (sizeOf left) hLeftSize left rfl
+          have hRight := ih (sizeOf right) hRightSize right rfl
+          simp only [footprintWithinReplacement, PactType.replaceVar,
+            PactType.MessageIds, PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds] at hLeft hRight ⊢
+          exact ⟨union_subset_union_union hLeft.1 hRight.1,
+            union_subset_union_union hLeft.2.1 hRight.2.1,
+            union_subset_union_union hLeft.2.2.1 hRight.2.2.1,
+            union_subset_union_union hLeft.2.2.2 hRight.2.2.2⟩
+      | xoffer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          have hElse := ih (sizeOf elseType) hElseSize elseType rfl
+          have hBranch := hBranches branches hBranchesSize
+          simp only [footprintWithinReplacement, branchFootprintWithinReplacement,
+            PactType.replaceVar, PactType.MessageIds, PactType.MessageActions,
+            PactType.ProgressIds, PactType.FairChoiceIds] at hElse hBranch ⊢
+          exact ⟨union_subset_union_union hElse.1 hBranch.1,
+            union_subset_union_union hElse.2.1 hBranch.2.1,
+            union_subset_union_union hElse.2.2.1 hBranch.2.2.1,
+            union_subset_union_union hElse.2.2.2 hBranch.2.2.2⟩
+      | offer elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          have hElse := ih (sizeOf elseType) hElseSize elseType rfl
+          have hBranch := hBranches branches hBranchesSize
+          simp only [footprintWithinReplacement, branchFootprintWithinReplacement,
+            PactType.replaceVar, PactType.MessageIds, PactType.MessageActions,
+            PactType.ProgressIds, PactType.FairChoiceIds] at hElse hBranch ⊢
+          exact ⟨union_subset_union_union hElse.1 hBranch.1,
+            union_subset_union_union hElse.2.1 hBranch.2.1,
+            union_subset_union_union hElse.2.2.1 hBranch.2.2.1,
+            union_subset_union_union hElse.2.2.2 hBranch.2.2.2⟩
+
+private def footprintSubset (result original : PactType) : Prop :=
+  result.MessageIds ⊆ original.MessageIds ∧
+  result.MessageActions ⊆ original.MessageActions ∧
+  result.ProgressIds ⊆ original.ProgressIds ∧
+  result.FairChoiceIds ⊆ original.FairChoiceIds
+
+private theorem branchType_footprintSubset
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hMem : (action, branchType) ∈ branches) :
+    branchType.MessageIds ⊆ PactType.BranchMessageIds branches ∧
+    branchType.MessageActions ⊆ PactType.BranchMessageActions branches ∧
+    branchType.ProgressIds ⊆ PactType.BranchProgressIds branches ∧
+    branchType.FairChoiceIds ⊆ PactType.BranchFairChoiceIds branches := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        simp only [PactType.BranchMessageIds, PactType.BranchMessageActions,
+          PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+        constructor
+        · exact fun item hItem => by simp [hItem]
+        constructor
+        · exact fun item hItem => by simp [hItem]
+        constructor <;> exact fun item hItem => by simp [hItem]
+      · obtain ⟨hIds, hActions, hProgress, hFair⟩ := ih hMem
+        simp only [PactType.BranchMessageIds, PactType.BranchMessageActions,
+          PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+        exact ⟨hIds.trans Finset.subset_union_right,
+          hActions.trans Finset.subset_union_right,
+          hProgress.trans Finset.subset_union_right,
+          hFair.trans Finset.subset_union_right⟩
+
+private theorem footprintSubset_left
+    {result left right : PactType}
+    (h : footprintSubset result left) :
+    result.MessageIds ⊆ left.MessageIds ∪ right.MessageIds ∧
+    result.MessageActions ⊆ left.MessageActions ∪ right.MessageActions ∧
+    result.ProgressIds ⊆ left.ProgressIds ∪ right.ProgressIds ∧
+    result.FairChoiceIds ⊆ left.FairChoiceIds ∪ right.FairChoiceIds :=
+  ⟨h.1.trans Finset.subset_union_left,
+    h.2.1.trans Finset.subset_union_left,
+    h.2.2.1.trans Finset.subset_union_left,
+    h.2.2.2.trans Finset.subset_union_left⟩
+
+private theorem footprintSubset_right
+    {result left right : PactType}
+    (h : footprintSubset result right) :
+    result.MessageIds ⊆ left.MessageIds ∪ right.MessageIds ∧
+    result.MessageActions ⊆ left.MessageActions ∪ right.MessageActions ∧
+    result.ProgressIds ⊆ left.ProgressIds ∪ right.ProgressIds ∧
+    result.FairChoiceIds ⊆ left.FairChoiceIds ∪ right.FairChoiceIds :=
+  ⟨h.1.trans Finset.subset_union_right,
+    h.2.1.trans Finset.subset_union_right,
+    h.2.2.1.trans Finset.subset_union_right,
+    h.2.2.2.trans Finset.subset_union_right⟩
+
+/-- A relation residual contains no observable identifier absent from its
+source type. -/
+private theorem buildRelationSetCoreFuel_footprintSubset
+    (signature : TypeAlphabet) :
+    ∀ fuel source residual state,
+      (residual, state) ∈ buildRelationSetCoreFuel signature fuel source →
+      footprintSubset residual source := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro source residual state hMem
+      simp only [buildRelationSetCoreFuel, Finset.mem_singleton,
+        Prod.mk.injEq] at hMem
+      rw [hMem.1]
+      exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+        Finset.Subset.rfl, Finset.Subset.rfl⟩
+  | succ fuel ih =>
+      intro source residual state hMem
+      cases source with
+      | skip | var _ =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_singleton,
+            Prod.mk.injEq] at hMem
+          rw [hMem.1]
+          exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+            Finset.Subset.rfl, Finset.Subset.rfl⟩
+      | message msg dir | progress msg | tock =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_singleton, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · simp [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds]
+      | choice left right =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_union, Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩ |
+              ⟨entry, hEntry, rfl, -⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · simpa [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using
+              footprintSubset_left (right := right) (ih left entry.1 entry.2 hEntry)
+          · simpa [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using
+              footprintSubset_right (left := left) (ih right entry.1 entry.2 hEntry)
+      | fairChoice bid left right =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_union, Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩ |
+              ⟨entry, hEntry, rfl, -⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · have h := footprintSubset_left (right := right)
+                (ih left entry.1 entry.2 hEntry)
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at h ⊢
+            exact ⟨h.1, h.2.1, h.2.2.1,
+              h.2.2.2.trans (by simp)⟩
+          · have h := footprintSubset_right (left := left)
+                (ih right entry.1 entry.2 hEntry)
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at h ⊢
+            exact ⟨h.1, h.2.1, h.2.2.1,
+              h.2.2.2.trans (by simp)⟩
+      | seq left right =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_union,
+            Finset.mem_image, Finset.mem_filter, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨entry, ⟨hEntry, -⟩, rfl, -⟩ |
+              ⟨entry, hEntry, rfl, -⟩
+          · have h := ih left entry.1 entry.2 hEntry
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at h ⊢
+            exact ⟨Finset.union_subset_union h.1 Finset.Subset.rfl,
+              Finset.union_subset_union h.2.1 Finset.Subset.rfl,
+              Finset.union_subset_union h.2.2.1 Finset.Subset.rfl,
+              Finset.union_subset_union h.2.2.2 Finset.Subset.rfl⟩
+          · simpa [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using
+              footprintSubset_right (left := left) (ih right entry.1 entry.2 hEntry)
+      | par left right interface =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩
+          · simp [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds]
+          · obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hEntry
+            have hLeft := ih left entry.1.1 entry.1.2 hLeftEntry
+            have hRight := ih right entry.2.1 entry.2.2 hRightEntry
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at hLeft hRight ⊢
+            exact ⟨Finset.union_subset_union hLeft.1 hRight.1,
+              Finset.union_subset_union hLeft.2.1 hRight.2.1,
+              Finset.union_subset_union hLeft.2.2.1 hRight.2.2.1,
+              Finset.union_subset_union hLeft.2.2.2 hRight.2.2.2⟩
+      | recur name body =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · have hChild := ih body entry.1 entry.2 hEntry
+            have hReplace := replaceVar_footprintWithinReplacement
+              name (.recur name body) entry.1
+            simp only [footprintSubset, footprintWithinReplacement,
+              PactType.MessageIds, PactType.MessageActions,
+              PactType.ProgressIds, PactType.FairChoiceIds] at hChild hReplace ⊢
+            exact ⟨hReplace.1.trans
+                (Finset.union_subset hChild.1 Finset.Subset.rfl),
+              hReplace.2.1.trans
+                (Finset.union_subset hChild.2.1 Finset.Subset.rfl),
+              hReplace.2.2.1.trans
+                (Finset.union_subset hChild.2.2.1 Finset.Subset.rfl),
+              hReplace.2.2.2.trans
+                (Finset.union_subset hChild.2.2.2 Finset.Subset.rfl)⟩
+      | xoffer elseType branches =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_union, mem_foldl_union_iff, Finset.notMem_empty,
+            false_or, Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩ |
+              ⟨item, hItem, entry, hEntry, rfl, -⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · simpa [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using footprintSubset_left
+                (right := PactType.offer .skip branches)
+                (ih elseType entry.1 entry.2 hEntry)
+          · have hFields := List.mem_zipIdx hItem
+            simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and] at hFields
+            obtain ⟨hBound, hValue⟩ := hFields
+            have hBranchMem : item.1 ∈ branches := by
+              have h := List.getElem_mem hBound
+              simpa [hValue] using h
+            have hBranch := branchType_footprintSubset hBranchMem
+            have hChild := ih item.1.2 entry.1 entry.2 hEntry
+            simp only [footprintSubset] at hChild
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at ⊢
+            exact ⟨(hChild.1.trans hBranch.1).trans Finset.subset_union_right,
+              (hChild.2.1.trans hBranch.2.1).trans Finset.subset_union_right,
+              (hChild.2.2.1.trans hBranch.2.2.1).trans Finset.subset_union_right,
+              (hChild.2.2.2.trans hBranch.2.2.2).trans Finset.subset_union_right⟩
+      | offer elseType branches =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_union, mem_foldl_union_iff, Finset.notMem_empty,
+            false_or, Finset.mem_image, Prod.mk.injEq] at hMem
+          rcases hMem with ⟨rfl, rfl⟩ | ⟨entry, hEntry, rfl, -⟩ |
+              ⟨item, hItem, entry, hEntry, rfl, -⟩
+          · exact ⟨Finset.Subset.rfl, Finset.Subset.rfl,
+              Finset.Subset.rfl, Finset.Subset.rfl⟩
+          · simpa [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] using footprintSubset_left
+                (right := PactType.offer .skip branches)
+                (ih elseType entry.1 entry.2 hEntry)
+          · have hChild := ih (parallelTypeBranchesSelecting item.1 branches)
+                entry.1 entry.2 hEntry
+            simp only [footprintSubset,
+              parallelTypeBranchesSelecting_messageIds,
+              parallelTypeBranchesSelecting_messageActions,
+              parallelTypeBranchesSelecting_progressIds,
+              parallelTypeBranchesSelecting_fairChoiceIds] at hChild
+            simp only [footprintSubset, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds] at ⊢
+            exact ⟨hChild.1.trans Finset.subset_union_right,
+              hChild.2.1.trans Finset.subset_union_right,
+              hChild.2.2.1.trans Finset.subset_union_right,
+              hChild.2.2.2.trans Finset.subset_union_right⟩
 /-- Defines the related-state shape for a compiled parallel product,
 mirroring `pactproofs.typ`'s own "Related states" bullets verbatim: a
 product state represents the pointwise composition, or the dedicated
@@ -687,12 +1114,9 @@ def parRelationShape
         residualLeft q1 ∧
       relationMembership (buildRelationSet right (compileType signature right))
         residualRight q2 ∧
-      PactType.ParallelMessageOwnership
-        (.par residualLeft residualRight interface) ∧
-      PactType.ParallelProgressOwnership
-        (.par residualLeft residualRight interface) ∧
-      PactType.ParallelFairChoiceOwnership
-        (.par residualLeft residualRight interface)) ∨
+      Disjoint residualLeft.MessageActions residualRight.MessageActions ∧
+      Disjoint residualLeft.ProgressIds residualRight.ProgressIds ∧
+      Disjoint residualLeft.FairChoiceIds residualRight.FairChoiceIds) ∨
     entry = (PactType.skip, TypeAutomatonState.final)
 
 /-- Proves every related parallel pair has the parallel shape.
@@ -709,12 +1133,15 @@ obtain child residuals `ρ₁`, `ρ₂` and states `q₁`, `q₂`, together with
 `ρ₁ ~ q₁` and `ρ₂ ~ q₂`. The parent pair is then
 `(ρ₁ ‖_I ρ₂, .pair q₁ q₂)`, which gives the product case.
 
-The child forward hypotheses are available when establishing any additional
-correspondence obligations packaged inside `parRelationShape`.
+The observable-footprint invariant below shows that each child residual uses
+only identifiers from its source child. Therefore the three sibling
+disjointness conditions also hold for the two residuals.
 
 -/
 lemma relationMembership_par_cases
     (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
+    (hLeftTailRecursive : PactType.TailRecursive left)
+    (hRightTailRecursive : PactType.TailRecursive right)
     (hMessageOwnership :
       PactType.ParallelMessageOwnership (.par left right interface))
     (hProgIdsOwnership :
@@ -750,7 +1177,61 @@ lemma relationMembership_par_cases
           (compileType signature (.par left right interface)))
         residual state) :
     parRelationShape signature left right interface (residual, state) := by
-  sorry
+  have hFuelEq : typeCompilationFuel (.par left right interface) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.par left right interface))
+        (.par left right interface) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidual, hState⟩ |
+      ⟨entry, hEntry, hResidual, hState⟩
+  · exact Or.inr (Prod.ext hResidual hState)
+  · obtain ⟨hLeftEntry, hRightEntry⟩ := Finset.mem_product.mp hEntry
+    have hLeftRelated : relationMembership
+        (buildRelationSet left (compileType signature left))
+        entry.1.1 entry.1.2 := by
+      show (entry.1.1, entry.1.2) ∈
+        buildRelationSetCoreFuel signature (typeCompilationFuel left) left
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature left
+        (le_max_left _ _) le_rfl]
+      exact hLeftEntry
+    have hRightRelated : relationMembership
+        (buildRelationSet right (compileType signature right))
+        entry.2.1 entry.2.2 := by
+      show (entry.2.1, entry.2.2) ∈
+        buildRelationSetCoreFuel signature (typeCompilationFuel right) right
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature right
+        (le_max_right _ _) le_rfl]
+      exact hRightEntry
+    have hLeftFootprint := buildRelationSetCoreFuel_footprintSubset signature
+      _ left entry.1.1 entry.1.2 hLeftEntry
+    have hRightFootprint := buildRelationSetCoreFuel_footprintSubset signature
+      _ right entry.2.1 entry.2.2 hRightEntry
+    have hMessageOwnershipPieces :
+        Disjoint (left.MessageIds \ interface) (right.MessageIds \ interface) ∧
+        Disjoint left.MessageActions right.MessageActions ∧
+        left.ParallelMessageOwnership ∧ right.ParallelMessageOwnership := by
+      simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+    have hProgressOwnershipPieces :
+        Disjoint left.ProgressIds right.ProgressIds ∧
+        left.ParallelProgressOwnership ∧ right.ParallelProgressOwnership := by
+      simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+    have hFairOwnershipPieces :
+        Disjoint left.FairChoiceIds right.FairChoiceIds ∧
+        left.ParallelFairChoiceOwnership ∧ right.ParallelFairChoiceOwnership := by
+      simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
+    refine Or.inl ⟨entry.1.2, entry.2.2, entry.1.1, entry.2.1,
+      Prod.ext hResidual.symm hState.symm, hLeftRelated, hRightRelated, ?_, ?_, ?_⟩
+    · exact hMessageOwnershipPieces.2.1.mono
+        hLeftFootprint.2.1 hRightFootprint.2.1
+    · exact hProgressOwnershipPieces.1.mono
+        hLeftFootprint.2.2.1 hRightFootprint.2.2.1
+    · exact hFairOwnershipPieces.1.mono
+        hLeftFootprint.2.2.2 hRightFootprint.2.2.2
   -- have hFuelEq : typeCompilationFuel (.par left right interface) =
   --     max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
   --   simp only [typeCompilationFuel]; omega
