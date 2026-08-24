@@ -38,7 +38,7 @@ lemma transitionAlphabet_environment_mem
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
     (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
       signature.transitionAlphabet) :
-    env ∈ signature.environments := by
+    env ∈ signature.localEnvironments := by
   classical
   unfold TypeAlphabet.transitionAlphabet at hSymbol
   rw [Finset.mem_biUnion] at hSymbol

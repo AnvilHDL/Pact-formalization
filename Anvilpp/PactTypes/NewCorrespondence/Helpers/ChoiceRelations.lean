@@ -18,6 +18,132 @@ def binaryChoiceRelationShape
       relationMembership (buildRelationSet right (compileType signature right))
         entry.1 q)
 
+/-- Lift a left-child relation pair through a constructor whose relation has
+the binary-choice shape. -/
+lemma relationMembership_binaryChoice_left
+    (signature : TypeAlphabet) (whole left right residual : PactType)
+    (hUnfold :
+      buildRelationSetCoreFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right) + 1) whole =
+        insert (whole, TypeAutomatonState.root)
+          ((buildRelationSetCoreFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) left).image
+              (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+            (buildRelationSetCoreFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) right).image
+              (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))))
+    (hFuelEq : typeCompilationFuel whole =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet left (compileType signature left)) residual state) :
+    relationMembership (buildRelationSet whole (compileType signature whole))
+      residual (.child 0 state) := by
+  show (residual, .child 0 state) ∈
+    buildRelationSetCoreFuel signature (typeCompilationFuel whole) whole
+  rw [hFuelEq, hUnfold]
+  simp only [Finset.mem_insert, Finset.mem_union, Finset.mem_image,
+    Prod.mk.injEq]
+  right
+  left
+  refine ⟨(residual, state), ?_, rfl, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature left
+    (le_max_left _ _) le_rfl]
+  exact hRelated
+
+/-- Lift a right-child relation pair through a constructor whose relation has
+the binary-choice shape. -/
+lemma relationMembership_binaryChoice_right
+    (signature : TypeAlphabet) (whole left right residual : PactType)
+    (hUnfold :
+      buildRelationSetCoreFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right) + 1) whole =
+        insert (whole, TypeAutomatonState.root)
+          ((buildRelationSetCoreFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) left).image
+              (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+            (buildRelationSetCoreFuel signature
+              (max (typeCompilationFuel left) (typeCompilationFuel right)) right).image
+              (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))))
+    (hFuelEq : typeCompilationFuel whole =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet right (compileType signature right)) residual state) :
+    relationMembership (buildRelationSet whole (compileType signature whole))
+      residual (.child 1 state) := by
+  show (residual, .child 1 state) ∈
+    buildRelationSetCoreFuel signature (typeCompilationFuel whole) whole
+  rw [hFuelEq, hUnfold]
+  simp only [Finset.mem_insert, Finset.mem_union, Finset.mem_image,
+    Prod.mk.injEq]
+  right
+  right
+  refine ⟨(residual, state), ?_, rfl, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
+    (le_max_right _ _) le_rfl]
+  exact hRelated
+
+lemma relationMembership_choice_left
+    (signature : TypeAlphabet) (left right residual : PactType)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet left (compileType signature left)) residual state) :
+    relationMembership
+      (buildRelationSet (.choice left right)
+        (compileType signature (.choice left right)))
+      residual (.child 0 state) := by
+  apply relationMembership_binaryChoice_left signature (.choice left right)
+    left right residual rfl
+  · simp only [typeCompilationFuel]
+    omega
+  · exact hRelated
+
+lemma relationMembership_choice_right
+    (signature : TypeAlphabet) (left right residual : PactType)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet right (compileType signature right)) residual state) :
+    relationMembership
+      (buildRelationSet (.choice left right)
+        (compileType signature (.choice left right)))
+      residual (.child 1 state) := by
+  apply relationMembership_binaryChoice_right signature (.choice left right)
+    left right residual rfl
+  · simp only [typeCompilationFuel]
+    omega
+  · exact hRelated
+
+lemma relationMembership_fairChoice_left
+    (signature : TypeAlphabet) (bid : BranchId)
+    (left right residual : PactType) {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet left (compileType signature left)) residual state) :
+    relationMembership
+      (buildRelationSet (.fairChoice bid left right)
+        (compileType signature (.fairChoice bid left right)))
+      residual (.child 0 state) := by
+  apply relationMembership_binaryChoice_left signature
+    (.fairChoice bid left right) left right residual rfl
+  · simp only [typeCompilationFuel]
+    omega
+  · exact hRelated
+
+lemma relationMembership_fairChoice_right
+    (signature : TypeAlphabet) (bid : BranchId)
+    (left right residual : PactType) {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet right (compileType signature right)) residual state) :
+    relationMembership
+      (buildRelationSet (.fairChoice bid left right)
+        (compileType signature (.fairChoice bid left right)))
+      residual (.child 1 state) := by
+  apply relationMembership_binaryChoice_right signature
+    (.fairChoice bid left right) left right residual rfl
+  · simp only [typeCompilationFuel]
+    omega
+  · exact hRelated
+
 /-- Every pair in a relation with the structural binary-choice clause is the
 fresh root, a state copied from the left relation, or a state copied from the
 right relation. -/

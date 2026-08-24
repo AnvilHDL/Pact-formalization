@@ -19,6 +19,65 @@ def seqRelationShape
       relationMembership (buildRelationSet right (compileType signature right))
         entry.1 q2)
 
+/-- Lift a surviving left-child state into the left phase of a sequence. -/
+lemma relationMembership_seq_left
+    (signature : TypeAlphabet) (left right residual : PactType)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet left (compileType signature left)) residual state)
+    (hNotAccepting : state ∉ (compileType signature left).accepting) :
+    relationMembership
+      (buildRelationSet (.seq left right)
+        (compileType signature (.seq left right)))
+      (.seq residual right) (.child 0 state) := by
+  have hFuelEq : typeCompilationFuel (.seq left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show ((.seq residual right : PactType), .child 0 state) ∈
+    buildRelationSetCoreFuel signature (typeCompilationFuel (.seq left right))
+      (.seq left right)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image,
+    Finset.mem_filter, Prod.mk.injEq]
+  left
+  refine ⟨(residual, state), ⟨?_, ?_⟩, rfl, rfl⟩
+  · rw [buildRelationSetCoreFuel_eq_of_sufficient signature left
+      (le_max_left _ _) le_rfl]
+    exact hRelated
+  · have hCompile := compileTypeFuel_eq_of_sufficient signature left
+      (le_max_left (typeCompilationFuel left) (typeCompilationFuel right)) le_rfl
+    rw [hCompile]
+    simp only [sequenceDeleted, Finset.mem_sdiff, Finset.mem_singleton]
+    intro hAccepting
+    exact (hNotAccepting (by simpa [compileType] using hAccepting.1)).elim
+
+/-- Lift a right-child state into the right phase of a sequence. -/
+lemma relationMembership_seq_right
+    (signature : TypeAlphabet) (left right residual : PactType)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet right (compileType signature right)) residual state) :
+    relationMembership
+      (buildRelationSet (.seq left right)
+        (compileType signature (.seq left right)))
+      residual (.child 1 state) := by
+  have hFuelEq : typeCompilationFuel (.seq left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show (residual, .child 1 state) ∈
+    buildRelationSetCoreFuel signature (typeCompilationFuel (.seq left right))
+      (.seq left right)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image,
+    Prod.mk.injEq]
+  right
+  refine ⟨(residual, state), ?_, rfl, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
+    (le_max_right _ _) le_rfl]
+  exact hRelated
+
 /-- Proves the sufficient-fuel sequence fragment is the sequence builder applied to the sufficient child fragments. -/
 theorem compileTypeFuel_sequence_eq_build
     (signature : TypeAlphabet) (left right : PactType) :
@@ -566,11 +625,8 @@ theorem compileType_seq_lift_left_step
       TypeOffers.seq env leftResidual leftTarget right label current childFuture
         hChildStep.2 hNonFinal⟩
   refine ⟨hParentEdge, ?_⟩
-  exact relationMembership_of_step_edge_unique (.seq left right)
-    (compileType signature (.seq left right)) hParentSource hParentEdge
-    hParentStep
-    (fun target hTargetStep =>
-      decoratedTypeTransition_target_unique hTargetStep hParentStep)
+  exact relationMembership_seq_left signature left right leftTarget hTarget
+    hNotAccepting
 
 /-- Lifts a final left-child edge to the redirected public sequence edge. -/
 theorem compileType_seq_lift_left_fuse
@@ -657,11 +713,8 @@ theorem compileType_seq_lift_left_fuse
       TypeOffers.seq_fuse env leftResidual right label current childFuture
         hChildStep.2⟩
   refine ⟨hParentEdge, ?_⟩
-  exact relationMembership_of_step_edge_unique (.seq left right)
-    (compileType signature (.seq left right)) hParentSource hParentEdge
-    hParentStep
-    (fun target hTargetStep =>
-      decoratedTypeTransition_target_unique hTargetStep hParentStep)
+  exact relationMembership_seq_right signature left right right
+    (buildRelationSet_initial right (compileType signature right))
 
 /-- Lifts a right-child edge to a copied public sequence edge. -/
 theorem compileType_seq_lift_right_step
@@ -733,11 +786,7 @@ theorem compileType_seq_lift_right_step
             hPendingFuture
     · simp [childPendingEdge, childState, hPendingTarget]
   refine ⟨.child 1 q', hParentEdge, ?_⟩
-  exact relationMembership_of_step_edge_unique (.seq left right)
-    (compileType signature (.seq left right)) hParentSource hParentEdge
-    hChildStep
-    (fun target hTargetStep =>
-      decoratedTypeTransition_target_unique hTargetStep hChildStep)
+  exact relationMembership_seq_right signature left right rightTarget _hTarget
 
 /-- Proves every related sequence pair has the sequence shape, given the forward direction of the left child's own step correspondence. -/
 lemma relationMembership_seq_cases

@@ -155,6 +155,14 @@ namespace TypeAlphabet
       alphabet.offerSets.image fun future =>
         { current := current, future := future }
 
+  /-- Offer summaries available while compiling a constructor or one of its
+  children.  Interface actions are local actions until the enclosing parallel
+  constructor hides them. -/
+  def localOfferSummaries (alphabet : TypeAlphabet) : Finset TypeOfferSummary :=
+    alphabet.localOfferSets.biUnion fun current =>
+      alphabet.localOfferSets.image fun future =>
+        { current := current, future := future }
+
   /-
   Validate a type against a previously chosen alphabet.  This checks use of
   the signature; it does not synthesize or enlarge the signature from syntax.
@@ -203,9 +211,9 @@ structure TypeAutomatonSymbol : Type where
 
 def TypeAlphabet.transitionAlphabet
     (alphabet : TypeAlphabet) : Finset TypeAutomatonSymbol :=
-  alphabet.environments.biUnion fun environment =>
-    alphabet.labels.biUnion fun label =>
-      alphabet.offerSummaries.image fun offers =>
+  alphabet.localEnvironments.biUnion fun environment =>
+    alphabet.localLabels.biUnion fun label =>
+      alphabet.localOfferSummaries.image fun offers =>
         { environment := environment, label := label, offers := offers }
 
 end

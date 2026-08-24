@@ -8,6 +8,24 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
+@[simp] theorem transitionAlphabet_mk_mem_iff
+    (signature : TypeAlphabet) (env : TypeEnvironment) (label : TypeLabel)
+    (offers : TypeOfferSummary) :
+    TypeAutomatonSymbol.mk env label offers ∈ signature.transitionAlphabet ↔
+      env ∈ signature.localEnvironments ∧
+      label ∈ signature.localLabels ∧
+      offers ∈ signature.localOfferSummaries := by
+  classical
+  simp [TypeAlphabet.transitionAlphabet]
+
+@[simp] theorem localOfferSummaries_mk_mem_iff
+    (signature : TypeAlphabet) (current future : Finset BareMessage) :
+    TypeOfferSummary.mk current future ∈ signature.localOfferSummaries ↔
+      current ⊆ signature.localActions ∧
+      future ⊆ signature.localActions := by
+  classical
+  simp [TypeAlphabet.localOfferSummaries, TypeAlphabet.localOfferSets]
+
 theorem localEnvironment_wellFormed
     (signature : TypeAlphabet) {environment : TypeEnvironment}
     (hEnvironment : environment ∈ signature.localEnvironments) :
@@ -28,14 +46,10 @@ theorem localEnvironment_wellFormed
       simp only [Finset.mem_sdiff] at hAvailable
       exact hAvailable.2 hImmediate
 
-/-- States that a decorated type step's target residual is uniquely determined by its environment, source, label, and offers. -/
-theorem decoratedTypeTransition_target_unique
-    {env : TypeEnvironment} {source : PactType} {label : TypeLabel}
-    {offers : TypeOfferSummary} {target target' : PactType}
-    (hStep : DecoratedTypeTransition env source label offers target)
-    (hStep' : DecoratedTypeTransition env source label offers target') :
-    target = target' := by
-  sorry
+/- Decorated type transitions are intentionally not target-deterministic.  For
+example, an unresolved choice may silently select either branch while exposing
+the same offers.  The correspondence proof therefore establishes target
+relation membership with the relation clause for the source constructor. -/
 
 /-- Proves a built relation set relates each automaton state to at most one residual. -/
 lemma relationMembership_functional
@@ -152,7 +166,7 @@ theorem transitionAlphabet_offerSummary_mem
     {offers : TypeOfferSummary}
     (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
       signature.transitionAlphabet) :
-    offers ∈ signature.offerSummaries := by
+    offers ∈ signature.localOfferSummaries := by
   classical
   unfold TypeAlphabet.transitionAlphabet at hSymbol
   rw [Finset.mem_biUnion] at hSymbol
@@ -170,7 +184,7 @@ theorem transitionAlphabet_change_offers
     {offers offers' : TypeOfferSummary}
     (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
       signature.transitionAlphabet)
-    (hOffers' : offers' ∈ signature.offerSummaries) :
+    (hOffers' : offers' ∈ signature.localOfferSummaries) :
     TypeAutomatonSymbol.mk env label offers' ∈ signature.transitionAlphabet := by
   classical
   unfold TypeAlphabet.transitionAlphabet at hSymbol ⊢
@@ -191,11 +205,11 @@ theorem transitionAlphabet_change_offers
 /-- Proves that an offer summary stays supported when its future part is drawn from the old future and current parts. -/
 theorem offerSummary_mem_of_future_subset_union
     (signature : TypeAlphabet) {current future future' : Finset BareMessage}
-    (hOffers : TypeOfferSummary.mk current future ∈ signature.offerSummaries)
+    (hOffers : TypeOfferSummary.mk current future ∈ signature.localOfferSummaries)
     (hFuture' : future' ⊆ future ∪ current) :
-    TypeOfferSummary.mk current future' ∈ signature.offerSummaries := by
+    TypeOfferSummary.mk current future' ∈ signature.localOfferSummaries := by
   classical
-  unfold TypeAlphabet.offerSummaries at hOffers ⊢
+  unfold TypeAlphabet.localOfferSummaries at hOffers ⊢
   rw [Finset.mem_biUnion] at hOffers
   obtain ⟨current0, hCurrent0, hImage⟩ := hOffers
   rw [Finset.mem_image] at hImage
@@ -205,7 +219,7 @@ theorem offerSummary_mem_of_future_subset_union
   refine ⟨current, hCurrent0, ?_⟩
   rw [Finset.mem_image]
   refine ⟨future', ?_, rfl⟩
-  unfold TypeAlphabet.offerSets at hCurrent0 hFuture0 ⊢
+  unfold TypeAlphabet.localOfferSets at hCurrent0 hFuture0 ⊢
   rw [Finset.mem_powerset] at hCurrent0 hFuture0 ⊢
   intro action hAction
   have hUnion := hFuture' hAction

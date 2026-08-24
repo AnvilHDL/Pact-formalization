@@ -1159,17 +1159,3 @@ theorem buildRelationSet_initial (ty : PactType) (auto : TypeAutomaton)
 
 end
 
-
-theorem relationMembership_of_step_edge_unique
-    (ty : PactType) (auto : TypeAutomaton)
-    {residual residual' : PactType} {state state' : TypeAutomatonState}
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
-    (hRelated : relationMembership (buildRelationSet ty auto) residual state)
-    (hEdge : auto.HasEdge state env label offers state')
-    (hStep : DecoratedTypeTransition env residual label offers residual')
-    (hUnique :
-      ∀ target,
-        DecoratedTypeTransition env residual label offers target →
-          target = residual') :
-    relationMembership (buildRelationSet ty auto) residual' state' := by
-    sorry

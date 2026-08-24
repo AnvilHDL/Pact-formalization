@@ -7,6 +7,29 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
+/-- Lift a body relation pair through the recursion substitution and child
+state tag. -/
+lemma relationMembership_recur_child
+    (signature : TypeAlphabet) (name : String) (body residual : PactType)
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet body (compileType signature body)) residual state) :
+    relationMembership
+      (buildRelationSet (.recur name body)
+        (compileType signature (.recur name body)))
+      (residual.replaceVar name (.recur name body)) (.child 0 state) := by
+  show (residual.replaceVar name (.recur name body), .child 0 state) ∈
+    buildRelationSetCoreFuel signature
+      (typeCompilationFuel (.recur name body)) (.recur name body)
+  have hFuelEq : typeCompilationFuel (.recur name body) =
+      typeCompilationFuel body + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_image,
+    Prod.mk.injEq]
+  exact Or.inr ⟨(residual, state), hRelated, rfl, rfl⟩
+
 theorem decoratedTypeTransition_replaceVar_iff
     (name : String) (body : PactType) (residual : PactType)
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
@@ -56,7 +79,8 @@ lemma helper_h15_recursion_future_offers_agree
         residual q) :
     computeFutureOf signature (.recur name body) (.child 0 q) =
       typeFutureOffers (residual.replaceVar name (.recur name body)) := by
-  sorry
+  exact helper_h15_future_offers_agree signature
+    (relationMembership_recur_child signature name body residual hRelated)
 
 
 end

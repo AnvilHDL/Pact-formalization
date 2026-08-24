@@ -23,6 +23,90 @@ def xofferRelationShape
         (buildRelationSet branchType (compileType signature branchType))
         entry.1 q)
 
+lemma relationMembership_xoffer_root
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) :
+    relationMembership
+      (buildRelationSet (.xoffer elseType branches)
+        (compileType signature (.xoffer elseType branches)))
+      (.xoffer elseType branches) .root := by
+  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show ((.xoffer elseType branches : PactType), .root) ∈
+    buildRelationSetCoreFuel signature
+      (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+  rw [hFuelEq]
+  simp [buildRelationSetCoreFuel]
+
+lemma relationMembership_xoffer_else
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) {residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet elseType (compileType signature elseType))
+      residual state) :
+    relationMembership
+      (buildRelationSet (.xoffer elseType branches)
+        (compileType signature (.xoffer elseType branches)))
+      residual (.child 0 state) := by
+  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show (residual, .child 0 state) ∈ buildRelationSetCoreFuel signature
+    (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  apply Finset.mem_insert_of_mem
+  apply Finset.mem_union_left
+  apply Finset.mem_image.mpr
+  refine ⟨(residual, state), ?_, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+    (le_max_left _ _) le_rfl]
+  exact hRelated
+
+lemma relationMembership_xoffer_branch
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    {index : Nat} {action : BareMessage} {branchType residual : PactType}
+    {state : TypeAutomatonState}
+    (hGet : branches[index]? = some (action, branchType))
+    (hRelated : relationMembership
+      (buildRelationSet branchType (compileType signature branchType))
+      residual state) :
+    relationMembership
+      (buildRelationSet (.xoffer elseType branches)
+        (compileType signature (.xoffer elseType branches)))
+      residual (.child (index + 1) state) := by
+  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  have hMem : (action, branchType) ∈ branches :=
+    List.mem_iff_getElem?.mpr ⟨index, hGet⟩
+  have hBranchFuel : typeCompilationFuel branchType ≤
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) :=
+    (typeCompilationFuel_le_typeBranchCompilationFuel branches
+      (action, branchType) hMem).trans (le_max_right _ _)
+  show (residual, .child (index + 1) state) ∈
+    buildRelationSetCoreFuel signature
+      (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  apply Finset.mem_insert_of_mem
+  apply Finset.mem_union_right
+  rw [mem_foldl_union_iff]
+  apply Or.inr
+  refine ⟨((action, branchType), index),
+    List.mk_mem_zipIdx_iff_getElem?.mpr hGet, ?_⟩
+  apply Finset.mem_image.mpr
+  refine ⟨(residual, state), ?_, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature branchType
+    hBranchFuel le_rfl]
+  exact hRelated
+
 set_option maxHeartbeats 4000000 in
 /-- Proves every related exclusive-offer pair has the exclusive-offer shape. -/
 lemma relationMembership_xoffer_cases
@@ -84,325 +168,6 @@ lemma relationMembership_xoffer_cases
       exact hEntry
     exact Or.inr (Or.inr ⟨item.2, item.1.1, item.1.2, entry.2,
       hGet, rfl, hBranchRelated⟩)
-  -- have hElseFuel : typeCompilationFuel elseType ≤
-  --     typeCompilationFuel (.xoffer elseType branches) := by
-  --   simp only [typeCompilationFuel]; omega
-  -- have hElseFuelStrict : typeCompilationFuel elseType + 1 ≤
-  --     typeCompilationFuel (.xoffer elseType branches) := by
-  --   simp only [typeCompilationFuel]; omega
-  -- have hBranchFuel : ∀ branch ∈ branches,
-  --     typeCompilationFuel branch.2 ≤ typeCompilationFuel (.xoffer elseType branches) := by
-  --   intro branch hBranch
-  --   have h1 := typeCompilationFuel_le_typeBranchCompilationFuel branches branch hBranch
-  --   simp only [typeCompilationFuel]; omega
-  -- have hBranchFuelStrict : ∀ branch ∈ branches,
-  --     typeCompilationFuel branch.2 + 1 ≤
-  --       typeCompilationFuel (.xoffer elseType branches) := by
-  --   intro branch hBranch
-  --   have h1 := typeCompilationFuel_le_typeBranchCompilationFuel branches branch hBranch
-  --   simp only [typeCompilationFuel]; omega
-  -- have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
-  --     max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
-  --   simp only [typeCompilationFuel]; omega
-  -- have hWhole :
-  --     compileTypeFuel signature (typeCompilationFuel (.xoffer elseType branches))
-  --       (.xoffer elseType branches) =
-  --       buildExclusiveOfferAutomaton signature branches
-  --         (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --         (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --           (typeCompilationFuel branch.2) branch.2)) := by
-  --   rw [hFuelEq]
-  --   show buildExclusiveOfferAutomaton signature branches
-  --       (compileTypeFuel signature
-  --         (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches)) elseType)
-  --       (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --         (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches))
-  --         branch.2)) =
-  --     buildExclusiveOfferAutomaton signature branches
-  --       (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --       (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --         (typeCompilationFuel branch.2) branch.2))
-  --   congr 1
-  --   · exact compileTypeFuel_eq_of_sufficient signature elseType (le_max_left _ _) le_rfl
-  --   · apply List.map_congr_left
-  --     intro branch hBranch
-  --     congr 1
-  --     exact compileTypeFuel_eq_of_sufficient signature branch.2
-  --       (le_trans (typeCompilationFuel_le_typeBranchCompilationFuel branches branch hBranch)
-  --         (le_max_right _ _)) le_rfl
-  -- have hInit : (compileType signature (.xoffer elseType branches)).initial =
-  --     TypeAutomatonState.root := by
-  --   show (compileTypeFuel signature (typeCompilationFuel (.xoffer elseType branches))
-  --     (.xoffer elseType branches)).initial = TypeAutomatonState.root
-  --   rw [hWhole]
-  --   simp [buildExclusiveOfferAutomaton, finishAutomatonFragment]
-  -- have hRootRelated : relationMembership
-  --     (buildRelationSet (.xoffer elseType branches)
-  --       (compileType signature (.xoffer elseType branches)))
-  --     (.xoffer elseType branches) TypeAutomatonState.root := by
-  --   rw [← hInit]
-  --   exact buildRelationSet_initial (.xoffer elseType branches)
-  --     (compileType signature (.xoffer elseType branches))
-  -- have hRootFuture : computeFutureOf signature (.xoffer elseType branches)
-  --     TypeAutomatonState.root = typeFutureOffers (.xoffer elseType branches) :=
-  --   helper_h15_future_offers_agree signature hRootRelated
-  -- refine buildRelationSet_preserves (.xoffer elseType branches)
-  --   (compileType signature (.xoffer elseType branches))
-  --   (xofferRelationShape signature elseType branches)
-  --   (by
-  --     show xofferRelationShape signature elseType branches
-  --       (.xoffer elseType branches,
-  --         (compileType signature (.xoffer elseType branches)).initial)
-  --     rw [hInit]; exact Or.inl rfl)
-  --   (by
-  --     intro entry hEntry successor hSuccessor
-  --     rcases relationSuccessors_mem_cases (compileType signature (.xoffer elseType branches))
-  --       entry successor hSuccessor with ⟨edge, hEdgeMem, hSource, hTarget, hStep⟩
-  --     have hSymbolMem := compileType_hasEdge_symbol_mem signature (.xoffer elseType branches)
-  --       (show (compileType signature (.xoffer elseType branches)).HasEdge edge.source
-  --         edge.symbol.environment edge.symbol.label edge.symbol.offers edge.target
-  --         from hEdgeMem)
-  --     have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-  --       (.xoffer elseType branches) edge.source edge.target edge.symbol.environment
-  --       edge.symbol.label edge.symbol.offers hSymbolMem).mp hEdgeMem
-  --     rw [hWhole] at hResolved
-  --     obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
-  --       hPTarget⟩ := hResolved
-  --     rcases hEntry with hRoot |
-  --       ⟨q, hStateEq, hMem⟩ |
-  --       ⟨i, action, branchType, q, hBranchesEq, hStateEq, hMem⟩
-  --     · -- root case: entry represents the whole exclusive offer; the three
-  --       -- root-edge families reconstruct the matching semantic offer rule.
-  --       have hEntry1 : entry.1 = .xoffer elseType branches := by rw [hRoot]
-  --       have hRootSource : pendingEdge.source = TypeAutomatonState.root := by
-  --         rw [hPSource, hSource, hRoot]
-  --       simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment, Finset.mem_union]
-  --         at hPendingMem
-  --       rcases hPendingMem with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved2)
-  --       · exfalso
-  --         simp only [childPendingEdges, Finset.mem_image] at hElse
-  --         obtain ⟨childEdge, _, hEq⟩ := hElse
-  --         rw [← hEq] at hRootSource
-  --         simp [childPendingEdge, childState] at hRootSource
-  --       · exfalso
-  --         rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
-  --         rcases hIndexed with hEmpty | ⟨indexed, _, hNewEdge⟩
-  --         · simp at hEmpty
-  --         · simp only [childPendingEdges, Finset.mem_image] at hNewEdge
-  --           obtain ⟨childEdge, _, hEq⟩ := hNewEdge
-  --           rw [← hEq] at hRootSource
-  --           simp [childPendingEdge, childState] at hRootSource
-  --       · -- fire family: reconstructs `xoffer_branch`
-  --         rw [mem_foldl_union_iff] at hBranch
-  --         rcases hBranch with hEmpty | ⟨indexed, hIndexedEntry, hNewEdge⟩
-  --         · simp at hEmpty
-  --         · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
-  --           obtain ⟨⟨branchAction, automaton⟩, index⟩ := indexed
-  --           rcases hNewEdge with ⟨environment, ⟨hEnvMem, hEnabled, hResolvedNeeds⟩, rfl⟩
-  --           have hIndexedGet :
-  --               (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --                 (typeCompilationFuel branch.2) branch.2))[index]? =
-  --                 some (branchAction, automaton) :=
-  --             List.mk_mem_zipIdx_iff_getElem?.mp hIndexedEntry
-  --           obtain ⟨branchType', hBranchGet, hAutEq⟩ :=
-  --             (branches_map_getElem?_eq_some_iff signature branches index branchAction
-  --               automaton).mp hIndexedGet
-  --           have hWF : environment.WellFormed :=
-  --             localEnvironment_wellFormed signature hEnvMem
-  --           have hBranchMem : (branchAction, branchType') ∈ branches :=
-  --             List.mem_iff_getElem?.mpr ⟨index, hBranchGet⟩
-  --           simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --           have hLabelEq : edge.symbol.label = TypeLabel.message branchAction.1
-  --               branchAction.2 := by injection hPLabel.symm
-  --           have hCurrentEq : edge.symbol.offers.current = {branchAction} := hPCurrent.symm
-  --           have hFutureEq : edge.symbol.offers.future = typeFutureOffers branchType' := by
-  --             rw [← hPFuture, ← hAutEq, computeFutureOf_exclusiveOffer_branch signature
-  --               elseType branches (.xoffer elseType branches) hWhole index branchAction
-  --               branchType' hBranchGet (hBranchFuelStrict (branchAction, branchType')
-  --                 hBranchMem) (compileTypeFuel signature (typeCompilationFuel branchType')
-  --                 branchType').initial (compileTypeFuel_initial_mem signature
-  --                 (typeCompilationFuel branchType') branchType' le_rfl), Finset.sdiff_empty]
-  --             show computeFutureOf signature branchType' (compileType signature
-  --               branchType').initial = typeFutureOffers branchType'
-  --             exact helper_h15_future_offers_agree signature
-  --               (buildRelationSet_initial branchType' (compileType signature branchType'))
-  --           have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk {branchAction}
-  --               (typeFutureOffers branchType') := by
-  --             rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --               edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --               hCurrentEq, hFutureEq]
-  --           have hResidualEq : successor.1 = branchType' := by
-  --             rw [hEntry1] at hStep
-  --             rw [hLabelEq, hOffersEq] at hStep
-  --             exact decoratedTypeTransition_target_unique hStep
-  --               (hPEnv ▸ ⟨TypeTransition.xoffer_branch environment elseType branches
-  --                 branchAction branchType'
-  --                 ⟨hWF, hBranchMem, hEnabled, hResolvedNeeds⟩,
-  --                 TypeOffers.xoffer_branch environment elseType branches
-  --                   branchAction branchType'
-  --                   ⟨hWF, hBranchMem, hEnabled, hResolvedNeeds⟩⟩)
-  --           have hTargetEq : successor.2 = .child (index + 1)
-  --               (compileTypeFuel signature (typeCompilationFuel branchType')
-  --                 branchType').initial := by
-  --             rw [hTarget, ← hPTarget, ← hAutEq]
-  --           exact Or.inr (Or.inr ⟨index, branchAction, branchType',
-  --             (compileTypeFuel signature (typeCompilationFuel branchType') branchType').initial,
-  --             hBranchGet, hTargetEq, hResidualEq ▸
-  --               buildRelationSet_initial branchType' (compileType signature branchType')⟩)
-  --       · -- wait family: a silent self-loop, reconstructs `xoffer_wait`
-  --         simp only [Finset.mem_image, Finset.mem_filter] at hWait
-  --         rcases hWait with ⟨environment, ⟨hEnvMem, hClock, hUnresolved⟩, rfl⟩
-  --         have hWF : environment.WellFormed := localEnvironment_wellFormed signature hEnvMem
-  --         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --         have hLabelEq : edge.symbol.label = TypeLabel.silent := by injection hPLabel.symm
-  --         have hCurrentEq : edge.symbol.offers.current =
-  --             typeWaitingOffers environment branches := hPCurrent.symm
-  --         have hFutureEq : edge.symbol.offers.future =
-  --             typeFutureOffers (.xoffer elseType branches) \
-  --               typeWaitingOffers environment branches := by
-  --           rw [← hPFuture, hRootFuture]
-  --           rfl
-  --         have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk
-  --             (typeWaitingOffers environment branches)
-  --             (typeFutureOffers (.xoffer elseType branches) \
-  --               typeWaitingOffers environment branches) := by
-  --           rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --             edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --             hCurrentEq, hFutureEq]
-  --         have hResidualEq : successor.1 = .xoffer elseType branches := by
-  --           rw [hEntry1] at hStep
-  --           rw [hLabelEq, hOffersEq] at hStep
-  --           exact decoratedTypeTransition_target_unique hStep
-  --             (hPEnv ▸ ⟨TypeTransition.xoffer_wait environment elseType branches
-  --               ⟨hWF, hUnresolved, hClock⟩,
-  --               TypeOffers.xoffer_wait environment elseType branches
-  --                 ⟨hWF, hUnresolved, hClock⟩⟩)
-  --         have hTargetEq : successor.2 = TypeAutomatonState.root := by
-  --           rw [hTarget, ← hPTarget]
-  --         exact Or.inl (by rw [show successor = (successor.1, successor.2) from rfl,
-  --           hResidualEq, hTargetEq])
-  --       · -- else family: reconstructs `xoffer_else`
-  --         simp only [Finset.mem_image, Finset.mem_filter] at hResolved2
-  --         rcases hResolved2 with ⟨environment, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
-  --         have hWF : environment.WellFormed := localEnvironment_wellFormed signature hEnvMem
-  --         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --         have hLabelEq : edge.symbol.label = TypeLabel.silent := by injection hPLabel.symm
-  --         have hCurrentEq : edge.symbol.offers.current = ∅ := hPCurrent.symm
-  --         have hFutureEq : edge.symbol.offers.future = typeFutureOffers elseType := by
-  --           rw [← hPFuture, computeFutureOf_exclusiveOffer_else signature elseType branches
-  --             (.xoffer elseType branches) hWhole hElseFuelStrict
-  --             (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
-  --             (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
-  --               le_rfl), Finset.sdiff_empty]
-  --           show computeFutureOf signature elseType (compileType signature elseType).initial =
-  --             typeFutureOffers elseType
-  --           exact helper_h15_future_offers_agree signature
-  --             (buildRelationSet_initial elseType (compileType signature elseType))
-  --         have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk ∅
-  --             (typeFutureOffers elseType) := by
-  --           rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --             edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --             hCurrentEq, hFutureEq]
-  --         have hResidualEq : successor.1 = elseType := by
-  --           rw [hEntry1] at hStep
-  --           rw [hLabelEq, hOffersEq] at hStep
-  --           exact decoratedTypeTransition_target_unique hStep
-  --             (hPEnv ▸ ⟨TypeTransition.xoffer_else environment elseType branches
-  --               ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
-  --               TypeOffers.xoffer_else environment elseType branches
-  --                 ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩)
-  --         have hTargetEq : successor.2 = .child 0
-  --             (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial := by
-  --           rw [hTarget, ← hPTarget]
-  --         exact Or.inr (Or.inl ⟨(compileTypeFuel signature (typeCompilationFuel elseType)
-  --           elseType).initial, hTargetEq, hResidualEq ▸
-  --             buildRelationSet_initial elseType (compileType signature elseType)⟩)
-  --     · -- else-child case: entry is already related to `q` inside `elseType`'s own relation
-  --       have hChildSource : pendingEdge.source = .child 0 q := by
-  --         rw [hPSource, hSource, hStateEq]
-  --       obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
-  --         (buildExclusiveOfferAutomaton_outgoing_else signature branches
-  --           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --           (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --             (typeCompilationFuel branch.2) branch.2)) q pendingEdge).mp
-  --           ⟨hPendingMem, hChildSource⟩
-  --       have hInnerEdgeMem : (compileType signature elseType).HasEdge q
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers
-  --           childEdge.target := by
-  --         rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers hSymbolMem]
-  --         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
-  --         · rw [← hPEnv, hChildEdgeEq]; rfl
-  --         · rw [← hPLabel, hChildEdgeEq]; rfl
-  --         · rw [← hPCurrent, hChildEdgeEq]; rfl
-  --         · rw [← hPFuture, hChildEdgeEq]
-  --           cases hSpec : childEdge.future with
-  --           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-  --           | «at» t r =>
-  --               have hStateMem := compileTypeFuel_futureTargetsInStates signature
-  --                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r
-  --                 hSpec
-  --               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-  --               rw [computeFutureOf_exclusiveOffer_else signature elseType branches
-  --                 (.xoffer elseType branches) hWhole hElseFuelStrict t hStateMem]
-  --       have hTargetEq : successor.2 = .child 0 childEdge.target := by
-  --         rw [hTarget, ← hPTarget, hChildEdgeEq]; rfl
-  --       have hInnerMem :=
-  --         relationMembership_of_step_edge_unique elseType (compileType signature elseType)
-  --           hMem hInnerEdgeMem hStep
-  --           (fun target hTargetStep =>
-  --             decoratedTypeTransition_target_unique hTargetStep hStep)
-  --       exact Or.inr (Or.inl ⟨childEdge.target, hTargetEq, hInnerMem⟩)
-  --     · -- branch-child case: entry is already related to `q` inside branch `i`'s own relation
-  --       have hChildSource : pendingEdge.source = .child (i + 1) q := by
-  --         rw [hPSource, hSource, hStateEq]
-  --       have hAutomataGet :
-  --           (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --             (typeCompilationFuel branch.2) branch.2))[i]? =
-  --             some (action, compileTypeFuel signature (typeCompilationFuel branchType)
-  --               branchType) :=
-  --         (branches_map_getElem?_eq_some_iff signature branches i action
-  --           (compileTypeFuel signature (typeCompilationFuel branchType) branchType)).mpr
-  --           ⟨branchType, hBranchesEq, rfl⟩
-  --       obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
-  --         (buildExclusiveOfferAutomaton_outgoing_branch signature branches
-  --           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --           (branches.map fun branch => (branch.1, compileTypeFuel signature
-  --             (typeCompilationFuel branch.2) branch.2))
-  --           i action (compileTypeFuel signature (typeCompilationFuel branchType) branchType)
-  --           hAutomataGet q pendingEdge).mp ⟨hPendingMem, hChildSource⟩
-  --       have hInnerEdgeMem : (compileType signature branchType).HasEdge q
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers
-  --           childEdge.target := by
-  --         rw [compileType_hasEdge_iff_hasResolvedEdge signature branchType q childEdge.target
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers hSymbolMem]
-  --         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
-  --         · rw [← hPEnv, hChildEdgeEq]; rfl
-  --         · rw [← hPLabel, hChildEdgeEq]; rfl
-  --         · rw [← hPCurrent, hChildEdgeEq]; rfl
-  --         · rw [← hPFuture, hChildEdgeEq]
-  --           cases hSpec : childEdge.future with
-  --           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-  --           | «at» t r =>
-  --               have hBranchMem : (action, branchType) ∈ branches :=
-  --                 List.mem_iff_getElem?.mpr ⟨i, hBranchesEq⟩
-  --               have hStateMem := compileTypeFuel_futureTargetsInStates signature
-  --                 (typeCompilationFuel branchType) branchType le_rfl childEdge hChildEdgeMem
-  --                 t r hSpec
-  --               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-  --               rw [computeFutureOf_exclusiveOffer_branch signature elseType branches
-  --                 (.xoffer elseType branches) hWhole i action branchType hBranchesEq
-  --                 (hBranchFuelStrict (action, branchType) hBranchMem) t hStateMem]
-  --       have hTargetEq : successor.2 = .child (i + 1) childEdge.target := by
-  --         rw [hTarget, ← hPTarget, hChildEdgeEq]; rfl
-  --       have hInnerMem :=
-  --         relationMembership_of_step_edge_unique branchType (compileType signature branchType)
-  --           hMem hInnerEdgeMem hStep
-  --           (fun target hTargetStep =>
-  --             decoratedTypeTransition_target_unique hTargetStep hStep)
-  --       exact Or.inr (Or.inr ⟨i, action, branchType, childEdge.target, hBranchesEq, hTargetEq,
-  --         hInnerMem⟩))
-  --   (residual, state) hRelated
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled conjunctive offer, agrees with the else child's own. -/
 theorem computeFutureOf_selectedConjunctiveOffer_else
@@ -614,6 +379,89 @@ def offerRelationShape
             (parallelTypeBranchesSelecting selected branches)))
         entry.1 q)
 
+lemma relationMembership_offer_root
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) :
+    relationMembership
+      (buildRelationSet (.offer elseType branches)
+        (compileType signature (.offer elseType branches)))
+      (.offer elseType branches) .root := by
+  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+      max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show ((.offer elseType branches : PactType), .root) ∈
+    buildRelationSetCoreFuel signature
+      (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+  rw [hFuelEq]
+  simp [buildRelationSetCoreFuel]
+
+lemma relationMembership_offer_else
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) {residual : PactType}
+    {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet elseType (compileType signature elseType))
+      residual state) :
+    relationMembership
+      (buildRelationSet (.offer elseType branches)
+        (compileType signature (.offer elseType branches)))
+      residual (.child 0 state) := by
+  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+      max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  show (residual, .child 0 state) ∈ buildRelationSetCoreFuel signature
+    (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  apply Finset.mem_insert_of_mem
+  apply Finset.mem_union_left
+  apply Finset.mem_image.mpr
+  refine ⟨(residual, state), ?_, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+    (le_max_left _ _) le_rfl]
+  exact hRelated
+
+lemma relationMembership_offer_selected
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    {index : Nat} {selected : BareMessage × PactType} {residual : PactType}
+    {state : TypeAutomatonState}
+    (hGet : branches[index]? = some selected)
+    (hRelated : relationMembership
+      (buildRelationSet (parallelTypeBranchesSelecting selected branches)
+        (compileType signature (parallelTypeBranchesSelecting selected branches)))
+      residual state) :
+    relationMembership
+      (buildRelationSet (.offer elseType branches)
+        (compileType signature (.offer elseType branches)))
+      residual (.child (index + 1) state) := by
+  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+      max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  have hSelectedFuel :
+      typeCompilationFuel (parallelTypeBranchesSelecting selected branches) ≤
+        max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) := by
+    rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+    exact le_max_right _ _
+  show (residual, .child (index + 1) state) ∈
+    buildRelationSetCoreFuel signature
+      (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  apply Finset.mem_insert_of_mem
+  apply Finset.mem_union_right
+  rw [mem_foldl_union_iff]
+  apply Or.inr
+  refine ⟨(selected, index), List.mk_mem_zipIdx_iff_getElem?.mpr hGet, ?_⟩
+  apply Finset.mem_image.mpr
+  refine ⟨(residual, state), ?_, rfl⟩
+  rw [buildRelationSetCoreFuel_eq_of_sufficient signature
+    (parallelTypeBranchesSelecting selected branches) hSelectedFuel le_rfl]
+  exact hRelated
+
 set_option maxHeartbeats 4000000 in
 /-- Proves every related conjunctive-offer pair has the conjunctive-offer shape. -/
 lemma relationMembership_offer_cases
@@ -679,299 +527,6 @@ lemma relationMembership_offer_cases
       exact hEntry
     exact Or.inr (Or.inr ⟨item.2, item.1, entry.2,
       hGet, rfl, hSelectedRelated⟩)
-  -- refine buildRelationSet_preserves (.offer elseType branches)
-  --   (compileType signature (.offer elseType branches))
-  --   (offerRelationShape signature elseType branches)
-  --   (by
-  --     show offerRelationShape signature elseType branches
-  --       (.offer elseType branches,
-  --         (compileType signature (.offer elseType branches)).initial)
-  --     rw [hInit]; exact Or.inl rfl)
-  --   (by
-  --     intro entry hEntry successor hSuccessor
-  --     rcases relationSuccessors_mem_cases (compileType signature (.offer elseType branches))
-  --       entry successor hSuccessor with ⟨edge, hEdgeMem, hSource, hTarget, hStep⟩
-  --     have hSymbolMem := compileType_hasEdge_symbol_mem signature (.offer elseType branches)
-  --       (show (compileType signature (.offer elseType branches)).HasEdge edge.source
-  --         edge.symbol.environment edge.symbol.label edge.symbol.offers edge.target
-  --         from hEdgeMem)
-  --     have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-  --       (.offer elseType branches) edge.source edge.target edge.symbol.environment
-  --       edge.symbol.label edge.symbol.offers hSymbolMem).mp hEdgeMem
-  --     rw [hWhole] at hResolved
-  --     obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
-  --       hPTarget⟩ := hResolved
-  --     rcases hEntry with hRoot |
-  --       ⟨q, hStateEq, hMem⟩ |
-  --       ⟨i, selected, q, hBranchesEq, hStateEq, hMem⟩
-  --     · -- root case: entry represents the whole conjunctive offer; the three
-  --       -- root-edge families reconstruct the matching semantic offer rule.
-  --       have hEntry1 : entry.1 = .offer elseType branches := by rw [hRoot]
-  --       have hRootSource : pendingEdge.source = TypeAutomatonState.root := by
-  --         rw [hPSource, hSource, hRoot]
-  --       simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
-  --         Finset.mem_union] at hPendingMem
-  --       rcases hPendingMem with ((((hElse | hIndexed) | hEnabledFamily) | hWait) | hResolved2)
-  --       · exfalso
-  --         simp only [childPendingEdges, Finset.mem_image] at hElse
-  --         obtain ⟨childEdge, _, hEq⟩ := hElse
-  --         rw [← hEq] at hRootSource
-  --         simp [childPendingEdge, childState] at hRootSource
-  --       · exfalso
-  --         rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
-  --         rcases hIndexed with hEmpty | ⟨indexed, _, hNewEdge⟩
-  --         · simp at hEmpty
-  --         · simp only [childPendingEdges, Finset.mem_image] at hNewEdge
-  --           obtain ⟨childEdge, _, hEq⟩ := hNewEdge
-  --           rw [← hEq] at hRootSource
-  --           simp [childPendingEdge, childState] at hRootSource
-  --       · -- fire family: reconstructs `offer_some`
-  --         rw [mem_foldl_union_iff] at hEnabledFamily
-  --         rcases hEnabledFamily with hEmpty | ⟨indexed, hIndexedEntry, hNewEdge⟩
-  --         · simp at hEmpty
-  --         · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
-  --           obtain ⟨⟨branchAction, automaton⟩, index⟩ := indexed
-  --           rcases hNewEdge with ⟨environment, ⟨hEnvMem, hEnabled⟩, rfl⟩
-  --           have hIndexedGet :
-  --               (branches.map fun selected => (selected.1, compileTypeFuel signature
-  --                 (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-  --                 (parallelTypeBranchesSelecting selected branches)))[index]? =
-  --                 some (branchAction, automaton) :=
-  --             List.mk_mem_zipIdx_iff_getElem?.mp hIndexedEntry
-  --           obtain ⟨branchType', hBranchGet, hAutEq⟩ :=
-  --             (branches_map_selecting_getElem?_eq_some_iff signature branches index
-  --               branchAction automaton).mp hIndexedGet
-  --           have hWF : environment.WellFormed :=
-  --             localEnvironment_wellFormed signature hEnvMem
-  --           have hSelectedMem : (branchAction, branchType') ∈ branches :=
-  --             List.mem_iff_getElem?.mpr ⟨index, hBranchGet⟩
-  --           simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --           have hLabelEq : edge.symbol.label = TypeLabel.silent := by
-  --             injection hPLabel.symm
-  --           have hCurrentEq : edge.symbol.offers.current = ∅ := hPCurrent.symm
-  --           have hFutureEq : edge.symbol.offers.future =
-  --               typeFutureOffers (parallelTypeBranchesSelecting
-  --                 (branchAction, branchType') branches) := by
-  --             rw [← hPFuture, ← hAutEq, computeFutureOf_selectedConjunctiveOffer_branch
-  --               signature elseType branches (.offer elseType branches) hWhole index
-  --               (branchAction, branchType') hBranchGet
-  --               (hBranchFuelStrict (branchAction, branchType'))
-  --               (compileTypeFuel signature (typeCompilationFuel
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches))
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial
-  --               (compileTypeFuel_initial_mem signature (typeCompilationFuel
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches))
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches)
-  --                 le_rfl), Finset.sdiff_empty]
-  --             show computeFutureOf signature
-  --               (parallelTypeBranchesSelecting (branchAction, branchType') branches)
-  --               (compileType signature
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType')
-  --                   branches)).initial =
-  --               typeFutureOffers (parallelTypeBranchesSelecting
-  --                 (branchAction, branchType') branches)
-  --             exact helper_h15_future_offers_agree signature
-  --               (buildRelationSet_initial
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches)
-  --                 (compileType signature
-  --                   (parallelTypeBranchesSelecting (branchAction, branchType') branches)))
-  --           have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk ∅
-  --               (typeFutureOffers (parallelTypeBranchesSelecting
-  --                 (branchAction, branchType') branches)) := by
-  --             rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --               edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --               hCurrentEq, hFutureEq]
-  --           have hResidualEq : successor.1 =
-  --               parallelTypeBranchesSelecting (branchAction, branchType') branches := by
-  --             rw [hEntry1] at hStep
-  --             rw [hLabelEq, hOffersEq] at hStep
-  --             exact decoratedTypeTransition_target_unique hStep
-  --               (hPEnv ▸ ⟨TypeTransition.offer_some environment elseType branches
-  --                 (branchAction, branchType')
-  --                 ⟨hWF, hSelectedMem, hEnabled⟩,
-  --                 TypeOffers.offer_some environment elseType branches
-  --                   (branchAction, branchType')
-  --                   ⟨hWF, hSelectedMem, hEnabled⟩⟩)
-  --           have hTargetEq : successor.2 = .child (index + 1)
-  --               (compileTypeFuel signature (typeCompilationFuel
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches))
-  --                 (parallelTypeBranchesSelecting
-  --                   (branchAction, branchType') branches)).initial := by
-  --             rw [hTarget, ← hPTarget, ← hAutEq]
-  --           exact Or.inr (Or.inr ⟨index, (branchAction, branchType'),
-  --             (compileTypeFuel signature (typeCompilationFuel
-  --               (parallelTypeBranchesSelecting (branchAction, branchType') branches))
-  --               (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial,
-  --             hBranchGet, hTargetEq, hResidualEq ▸
-  --               buildRelationSet_initial
-  --                 (parallelTypeBranchesSelecting (branchAction, branchType') branches)
-  --                 (compileType signature
-  --                   (parallelTypeBranchesSelecting (branchAction, branchType')
-  --                     branches))⟩)
-  --       · -- wait family: a silent self-loop, reconstructs `offer_wait`
-  --         simp only [Finset.mem_image, Finset.mem_filter] at hWait
-  --         rcases hWait with ⟨environment, ⟨hEnvMem, hClock, hNoImmediate, hUnresolved⟩, rfl⟩
-  --         have hWF : environment.WellFormed := localEnvironment_wellFormed signature hEnvMem
-  --         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --         have hLabelEq : edge.symbol.label = TypeLabel.silent := by injection hPLabel.symm
-  --         have hCurrentEq : edge.symbol.offers.current =
-  --             typeWaitingOffers environment branches := hPCurrent.symm
-  --         have hFutureEq : edge.symbol.offers.future =
-  --             typeFutureOffers (.offer elseType branches) \
-  --               typeWaitingOffers environment branches := by
-  --           rw [← hPFuture, hRootFuture]
-  --           rfl
-  --         have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk
-  --             (typeWaitingOffers environment branches)
-  --             (typeFutureOffers (.offer elseType branches) \
-  --               typeWaitingOffers environment branches) := by
-  --           rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --             edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --             hCurrentEq, hFutureEq]
-  --         have hResidualEq : successor.1 = .offer elseType branches := by
-  --           rw [hEntry1] at hStep
-  --           rw [hLabelEq, hOffersEq] at hStep
-  --           exact decoratedTypeTransition_target_unique hStep
-  --             (hPEnv ▸ ⟨TypeTransition.offer_wait environment elseType branches
-  --               ⟨hWF, hNoImmediate, hUnresolved, hClock⟩,
-  --               TypeOffers.offer_wait environment elseType branches
-  --                 ⟨hWF, hNoImmediate, hUnresolved, hClock⟩⟩)
-  --         have hTargetEq : successor.2 = TypeAutomatonState.root := by
-  --           rw [hTarget, ← hPTarget]
-  --         exact Or.inl (by rw [show successor = (successor.1, successor.2) from rfl,
-  --           hResidualEq, hTargetEq])
-  --       · -- else family: reconstructs `offer_else`
-  --         simp only [Finset.mem_image, Finset.mem_filter] at hResolved2
-  --         rcases hResolved2 with ⟨environment, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
-  --         have hWF : environment.WellFormed := localEnvironment_wellFormed signature hEnvMem
-  --         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
-  --         have hLabelEq : edge.symbol.label = TypeLabel.silent := by injection hPLabel.symm
-  --         have hCurrentEq : edge.symbol.offers.current = typeBranchActions branches :=
-  --           hPCurrent.symm
-  --         have hFutureEq : edge.symbol.offers.future = typeFutureOffers elseType := by
-  --           rw [← hPFuture, computeFutureOf_selectedConjunctiveOffer_else signature elseType
-  --             branches (.offer elseType branches) hWhole hElseFuelStrict
-  --             (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
-  --             (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
-  --               le_rfl), Finset.sdiff_empty]
-  --           show computeFutureOf signature elseType (compileType signature elseType).initial =
-  --             typeFutureOffers elseType
-  --           exact helper_h15_future_offers_agree signature
-  --             (buildRelationSet_initial elseType (compileType signature elseType))
-  --         have hOffersEq : edge.symbol.offers = TypeOfferSummary.mk (typeBranchActions branches)
-  --             (typeFutureOffers elseType) := by
-  --           rw [show edge.symbol.offers = TypeOfferSummary.mk
-  --             edge.symbol.offers.current edge.symbol.offers.future from rfl,
-  --             hCurrentEq, hFutureEq]
-  --         have hResidualEq : successor.1 = elseType := by
-  --           rw [hEntry1] at hStep
-  --           rw [hLabelEq, hOffersEq] at hStep
-  --           exact decoratedTypeTransition_target_unique hStep
-  --             (hPEnv ▸ ⟨TypeTransition.offer_else environment elseType branches
-  --               ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
-  --               TypeOffers.offer_else environment elseType branches
-  --                 ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩)
-  --         have hTargetEq : successor.2 = .child 0
-  --             (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial := by
-  --           rw [hTarget, ← hPTarget]
-  --         exact Or.inr (Or.inl ⟨(compileTypeFuel signature (typeCompilationFuel elseType)
-  --           elseType).initial, hTargetEq, hResidualEq ▸
-  --             buildRelationSet_initial elseType (compileType signature elseType)⟩)
-  --     · -- else-child case: entry is already related to `q` inside `elseType`'s own relation
-  --       have hChildSource : pendingEdge.source = .child 0 q := by
-  --         rw [hPSource, hSource, hStateEq]
-  --       obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
-  --         (buildSelectedConjunctiveOfferAutomaton_outgoing_else signature branches
-  --           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --           (branches.map fun selected => (selected.1, compileTypeFuel signature
-  --             (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-  --             (parallelTypeBranchesSelecting selected branches))) q pendingEdge).mp
-  --           ⟨hPendingMem, hChildSource⟩
-  --       have hInnerEdgeMem : (compileType signature elseType).HasEdge q
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers
-  --           childEdge.target := by
-  --         rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers hSymbolMem]
-  --         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
-  --         · rw [← hPEnv, hChildEdgeEq]; rfl
-  --         · rw [← hPLabel, hChildEdgeEq]; rfl
-  --         · rw [← hPCurrent, hChildEdgeEq]; rfl
-  --         · rw [← hPFuture, hChildEdgeEq]
-  --           cases hSpec : childEdge.future with
-  --           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-  --           | «at» t r =>
-  --               have hStateMem := compileTypeFuel_futureTargetsInStates signature
-  --                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r
-  --                 hSpec
-  --               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-  --               rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
-  --                 (.offer elseType branches) hWhole hElseFuelStrict t hStateMem]
-  --       have hTargetEq : successor.2 = .child 0 childEdge.target := by
-  --         rw [hTarget, ← hPTarget, hChildEdgeEq]; rfl
-  --       have hInnerMem :=
-  --         relationMembership_of_step_edge_unique elseType (compileType signature elseType)
-  --           hMem hInnerEdgeMem hStep
-  --           (fun target hTargetStep =>
-  --             decoratedTypeTransition_target_unique hTargetStep hStep)
-  --       exact Or.inr (Or.inl ⟨childEdge.target, hTargetEq, hInnerMem⟩)
-  --     · -- branch-child case: entry is already related to `q` inside branch `i`'s
-  --       -- generated commit type's own relation
-  --       have hChildSource : pendingEdge.source = .child (i + 1) q := by
-  --         rw [hPSource, hSource, hStateEq]
-  --       have hAutomataGet :
-  --           (branches.map fun selected' => (selected'.1, compileTypeFuel signature
-  --             (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
-  --             (parallelTypeBranchesSelecting selected' branches)))[i]? =
-  --             some (selected.1, compileTypeFuel signature (typeCompilationFuel
-  --               (parallelTypeBranchesSelecting selected branches))
-  --               (parallelTypeBranchesSelecting selected branches)) := by
-  --         rw [List.getElem?_map, hBranchesEq]
-  --         rfl
-  --       obtain ⟨childEdge, hChildEdgeMem, hChildEdgeSource, hChildEdgeEq⟩ :=
-  --         (buildSelectedConjunctiveOfferAutomaton_outgoing_branch signature branches
-  --           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-  --           (branches.map fun selected' => (selected'.1, compileTypeFuel signature
-  --             (typeCompilationFuel (parallelTypeBranchesSelecting selected' branches))
-  --             (parallelTypeBranchesSelecting selected' branches)))
-  --           i selected.1 (compileTypeFuel signature (typeCompilationFuel
-  --             (parallelTypeBranchesSelecting selected branches))
-  --             (parallelTypeBranchesSelecting selected branches))
-  --           hAutomataGet q pendingEdge).mp ⟨hPendingMem, hChildSource⟩
-  --       have hInnerEdgeMem : (compileType signature
-  --           (parallelTypeBranchesSelecting selected branches)).HasEdge q
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers
-  --           childEdge.target := by
-  --         rw [compileType_hasEdge_iff_hasResolvedEdge signature
-  --           (parallelTypeBranchesSelecting selected branches) q childEdge.target
-  --           edge.symbol.environment edge.symbol.label edge.symbol.offers hSymbolMem]
-  --         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
-  --         · rw [← hPEnv, hChildEdgeEq]; rfl
-  --         · rw [← hPLabel, hChildEdgeEq]; rfl
-  --         · rw [← hPCurrent, hChildEdgeEq]; rfl
-  --         · rw [← hPFuture, hChildEdgeEq]
-  --           cases hSpec : childEdge.future with
-  --           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-  --           | «at» t r =>
-  --               have hStateMem := compileTypeFuel_futureTargetsInStates signature
-  --                 (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-  --                 (parallelTypeBranchesSelecting selected branches) le_rfl childEdge
-  --                 hChildEdgeMem t r hSpec
-  --               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-  --               rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
-  --                 (.offer elseType branches) hWhole i selected hBranchesEq
-  --                 (hBranchFuelStrict selected) t hStateMem]
-  --       have hTargetEq : successor.2 = .child (i + 1) childEdge.target := by
-  --         rw [hTarget, ← hPTarget, hChildEdgeEq]; rfl
-  --       have hInnerMem :=
-  --         relationMembership_of_step_edge_unique
-  --           (parallelTypeBranchesSelecting selected branches)
-  --           (compileType signature (parallelTypeBranchesSelecting selected branches))
-  --           hMem hInnerEdgeMem hStep
-  --           (fun target hTargetStep =>
-  --             decoratedTypeTransition_target_unique hTargetStep hStep)
-  --       exact Or.inr (Or.inr ⟨i, selected, childEdge.target, hBranchesEq, hTargetEq,
-  --         hInnerMem⟩))
-  --   (residual, state) hRelated
 
 
 end
