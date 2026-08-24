@@ -87,14 +87,18 @@ def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
   exact product
 
 theorem buildParallelAutomaton_futureTargetsInStates
-    (signature : TypeAlphabet) (interface : Interface) (left right : AutomatonFragment) :
+    (signature : TypeAlphabet) (interface : Interface) (left right : AutomatonFragment)
+    (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
+    (hRightEdgeTargets : ∀ edge ∈ right.edges, edge.target ∈ right.states) :
     (buildParallelAutomaton signature interface left right).FutureTargetsInStates := by
   classical
   intro edge hEdge target removed hFuture
   simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
     Finset.mem_biUnion, Finset.mem_image,
     Finset.mem_filter] at hEdge
-  rcases hEdge with ⟨⟨leftEdge, _, rightEdge, _, rfl⟩, _⟩ | ⟨environment, _, rfl⟩
+  rcases hEdge with
+      ⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩, _⟩ |
+      ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
     · simp [hAccept] at hFuture
@@ -104,7 +108,13 @@ theorem buildParallelAutomaton_futureTargetsInStates
     · simp [hAccept] at hFuture
       obtain ⟨hTarget, _⟩ := hFuture
       subst target
-      sorry -- needs `left`/`right` edge-target-in-states, not yet threaded here
+      simp only [resolvedAutomatonEdges, Finset.mem_image] at hLeftEdge hRightEdge
+      obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+      obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+      rw [← hLeftEq, ← hRightEq]
+      simp [buildParallelAutomaton, finishAutomatonFragment,
+        hLeftEdgeTargets leftRaw hLeftRaw,
+        hRightEdgeTargets rightRaw hRightRaw]
   · simp at hFuture
 
 end

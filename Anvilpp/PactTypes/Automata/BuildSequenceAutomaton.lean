@@ -116,6 +116,41 @@ def buildSequenceAutomaton (_signature : TypeAlphabet)
     ((sequenceLeftEdges left right ∪ sequenceRightEdges right) ∪
       sequenceRedirectEdges left right)
 
+/-- Edges leaving a right-child state are exactly the copied edges of the
+right fragment. Neither the left-edge nor redirect clause can have a
+`.child 1` source. -/
+theorem buildSequenceAutomaton_outgoing_right
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
+    edge ∈ (buildSequenceAutomaton signature left right).edges ∧
+        edge.source = .child 1 state ↔
+      ∃ childEdge ∈ right.edges,
+        childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
+  classical
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
+      sequenceRightEdges, sequenceRedirectEdges, childPendingEdges,
+      Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+    rcases hEdge with (hLeft | hRight) | hRedirect
+    · rcases hLeft with ⟨childEdge, _, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [sequenceKeptLeftEdge, childState] at hSource
+    · rcases hRight with ⟨childEdge, hChildEdge, hEdgeEq⟩
+      have hChildSource := hSource
+      rw [← hEdgeEq] at hChildSource
+      simp [childPendingEdge, childState] at hChildSource
+      exact ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
+    · rcases hRedirect with ⟨childEdge, _, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [sequenceRedirectEdge, childState] at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRightEdges,
+        childPendingEdges, Finset.mem_union, Finset.mem_image]
+      exact Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩)
+    · simp [childPendingEdge, childState, hChildSource]
+
 /-! ### `sequenceRedirect` / sequence edge API
 
 The two rewrite lemmas below let downstream proofs avoid ever unfolding the
@@ -200,8 +235,8 @@ theorem sequenceRedirect_mem_states (signature : TypeAlphabet)
 
 theorem buildSequenceAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (left right : AutomatonFragment)
-    (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
+    (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
     (buildSequenceAutomaton signature left right).FutureTargetsInStates := by
   classical
@@ -216,7 +251,7 @@ theorem buildSequenceAutomaton_futureTargetsInStates
     injection hFuture with hTargetEq _
     subst hTargetEq
     apply sequenceRedirect_mem_states signature left right hRightInitial
-    sorry -- needs `leftEdge.target ∈ left.states`, not yet threaded as a hypothesis here
+    exact hLeftEdgeTargets leftEdge hLeftEdge.1
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with
     | explicit offers =>

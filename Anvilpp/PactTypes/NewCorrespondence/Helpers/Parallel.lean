@@ -236,7 +236,9 @@ construction directly supplies the required self-loop at `.final`.
 theorem buildParallelAutomaton_final_hasEdge_iff
     (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
     (env : TypeEnvironment) (label : TypeLabel) (offers : TypeOfferSummary)
-    (target : TypeAutomatonState) :
+    (target : TypeAutomatonState)
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabet) :
     (compileType signature (.par left right interface)).HasEdge
         TypeAutomatonState.final env label offers target ↔
       env.WellFormed ∧ env.clock = false ∧ label = TypeLabel.silent ∧
@@ -244,7 +246,6 @@ theorem buildParallelAutomaton_final_hasEdge_iff
   classical
   constructor
   · intro hEdge
-    have hSymbol := compileType_hasEdge_symbol_mem signature (.par left right interface) hEdge
     have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
       (.par left right interface) TypeAutomatonState.final target env label offers
       hSymbol).mp hEdge
@@ -283,7 +284,39 @@ theorem buildParallelAutomaton_final_hasEdge_iff
         | mk current future => simp_all
   · rintro ⟨hWF, hClock, hLabel, hOffers, hTarget⟩
     subst hLabel; subst hOffers; subst hTarget
-    sorry -- needs `env ∈ signature.localEnvironments`, not derivable from `env.WellFormed` alone
+    rw [compileType_hasEdge_iff_hasResolvedEdge signature
+      (.par left right interface) TypeAutomatonState.final TypeAutomatonState.final
+      env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
+    have hEnvironment : env ∈ signature.environments :=
+      transitionAlphabet_environment_mem signature hSymbol
+    have hLocal : env ∈ signature.localEnvironments :=
+      signature.environments_subset_localEnvironments hEnvironment
+    have hFuelEq : typeCompilationFuel (.par left right interface) =
+        max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+      simp only [typeCompilationFuel]; omega
+    have hWhole : compileTypeFuel signature
+        (typeCompilationFuel (.par left right interface))
+        (.par left right interface) =
+        buildParallelAutomaton signature interface
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right) := by
+      rw [hFuelEq]
+      show buildParallelAutomaton signature interface
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+        (compileTypeFuel signature
+          (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
+      rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+        compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+    refine ⟨
+      { source := TypeAutomatonState.final
+        environment := env
+        label := .visible TypeLabel.silent
+        current := ∅
+        future := .explicit ∅
+        target := TypeAutomatonState.final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+    rw [hWhole]
+    simp [buildParallelAutomaton, finishAutomatonFragment, hLocal, hClock]
 
 /-- Proves each parallel component's own offer pair remains in its own
 transition alphabet whenever the combined, interface-hidden parent symbol
@@ -371,7 +404,7 @@ theorem relationMembership_of_accepting
     (hAccept : state ∈ (compileType signature processType).accepting) :
     relationMembership (buildRelationSet processType (compileType signature processType))
       PactType.skip state := by
-  induction hSize : sizeOf processType using Nat.strong_induction_on
+  induction hSize : typeCompilationFuel processType using Nat.strong_induction_on
       generalizing processType state with
   | _ n ih =>
     cases processType with
@@ -422,8 +455,10 @@ theorem relationMembership_of_accepting
               (.var name)).accepting := hAccept
         simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment] at hAccept'
     | choice left right =>
-        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hLeftSize : typeCompilationFuel left < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (.choice left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -452,17 +487,19 @@ theorem relationMembership_of_accepting
           Finset.mem_image]
         rcases hAccept with ⟨q, hq, hEq⟩ | ⟨q, hq, hEq⟩
         · refine Or.inr (Or.inl ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
-          have hRelated := ih (sizeOf left) hLeftSize left hq rfl
+          have hRelated := ih (typeCompilationFuel left) hLeftSize left hq rfl
           rw [buildRelationSetCoreFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl]
           exact hRelated
         · refine Or.inr (Or.inr ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
-          have hRelated := ih (sizeOf right) hRightSize right hq rfl
+          have hRelated := ih (typeCompilationFuel right) hRightSize right hq rfl
           rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
             (le_max_right _ _) le_rfl]
           exact hRelated
     | fairChoice bid left right =>
-        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hLeftSize : typeCompilationFuel left < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (.fairChoice bid left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -491,16 +528,17 @@ theorem relationMembership_of_accepting
           Finset.mem_image]
         rcases hAccept with ⟨q, hq, hEq⟩ | ⟨q, hq, hEq⟩
         · refine Or.inr (Or.inl ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
-          have hRelated := ih (sizeOf left) hLeftSize left hq rfl
+          have hRelated := ih (typeCompilationFuel left) hLeftSize left hq rfl
           rw [buildRelationSetCoreFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl]
           exact hRelated
         · refine Or.inr (Or.inr ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
-          have hRelated := ih (sizeOf right) hRightSize right hq rfl
+          have hRelated := ih (typeCompilationFuel right) hRightSize right hq rfl
           rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
             (le_max_right _ _) le_rfl]
           exact hRelated
     | seq left right =>
-        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (.seq left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -525,7 +563,7 @@ theorem relationMembership_of_accepting
         rw [hFuelEq]
         simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image]
         refine Or.inr ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩
-        have hRelated := ih (sizeOf right) hRightSize right hq rfl
+        have hRelated := ih (typeCompilationFuel right) hRightSize right hq rfl
         rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
           (le_max_right _ _) le_rfl]
         exact hRelated
@@ -552,7 +590,9 @@ theorem relationMembership_of_accepting
         rw [hFuelEq]
         simp [buildRelationSetCoreFuel]
     | recur name body =>
-        have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+        have hBodySize : typeCompilationFuel body < n := by
+          rw [← hSize]
+          simp [typeCompilationFuel]
         have hFuelEq : typeCompilationFuel (.recur name body) = typeCompilationFuel body + 1 := by
           simp only [typeCompilationFuel]; omega
         have hAcceptEq : (compileType signature (.recur name body)).accepting =
@@ -566,7 +606,7 @@ theorem relationMembership_of_accepting
         rw [hAcceptEq] at hAccept
         simp only [childAccepting, Finset.mem_image] at hAccept
         obtain ⟨q, hq, hEq⟩ := hAccept
-        have hRelated := ih (sizeOf body) hBodySize body hq rfl
+        have hRelated := ih (typeCompilationFuel body) hBodySize body hq rfl
         show (PactType.skip, state) ∈
           buildRelationSetCoreFuel signature (typeCompilationFuel (.recur name body))
             (.recur name body)
@@ -577,7 +617,8 @@ theorem relationMembership_of_accepting
           (replaceVar_eq_skip_iff PactType.skip name (.recur name body) (by simp)).mpr rfl
         exact Prod.ext hReplace hEq
     | xoffer elseType branches =>
-        have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+        have hElseSize : typeCompilationFuel elseType < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (PactType.xoffer elseType branches) =
             max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -621,7 +662,7 @@ theorem relationMembership_of_accepting
         rcases hAccept with hElse | hBranch
         · rcases hElse with ⟨q, hq, hEq⟩
           refine Or.inr (Or.inl ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
-          have hRelated := ih (sizeOf elseType) hElseSize elseType hq rfl
+          have hRelated := ih (typeCompilationFuel elseType) hElseSize elseType hq rfl
           rw [buildRelationSetCoreFuel_eq_of_sufficient signature elseType
             (le_max_left _ _) le_rfl]
           exact hRelated
@@ -636,13 +677,14 @@ theorem relationMembership_of_accepting
             rcases hIndexedMem with ⟨branchType, hGet, hAutomatonEq⟩
             have hBranchMem : (action, branchType) ∈ branches := by
               exact List.mem_of_getElem? hGet
-            have hBranchSize : sizeOf branchType < n := by
-              have hLt : sizeOf branchType < sizeOf (PactType.xoffer elseType branches) := by
-                have hProdSize := List.sizeOf_lt_of_mem hBranchMem
-                rw [Prod.mk.sizeOf_spec] at hProdSize
-                simp
-                omega
-              simpa [hSize] using hLt
+            have hBranchSize : typeCompilationFuel branchType < n := by
+              have hLeBranch : typeCompilationFuel branchType ≤
+                  typeBranchCompilationFuel branches :=
+                typeCompilationFuel_le_typeBranchCompilationFuel branches
+                  (action, branchType) hBranchMem
+              rw [← hSize]
+              simp only [typeCompilationFuel]
+              omega
             rw [← hAutomatonEq] at hStateMem
             simp only [Finset.mem_image] at hStateMem
             rcases hStateMem with ⟨q, hq, hEq⟩
@@ -653,13 +695,113 @@ theorem relationMembership_of_accepting
               exact hGet
             · simp only [Finset.mem_image]
               refine ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩
-              have hRelated := ih (sizeOf branchType) hBranchSize branchType hq rfl
+              have hRelated := ih (typeCompilationFuel branchType) hBranchSize branchType hq rfl
               rw [buildRelationSetCoreFuel_eq_of_sufficient signature branchType ?_ le_rfl]
               · exact hRelated
               · have hLeBranch : typeCompilationFuel branchType ≤ typeBranchCompilationFuel branches :=
                   typeCompilationFuel_le_typeBranchCompilationFuel branches (action, branchType) hBranchMem
                 exact le_trans hLeBranch (le_max_right _ _)
-    | offer elseType branches => sorry
+    | offer elseType branches =>
+        have hElseSize : typeCompilationFuel elseType < n := by
+          rw [← hSize]; simp [typeCompilationFuel]; omega
+        have hFuelEq : typeCompilationFuel (PactType.offer elseType branches) =
+            max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+          simp only [typeCompilationFuel]; omega
+        let selectedConjunctions := List.map (fun selected => (selected.1,
+          compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches))) branches
+        have hMapEq :
+            List.map (fun selected => (selected.1,
+              compileTypeFuel signature
+                (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
+                (parallelTypeBranchesSelecting selected branches))) branches =
+              selectedConjunctions := by
+          dsimp [selectedConjunctions]
+          apply List.map_congr_left
+          intro selected hSelected
+          rw [compileTypeFuel_eq_of_sufficient signature
+            (parallelTypeBranchesSelecting selected branches) ?_ le_rfl]
+          show typeCompilationFuel (parallelTypeBranchesSelecting selected branches) ≤
+            max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)
+          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+          exact le_max_right _ _
+        have hAcceptEq : (compileType signature (PactType.offer elseType branches)).accepting =
+            childAccepting 0 (compileTypeFuel signature
+              (typeCompilationFuel elseType) elseType) ∪
+              indexedFragmentAccepting selectedConjunctions := by
+          show (compileTypeFuel signature
+            (typeCompilationFuel (PactType.offer elseType branches))
+            (PactType.offer elseType branches)).accepting = _
+          rw [hFuelEq]
+          show (buildSelectedConjunctiveOfferAutomaton signature branches
+            (compileTypeFuel signature
+              (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
+              elseType)
+            (List.map (fun selected => (selected.1,
+              compileTypeFuel signature
+                (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
+                (parallelTypeBranchesSelecting selected branches))) branches)).accepting = _
+          rw [compileTypeFuel_eq_of_sufficient signature elseType
+            (le_max_left _ _) le_rfl, hMapEq]
+          simp [buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, selectedConjunctions]
+        rw [hAcceptEq] at hAccept
+        simp only [childAccepting, indexedFragmentAccepting, Finset.mem_union,
+          Finset.mem_image] at hAccept
+        show (PactType.skip, state) ∈
+          buildRelationSetCoreFuel signature
+            (typeCompilationFuel (PactType.offer elseType branches))
+            (PactType.offer elseType branches)
+        rw [hFuelEq]
+        simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
+          Finset.mem_image]
+        rcases hAccept with hElse | hSelected
+        · rcases hElse with ⟨q, hq, hEq⟩
+          refine Or.inr (Or.inl ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩)
+          have hRelated := ih (typeCompilationFuel elseType) hElseSize elseType hq rfl
+          rw [buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+            (le_max_left _ _) le_rfl]
+          exact hRelated
+        · rw [mem_foldl_union_iff] at hSelected
+          rcases hSelected with hEmpty | ⟨indexed, hIndexedMem, hStateMem⟩
+          · simp at hEmpty
+          · rcases indexed with ⟨selectedAutomaton, index⟩
+            rcases selectedAutomaton with ⟨action, automaton⟩
+            rw [List.mk_mem_zipIdx_iff_getElem?] at hIndexedMem
+            dsimp [selectedConjunctions] at hIndexedMem
+            rw [List.getElem?_map, Option.map_eq_some_iff] at hIndexedMem
+            rcases hIndexedMem with
+              ⟨⟨branchAction, branchType⟩, hGet, hMappedEq⟩
+            simp only [Prod.mk.injEq] at hMappedEq
+            rcases hMappedEq with ⟨hActionEq, hAutomatonEq⟩
+            subst branchAction
+            let selectedType :=
+              parallelTypeBranchesSelecting (action, branchType) branches
+            have hSelectedSize : typeCompilationFuel selectedType < n := by
+              dsimp [selectedType]
+              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hSize]
+              simp only [typeCompilationFuel]
+              omega
+            rw [← hAutomatonEq] at hStateMem
+            simp only [Finset.mem_image] at hStateMem
+            rcases hStateMem with ⟨q, hq, hEq⟩
+            refine Or.inr (Or.inr ?_)
+            rw [mem_foldl_union_iff]
+            refine Or.inr ⟨((action, branchType), index), ?_, ?_⟩
+            · rw [List.mk_mem_zipIdx_iff_getElem?]
+              exact hGet
+            · simp only [Finset.mem_image]
+              refine ⟨(PactType.skip, q), ?_, Prod.ext rfl hEq⟩
+              have hRelated := ih (typeCompilationFuel selectedType)
+                hSelectedSize selectedType hq rfl
+              rw [buildRelationSetCoreFuel_eq_of_sufficient signature selectedType ?_ le_rfl]
+              · exact hRelated
+              · show typeCompilationFuel selectedType ≤
+                  max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)
+                dsimp [selectedType]
+                rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+                exact le_max_right _ _
 
 private def footprintWithinReplacement
     (result original replacement : PactType) : Prop :=

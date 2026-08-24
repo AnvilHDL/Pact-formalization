@@ -42,39 +42,6 @@ theorem compileTypeFuel_sequence_eq_build
   rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
     compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
 
-/-- Proves sequence edges leaving a right-child state are exactly copied right-child edges. -/
-theorem buildSequenceAutomaton_outgoing_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
-    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    edge ∈ (buildSequenceAutomaton signature left right).edges ∧
-        edge.source = .child 1 state ↔
-      ∃ childEdge ∈ right.edges,
-        childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
-  classical
-  constructor
-  · rintro ⟨hEdge, hSource⟩
-    simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
-      sequenceRightEdges, sequenceRedirectEdges, childPendingEdges,
-      Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
-    rcases hEdge with (hLeft | hRight) | hRedirect
-    · rcases hLeft with ⟨childEdge, _, hEdgeEq⟩
-      rw [← hEdgeEq] at hSource
-      simp [sequenceKeptLeftEdge, childState] at hSource
-    · rcases hRight with ⟨childEdge, hChildEdge, hEdgeEq⟩
-      have hChildSource := hSource
-      rw [← hEdgeEq] at hChildSource
-      simp [childPendingEdge, childState] at hChildSource
-      exact ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
-    · rcases hRedirect with ⟨childEdge, _, hEdgeEq⟩
-      rw [← hEdgeEq] at hSource
-      simp [sequenceRedirectEdge, childState] at hSource
-  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
-    constructor
-    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRightEdges,
-        childPendingEdges, Finset.mem_union, Finset.mem_image]
-      exact Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩)
-    · simp [childPendingEdge, childState, hChildSource]
-
 private theorem buildSequenceAutomaton_referencedStates_right
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (state : TypeAutomatonState) :

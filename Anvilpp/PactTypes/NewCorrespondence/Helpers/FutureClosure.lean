@@ -7,6 +7,399 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
+private theorem childPendingEdges_edgeTargetsInStates
+    (index : Nat) (fragment : AutomatonFragment)
+    (hTargets : fragment.EdgeTargetsInStates) :
+    ∀ edge ∈ childPendingEdges index fragment,
+      edge.target ∈ childStates index fragment := by
+  intro edge hEdge
+  simp only [childPendingEdges, Finset.mem_image] at hEdge
+  obtain ⟨childEdge, hChildEdge, rfl⟩ := hEdge
+  simp [childPendingEdge, childStates, childState,
+    hTargets childEdge hChildEdge]
+
+private theorem indexedFragment_edgeTargetsInStates
+    (automata : List (BareMessage × AutomatonFragment))
+    (hTargets : ∀ entry ∈ automata, entry.2.EdgeTargetsInStates) :
+    ∀ edge ∈ indexedFragmentEdges automata,
+      edge.target ∈ indexedFragmentStates automata := by
+  intro edge hEdge
+  rw [indexedFragmentEdges, mem_foldl_union_iff] at hEdge
+  rcases hEdge with hEmpty | ⟨indexed, hIndexed, hChildEdge⟩
+  · simp at hEmpty
+  · have hEntry : indexed.1 ∈ automata := by
+      have hMapped : indexed.1 ∈ automata.zipIdx.map Prod.fst :=
+        List.mem_map_of_mem (f := Prod.fst) hIndexed
+      simpa using hMapped
+    have hTarget := childPendingEdges_edgeTargetsInStates
+      (indexed.2 + 1) indexed.1.2 (hTargets indexed.1 hEntry)
+      edge hChildEdge
+    rw [indexedFragmentStates, mem_foldl_union_iff]
+    exact Or.inr ⟨indexed, hIndexed, hTarget⟩
+
+private theorem buildChoiceAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hLeftTargets : left.EdgeTargetsInStates)
+    (hRightTargets : right.EdgeTargetsInStates)
+    (hLeftInitial : left.initial ∈ left.states)
+    (hRightInitial : right.initial ∈ right.states) :
+    (buildChoiceAutomaton signature left right selectionLeft
+      selectionRight).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildChoiceAutomaton, finishAutomatonFragment,
+    childPendingEdges, Finset.mem_union, Finset.mem_image,
+    Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+  rcases hEdge with (hLeft | hRight) | hSelection
+  · obtain ⟨childEdge, hChildEdge, rfl⟩ := hLeft
+    simp [childPendingEdge, buildChoiceAutomaton,
+      finishAutomatonFragment, childStates, childState,
+      hLeftTargets childEdge hChildEdge]
+  · obtain ⟨childEdge, hChildEdge, rfl⟩ := hRight
+    simp [childPendingEdge, buildChoiceAutomaton,
+      finishAutomatonFragment, childStates, childState,
+      hRightTargets childEdge hChildEdge]
+  · rcases hSelection with ⟨environment, _, rfl | rfl⟩
+    · simp [buildChoiceAutomaton, finishAutomatonFragment,
+        childStates, childState, hLeftInitial]
+    · simp [buildChoiceAutomaton, finishAutomatonFragment,
+        childStates, childState, hRightInitial]
+
+private theorem buildRecursionAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (hBodyTargets : body.EdgeTargetsInStates)
+    (hBodyInitial : body.initial ∈ body.states) :
+    (buildRecursionAutomaton signature name body).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildRecursionAutomaton, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image] at hEdge
+  rcases hEdge with ⟨environment, _, rfl⟩ |
+      ⟨bodyEdge, hBodyEdge, rfl⟩
+  · simp [buildRecursionAutomaton, finishAutomatonFragment,
+      childStates, childState, hBodyInitial]
+  · by_cases hMarker : bodyEdge.label = .variable name
+    · simp [hMarker, buildRecursionAutomaton, finishAutomatonFragment,
+        childStates, childState, hBodyInitial]
+    · simp [hMarker, buildRecursionAutomaton, finishAutomatonFragment,
+        childStates, childState, hBodyTargets bodyEdge hBodyEdge]
+
+private theorem buildSequenceAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (hLeftTargets : left.EdgeTargetsInStates)
+    (hRightTargets : right.EdgeTargetsInStates)
+    (hRightInitial : right.initial ∈ right.states) :
+    (buildSequenceAutomaton signature left right).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildSequenceAutomaton, finishAutomatonFragment,
+    sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
+    childPendingEdges, Finset.mem_union, Finset.mem_image,
+    Finset.mem_filter] at hEdge
+  rcases hEdge with (hLeft | hRight) | hRedirect
+  · obtain ⟨leftEdge, ⟨hLeftEdge, hNotAccepting⟩, rfl⟩ := hLeft
+    simp only [sequenceKeptLeftEdge, buildSequenceAutomaton,
+      finishAutomatonFragment, Finset.mem_union, Finset.mem_image,
+      Finset.mem_sdiff]
+    exact Or.inl ⟨leftEdge.target,
+      ⟨hLeftTargets leftEdge hLeftEdge,
+        not_mem_sequenceDeleted_of_not_accepting hNotAccepting⟩, rfl⟩
+  · obtain ⟨rightEdge, hRightEdge, rfl⟩ := hRight
+    simp [childPendingEdge, buildSequenceAutomaton,
+      finishAutomatonFragment, childStates, childState,
+      hRightTargets rightEdge hRightEdge]
+  · obtain ⟨leftEdge, _, rfl⟩ := hRedirect
+    simp [sequenceRedirectEdge, buildSequenceAutomaton,
+      finishAutomatonFragment, childStates, childState, hRightInitial]
+
+private theorem buildParallelAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet) (interface : Interface)
+    (left right : AutomatonFragment)
+    (hLeftTargets : left.EdgeTargetsInStates)
+    (hRightTargets : right.EdgeTargetsInStates) :
+    (buildParallelAutomaton signature interface left right).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildParallelAutomaton, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
+    Finset.mem_filter] at hEdge
+  rcases hEdge with
+      ⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩, _⟩ |
+      ⟨environment, _, rfl⟩
+  · by_cases hAccept :
+      leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
+    · simp [hAccept, buildParallelAutomaton, finishAutomatonFragment]
+    · simp only [resolvedAutomatonEdges, Finset.mem_image]
+        at hLeftEdge hRightEdge
+      obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+      obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+      have hLeftTargetEq : leftRaw.target = leftEdge.target :=
+        congrArg AutomatonFragmentEdge.target hLeftEq
+      have hRightTargetEq : rightRaw.target = rightEdge.target :=
+        congrArg AutomatonFragmentEdge.target hRightEq
+      have hAcceptRaw : ¬(leftRaw.target ∈ left.accepting ∧
+          rightRaw.target ∈ right.accepting) := by
+        simpa [hLeftTargetEq, hRightTargetEq] using hAccept
+      rw [← hLeftEq, ← hRightEq]
+      simp only [if_neg hAcceptRaw]
+      simp [buildParallelAutomaton, finishAutomatonFragment,
+        hLeftTargets leftRaw hLeftRaw,
+        hRightTargets rightRaw hRightRaw]
+  · simp [buildParallelAutomaton, finishAutomatonFragment]
+
+private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hElseTargets : elseAutomaton.EdgeTargetsInStates)
+    (hBranchTargets : ∀ entry ∈ branchAutomata,
+      entry.2.EdgeTargetsInStates)
+    (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
+    (hBranchInitial : ∀ entry ∈ branchAutomata,
+      entry.2.initial ∈ entry.2.states) :
+    (buildExclusiveOfferAutomaton signature branches elseAutomaton
+      branchAutomata).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+  · have hTarget := childPendingEdges_edgeTargetsInStates 0 elseAutomaton
+      hElseTargets edge hElse
+    simp [buildExclusiveOfferAutomaton, finishAutomatonFragment, hTarget]
+  · have hTarget := indexedFragment_edgeTargetsInStates branchAutomata
+      hBranchTargets edge hIndexed
+    simp [buildExclusiveOfferAutomaton, finishAutomatonFragment, hTarget]
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, hIndexed, hNewEdge⟩
+    · simp at hEmpty
+    · have hEntry : indexed.1 ∈ branchAutomata := by
+        have hMapped : indexed.1 ∈ branchAutomata.zipIdx.map Prod.fst :=
+          List.mem_map_of_mem (f := Prod.fst) hIndexed
+        simpa using hMapped
+      simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      obtain ⟨environment, _, rfl⟩ := hNewEdge
+      have hIndexedState : childState (indexed.2 + 1)
+          indexed.1.2.initial ∈ indexedFragmentStates branchAutomata := by
+        rw [indexedFragmentStates, mem_foldl_union_iff]
+        exact Or.inr ⟨indexed, hIndexed, by
+          simp [childStates, childState, hBranchInitial indexed.1 hEntry]⟩
+      simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        hIndexedState]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    obtain ⟨environment, _, rfl⟩ := hWait
+    simp [buildExclusiveOfferAutomaton, finishAutomatonFragment]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    obtain ⟨environment, _, rfl⟩ := hResolved
+    simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+      childStates, childState, hElseInitial]
+
+private theorem buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
+    (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (hElseTargets : elseAutomaton.EdgeTargetsInStates)
+    (hConjunctionTargets : ∀ entry ∈ selectedConjunctions,
+      entry.2.EdgeTargetsInStates)
+    (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
+    (hConjunctionInitial : ∀ entry ∈ selectedConjunctions,
+      entry.2.initial ∈ entry.2.states) :
+    (buildSelectedConjunctiveOfferAutomaton signature branches elseAutomaton
+      selectedConjunctions).EdgeTargetsInStates := by
+  intro edge hEdge
+  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hConjunction) | hEnabled) | hWait) | hResolved)
+  · have hTarget := childPendingEdges_edgeTargetsInStates 0 elseAutomaton
+      hElseTargets edge hElse
+    simp [buildSelectedConjunctiveOfferAutomaton,
+      finishAutomatonFragment, hTarget]
+  · have hTarget := indexedFragment_edgeTargetsInStates
+      selectedConjunctions hConjunctionTargets edge hConjunction
+    simp [buildSelectedConjunctiveOfferAutomaton,
+      finishAutomatonFragment, hTarget]
+  · rw [mem_foldl_union_iff] at hEnabled
+    rcases hEnabled with hEmpty | ⟨indexed, hIndexed, hNewEdge⟩
+    · simp at hEmpty
+    · have hEntry : indexed.1 ∈ selectedConjunctions := by
+        have hMapped : indexed.1 ∈ selectedConjunctions.zipIdx.map Prod.fst :=
+          List.mem_map_of_mem (f := Prod.fst) hIndexed
+        simpa using hMapped
+      simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      obtain ⟨environment, _, rfl⟩ := hNewEdge
+      have hIndexedState : childState (indexed.2 + 1)
+          indexed.1.2.initial ∈
+            indexedFragmentStates selectedConjunctions := by
+        rw [indexedFragmentStates, mem_foldl_union_iff]
+        exact Or.inr ⟨indexed, hIndexed, by
+          simp [childStates, childState,
+            hConjunctionInitial indexed.1 hEntry]⟩
+      simp [buildSelectedConjunctiveOfferAutomaton,
+        finishAutomatonFragment, hIndexedState]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    obtain ⟨environment, _, rfl⟩ := hWait
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment]
+  · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    obtain ⟨environment, _, rfl⟩ := hResolved
+    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+      childStates, childState, hElseInitial]
+
+/-- Every edge emitted by a sufficiently fuelled compilation targets a state
+declared by that same compiled fragment. -/
+theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      (compileTypeFuel signature fuel processType).EdgeTargetsInStates := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message msg dir =>
+          intro edge hEdge
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image] at hEdge
+          rcases hEdge with
+            (⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩) |
+              ⟨environment, _, rfl⟩ <;>
+            simp [compileTypeFuel, finishAutomatonFragment]
+      | progress pid =>
+          intro edge hEdge
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image] at hEdge
+          rcases hEdge with ⟨environment, _, rfl⟩ |
+            ⟨environment, _, rfl⟩ <;>
+            simp [compileTypeFuel, finishAutomatonFragment]
+      | tock =>
+          intro edge hEdge
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image] at hEdge
+          rcases hEdge with ⟨environment, _, rfl⟩ |
+            ⟨environment, _, rfl⟩
+          · by_cases hClock : environment.clock <;>
+              simp [hClock, compileTypeFuel, finishAutomatonFragment]
+          · simp [compileTypeFuel, finishAutomatonFragment]
+      | skip =>
+          intro edge hEdge
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image] at hEdge
+          obtain ⟨environment, _, rfl⟩ := hEdge
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | var name =>
+          intro edge hEdge
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image] at hEdge
+          obtain ⟨environment, _, rfl⟩ := hEdge
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | recur name body =>
+          have hBody : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          exact buildRecursionAutomaton_edgeTargetsInStates signature name
+            (compileTypeFuel signature fuel body) (ih body hBody)
+            (compileTypeFuel_initial_mem signature fuel body hBody)
+      | choice left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          exact buildChoiceAutomaton_edgeTargetsInStates signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) .silent .silent
+            (ih left hLeft) (ih right hRight)
+            (compileTypeFuel_initial_mem signature fuel left hLeft)
+            (compileTypeFuel_initial_mem signature fuel right hRight)
+      | fairChoice bid left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          exact buildChoiceAutomaton_edgeTargetsInStates signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) (.fair bid true)
+            (.fair bid false) (ih left hLeft) (ih right hRight)
+            (compileTypeFuel_initial_mem signature fuel left hLeft)
+            (compileTypeFuel_initial_mem signature fuel right hRight)
+      | seq left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          exact buildSequenceAutomaton_edgeTargetsInStates signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) (ih left hLeft)
+            (ih right hRight)
+            (compileTypeFuel_initial_mem signature fuel right hRight)
+      | par left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          exact buildParallelAutomaton_edgeTargetsInStates signature interface
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right)
+            (ih left hLeft) (ih right hRight)
+      | xoffer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hBranches : ∀ entry ∈ branches,
+              TypeCompilationFuelSufficient entry.2 fuel := by
+            intro entry hEntry
+            have hBound := typeCompilationFuel_le_typeBranchCompilationFuel
+              branches entry hEntry
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            simp only [TypeCompilationFuelSufficient]
+            omega
+          apply buildExclusiveOfferAutomaton_edgeTargetsInStates
+          · exact ih elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact ih original.2 (hBranches original hOriginal)
+          · exact compileTypeFuel_initial_mem signature fuel elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact compileTypeFuel_initial_mem signature fuel original.2
+              (hBranches original hOriginal)
+      | offer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hSelected : ∀ selected ∈ branches,
+              TypeCompilationFuelSufficient
+                (parallelTypeBranchesSelecting selected branches) fuel := by
+            intro selected hSelected
+            simp only [TypeCompilationFuelSufficient,
+              typeCompilationFuel_parallelTypeBranchesSelecting]
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          apply buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
+          · exact ih elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact ih (parallelTypeBranchesSelecting original branches)
+              (hSelected original hOriginal)
+          · exact compileTypeFuel_initial_mem signature fuel elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact compileTypeFuel_initial_mem signature fuel
+              (parallelTypeBranchesSelecting original branches)
+              (hSelected original hOriginal)
+
 theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →
@@ -100,13 +493,21 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             omega
           exact buildSequenceAutomaton_futureTargetsInStates signature
             (compileTypeFuel signature fuel left)
-            (compileTypeFuel signature fuel right) (ih left hLeft)
-            (ih right hRight)
+            (compileTypeFuel signature fuel right) (ih right hRight)
+            (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
       | par left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
           exact buildParallelAutomaton_futureTargetsInStates signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
+            (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
+            (compileTypeFuel_edgeTargetsInStates signature fuel right hRight)
       | xoffer elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢

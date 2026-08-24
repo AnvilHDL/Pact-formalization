@@ -77,6 +77,11 @@ def AutomatonFragment.FutureTargetsInStates
   ∀ edge ∈ fragment.edges, ∀ target removed,
     edge.future = .at target removed → target ∈ fragment.states
 
+/-- Every edge target of a fragment belongs to its declared state carrier. -/
+def AutomatonFragment.EdgeTargetsInStates
+    (fragment : AutomatonFragment) : Prop :=
+  ∀ edge ∈ fragment.edges, edge.target ∈ fragment.states
+
 /-- A constructor edge after its future-offer field has been computed. -/
 structure AutomatonFragmentEdge : Type where
   source : TypeAutomatonState

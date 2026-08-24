@@ -558,57 +558,35 @@ theorem ofStage_sequence_child1
   induction m with
   | zero => intro q; rfl
   | succ m ih =>
-      -- intro q
-      -- simp only [ofStage]
-      -- rw [hProductEq q, hEdgesEq]
-      -- congr 1
-      -- apply Finset.ext
-      -- intro x
-      -- simp only [Finset.mem_biUnion, Finset.mem_filter]
-      -- constructor
-      sorry
-      -- · rintro ⟨edge, ⟨hEdgeMem, hSource, hNotTock⟩, hx⟩
-      --   simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
-      --     Finset.mem_union, Finset.mem_image] at hEdgeMem
-      --   rcases hEdgeMem with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
-      --       hEntryBridge) | hCompletingBridge
-      --   · subst hEq
-      --     rw [sequenceLeftEdge_source] at hSource
-      --     exact nomatch hSource
-      --   · subst hEq
-      --     simp only [childPendingEdge, childState] at hSource
-      --     injection hSource with _ hSource
-      --     refine ⟨childEdge, ⟨hChildMem, hSource, ?_⟩, ?_⟩
-      --     · simpa only [childPendingEdge] using hNotTock
-      --     · simp only [childPendingEdge, childState] at hx
-      --       rwa [ih childEdge.target] at hx
-      --   · exfalso
-      --     simp only [sequenceEntryBridgeEdges] at hEntryBridge
-      --     split at hEntryBridge
-      --     · simp only [Finset.mem_image] at hEntryBridge
-      --       obtain ⟨environment, -, hEq⟩ := hEntryBridge
-      --       subst hEq
-      --       exact nomatch hSource
-      --     · simp at hEntryBridge
-      --   · exfalso
-      --     simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
-      --     obtain ⟨state, -, hEq⟩ := hCompletingBridge
-      --     subst hEq
-      --     exact nomatch hSource
-      -- · rintro ⟨childEdge, ⟨hChildMem, hChildSource, hNotTock⟩, hx⟩
-      --   have hOut : childPendingEdge 1 childEdge ∈
-      --       (buildSequenceAutomaton signature
-      --         (compileTypeFuel signature (typeCompilationFuel left) left)
-      --         (compileTypeFuel signature (typeCompilationFuel right) right)).edges := by
-      --     simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
-      --       Finset.mem_union, Finset.mem_image]
-      --     exact Or.inl (Or.inl (Or.inr ⟨childEdge, hChildMem, rfl⟩))
-      --   refine ⟨childPendingEdge 1 childEdge, ⟨hOut, ?_, ?_⟩, ?_⟩
-      --   · simp only [childPendingEdge, childState]
-      --     exact congrArg (TypeAutomatonState.child 1) hChildSource
-      --   · simpa [childPendingEdge] using hNotTock
-      --   · simp only [childPendingEdge, childState]
-      --     rwa [ih childEdge.target]
+      intro q
+      simp only [ofStage]
+      rw [hProductEq q, hEdgesEq]
+      congr 1
+      apply Finset.ext
+      intro x
+      simp only [Finset.mem_biUnion, Finset.mem_filter]
+      constructor
+      · rintro ⟨edge, ⟨hEdgeMem, hSource, hNotTock⟩, hx⟩
+        obtain ⟨childEdge, hChildMem, hChildSource, hEdgeEq⟩ :=
+          (buildSequenceAutomaton_outgoing_right signature
+            (compileTypeFuel signature (typeCompilationFuel left) left)
+            (compileTypeFuel signature (typeCompilationFuel right) right)
+            q edge).mp ⟨hEdgeMem, hSource⟩
+        refine ⟨childEdge, ⟨hChildMem, hChildSource, ?_⟩, ?_⟩
+        · simpa [hEdgeEq, childPendingEdge] using hNotTock
+        · rw [hEdgeEq] at hx
+          simp only [childPendingEdge, childState] at hx
+          rwa [ih childEdge.target] at hx
+      · rintro ⟨childEdge, ⟨hChildMem, hChildSource, hNotTock⟩, hx⟩
+        have hOut := (buildSequenceAutomaton_outgoing_right signature
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          q (childPendingEdge 1 childEdge)).mpr
+          ⟨childEdge, hChildMem, hChildSource, rfl⟩
+        refine ⟨childPendingEdge 1 childEdge, ⟨hOut.1, hOut.2, ?_⟩, ?_⟩
+        · simpa [childPendingEdge] using hNotTock
+        · simp only [childPendingEdge, childState]
+          rwa [ih childEdge.target]
 
 /-- The `AutomatonNonClockStep`-level (one-step, non-recursive) form of
 `ofStage_sequence_child1`'s own edge case-split: a `.child 1 q`-tagged
@@ -618,49 +596,24 @@ theorem automatonNonClockStep_sequence_child1
     (signature : TypeAlphabet) (left right : AutomatonFragment) (q target : TypeAutomatonState) :
     AutomatonNonClockStep (buildSequenceAutomaton signature left right) (childState 1 q) target ↔
       ∃ q', target = childState 1 q' ∧ AutomatonNonClockStep right q q' := by
-  -- constructor
-  sorry
-  -- · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock, hNotFuture⟩
-  --   simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
-  --     Finset.mem_union, Finset.mem_image] at hEdgeMem
-  --   rcases hEdgeMem with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
-  --       hEntryBridge) | hCompletingBridge
-  --   · exfalso; rw [← hEq, sequenceLeftEdge_source] at hSource; exact nomatch hSource
-  --   · subst hEq
-  --     simp only [childPendingEdge, childState] at hSource
-  --     injection hSource with _ hSource
-  --     refine ⟨childEdge.target, ?_, childEdge, hChildMem, hSource, rfl, ?_, ?_⟩
-  --     · rw [← hTarget]; simp [childPendingEdge, childState]
-  --     · simpa only [childPendingEdge] using hNotTock
-  --     · simpa only [childPendingEdge] using hNotFuture
-  --   · exfalso
-  --     simp only [sequenceEntryBridgeEdges] at hEntryBridge
-  --     split at hEntryBridge
-  --     · simp only [Finset.mem_image] at hEntryBridge
-  --       obtain ⟨environment, -, hEq⟩ := hEntryBridge
-  --       rw [← hEq] at hSource
-  --       exact nomatch hSource
-  --     · simp at hEntryBridge
-  --   · exfalso
-  --     simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
-  --     obtain ⟨s, -, hEq⟩ := hCompletingBridge
-  --     rw [← hEq] at hSource
-  --     exact nomatch hSource
-  -- · rintro ⟨q', hTargetEq, childEdge, hChildMem, hChildSource, hChildTarget, hChildNotTock,
-  --     hChildNotFuture⟩
-  --   have hOut : childPendingEdge 1 childEdge ∈
-  --       (buildSequenceAutomaton signature left right).edges := by
-  --     simp only [buildSequenceAutomaton, finishAutomatonFragment, childPendingEdges,
-  --       Finset.mem_union, Finset.mem_image]
-  --     exact Or.inl (Or.inl (Or.inr ⟨childEdge, hChildMem, rfl⟩))
-  --   refine ⟨childPendingEdge 1 childEdge, hOut, ?_, ?_, ?_, ?_⟩
-  --   · simp only [childPendingEdge, childState]
-  --     exact congrArg (TypeAutomatonState.child 1) hChildSource
-  --   · rw [hTargetEq]
-  --     simp only [childPendingEdge, childState]
-  --     exact congrArg (TypeAutomatonState.child 1) hChildTarget
-  --   · simpa [childPendingEdge] using hChildNotTock
-  --   · simpa [childPendingEdge] using hChildNotFuture
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
+    obtain ⟨childEdge, hChildMem, hChildSource, hEdgeEq⟩ :=
+      (buildSequenceAutomaton_outgoing_right signature left right q edge).mp
+        ⟨hEdgeMem, hSource⟩
+    refine ⟨childEdge.target, ?_, childEdge, hChildMem, hChildSource, rfl, ?_⟩
+    · rw [hEdgeEq] at hTarget
+      exact hTarget.symm
+    · simpa [hEdgeEq, childPendingEdge] using hNotTock
+  · rintro ⟨q', hTargetEq, childEdge, hChildMem, hChildSource, hChildTarget,
+      hChildNotTock⟩
+    have hOut := (buildSequenceAutomaton_outgoing_right signature left right q
+      (childPendingEdge 1 childEdge)).mpr
+      ⟨childEdge, hChildMem, hChildSource, rfl⟩
+    refine ⟨childPendingEdge 1 childEdge, hOut.1, hOut.2, ?_, ?_⟩
+    · simp only [childPendingEdge, childState]
+      exact (congrArg (childState 1) hChildTarget).trans hTargetEq.symm
+    · simpa [childPendingEdge] using hChildNotTock
 
 theorem buildSequenceAutomaton_child1_accepting_iff
     (signature : TypeAlphabet) (left right : AutomatonFragment) (q : TypeAutomatonState) :

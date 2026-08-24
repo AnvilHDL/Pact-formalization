@@ -1868,11 +1868,15 @@ theorem correspondence_par_stepIff
               have hEdge : (compileType signature (.par left right interface)).HasEdge
                   TypeAutomatonState.final env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅)
                   TypeAutomatonState.final := by
-                rw [buildParallelAutomaton_final_hasEdge_iff]
+                rw [buildParallelAutomaton_final_hasEdge_iff signature left right
+                  interface env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅)
+                  TypeAutomatonState.final hSignatureSymbol]
                 exact ⟨hWF, hClock, rfl, rfl, rfl⟩
               exact ⟨.final, hEdge, hRelated⟩
     · rintro ⟨state', hEdge, hTargetRelated⟩
-      rw [buildParallelAutomaton_final_hasEdge_iff] at hEdge
+      rw [buildParallelAutomaton_final_hasEdge_iff signature left right
+        interface env label (TypeOfferSummary.mk current future) state'
+        hSignatureSymbol] at hEdge
       obtain ⟨hWF, hClock, hLabelEq, hOffersEq, hTargetEq⟩ := hEdge
       subst hLabelEq
       injection hOffersEq with hCurrentEq hFutureEq

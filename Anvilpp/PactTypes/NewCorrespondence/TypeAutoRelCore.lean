@@ -601,6 +601,17 @@ theorem buildRelationSetCoreFuel_eq_of_sufficient
     obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
     exact buildRelationSetCoreFuel_add_stable signature processType rightFuel extra hRight
 
+private theorem mem_map_zipIdx_cases
+    {Item Mapped : Type} (items : List Item) (mapEntry : Item → Mapped)
+    {indexed : Mapped × Nat}
+    (hIndexed : indexed ∈ (items.map mapEntry).zipIdx) :
+    ∃ item, (item, indexed.2) ∈ items.zipIdx ∧
+      mapEntry item = indexed.1 := by
+  have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
+  rw [List.getElem?_map, Option.map_eq_some_iff] at hGet
+  obtain ⟨item, hItem, hEq⟩ := hGet
+  exact ⟨item, List.mk_mem_zipIdx_iff_getElem?.mpr hItem, hEq⟩
+
 /-- Every automaton edge's target either relates to something under `ty`'s own
 relation, or the edge is a still-dangling recursion marker — one whose label
 is `.variable name` because it has not yet been crossed by the `.recur name`
@@ -610,8 +621,7 @@ preserves the label unchanged). In that case the target is provably inert: no
 further edge is sourced there and it is not a product state either, so
 `ofStage`'s value there is `∅` regardless of what (if anything) it
 represents. Replaces the old (deleted) `relationSuccessors_mem_cases` for the
-new, provenance-directed relation. `.par`/`.xoffer`/`.offer` deferred, matching
-`typeSameCycleSteps`'s own scope so far. -/
+new, provenance-directed relation. -/
 theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
     ∀ fuel ty, TypeCompilationFuelSufficient ty fuel →
       ∀ edge ∈ (compileTypeFuel signature fuel ty).edges,
@@ -741,61 +751,53 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               ⟨(right, (compileTypeFuel signature fuel right).initial),
                 buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩))
       | seq left right =>
-          sorry
-          -- have hLeft : TypeCompilationFuelSufficient left fuel := by
-          --   simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
-          -- have hRight : TypeCompilationFuelSufficient right fuel := by
-          --   simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
-          -- simp only [compileTypeFuel, buildSequenceAutomaton, finishAutomatonFragment,
-          --   childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
-          -- rcases hEdge with ((⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
-          --     hEntryBridge) | hCompletingBridge
-          -- · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
-          --   · left
-          --     by_cases hAccept : childEdge.target ∈ (compileTypeFuel signature fuel left).accepting
-          --     · refine ⟨right, ?_⟩
-          --       subst hEq
-          --       rw [sequenceLeftEdge_target, sequenceRedirect_of_accepting hAccept]
-          --       simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
-          --         Finset.mem_image]
-          --       exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
-          --         buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
-          --     · refine ⟨.seq residual right, ?_⟩
-          --       subst hEq
-          --       rw [sequenceLeftEdge_target, sequenceRedirect_of_not_accepting hAccept]
-          --       simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
-          --         Finset.mem_image, Prod.mk.injEq]
-          --       exact Or.inl ⟨(residual, childEdge.target), hResidual, rfl, rfl⟩
-          --   · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          -- · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
-          --   · left
-          --     refine ⟨residual, ?_⟩
-          --     subst hEq
-          --     simp only [childPendingEdge, childState, buildRelationSetCoreFuel,
-          --       Finset.mem_union, Finset.mem_image]
-          --     exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
-          --   · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          -- · left
-          --   refine ⟨right, ?_⟩
-          --   simp only [sequenceEntryBridgeEdges] at hEntryBridge
-          --   split at hEntryBridge
-          --   · simp only [Finset.mem_image] at hEntryBridge
-          --     obtain ⟨environment, -, hEq⟩ := hEntryBridge
-          --     subst hEq
-          --     simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
-          --       Finset.mem_image]
-          --     exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
-          --       buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
-          --   · simp at hEntryBridge
-          -- · left
-          --   refine ⟨right, ?_⟩
-          --   simp only [sequenceCompletingBridgeEdges, Finset.mem_image] at hCompletingBridge
-          --   obtain ⟨state, -, hEq⟩ := hCompletingBridge
-          --   subst hEq
-          --   simp only [childState, buildRelationSetCoreFuel, Finset.mem_union,
-          --     Finset.mem_image]
-          --   exact Or.inr ⟨(right, (compileTypeFuel signature fuel right).initial),
-          --     buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildSequenceAutomaton,
+            finishAutomatonFragment, sequenceLeftEdges, sequenceRightEdges,
+            sequenceRedirectEdges, childPendingEdges, Finset.mem_union,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with (hLeftEdge | hRightEdge) | hRedirect
+          · obtain ⟨childEdge, ⟨hChildMem, hNotAccepting⟩, rfl⟩ :=
+              hLeftEdge
+            rcases ih left hLeft childEdge hChildMem with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+            · left
+              refine ⟨.seq residual right, ?_⟩
+              simp only [sequenceKeptLeftEdge, childState,
+                buildRelationSetCoreFuel, Finset.mem_union,
+                Finset.mem_image, Finset.mem_filter]
+              exact Or.inl ⟨(residual, childEdge.target),
+                ⟨hResidual,
+                  not_mem_sequenceDeleted_of_not_accepting hNotAccepting⟩,
+                rfl⟩
+            · right
+              exact ⟨markerName, by
+                simpa [sequenceKeptLeftEdge] using hLabel⟩
+          · obtain ⟨childEdge, hChildMem, rfl⟩ := hRightEdge
+            rcases ih right hRight childEdge hChildMem with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              simp only [childPendingEdge, childState,
+                buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image]
+              exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
+            · right
+              exact ⟨markerName, by
+                simpa [childPendingEdge] using hLabel⟩
+          · obtain ⟨childEdge, _, rfl⟩ := hRedirect
+            left
+            refine ⟨right, ?_⟩
+            simp only [sequenceRedirectEdge, childState,
+              buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image]
+            exact Or.inr ⟨(right,
+              (compileTypeFuel signature fuel right).initial),
+              buildRelationSetCoreFuel_initial_mem signature fuel right hRight,
+              rfl⟩
       | recur name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
@@ -827,9 +829,313 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                   Finset.mem_insert, Finset.mem_image]
                 exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
               · exact Or.inr ⟨name', by subst hEq; exact hLabel⟩
-      | par left right interface => sorry
-      | xoffer elseType branches => sorry
-      | offer elseType branches => sorry
+      | par left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          simp only [compileTypeFuel, buildParallelAutomaton,
+            finishAutomatonFragment, Finset.mem_union, Finset.mem_biUnion,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with
+              ⟨⟨leftEdge, hLeftEdge, rightEdge,
+                ⟨hRightEdge, _hSync⟩, rfl⟩, _hReachable⟩ |
+              ⟨environment, _, rfl⟩
+          · simp only [resolvedAutomatonEdges, Finset.mem_image]
+              at hLeftEdge hRightEdge
+            obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+            obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+            rw [← hLeftEq, ← hRightEq]
+            rcases ih left hLeft leftRaw hLeftRaw with
+                ⟨leftResidual, hLeftResidual⟩ |
+                ⟨leftMarker, hLeftLabel⟩
+            · rcases ih right hRight rightRaw hRightRaw with
+                  ⟨rightResidual, hRightResidual⟩ |
+                  ⟨rightMarker, hRightLabel⟩
+              · left
+                by_cases hAccept :
+                    leftRaw.target ∈
+                        (compileTypeFuel signature fuel left).accepting ∧
+                      rightRaw.target ∈
+                        (compileTypeFuel signature fuel right).accepting
+                · refine ⟨.skip, ?_⟩
+                  simp [hAccept, buildRelationSetCoreFuel]
+                · refine ⟨.par leftResidual rightResidual interface, ?_⟩
+                  simp only [if_neg hAccept, buildRelationSetCoreFuel,
+                    Finset.mem_insert]
+                  right
+                  exact Finset.mem_image.mpr ⟨
+                    ((leftResidual, leftRaw.target),
+                      (rightResidual, rightRaw.target)),
+                    Finset.mem_product.mpr
+                      ⟨hLeftResidual, hRightResidual⟩, rfl⟩
+              · right
+                cases hLeftConstruction : leftRaw.label with
+                | visible leftLabel =>
+                    exact ⟨rightMarker, by
+                      simp [AutomatonConstructionLabel.combine,
+                        hRightLabel]⟩
+                | «variable» earlierMarker =>
+                    exact ⟨earlierMarker, by
+                      simp [AutomatonConstructionLabel.combine]⟩
+            · right
+              exact ⟨leftMarker, by
+                simp [AutomatonConstructionLabel.combine, hLeftLabel]⟩
+          · left
+            refine ⟨.skip, ?_⟩
+            change (.skip, .final) ∈
+              buildRelationSetCoreFuel signature (fuel + 1)
+                (.par left right interface)
+            simp [buildRelationSetCoreFuel]
+      | xoffer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hBranches : ∀ entry ∈ branches,
+              TypeCompilationFuelSufficient entry.2 fuel := by
+            intro entry hEntry
+            have hBound := typeCompilationFuel_le_typeBranchCompilationFuel
+              branches entry hEntry
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            simp only [TypeCompilationFuelSufficient]
+            omega
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          rcases hEdge with
+              ((((hElseEdge | hIndexedEdge) | hBranchEdge) | hWaitEdge) |
+                hResolvedEdge)
+          · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
+            obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
+            rcases ih elseType hElse childEdge hChildMem with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              simp only [childPendingEdge, childState,
+                buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inl
+                ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · right
+              exact ⟨markerName, by
+                simpa [childPendingEdge] using hLabel⟩
+          · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexedEdge
+            rcases hIndexedEdge with hEmpty |
+              ⟨indexed, hIndexed, hChildPending⟩
+            · simp at hEmpty
+            · simp only [childPendingEdges, Finset.mem_image] at hChildPending
+              obtain ⟨childEdge, hChildMem, rfl⟩ := hChildPending
+              obtain ⟨branch, hBranchIndexed, hMappedEq⟩ :=
+                mem_map_zipIdx_cases branches
+                  (fun branch =>
+                    (branch.1, compileTypeFuel signature fuel branch.2))
+                  hIndexed
+              have hBranchMem : branch ∈ branches := by
+                exact List.mem_of_getElem?
+                  (List.mk_mem_zipIdx_iff_getElem?.mp hBranchIndexed)
+              have hAutomatonEq :
+                  compileTypeFuel signature fuel branch.2 = indexed.1.2 :=
+                congrArg Prod.snd hMappedEq
+              have hChildMem' : childEdge ∈
+                  (compileTypeFuel signature fuel branch.2).edges := by
+                simpa [hAutomatonEq] using hChildMem
+              rcases ih branch.2 (hBranches branch hBranchMem)
+                  childEdge hChildMem' with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+              · left
+                refine ⟨residual, ?_⟩
+                simp only [childPendingEdge, childState,
+                  buildRelationSetCoreFuel, Finset.mem_insert,
+                  Finset.mem_union, Finset.mem_image]
+                right
+                right
+                rw [mem_foldl_union_iff]
+                exact Or.inr ⟨(branch, indexed.2), hBranchIndexed,
+                  Finset.mem_image.mpr
+                    ⟨(residual, childEdge.target), hResidual, rfl⟩⟩
+              · right
+                exact ⟨markerName, by
+                  simpa [childPendingEdge] using hLabel⟩
+          · rw [mem_foldl_union_iff] at hBranchEdge
+            rcases hBranchEdge with hEmpty |
+              ⟨indexed, hIndexed, hNewEdge⟩
+            · simp at hEmpty
+            · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+              obtain ⟨environment, _, rfl⟩ := hNewEdge
+              obtain ⟨branch, hBranchIndexed, hMappedEq⟩ :=
+                mem_map_zipIdx_cases branches
+                  (fun branch =>
+                    (branch.1, compileTypeFuel signature fuel branch.2))
+                  hIndexed
+              have hBranchMem : branch ∈ branches := by
+                exact List.mem_of_getElem?
+                  (List.mk_mem_zipIdx_iff_getElem?.mp hBranchIndexed)
+              have hInitial := buildRelationSetCoreFuel_initial_mem signature
+                fuel branch.2 (hBranches branch hBranchMem)
+              left
+              refine ⟨branch.2, ?_⟩
+              simp only [childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              right
+              right
+              rw [mem_foldl_union_iff]
+              refine Or.inr ⟨(branch, indexed.2), hBranchIndexed, ?_⟩
+              apply Finset.mem_image.mpr
+              refine ⟨(branch.2,
+                (compileTypeFuel signature fuel branch.2).initial),
+                hInitial, ?_⟩
+              have hAutomatonEq :
+                  compileTypeFuel signature fuel branch.2 = indexed.1.2 :=
+                congrArg Prod.snd hMappedEq
+              have hInitialEq := congrArg
+                (fun fragment : AutomatonFragment => fragment.initial)
+                hAutomatonEq
+              simp only at hInitialEq
+              exact Prod.ext rfl (congrArg (TypeAutomatonState.child
+                (indexed.2 + 1)) hInitialEq)
+          · simp only [Finset.mem_image, Finset.mem_filter] at hWaitEdge
+            obtain ⟨environment, _, rfl⟩ := hWaitEdge
+            left
+            exact ⟨.xoffer elseType branches, by
+              simp [buildRelationSetCoreFuel]⟩
+          · simp only [Finset.mem_image, Finset.mem_filter] at hResolvedEdge
+            obtain ⟨environment, _, rfl⟩ := hResolvedEdge
+            left
+            refine ⟨elseType, ?_⟩
+            simp only [childState, buildRelationSetCoreFuel,
+              Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+            exact Or.inr (Or.inl ⟨(elseType,
+              (compileTypeFuel signature fuel elseType).initial),
+              buildRelationSetCoreFuel_initial_mem signature fuel elseType hElse,
+              rfl⟩)
+      | offer elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hSelected : ∀ selected ∈ branches,
+              TypeCompilationFuelSufficient
+                (parallelTypeBranchesSelecting selected branches) fuel := by
+            intro selected hSelected
+            simp only [TypeCompilationFuelSufficient,
+              typeCompilationFuel_parallelTypeBranchesSelecting]
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          simp only [compileTypeFuel,
+            buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union] at hEdge
+          rcases hEdge with
+              ((((hElseEdge | hIndexedEdge) | hEnabledEdge) | hWaitEdge) |
+                hResolvedEdge)
+          · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
+            obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
+            rcases ih elseType hElse childEdge hChildMem with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+            · left
+              refine ⟨residual, ?_⟩
+              simp only [childPendingEdge, childState,
+                buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              exact Or.inr (Or.inl
+                ⟨(residual, childEdge.target), hResidual, rfl⟩)
+            · right
+              exact ⟨markerName, by
+                simpa [childPendingEdge] using hLabel⟩
+          · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexedEdge
+            rcases hIndexedEdge with hEmpty |
+              ⟨indexed, hIndexed, hChildPending⟩
+            · simp at hEmpty
+            · simp only [childPendingEdges, Finset.mem_image] at hChildPending
+              obtain ⟨childEdge, hChildMem, rfl⟩ := hChildPending
+              obtain ⟨selected, hSelectedIndexed, hMappedEq⟩ :=
+                mem_map_zipIdx_cases branches
+                  (fun selected =>
+                    (selected.1, compileTypeFuel signature fuel
+                      (parallelTypeBranchesSelecting selected branches)))
+                  hIndexed
+              have hSelectedMem : selected ∈ branches := by
+                exact List.mem_of_getElem?
+                  (List.mk_mem_zipIdx_iff_getElem?.mp hSelectedIndexed)
+              let selectedType :=
+                parallelTypeBranchesSelecting selected branches
+              have hAutomatonEq :
+                  compileTypeFuel signature fuel selectedType = indexed.1.2 :=
+                congrArg Prod.snd hMappedEq
+              have hChildMem' : childEdge ∈
+                  (compileTypeFuel signature fuel selectedType).edges := by
+                simpa [hAutomatonEq] using hChildMem
+              rcases ih selectedType (hSelected selected hSelectedMem)
+                  childEdge hChildMem' with
+                ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
+              · left
+                refine ⟨residual, ?_⟩
+                simp only [childPendingEdge, childState,
+                  buildRelationSetCoreFuel, Finset.mem_insert,
+                  Finset.mem_union, Finset.mem_image]
+                right
+                right
+                rw [mem_foldl_union_iff]
+                exact Or.inr ⟨(selected, indexed.2), hSelectedIndexed,
+                  Finset.mem_image.mpr
+                    ⟨(residual, childEdge.target), hResidual, rfl⟩⟩
+              · right
+                exact ⟨markerName, by
+                  simpa [childPendingEdge] using hLabel⟩
+          · rw [mem_foldl_union_iff] at hEnabledEdge
+            rcases hEnabledEdge with hEmpty |
+              ⟨indexed, hIndexed, hNewEdge⟩
+            · simp at hEmpty
+            · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+              obtain ⟨environment, _, rfl⟩ := hNewEdge
+              obtain ⟨selected, hSelectedIndexed, hMappedEq⟩ :=
+                mem_map_zipIdx_cases branches
+                  (fun selected =>
+                    (selected.1, compileTypeFuel signature fuel
+                      (parallelTypeBranchesSelecting selected branches)))
+                  hIndexed
+              have hSelectedMem : selected ∈ branches := by
+                exact List.mem_of_getElem?
+                  (List.mk_mem_zipIdx_iff_getElem?.mp hSelectedIndexed)
+              let selectedType :=
+                parallelTypeBranchesSelecting selected branches
+              have hInitial := buildRelationSetCoreFuel_initial_mem signature
+                fuel selectedType (hSelected selected hSelectedMem)
+              left
+              refine ⟨selectedType, ?_⟩
+              simp only [childState, buildRelationSetCoreFuel,
+                Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+              right
+              right
+              rw [mem_foldl_union_iff]
+              refine Or.inr ⟨(selected, indexed.2), hSelectedIndexed, ?_⟩
+              apply Finset.mem_image.mpr
+              refine ⟨(selectedType,
+                (compileTypeFuel signature fuel selectedType).initial),
+                hInitial, ?_⟩
+              have hAutomatonEq :
+                  compileTypeFuel signature fuel selectedType = indexed.1.2 :=
+                congrArg Prod.snd hMappedEq
+              have hInitialEq := congrArg
+                (fun fragment : AutomatonFragment => fragment.initial)
+                hAutomatonEq
+              simp only at hInitialEq
+              exact Prod.ext rfl (congrArg (TypeAutomatonState.child
+                (indexed.2 + 1)) hInitialEq)
+          · simp only [Finset.mem_image, Finset.mem_filter] at hWaitEdge
+            obtain ⟨environment, _, rfl⟩ := hWaitEdge
+            left
+            exact ⟨.offer elseType branches, by
+              simp [buildRelationSetCoreFuel]⟩
+          · simp only [Finset.mem_image, Finset.mem_filter] at hResolvedEdge
+            obtain ⟨environment, _, rfl⟩ := hResolvedEdge
+            left
+            refine ⟨elseType, ?_⟩
+            simp only [childState, buildRelationSetCoreFuel,
+              Finset.mem_insert, Finset.mem_union, Finset.mem_image]
+            exact Or.inr (Or.inl ⟨(elseType,
+              (compileTypeFuel signature fuel elseType).initial),
+              buildRelationSetCoreFuel_initial_mem signature fuel elseType hElse,
+              rfl⟩)
 
 /-- Defines relation membership as occurrence of the residual/state pair in the relation set. -/
 def relationMembership
