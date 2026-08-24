@@ -2632,6 +2632,988 @@ lemma helper_h15_edge_future_offers_agree
     future = typeFutureOffers residual' \ current := by
   sorry -- TODO(section7): derive from global future agreement and edge resolution.
 
+/-! ## Type-label ownership and synchronized recovery -/
+
+/-- `ObservationOwnedBy source observation` states that every identifier carried by
+`observation` occurs in the corresponding identifier set of `source`. A resolved
+message requires ownership of both message polarities. -/
+def ObservationOwnedBy (processType : PactType) : TypeObservation → Prop
+  | .message msg dir => (msg, dir) ∈ PactType.MessageActions processType
+  | .resolved msg =>
+      (msg, .send) ∈ PactType.MessageActions processType ∧
+        (msg, .recv) ∈ PactType.MessageActions processType
+  | .fair bid _ => bid ∈ PactType.FairChoiceIds processType
+  | .progress pid => pid ∈ PactType.ProgressIds processType
+
+/-- A label is supported by a type when each non-clock observation in the label
+uses an identifier owned by that type. Clock labels carry no identifiers. -/
+def LabelSupportedBy (processType : PactType) : TypeLabel → Prop
+  | .tock => True
+  | .actions observations => ∀ observation ∈ observations,
+      ObservationOwnedBy processType observation
+
+private theorem sends_iff_contains (label : TypeLabel) (msg : MessageId) :
+    msg ∈ label.sends ↔ label.contains (.message msg .send) := by
+  cases label with
+  | tock => simp [TypeLabel.sends, TypeLabel.contains]
+  | actions observations =>
+      simp only [TypeLabel.sends, TypeLabel.messageIdsWith, Finset.mem_image,
+        Finset.mem_filter, TypeLabel.contains]
+      constructor
+      · rintro ⟨observation, ⟨hMem, hDir⟩, hMsg⟩
+        cases observation <;> simp_all
+      · intro hMem
+        exact ⟨.message msg .send, ⟨hMem, rfl⟩, rfl⟩
+
+private theorem recvs_iff_contains (label : TypeLabel) (msg : MessageId) :
+    msg ∈ label.recvs ↔ label.contains (.message msg .recv) := by
+  cases label with
+  | tock => simp [TypeLabel.recvs, TypeLabel.contains]
+  | actions observations =>
+      simp only [TypeLabel.recvs, TypeLabel.messageIdsWith, Finset.mem_image,
+        Finset.mem_filter, TypeLabel.contains]
+      constructor
+      · rintro ⟨observation, ⟨hMem, hDir⟩, hMsg⟩
+        cases observation <;> simp_all
+      · intro hMem
+        exact ⟨.message msg .recv, ⟨hMem, rfl⟩, rfl⟩
+
+private theorem branch_action_mem
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {processType : PactType}
+    (hMem : (action, processType) ∈ branches) :
+    action ∈ PactType.BranchMessageActions branches := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [List.mem_cons] at hMem
+      simp only [PactType.BranchMessageActions, Finset.mem_union,
+        Finset.mem_singleton]
+      rcases hMem with hEq | hRest
+      · exact Or.inl (Or.inl (congrArg Prod.fst hEq))
+      · exact Or.inr (ih hRest)
+
+/-- Synchronized combination preserves label support: observations contributed by
+either component, and resolved observations created by synchronization, are
+owned by the corresponding parallel type. -/
+theorem combine_label_supported
+    {left right : PactType} {interface : Interface}
+    {leftLabel rightLabel : TypeLabel}
+    (hLeft : LabelSupportedBy left leftLabel)
+    (hRight : LabelSupportedBy right rightLabel)
+    (hSync : TypeLabel.Sync interface leftLabel rightLabel) :
+    LabelSupportedBy (.par left right interface)
+      (TypeLabel.combine interface leftLabel rightLabel) := by
+  cases leftLabel with
+  | tock =>
+      cases rightLabel with
+      | tock => trivial
+      | actions observations => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync
+  | actions leftObservations =>
+      cases rightLabel with
+      | tock => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync
+      | actions rightObservations =>
+          simp only [LabelSupportedBy, TypeLabel.combine, Finset.mem_union,
+            Finset.mem_filter, Finset.mem_image]
+          intro observation hObservation
+          rcases hObservation with ⟨hObservation, _⟩ | ⟨msg, hSynced, rfl⟩
+          · rcases hObservation with hLeftMem | hRightMem
+            · have hOwned := hLeft observation hLeftMem
+              cases observation with
+              | message msg dir =>
+                  simpa [ObservationOwnedBy, PactType.MessageActions] using
+                    (show (msg, dir) ∈ left.MessageActions ∨
+                      (msg, dir) ∈ right.MessageActions from Or.inl hOwned)
+              | resolved msg =>
+                  simpa [ObservationOwnedBy, PactType.MessageActions] using
+                    (And.intro
+                      (show (msg, .send) ∈ left.MessageActions ∨
+                        (msg, .send) ∈ right.MessageActions from Or.inl hOwned.1)
+                      (show (msg, .recv) ∈ left.MessageActions ∨
+                        (msg, .recv) ∈ right.MessageActions from Or.inl hOwned.2))
+              | fair bid taken =>
+                  simpa [ObservationOwnedBy, PactType.FairChoiceIds] using
+                    (show bid ∈ left.FairChoiceIds ∨ bid ∈ right.FairChoiceIds
+                      from Or.inl hOwned)
+              | progress pid =>
+                  simpa [ObservationOwnedBy, PactType.ProgressIds] using
+                    (show pid ∈ left.ProgressIds ∨ pid ∈ right.ProgressIds
+                      from Or.inl hOwned)
+            · have hOwned := hRight observation hRightMem
+              cases observation with
+              | message msg dir =>
+                  simpa [ObservationOwnedBy, PactType.MessageActions] using
+                    (show (msg, dir) ∈ left.MessageActions ∨
+                      (msg, dir) ∈ right.MessageActions from Or.inr hOwned)
+              | resolved msg =>
+                  simpa [ObservationOwnedBy, PactType.MessageActions] using
+                    (And.intro
+                      (show (msg, .send) ∈ left.MessageActions ∨
+                        (msg, .send) ∈ right.MessageActions from Or.inr hOwned.1)
+                      (show (msg, .recv) ∈ left.MessageActions ∨
+                        (msg, .recv) ∈ right.MessageActions from Or.inr hOwned.2))
+              | fair bid taken =>
+                  simpa [ObservationOwnedBy, PactType.FairChoiceIds] using
+                    (show bid ∈ left.FairChoiceIds ∨ bid ∈ right.FairChoiceIds
+                      from Or.inr hOwned)
+              | progress pid =>
+                  simpa [ObservationOwnedBy, PactType.ProgressIds] using
+                    (show pid ∈ left.ProgressIds ∨ pid ∈ right.ProgressIds
+                      from Or.inr hOwned)
+          · simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter] at hSynced
+            have hSyncPieces := hSync
+            simp only [TypeLabel.Sync] at hSyncPieces
+            rcases hSynced with hLeftSend | hRightSend
+            · have hLeftMessage : TypeLabel.contains (.actions leftObservations)
+                  (.message msg .send) :=
+                (sends_iff_contains (.actions leftObservations) msg).mp hLeftSend.2
+              have hRightRecv : msg ∈ (.actions rightObservations : TypeLabel).recvs := by
+                have hBoth : msg ∈ interface ∩
+                    (.actions leftObservations : TypeLabel).sends := by
+                  exact Finset.mem_inter.mpr hLeftSend
+                rw [hSyncPieces.1] at hBoth
+                exact (Finset.mem_inter.mp hBoth).2
+              have hRightMessage : TypeLabel.contains (.actions rightObservations)
+                  (.message msg .recv) :=
+                (recvs_iff_contains (.actions rightObservations) msg).mp hRightRecv
+              have hOwnedLeft := hLeft (.message msg .send) hLeftMessage
+              have hOwnedRight := hRight (.message msg .recv) hRightMessage
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                And.intro (Or.inl hOwnedLeft) (Or.inr hOwnedRight)
+            · have hRightMessage : TypeLabel.contains (.actions rightObservations)
+                  (.message msg .send) :=
+                (sends_iff_contains (.actions rightObservations) msg).mp hRightSend.2
+              have hLeftRecv : msg ∈ (.actions leftObservations : TypeLabel).recvs := by
+                have hBoth : msg ∈ interface ∩
+                    (.actions rightObservations : TypeLabel).sends := by
+                  exact Finset.mem_inter.mpr hRightSend
+                rw [← hSyncPieces.2.1] at hBoth
+                exact (Finset.mem_inter.mp hBoth).2
+              have hLeftMessage : TypeLabel.contains (.actions leftObservations)
+                  (.message msg .recv) :=
+                (recvs_iff_contains (.actions leftObservations) msg).mp hLeftRecv
+              have hOwnedLeft := hLeft (.message msg .recv) hLeftMessage
+              have hOwnedRight := hRight (.message msg .send) hRightMessage
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                And.intro (Or.inr hOwnedRight) (Or.inl hOwnedLeft)
+
+set_option maxHeartbeats 4000000 in
+/-- Every operational transition label is supported by its source type. -/
+theorem transition_label_supported
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    (hTransition : TypeTransition env source label target) :
+    LabelSupportedBy source label := by
+  induction hTransition with
+  | seq_fuse env left right label hStep ih =>
+      cases label with
+      | tock => trivial
+      | actions observations =>
+          intro observation hMem
+          have hOwned := ih observation hMem
+          cases observation with
+          | message msg dir =>
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                (show (msg, dir) ∈ left.MessageActions ∨
+                  (msg, dir) ∈ right.MessageActions from Or.inl hOwned)
+          | resolved msg =>
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                (And.intro
+                  (show (msg, .send) ∈ left.MessageActions ∨
+                    (msg, .send) ∈ right.MessageActions from Or.inl hOwned.1)
+                  (show (msg, .recv) ∈ left.MessageActions ∨
+                    (msg, .recv) ∈ right.MessageActions from Or.inl hOwned.2))
+          | fair bid taken =>
+              simpa [ObservationOwnedBy, PactType.FairChoiceIds] using
+                (show bid ∈ left.FairChoiceIds ∨ bid ∈ right.FairChoiceIds
+                  from Or.inl hOwned)
+          | progress pid =>
+              simpa [ObservationOwnedBy, PactType.ProgressIds] using
+                (show pid ∈ left.ProgressIds ∨ pid ∈ right.ProgressIds
+                  from Or.inl hOwned)
+  | seq env left left' right label hStep hNonFinal ih =>
+      cases label with
+      | tock => trivial
+      | actions observations =>
+          intro observation hMem
+          have hOwned := ih observation hMem
+          cases observation with
+          | message msg dir =>
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                (show (msg, dir) ∈ left.MessageActions ∨
+                  (msg, dir) ∈ right.MessageActions from Or.inl hOwned)
+          | resolved msg =>
+              simpa [ObservationOwnedBy, PactType.MessageActions] using
+                (And.intro
+                  (show (msg, .send) ∈ left.MessageActions ∨
+                    (msg, .send) ∈ right.MessageActions from Or.inl hOwned.1)
+                  (show (msg, .recv) ∈ left.MessageActions ∨
+                    (msg, .recv) ∈ right.MessageActions from Or.inl hOwned.2))
+          | fair bid taken =>
+              simpa [ObservationOwnedBy, PactType.FairChoiceIds] using
+                (show bid ∈ left.FairChoiceIds ∨ bid ∈ right.FairChoiceIds
+                  from Or.inl hOwned)
+          | progress pid =>
+              simpa [ObservationOwnedBy, PactType.ProgressIds] using
+                (show pid ∈ left.ProgressIds ∨ pid ∈ right.ProgressIds
+                  from Or.inl hOwned)
+  | xoffer_branch env elseType branches action processType hConditions =>
+      simp only [LabelSupportedBy, TypeLabel.message, Finset.mem_singleton,
+        forall_eq, ObservationOwnedBy, PactType.MessageActions,
+        Finset.mem_union]
+      exact Or.inr (branch_action_mem hConditions.2.1)
+  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+      rightLabel hLeftStep hRightStep hNonFinal hConditions hLeftIH hRightIH =>
+      exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      hLeftStep hRightStep hConditions hLeftIH hRightIH =>
+      exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
+  | _ =>
+      simp_all [LabelSupportedBy, ObservationOwnedBy, TypeLabel.silent,
+        TypeLabel.message, TypeLabel.fair, TypeLabel.progress,
+        PactType.MessageActions, PactType.ProgressIds, PactType.FairChoiceIds]
+
+private theorem seq_label_supported
+    {left right : PactType} {label : TypeLabel}
+    (hSupported : LabelSupportedBy left label) :
+    LabelSupportedBy (.seq left right) label := by
+  cases label with
+
+  | tock => trivial
+  | actions observations =>
+      intro observation hMem
+      have hOwned := hSupported observation hMem
+      cases observation with
+      | message msg dir =>
+          simpa [ObservationOwnedBy, PactType.MessageActions] using
+            (show (msg, dir) ∈ left.MessageActions ∨
+              (msg, dir) ∈ right.MessageActions from Or.inl hOwned)
+      | resolved msg =>
+          simpa [ObservationOwnedBy, PactType.MessageActions] using
+            (And.intro
+              (show (msg, .send) ∈ left.MessageActions ∨
+                (msg, .send) ∈ right.MessageActions from Or.inl hOwned.1)
+              (show (msg, .recv) ∈ left.MessageActions ∨
+                (msg, .recv) ∈ right.MessageActions from Or.inl hOwned.2))
+      | fair bid taken =>
+          simpa [ObservationOwnedBy, PactType.FairChoiceIds] using
+            (show bid ∈ left.FairChoiceIds ∨ bid ∈ right.FairChoiceIds
+              from Or.inl hOwned)
+      | progress pid =>
+          simpa [ObservationOwnedBy, PactType.ProgressIds] using
+            (show pid ∈ left.ProgressIds ∨ pid ∈ right.ProgressIds
+              from Or.inl hOwned)
+
+/-- Every offer-judgment label is supported by its source type. -/
+theorem offers_label_supported
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future) :
+    LabelSupportedBy source label := by
+  cases hOffers with
+  | seq_fuse env left right label current childFuture hChildOffers =>
+      exact seq_label_supported (offers_label_supported hChildOffers)
+  | seq env left left' right label current childFuture hChildOffers hNonFinal =>
+      exact seq_label_supported (offers_label_supported hChildOffers)
+  | xoffer_branch env elseType branches action processType hConditions =>
+      simp only [LabelSupportedBy, TypeLabel.message, Finset.mem_singleton,
+        forall_eq, ObservationOwnedBy, PactType.MessageActions,
+        Finset.mem_union]
+      exact Or.inr (branch_action_mem hConditions.2.1)
+  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hNonFinal hLocal1 hLocal2 hConditions =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
+      hLocal1 hLocal2 hConditions =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | _ =>
+      simp_all [LabelSupportedBy, ObservationOwnedBy, TypeLabel.silent,
+        TypeLabel.message, TypeLabel.fair, TypeLabel.progress,
+        PactType.MessageActions, PactType.ProgressIds, PactType.FairChoiceIds]
+termination_by sizeOf source
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+
+private theorem combine_contains_progress
+    (interface : Interface) (left right : Finset TypeObservation)
+    (pid : ProcId) :
+    (TypeLabel.combine interface (.actions left) (.actions right)).contains
+        (.progress pid) ↔
+      (TypeObservation.progress pid ∈ left ∨
+        TypeObservation.progress pid ∈ right) := by
+  simp [TypeLabel.combine, TypeLabel.contains, TypeLabel.isRawSyncedMessage]
+
+private theorem combine_contains_fair
+    (interface : Interface) (left right : Finset TypeObservation)
+    (bid : BranchId) (taken : Bool) :
+    (TypeLabel.combine interface (.actions left) (.actions right)).contains
+        (.fair bid taken) ↔
+      (TypeObservation.fair bid taken ∈ left ∨
+        TypeObservation.fair bid taken ∈ right) := by
+  simp [TypeLabel.combine, TypeLabel.contains, TypeLabel.isRawSyncedMessage]
+
+private theorem combine_contains_message
+    (interface : Interface) (left right : Finset TypeObservation)
+    (msg : MessageId) (dir : MessageDir) :
+    (TypeLabel.combine interface (.actions left) (.actions right)).contains
+        (.message msg dir) ↔
+      ((TypeObservation.message msg dir ∈ left ∨
+          TypeObservation.message msg dir ∈ right) ∧
+        msg ∉ TypeLabel.synced interface (.actions left) (.actions right)) := by
+  simp [TypeLabel.combine, TypeLabel.contains, TypeLabel.isRawSyncedMessage]
+
+private theorem combine_contains_resolved
+    (interface : Interface) (left right : Finset TypeObservation)
+    (msg : MessageId) :
+    (TypeLabel.combine interface (.actions left) (.actions right)).contains
+        (.resolved msg) ↔
+      ((TypeObservation.resolved msg ∈ left ∨
+        TypeObservation.resolved msg ∈ right) ∨
+        msg ∈ TypeLabel.synced interface (.actions left) (.actions right)) := by
+  simp [TypeLabel.combine, TypeLabel.contains, TypeLabel.isRawSyncedMessage]
+
+set_option maxHeartbeats 4000000 in
+private theorem action_labels_recover_left_subset
+    {left right : PactType} {interface : Interface}
+    {leftObs rightObs leftObs' rightObs' : Finset TypeObservation}
+    (hLeft : LabelSupportedBy left (.actions leftObs))
+    (hRight : LabelSupportedBy right (.actions rightObs))
+    (hLeft' : LabelSupportedBy left (.actions leftObs'))
+    (hRight' : LabelSupportedBy right (.actions rightObs'))
+    (hMessages : Disjoint left.MessageActions right.MessageActions)
+    (hProgress : Disjoint left.ProgressIds right.ProgressIds)
+    (hFair : Disjoint left.FairChoiceIds right.FairChoiceIds)
+    (hSync : TypeLabel.Sync interface (.actions leftObs) (.actions rightObs))
+    (hSync' : TypeLabel.Sync interface (.actions leftObs') (.actions rightObs'))
+    (hCombineEq :
+      TypeLabel.combine interface (.actions leftObs) (.actions rightObs) =
+        TypeLabel.combine interface (.actions leftObs') (.actions rightObs')) :
+    leftObs ⊆ leftObs' := by
+    intro observation hObservation
+    have hNoMessage := Finset.disjoint_left.mp hMessages
+    have hNoProgress := Finset.disjoint_left.mp hProgress
+    have hNoFair := Finset.disjoint_left.mp hFair
+    cases observation with
+    | progress pid =>
+        have hCombined :
+            (TypeLabel.combine interface (.actions leftObs) (.actions rightObs)).contains
+              (.progress pid) :=
+          (combine_contains_progress interface leftObs rightObs pid).mpr
+            (Or.inl hObservation)
+        rw [hCombineEq] at hCombined
+        rcases (combine_contains_progress interface leftObs' rightObs' pid).mp
+            hCombined with hInLeft | hInRight
+        · exact hInLeft
+        · exact False.elim (hNoProgress
+            (hLeft (.progress pid) hObservation) (hRight' (.progress pid) hInRight))
+    | fair bid taken =>
+        have hCombined :
+            (TypeLabel.combine interface (.actions leftObs) (.actions rightObs)).contains
+              (.fair bid taken) :=
+          (combine_contains_fair interface leftObs rightObs bid taken).mpr
+            (Or.inl hObservation)
+        rw [hCombineEq] at hCombined
+        rcases (combine_contains_fair interface leftObs' rightObs' bid taken).mp
+            hCombined with hInLeft | hInRight
+        · exact hInLeft
+        · exact False.elim (hNoFair
+            (hLeft (.fair bid taken) hObservation)
+            (hRight' (.fair bid taken) hInRight))
+    | resolved msg =>
+        have hCombined :
+            (TypeLabel.combine interface (.actions leftObs) (.actions rightObs)).contains
+              (.resolved msg) :=
+          (combine_contains_resolved interface leftObs rightObs msg).mpr
+            (Or.inl (Or.inl hObservation))
+        rw [hCombineEq] at hCombined
+        rcases (combine_contains_resolved interface leftObs' rightObs' msg).mp
+            hCombined with (hInLeft | hInRight) | hRootSync
+        · exact hInLeft
+        · have hOwnedLeft := hLeft (.resolved msg) hObservation
+          have hOwnedRight := hRight' (.resolved msg) hInRight
+          exact False.elim (hNoMessage hOwnedLeft.1 hOwnedRight.1)
+        · have hOwnedLeft := hLeft (.resolved msg) hObservation
+          simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter] at hRootSync
+          rcases hRootSync with hLeftSend | hRightSend
+          · have hRightRecv : msg ∈ (.actions rightObs' : TypeLabel).recvs := by
+              have hBoth : msg ∈ interface ∩ (.actions leftObs' : TypeLabel).sends :=
+                Finset.mem_inter.mpr hLeftSend
+              rw [hSync'.1] at hBoth
+              exact (Finset.mem_inter.mp hBoth).2
+            have hRightRaw := (recvs_iff_contains (.actions rightObs') msg).mp hRightRecv
+            exact False.elim (hNoMessage hOwnedLeft.2
+              (hRight' (.message msg .recv) hRightRaw))
+          · have hRightRaw := (sends_iff_contains (.actions rightObs') msg).mp hRightSend.2
+            exact False.elim (hNoMessage hOwnedLeft.1
+              (hRight' (.message msg .send) hRightRaw))
+    | message msg dir =>
+        by_cases hRootSync :
+            msg ∈ TypeLabel.synced interface (.actions leftObs) (.actions rightObs)
+        · have hInterface : msg ∈ interface := by
+            simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter] at hRootSync
+            exact hRootSync.elim And.left And.left
+          have hComplementRight :
+              TypeObservation.message msg dir.invert ∈ rightObs := by
+            cases dir with
+            | send =>
+                have hLeftSend : msg ∈ (.actions leftObs : TypeLabel).sends :=
+                  (sends_iff_contains (.actions leftObs) msg).mpr hObservation
+                have hBoth : msg ∈ interface ∩ (.actions leftObs : TypeLabel).sends :=
+                  Finset.mem_inter.mpr ⟨hInterface, hLeftSend⟩
+                rw [hSync.1] at hBoth
+                exact (recvs_iff_contains (.actions rightObs) msg).mp
+                  (Finset.mem_inter.mp hBoth).2
+            | recv =>
+                have hLeftRecv : msg ∈ (.actions leftObs : TypeLabel).recvs :=
+                  (recvs_iff_contains (.actions leftObs) msg).mpr hObservation
+                have hBoth : msg ∈ interface ∩ (.actions leftObs : TypeLabel).recvs :=
+                  Finset.mem_inter.mpr ⟨hInterface, hLeftRecv⟩
+                rw [hSync.2.1] at hBoth
+                exact (sends_iff_contains (.actions rightObs) msg).mp
+                  (Finset.mem_inter.mp hBoth).2
+          have hCombined :
+
+              (TypeLabel.combine interface (.actions leftObs) (.actions rightObs)).contains
+                (.resolved msg) :=
+            (combine_contains_resolved interface leftObs rightObs msg).mpr
+              (Or.inr hRootSync)
+          rw [hCombineEq] at hCombined
+          rcases (combine_contains_resolved interface leftObs' rightObs' msg).mp
+              hCombined with (hResolvedLeft | hResolvedRight) | hRootSync'
+          · have hResolvedOwned := hLeft' (.resolved msg) hResolvedLeft
+            cases dir with
+            | send =>
+                exact False.elim (hNoMessage hResolvedOwned.2
+                  (hRight (.message msg .recv) hComplementRight))
+            | recv =>
+                exact False.elim (hNoMessage hResolvedOwned.1
+                  (hRight (.message msg .send) hComplementRight))
+          · have hResolvedOwned := hRight' (.resolved msg) hResolvedRight
+            cases dir with
+            | send =>
+                exact False.elim (hNoMessage
+                  (hLeft (.message msg .send) hObservation) hResolvedOwned.1)
+            | recv =>
+                exact False.elim (hNoMessage
+                  (hLeft (.message msg .recv) hObservation) hResolvedOwned.2)
+          · simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter] at hRootSync'
+            cases dir with
+            | send =>
+                rcases hRootSync' with hLeftSend | hRightSend
+                · exact (sends_iff_contains (.actions leftObs') msg).mp hLeftSend.2
+                · have hRightOwned : ObservationOwnedBy right (.message msg .send) := by
+                    exact hRight' (.message msg .send)
+                      ((sends_iff_contains (.actions rightObs') msg).mp hRightSend.2)
+                  exact False.elim (hNoMessage
+                    (hLeft (.message msg .send) hObservation) hRightOwned)
+            | recv =>
+                rcases hRootSync' with hLeftSend | hRightSend
+                · have hLeftOwned : ObservationOwnedBy left (.message msg .send) := by
+                    exact hLeft' (.message msg .send)
+                      ((sends_iff_contains (.actions leftObs') msg).mp hLeftSend.2)
+                  exact False.elim (hNoMessage hLeftOwned
+                    (hRight (.message msg .send) hComplementRight))
+                · have hBoth : msg ∈ interface ∩
+                      (.actions rightObs' : TypeLabel).sends := by
+                    exact Finset.mem_inter.mpr hRightSend
+                  rw [← hSync'.2.1] at hBoth
+                  exact (recvs_iff_contains (.actions leftObs') msg).mp
+                    (Finset.mem_inter.mp hBoth).2
+        · have hCombined :
+              (TypeLabel.combine interface (.actions leftObs) (.actions rightObs)).contains
+                (.message msg dir) :=
+            (combine_contains_message interface leftObs rightObs msg dir).mpr
+              ⟨Or.inl hObservation, hRootSync⟩
+          rw [hCombineEq] at hCombined
+          rcases ((combine_contains_message interface leftObs' rightObs' msg dir).mp
+              hCombined).1 with hInLeft | hInRight
+          · exact hInLeft
+          · exact False.elim (hNoMessage
+              (hLeft (.message msg dir) hObservation)
+              (hRight' (.message msg dir) hInRight))
+
+private theorem action_labels_recover_left
+    {left right : PactType} {interface : Interface}
+    {leftObs rightObs leftObs' rightObs' : Finset TypeObservation}
+    (hLeft : LabelSupportedBy left (.actions leftObs))
+    (hRight : LabelSupportedBy right (.actions rightObs))
+    (hLeft' : LabelSupportedBy left (.actions leftObs'))
+    (hRight' : LabelSupportedBy right (.actions rightObs'))
+    (hMessages : Disjoint left.MessageActions right.MessageActions)
+    (hProgress : Disjoint left.ProgressIds right.ProgressIds)
+    (hFair : Disjoint left.FairChoiceIds right.FairChoiceIds)
+    (hSync : TypeLabel.Sync interface (.actions leftObs) (.actions rightObs))
+    (hSync' : TypeLabel.Sync interface (.actions leftObs') (.actions rightObs'))
+    (hCombineEq :
+      TypeLabel.combine interface (.actions leftObs) (.actions rightObs) =
+        TypeLabel.combine interface (.actions leftObs') (.actions rightObs')) :
+    leftObs = leftObs' := by
+  apply Finset.Subset.antisymm
+  · exact action_labels_recover_left_subset hLeft hRight hLeft' hRight'
+      hMessages hProgress hFair hSync hSync' hCombineEq
+  · exact action_labels_recover_left_subset hLeft' hRight' hLeft hRight
+      hMessages hProgress hFair hSync' hSync hCombineEq.symm
+
+private theorem typeLabel_sync_comm
+    {interface : Interface} {left right : TypeLabel}
+    (hSync : TypeLabel.Sync interface left right) :
+    TypeLabel.Sync interface right left := by
+  exact ⟨hSync.2.1.symm, hSync.1.symm, hSync.2.2.symm⟩
+
+private theorem typeLabel_combine_comm
+    (interface : Interface) (left right : TypeLabel) :
+    TypeLabel.combine interface left right =
+      TypeLabel.combine interface right left := by
+  cases left <;> cases right <;>
+    simp [TypeLabel.combine, TypeLabel.synced, Finset.union_comm]
+
+/-- Synchronized combination is injective on a pair of supported labels when the
+component types have disjoint message actions, progress identifiers, and fair-choice
+identifiers. Thus an equal combined label determines both component labels. -/
+theorem supported_labels_recover
+    {left right : PactType} {interface : Interface}
+    {leftLabel rightLabel leftLabel' rightLabel' : TypeLabel}
+    (hLeft : LabelSupportedBy left leftLabel)
+    (hRight : LabelSupportedBy right rightLabel)
+    (hLeft' : LabelSupportedBy left leftLabel')
+    (hRight' : LabelSupportedBy right rightLabel')
+    (hMessages : Disjoint left.MessageActions right.MessageActions)
+    (hProgress : Disjoint left.ProgressIds right.ProgressIds)
+    (hFair : Disjoint left.FairChoiceIds right.FairChoiceIds)
+    (hSync : TypeLabel.Sync interface leftLabel rightLabel)
+    (hSync' : TypeLabel.Sync interface leftLabel' rightLabel')
+    (hCombineEq : TypeLabel.combine interface leftLabel rightLabel =
+      TypeLabel.combine interface leftLabel' rightLabel') :
+    leftLabel = leftLabel' ∧ rightLabel = rightLabel' := by
+  cases leftLabel with
+  | tock =>
+      cases rightLabel with
+      | actions rightObs => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync
+      | tock =>
+          cases leftLabel' with
+          | tock =>
+              cases rightLabel' with
+              | tock => exact ⟨rfl, rfl⟩
+              | actions rightObs' =>
+                  simp [TypeLabel.Sync, TypeLabel.isTock] at hSync'
+          | actions leftObs' =>
+              cases rightLabel' with
+              | tock => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync'
+              | actions rightObs' => simp [TypeLabel.combine] at hCombineEq
+  | actions leftObs =>
+      cases rightLabel with
+      | tock => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync
+      | actions rightObs =>
+          cases leftLabel' with
+          | tock =>
+              cases rightLabel' with
+              | tock => simp [TypeLabel.combine] at hCombineEq
+              | actions rightObs' =>
+                  simp [TypeLabel.Sync, TypeLabel.isTock] at hSync'
+          | actions leftObs' =>
+              cases rightLabel' with
+              | tock => simp [TypeLabel.Sync, TypeLabel.isTock] at hSync'
+              | actions rightObs' =>
+                  have hLeftEq := action_labels_recover_left hLeft hRight hLeft' hRight'
+                    hMessages hProgress hFair hSync hSync' hCombineEq
+                  have hSwappedCombineEq :
+                      TypeLabel.combine interface (.actions rightObs) (.actions leftObs) =
+                        TypeLabel.combine interface (.actions rightObs') (.actions leftObs') := by
+                    calc
+                      _ = TypeLabel.combine interface (.actions leftObs)
+                          (.actions rightObs) := typeLabel_combine_comm _ _ _
+                      _ = TypeLabel.combine interface (.actions leftObs')
+                          (.actions rightObs') := hCombineEq
+                      _ = _ := (typeLabel_combine_comm _ _ _).symm
+                  have hRightEq := action_labels_recover_left hRight hLeft hRight' hLeft'
+                    hMessages.symm hProgress.symm hFair.symm
+                    (typeLabel_sync_comm hSync) (typeLabel_sync_comm hSync')
+                    hSwappedCombineEq
+                  exact ⟨congrArg TypeLabel.actions hLeftEq,
+                    congrArg TypeLabel.actions hRightEq⟩
+
+/-! ## Ownership of generated conjunctive-offer branch products -/
+
+/-- The generated parallel branch product mentions exactly the message names occurring in the source branch list. -/
+theorem parallelTypeBranches_messageIds (branches : List (BareMessage × PactType)) :
+    PactType.MessageIds (parallelTypeBranches branches) =
+      PactType.BranchMessageIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.MessageIds, PactType.BranchMessageIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.MessageIds,
+            PactType.BranchMessageIds]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.MessageIds,
+            PactType.BranchMessageIds, ih]
+
+/-- The generated parallel branch product mentions exactly the polarized message actions occurring in the source branch list. -/
+theorem parallelTypeBranches_messageActions (branches : List (BareMessage × PactType)) :
+    PactType.MessageActions (parallelTypeBranches branches) =
+      PactType.BranchMessageActions branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.MessageActions,
+      PactType.BranchMessageActions]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.MessageActions,
+            PactType.BranchMessageActions]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.MessageActions,
+            PactType.BranchMessageActions, ih]
+
+/-- The generated parallel branch product preserves the branch list's progress identifiers. -/
+theorem parallelTypeBranches_progressIds (branches : List (BareMessage × PactType)) :
+    PactType.ProgressIds (parallelTypeBranches branches) =
+      PactType.BranchProgressIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.ProgressIds, PactType.BranchProgressIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.ProgressIds,
+            PactType.BranchProgressIds]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.ProgressIds,
+            PactType.BranchProgressIds, ih]
+
+/-- The generated parallel branch product preserves the branch list's fair-choice identifiers. -/
+theorem parallelTypeBranches_fairChoiceIds (branches : List (BareMessage × PactType)) :
+    PactType.FairChoiceIds (parallelTypeBranches branches) =
+      PactType.BranchFairChoiceIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.FairChoiceIds,
+      PactType.BranchFairChoiceIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.FairChoiceIds,
+            PactType.BranchFairChoiceIds]
+      | cons next tail =>
+          simp [parallelTypeBranches, singletonTypeXOffer, PactType.FairChoiceIds,
+            PactType.BranchFairChoiceIds, ih]
+
+/-- Selecting a generated branch preserves the message-name set of the complete branch list. -/
+theorem parallelTypeBranchesSelecting_messageIds
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
+    PactType.MessageIds (parallelTypeBranchesSelecting selected branches) =
+      PactType.BranchMessageIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.MessageIds,
+      PactType.BranchMessageIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.MessageIds, PactType.BranchMessageIds]
+      | cons next tail =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.MessageIds, PactType.BranchMessageIds, ih,
+            parallelTypeBranches_messageIds]
+
+/-- Selecting a generated branch preserves the polarized message-action set of the complete branch list. -/
+theorem parallelTypeBranchesSelecting_messageActions
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
+    PactType.MessageActions (parallelTypeBranchesSelecting selected branches) =
+      PactType.BranchMessageActions branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.MessageActions,
+      PactType.BranchMessageActions]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.MessageActions, PactType.BranchMessageActions]
+      | cons next tail =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.MessageActions, PactType.BranchMessageActions, ih,
+            parallelTypeBranches_messageActions]
+
+/-- Selecting a generated branch preserves the progress-identifier set of the complete branch list. -/
+theorem parallelTypeBranchesSelecting_progressIds
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
+    PactType.ProgressIds (parallelTypeBranchesSelecting selected branches) =
+      PactType.BranchProgressIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.ProgressIds,
+      PactType.BranchProgressIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.ProgressIds, PactType.BranchProgressIds]
+      | cons next tail =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.ProgressIds, PactType.BranchProgressIds, ih,
+            parallelTypeBranches_progressIds]
+
+/-- Selecting a generated branch preserves the fair-choice-identifier set of the complete branch list. -/
+theorem parallelTypeBranchesSelecting_fairChoiceIds
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
+    PactType.FairChoiceIds (parallelTypeBranchesSelecting selected branches) =
+      PactType.BranchFairChoiceIds branches := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.FairChoiceIds,
+      PactType.BranchFairChoiceIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.FairChoiceIds, PactType.BranchFairChoiceIds]
+      | cons next tail =>
+          simp [parallelTypeBranchesSelecting]
+          split <;> simp [selectedTypeBranch, singletonTypeXOffer,
+            PactType.FairChoiceIds, PactType.BranchFairChoiceIds, ih,
+            parallelTypeBranches_fairChoiceIds]
+
+/-- Pairwise message ownership of a branch list is preserved by its generated parallel product. -/
+theorem parallelTypeBranches_messageOwnership
+    (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelMessageOwnershipBranches branches) :
+    PactType.ParallelMessageOwnership (parallelTypeBranches branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.ParallelMessageOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelMessageOwnership processType ∧
+            Disjoint ({action.1} ∪ PactType.MessageIds processType)
+              (PactType.BranchMessageIds rest) ∧
+            Disjoint ({action} ∪ PactType.MessageActions processType)
+              (PactType.BranchMessageActions rest) ∧
+            PactType.ParallelMessageOwnershipBranches rest := by
+        simpa [PactType.ParallelMessageOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.ParallelMessageOwnership,
+            PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
+            PactType.BranchMessageActions] using hPieces
+      | cons next tail =>
+          have hRight := ih hPieces.2.2.2
+          simp only [parallelTypeBranches, PactType.ParallelMessageOwnership,
+            Finset.sdiff_empty]
+          refine ⟨?_, ?_, ?_, hRight⟩
+          · simpa [singletonTypeXOffer, PactType.MessageIds,
+              PactType.BranchMessageIds, parallelTypeBranches_messageIds] using hPieces.2.1
+          · simpa [singletonTypeXOffer, PactType.MessageActions,
+              PactType.BranchMessageActions, parallelTypeBranches_messageActions] using hPieces.2.2.1
+          · simpa [singletonTypeXOffer, PactType.ParallelMessageOwnership,
+              PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
+              PactType.BranchMessageActions] using hPieces.1
+
+/-- Pairwise progress-identifier ownership of a branch list is preserved by its generated parallel product. -/
+theorem parallelTypeBranches_progressOwnership
+    (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelProgressOwnershipBranches branches) :
+    PactType.ParallelProgressOwnership (parallelTypeBranches branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.ParallelProgressOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelProgressOwnership processType ∧
+            Disjoint (PactType.ProgressIds processType)
+              (PactType.BranchProgressIds rest) ∧
+            PactType.ParallelProgressOwnershipBranches rest := by
+        simpa [PactType.ParallelProgressOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
+            using hPieces
+      | cons next tail =>
+          have hRight := ih hPieces.2.2
+          simp only [parallelTypeBranches, PactType.ParallelProgressOwnership]
+          refine ⟨?_, ?_, hRight⟩
+          · simpa [singletonTypeXOffer, PactType.ProgressIds,
+              PactType.BranchProgressIds, parallelTypeBranches_progressIds] using hPieces.2.1
+          · simpa [singletonTypeXOffer, PactType.ParallelProgressOwnership,
+              PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
+              using hPieces.1
+
+/-- Pairwise fair-choice-identifier ownership of a branch list is preserved by its generated parallel product. -/
+theorem parallelTypeBranches_fairChoiceOwnership
+    (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelFairChoiceOwnershipBranches branches) :
+    PactType.ParallelFairChoiceOwnership (parallelTypeBranches branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranches, PactType.ParallelFairChoiceOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelFairChoiceOwnership processType ∧
+            Disjoint (PactType.FairChoiceIds processType)
+              (PactType.BranchFairChoiceIds rest) ∧
+            PactType.ParallelFairChoiceOwnershipBranches rest := by
+        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simpa [parallelTypeBranches, singletonTypeXOffer,
+            PactType.ParallelFairChoiceOwnership,
+            PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
+            using hPieces
+      | cons next tail =>
+          have hRight := ih hPieces.2.2
+          simp only [parallelTypeBranches, PactType.ParallelFairChoiceOwnership]
+          refine ⟨?_, ?_, hRight⟩
+          · simpa [singletonTypeXOffer, PactType.FairChoiceIds,
+              PactType.BranchFairChoiceIds, parallelTypeBranches_fairChoiceIds] using hPieces.2.1
+          · simpa [singletonTypeXOffer, PactType.ParallelFairChoiceOwnership,
+              PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
+              using hPieces.1
+
+/-- Selecting one generated branch preserves the branch list's pairwise message ownership. -/
+theorem parallelTypeBranchesSelecting_messageOwnership
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelMessageOwnershipBranches branches) :
+    PactType.ParallelMessageOwnership
+      (parallelTypeBranchesSelecting selected branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.ParallelMessageOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelMessageOwnership processType ∧
+            Disjoint ({action.1} ∪ PactType.MessageIds processType)
+              (PactType.BranchMessageIds rest) ∧
+            Disjoint ({action} ∪ PactType.MessageActions processType)
+              (PactType.BranchMessageActions rest) ∧
+            PactType.ParallelMessageOwnershipBranches rest := by
+        simpa [PactType.ParallelMessageOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesSelecting]
+          split <;> simpa [selectedTypeBranch, singletonTypeXOffer,
+            PactType.ParallelMessageOwnership,
+            PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
+            PactType.BranchMessageActions] using hPieces
+      | cons next tail =>
+          simp only [parallelTypeBranchesSelecting]
+          split
+          · simp only [PactType.ParallelMessageOwnership, Finset.sdiff_empty]
+            refine ⟨?_, ?_, ?_, parallelTypeBranches_messageOwnership _ hPieces.2.2.2⟩
+            · simpa [selectedTypeBranch, PactType.MessageIds,
+                parallelTypeBranches_messageIds] using hPieces.2.1
+            · simpa [selectedTypeBranch, PactType.MessageActions,
+                parallelTypeBranches_messageActions] using hPieces.2.2.1
+            · simpa [selectedTypeBranch, PactType.ParallelMessageOwnership] using hPieces.1
+          · simp only [PactType.ParallelMessageOwnership, Finset.sdiff_empty]
+            refine ⟨?_, ?_, ?_, ih hPieces.2.2.2⟩
+            · simpa [singletonTypeXOffer, PactType.MessageIds,
+                PactType.BranchMessageIds, parallelTypeBranchesSelecting_messageIds] using hPieces.2.1
+            · simpa [singletonTypeXOffer, PactType.MessageActions,
+                PactType.BranchMessageActions, parallelTypeBranchesSelecting_messageActions]
+                using hPieces.2.2.1
+            · simpa [singletonTypeXOffer, PactType.ParallelMessageOwnership,
+                PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
+                PactType.BranchMessageActions] using hPieces.1
+
+/-- Selecting one generated branch preserves the branch list's pairwise progress-identifier ownership. -/
+theorem parallelTypeBranchesSelecting_progressOwnership
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelProgressOwnershipBranches branches) :
+    PactType.ParallelProgressOwnership
+      (parallelTypeBranchesSelecting selected branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.ParallelProgressOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelProgressOwnership processType ∧
+            Disjoint (PactType.ProgressIds processType)
+              (PactType.BranchProgressIds rest) ∧
+            PactType.ParallelProgressOwnershipBranches rest := by
+        simpa [PactType.ParallelProgressOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesSelecting]
+          split <;> simpa [selectedTypeBranch, singletonTypeXOffer,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
+            using hPieces
+      | cons next tail =>
+          simp only [parallelTypeBranchesSelecting]
+          split
+          · simp only [PactType.ParallelProgressOwnership]
+            refine ⟨?_, ?_, parallelTypeBranches_progressOwnership _ hPieces.2.2⟩
+            · simpa [selectedTypeBranch, PactType.ProgressIds,
+                parallelTypeBranches_progressIds] using hPieces.2.1
+            · simpa [selectedTypeBranch, PactType.ParallelProgressOwnership] using hPieces.1
+          · simp only [PactType.ParallelProgressOwnership]
+            refine ⟨?_, ?_, ih hPieces.2.2⟩
+            · simpa [singletonTypeXOffer, PactType.ProgressIds,
+                PactType.BranchProgressIds, parallelTypeBranchesSelecting_progressIds] using hPieces.2.1
+            · simpa [singletonTypeXOffer, PactType.ParallelProgressOwnership,
+                PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
+                using hPieces.1
+
+/-- Selecting one generated branch preserves the branch list's pairwise fair-choice-identifier ownership. -/
+theorem parallelTypeBranchesSelecting_fairChoiceOwnership
+    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
+    (hOwnership : PactType.ParallelFairChoiceOwnershipBranches branches) :
+    PactType.ParallelFairChoiceOwnership
+      (parallelTypeBranchesSelecting selected branches) := by
+  induction branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.ParallelFairChoiceOwnership]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      have hPieces :
+          PactType.ParallelFairChoiceOwnership processType ∧
+            Disjoint (PactType.FairChoiceIds processType)
+              (PactType.BranchFairChoiceIds rest) ∧
+            PactType.ParallelFairChoiceOwnershipBranches rest := by
+        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hOwnership
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesSelecting]
+          split <;> simpa [selectedTypeBranch, singletonTypeXOffer,
+            PactType.ParallelFairChoiceOwnership,
+            PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
+            using hPieces
+      | cons next tail =>
+          simp only [parallelTypeBranchesSelecting]
+          split
+          · simp only [PactType.ParallelFairChoiceOwnership]
+            refine ⟨?_, ?_, parallelTypeBranches_fairChoiceOwnership _ hPieces.2.2⟩
+            · simpa [selectedTypeBranch, PactType.FairChoiceIds,
+                parallelTypeBranches_fairChoiceIds] using hPieces.2.1
+            · simpa [selectedTypeBranch, PactType.ParallelFairChoiceOwnership] using hPieces.1
+          · simp only [PactType.ParallelFairChoiceOwnership]
+            refine ⟨?_, ?_, ih hPieces.2.2⟩
+            · simpa [singletonTypeXOffer, PactType.FairChoiceIds,
+                PactType.BranchFairChoiceIds, parallelTypeBranchesSelecting_fairChoiceIds] using hPieces.2.1
+            · simpa [singletonTypeXOffer, PactType.ParallelFairChoiceOwnership,
+                PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
+                using hPieces.1
+
 end
 
 end Pact

@@ -27,6 +27,9 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.ClockGuarded processType ∧
     PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType ∧
+    PactType.ParallelMessageOwnership processType ∧
+    PactType.ParallelProgressOwnership processType ∧
+    PactType.ParallelFairChoiceOwnership processType ∧
     PactType.InterfaceScoped processType
 
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/

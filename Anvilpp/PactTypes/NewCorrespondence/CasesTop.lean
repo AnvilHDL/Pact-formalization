@@ -1612,6 +1612,9 @@ set_option maxHeartbeats 4000000 in
 /-- Step correspondence for interleaved parallel composition `τ1 ‖_I τ2`. -/
 theorem correspondence_par_stepIff
     (signature : TypeAlphabet) (left right : PactType) (interface : Interface)
+    (hMessageOwnership : PactType.ParallelMessageOwnership (.par left right interface))
+    (hProgIdsOwnership : PactType.ParallelProgressOwnership (.par left right interface))
+    (hFairIdOwnership : PactType.ParallelFairChoiceOwnership (.par left right interface))
     (hLeftIH : StepIffStatement signature left)
     (hRightIH : StepIffStatement signature right) :
     StepIffStatement signature (.par left right interface) := by
@@ -1648,14 +1651,18 @@ theorem correspondence_par_stepIff
             target q2' :=
     fun hMem hSym hStep' => (hRightIH hMem hSym).mp hStep'
   rcases relationMembership_par_cases signature left right interface
+    hMessageOwnership hProgIdsOwnership hFairIdOwnership
     (hLeftForward := hLeftForward) (hRightForward := hRightForward) hRelated with
-    ⟨q1, q2, residualLeft, residualRight, hEntryEq, hLeftRelated, hRightRelated⟩ | hEntryEq
+    ⟨q1, q2, residualLeft, residualRight, hEntryEq, hLeftRelated,
+      hRightRelated, hResidualMessageOwnership, hResidualProgIdsOwnership,
+      hResidualFairIdOwnership⟩ | hEntryEq
   · -- general product case: `residual` represents `residualLeft ‖_I residualRight`
     injection hEntryEq with hResidualEq hStateEq
     subst hResidualEq; subst hStateEq
     constructor
     · intro hStep
-      cases decoratedTypeTransition_par_cases hStep with
+      cases decoratedTypeTransition_par_cases hResidualMessageOwnership
+          hResidualProgIdsOwnership hResidualFairIdOwnership hStep with
       | step leftEnv rightEnv leftLabel rightLabel leftTarget rightTarget
           leftCurrent leftFuture rightCurrent rightFuture hTargetEq hNonFinal
           hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq hCurrentEq hFutureEq =>
@@ -1785,8 +1792,9 @@ theorem correspondence_par_stepIff
           (hRightIH hRightRelated hRightSymbolMem).mpr
             ⟨q2', hRightEdge, relationMembership_of_accepting signature right hBothAccept.2⟩
         rcases relationMembership_par_cases signature left right interface
+          hMessageOwnership hProgIdsOwnership hFairIdOwnership
           (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
-          ⟨qq1, qq2, resL, resR, hEqAgain, _, _⟩ | hEqAgain
+          ⟨qq1, qq2, resL, resR, hEqAgain, _, _, _, _, _⟩ | hEqAgain
         · simp at hEqAgain
         · injection hEqAgain with hResidualEqAgain hStateEqAgain
           subst hResidualEqAgain
@@ -1805,9 +1813,10 @@ theorem correspondence_par_stepIff
         rw [if_neg hBothAccept] at hRedirect
         subst hRedirect
         rcases relationMembership_par_cases signature left right interface
+          hMessageOwnership hProgIdsOwnership hFairIdOwnership
           (hLeftForward := hLeftForward) (hRightForward := hRightForward) hTargetRelated with
           ⟨qq1, qq2, leftTarget, rightTarget, hEqAgain, hLeftTargetRelated,
-            hRightTargetRelated⟩ | hEqAgain
+            hRightTargetRelated, _, _, _⟩ | hEqAgain
         · injection hEqAgain with hResidualEqAgain hPairEqAgain
           injection hPairEqAgain with hQ1EqAgain hQ2EqAgain
           subst hQ1EqAgain; subst hQ2EqAgain
@@ -2861,17 +2870,40 @@ theorem correspondence_xoffer_stepIff
 theorem correspondence_parallelTypeBranches_stepIff
     (signature : TypeAlphabet) :
     ∀ (branches : List (BareMessage × PactType)),
+      PactType.ParallelMessageOwnershipBranches branches →
+      PactType.ParallelProgressOwnershipBranches branches →
+      PactType.ParallelFairChoiceOwnershipBranches branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         StepIffStatement signature branchType) →
       StepIffStatement signature (parallelTypeBranches branches) := by
   intro branches
   induction branches with
   | nil =>
-      intro _
+      intro _ _ _ _
       exact correspondence_skip_stepIff signature
   | cons branch rest ih =>
-      intro hBranchesIH
+      intro hMessageBranches hProgressBranches hFairBranches hBranchesIH
       rcases branch with ⟨action, processType⟩
+      have hMessagePieces :
+          PactType.ParallelMessageOwnership processType ∧
+            Disjoint ({action.1} ∪ PactType.MessageIds processType)
+              (PactType.BranchMessageIds rest) ∧
+            Disjoint ({action} ∪ PactType.MessageActions processType)
+              (PactType.BranchMessageActions rest) ∧
+            PactType.ParallelMessageOwnershipBranches rest := by
+        simpa [PactType.ParallelMessageOwnershipBranches] using hMessageBranches
+      have hProgressPieces :
+          PactType.ParallelProgressOwnership processType ∧
+            Disjoint (PactType.ProgressIds processType)
+              (PactType.BranchProgressIds rest) ∧
+            PactType.ParallelProgressOwnershipBranches rest := by
+        simpa [PactType.ParallelProgressOwnershipBranches] using hProgressBranches
+      have hFairPieces :
+          PactType.ParallelFairChoiceOwnership processType ∧
+            Disjoint (PactType.FairChoiceIds processType)
+              (PactType.BranchFairChoiceIds rest) ∧
+            PactType.ParallelFairChoiceOwnershipBranches rest := by
+        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hFairBranches
       have hProcessTypeIH : StepIffStatement signature processType :=
         hBranchesIH action processType List.mem_cons_self
       have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
@@ -2892,7 +2924,8 @@ theorem correspondence_parallelTypeBranches_stepIff
             (correspondence_skip_stepIff signature) hSingletonIH hRelated hSymbol
       | cons next tail =>
           have hRestIH : StepIffStatement signature (parallelTypeBranches (next :: tail)) :=
-            ih hRestBranchesIH
+            ih hMessagePieces.2.2.2 hProgressPieces.2.2 hFairPieces.2.2
+              hRestBranchesIH
           rw [show parallelTypeBranches ((action, processType) :: next :: tail) =
             .par (PactType.xoffer PactType.skip [(action, processType)])
               (parallelTypeBranches (next :: tail)) ∅ by
@@ -2900,6 +2933,18 @@ theorem correspondence_parallelTypeBranches_stepIff
           intro residual residual' state env label offers hRelated hSymbol
           exact correspondence_par_stepIff signature (.xoffer .skip [(action, processType)])
             (parallelTypeBranches (next :: tail)) ∅
+            (by
+              simpa [parallelTypeBranches, singletonTypeXOffer] using
+                parallelTypeBranches_messageOwnership
+                  ((action, processType) :: next :: tail) hMessageBranches)
+            (by
+              simpa [parallelTypeBranches, singletonTypeXOffer] using
+                parallelTypeBranches_progressOwnership
+                  ((action, processType) :: next :: tail) hProgressBranches)
+            (by
+              simpa [parallelTypeBranches, singletonTypeXOffer] using
+                parallelTypeBranches_fairChoiceOwnership
+                  ((action, processType) :: next :: tail) hFairBranches)
             (correspondence_xoffer_stepIff signature .skip [(action, processType)]
               (correspondence_skip_stepIff signature) hSingletonIH)
             hRestIH hRelated hSymbol
@@ -2910,16 +2955,39 @@ branch list, reusing the exclusive-offer/sequence/parallel cases already proved.
 theorem correspondence_parallelTypeBranchesSelecting_stepIff
     (signature : TypeAlphabet) :
     ∀ (branches : List (BareMessage × PactType)),
+      PactType.ParallelMessageOwnershipBranches branches →
+      PactType.ParallelProgressOwnershipBranches branches →
+      PactType.ParallelFairChoiceOwnershipBranches branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         StepIffStatement signature branchType) →
       ∀ selected ∈ branches,
         StepIffStatement signature (parallelTypeBranchesSelecting selected branches) := by
   intro branches
   induction branches with
-  | nil => intro _ selected hMem; exact absurd hMem List.not_mem_nil
+  | nil => intro _ _ _ _ selected hMem; exact absurd hMem List.not_mem_nil
   | cons branch rest ih =>
-      intro hBranchesIH selected hMem
+      intro hMessageBranches hProgressBranches hFairBranches hBranchesIH selected hMem
       rcases branch with ⟨action, processType⟩
+      have hMessagePieces :
+          PactType.ParallelMessageOwnership processType ∧
+            Disjoint ({action.1} ∪ PactType.MessageIds processType)
+              (PactType.BranchMessageIds rest) ∧
+            Disjoint ({action} ∪ PactType.MessageActions processType)
+              (PactType.BranchMessageActions rest) ∧
+            PactType.ParallelMessageOwnershipBranches rest := by
+        simpa [PactType.ParallelMessageOwnershipBranches] using hMessageBranches
+      have hProgressPieces :
+          PactType.ParallelProgressOwnership processType ∧
+            Disjoint (PactType.ProgressIds processType)
+              (PactType.BranchProgressIds rest) ∧
+            PactType.ParallelProgressOwnershipBranches rest := by
+        simpa [PactType.ParallelProgressOwnershipBranches] using hProgressBranches
+      have hFairPieces :
+          PactType.ParallelFairChoiceOwnership processType ∧
+            Disjoint (PactType.FairChoiceIds processType)
+              (PactType.BranchFairChoiceIds rest) ∧
+            PactType.ParallelFairChoiceOwnershipBranches rest := by
+        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hFairBranches
       have hProcessTypeIH : StepIffStatement signature processType :=
         hBranchesIH action processType List.mem_cons_self
       have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
@@ -2946,7 +3014,9 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
           intro residual residual' state env label offers hRelated hSymbol
           by_cases hSelf : (action, processType) = selected
           · have hRestPlainIH : StepIffStatement signature (parallelTypeBranches (next :: tail)) :=
-              correspondence_parallelTypeBranches_stepIff signature (next :: tail) hRestBranchesIH
+              correspondence_parallelTypeBranches_stepIff signature (next :: tail)
+                hMessagePieces.2.2.2 hProgressPieces.2.2 hFairPieces.2.2
+                hRestBranchesIH
             rw [show parallelTypeBranchesSelecting selected ((action, processType) :: next :: tail) =
               .par (.seq (.message action.1 action.2) processType)
                 (parallelTypeBranches (next :: tail)) ∅ by
@@ -2954,6 +3024,18 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
             exact correspondence_par_stepIff signature
               (.seq (.message action.1 action.2) processType)
               (parallelTypeBranches (next :: tail)) ∅
+              (by
+                simpa [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf] using
+                  parallelTypeBranchesSelecting_messageOwnership selected
+                    ((action, processType) :: next :: tail) hMessageBranches)
+              (by
+                simpa [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf] using
+                  parallelTypeBranchesSelecting_progressOwnership selected
+                    ((action, processType) :: next :: tail) hProgressBranches)
+              (by
+                simpa [parallelTypeBranchesSelecting, selectedTypeBranch, hSelf] using
+                  parallelTypeBranchesSelecting_fairChoiceOwnership selected
+                    ((action, processType) :: next :: tail) hFairBranches)
               (correspondence_seq_stepIff signature (.message action.1 action.2) processType
                 (correspondence_message_stepIff signature action.1 action.2)
                 hProcessTypeIH)
@@ -2962,13 +3044,26 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
             · exact absurd hEq.symm hSelf
             · have hRestIH : StepIffStatement signature
                   (parallelTypeBranchesSelecting selected (next :: tail)) :=
-                ih hRestBranchesIH selected hMemRest
+                ih hMessagePieces.2.2.2 hProgressPieces.2.2 hFairPieces.2.2
+                  hRestBranchesIH selected hMemRest
               rw [show parallelTypeBranchesSelecting selected ((action, processType) :: next :: tail) =
                 .par (PactType.xoffer PactType.skip [(action, processType)])
                   (parallelTypeBranchesSelecting selected (next :: tail)) ∅ by
                   simp [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf]] at hRelated ⊢
               exact correspondence_par_stepIff signature (.xoffer .skip [(action, processType)])
                 (parallelTypeBranchesSelecting selected (next :: tail)) ∅
+                (by
+                  simpa [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf] using
+                    parallelTypeBranchesSelecting_messageOwnership selected
+                      ((action, processType) :: next :: tail) hMessageBranches)
+                (by
+                  simpa [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf] using
+                    parallelTypeBranchesSelecting_progressOwnership selected
+                      ((action, processType) :: next :: tail) hProgressBranches)
+                (by
+                  simpa [parallelTypeBranchesSelecting, singletonTypeXOffer, hSelf] using
+                    parallelTypeBranchesSelecting_fairChoiceOwnership selected
+                      ((action, processType) :: next :: tail) hFairBranches)
                 (correspondence_xoffer_stepIff signature .skip [(action, processType)]
                   (correspondence_skip_stepIff signature) hSingletonIH)
                 hRestIH hRelated hSymbol
@@ -2978,6 +3073,9 @@ set_option maxHeartbeats 4000000 in
 theorem correspondence_offer_stepIff
     (signature : TypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
+    (hMessageBranches : PactType.ParallelMessageOwnershipBranches branches)
+    (hProgressBranches : PactType.ParallelProgressOwnershipBranches branches)
+    (hFairBranches : PactType.ParallelFairChoiceOwnershipBranches branches)
     (hElseIH : StepIffStatement signature elseType)
     (hBranchesIH :
       ∀ action branchType, (action, branchType) ∈ branches →
@@ -3563,8 +3661,8 @@ theorem correspondence_offer_stepIff
       List.mem_iff_getElem?.mpr ⟨i, hSelectedEq⟩
     have hBranchIH : StepIffStatement signature
         (parallelTypeBranchesSelecting selected branches) :=
-      correspondence_parallelTypeBranchesSelecting_stepIff signature branches hBranchesIH
-        selected hSelectedMem
+      correspondence_parallelTypeBranchesSelecting_stepIff signature branches
+        hMessageBranches hProgressBranches hFairBranches hBranchesIH selected hSelectedMem
     have hBranchSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈
         (compileType signature (parallelTypeBranchesSelecting selected branches)).alphabet := by
@@ -3729,13 +3827,83 @@ theorem correspondence_var_stepIff
     obtain ⟨environment, -, rfl⟩ := hPending
     simp at hLabel
 
+private theorem parallelMessageOwnershipBranches_of_mem
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.ParallelMessageOwnershipBranches branches)
+    (hMem : (action, branchType) ∈ branches) :
+    PactType.ParallelMessageOwnership branchType := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      have hPieces :
+          PactType.ParallelMessageOwnership headType ∧
+            Disjoint ({headAction.1} ∪ PactType.MessageIds headType)
+              (PactType.BranchMessageIds rest) ∧
+            Disjoint ({headAction} ∪ PactType.MessageActions headType)
+              (PactType.BranchMessageActions rest) ∧
+            PactType.ParallelMessageOwnershipBranches rest := by
+        simpa [PactType.ParallelMessageOwnershipBranches] using hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hPieces.1
+      · exact ih hPieces.2.2.2 hMemRest
+
+private theorem parallelProgressOwnershipBranches_of_mem
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.ParallelProgressOwnershipBranches branches)
+    (hMem : (action, branchType) ∈ branches) :
+    PactType.ParallelProgressOwnership branchType := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      have hPieces :
+          PactType.ParallelProgressOwnership headType ∧
+            Disjoint (PactType.ProgressIds headType)
+              (PactType.BranchProgressIds rest) ∧
+            PactType.ParallelProgressOwnershipBranches rest := by
+        simpa [PactType.ParallelProgressOwnershipBranches] using hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hPieces.1
+      · exact ih hPieces.2.2 hMemRest
+
+private theorem parallelFairChoiceOwnershipBranches_of_mem
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.ParallelFairChoiceOwnershipBranches branches)
+    (hMem : (action, branchType) ∈ branches) :
+    PactType.ParallelFairChoiceOwnership branchType := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      have hPieces :
+          PactType.ParallelFairChoiceOwnership headType ∧
+            Disjoint (PactType.FairChoiceIds headType)
+              (PactType.BranchFairChoiceIds rest) ∧
+            PactType.ParallelFairChoiceOwnershipBranches rest := by
+        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hPieces.1
+      · exact ih hPieces.2.2 hMemRest
+
 /-- Step correspondence for all constructors, arranged as the Lemma 4.5 induction. -/
 theorem correspondence_stepIff
-    (signature : TypeAlphabet) :
-    ∀ processType, StepIffStatement signature processType := by
-  intro processType
+    (signature : TypeAlphabet) (processType : PactType)
+    (hAdmissible : AdmissibleType signature processType) :
+    StepIffStatement signature processType := by
+  obtain ⟨hSignatureWF, hSupports, hVariablesBound, hBinderHygienic,
+    hClockGuarded, hTailRecursive, hSameCycleLinear, hMessageOwnership,
+    hProgIdsOwnership, hFairIdOwnership, hInterfaceScoped⟩ := hAdmissible
+  clear hSignatureWF hSupports hVariablesBound hBinderHygienic hClockGuarded
+    hTailRecursive hSameCycleLinear hInterfaceScoped
   induction hSize : sizeOf processType using Nat.strong_induction_on
-      generalizing processType with
+      generalizing processType hMessageOwnership hProgIdsOwnership hFairIdOwnership with
   | _ n ih =>
       cases processType with
       | message msg dir =>
@@ -3756,75 +3924,157 @@ theorem correspondence_stepIff
           exact correspondence_skip_stepIff signature hRelated hSymbol
       | choice left right =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hBinaryOwnership :
+              PactType.ParallelMessageOwnership left ∧
+                PactType.ParallelMessageOwnership right := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hBinaryProgressOwnership :
+              PactType.ParallelProgressOwnership left ∧
+                PactType.ParallelProgressOwnership right := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hBinaryFairOwnership :
+              PactType.ParallelFairChoiceOwnership left ∧
+                PactType.ParallelFairChoiceOwnership right := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hLeftIH : StepIffStatement signature left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left hBinaryOwnership.1
+              hBinaryProgressOwnership.1 hBinaryFairOwnership.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right hBinaryOwnership.2
+              hBinaryProgressOwnership.2 hBinaryFairOwnership.2 rfl hRelated hSymbol
           -- Now prove the ordinary-choice inductive case from both child hypotheses.
           exact correspondence_choice_stepIff signature left right hLeftIH
             hRightIH hRelated hSymbol
       | seq first second =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hBinaryOwnership :
+              PactType.ParallelMessageOwnership first ∧
+                PactType.ParallelMessageOwnership second := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hBinaryProgressOwnership :
+              PactType.ParallelProgressOwnership first ∧
+                PactType.ParallelProgressOwnership second := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hBinaryFairOwnership :
+              PactType.ParallelFairChoiceOwnership first ∧
+                PactType.ParallelFairChoiceOwnership second := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hFirstIH : StepIffStatement signature first := by
             have hFirstSize : sizeOf first < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf first) hFirstSize first rfl hRelated hSymbol
+            exact ih (sizeOf first) hFirstSize first hBinaryOwnership.1
+              hBinaryProgressOwnership.1 hBinaryFairOwnership.1 rfl hRelated hSymbol
           have hSecondIH : StepIffStatement signature second := by
             have hSecondSize : sizeOf second < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf second) hSecondSize second rfl hRelated hSymbol
+            exact ih (sizeOf second) hSecondSize second hBinaryOwnership.2
+              hBinaryProgressOwnership.2 hBinaryFairOwnership.2 rfl hRelated hSymbol
           -- Now prove the sequencing inductive case from both child hypotheses.
           exact correspondence_seq_stepIff signature first second hFirstIH
             hSecondIH hRelated hSymbol
       | par left right interface =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hParOwnership :
+              Disjoint (PactType.MessageIds left \ interface)
+                  (PactType.MessageIds right \ interface) ∧
+                Disjoint (PactType.MessageActions left)
+                  (PactType.MessageActions right) ∧
+                PactType.ParallelMessageOwnership left ∧
+                PactType.ParallelMessageOwnership right := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hParProgressOwnership :
+              Disjoint (PactType.ProgressIds left) (PactType.ProgressIds right) ∧
+                PactType.ParallelProgressOwnership left ∧
+                PactType.ParallelProgressOwnership right := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hParFairOwnership :
+              Disjoint (PactType.FairChoiceIds left) (PactType.FairChoiceIds right) ∧
+                PactType.ParallelFairChoiceOwnership left ∧
+                PactType.ParallelFairChoiceOwnership right := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hLeftIH : StepIffStatement signature left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left hParOwnership.2.2.1
+              hParProgressOwnership.2.1 hParFairOwnership.2.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right hParOwnership.2.2.2
+              hParProgressOwnership.2.2 hParFairOwnership.2.2 rfl hRelated hSymbol
           -- Now prove the parallel inductive case from both child hypotheses.
           exact correspondence_par_stepIff signature left right interface
-            hLeftIH hRightIH hRelated hSymbol
+            hMessageOwnership hProgIdsOwnership hFairIdOwnership hLeftIH hRightIH hRelated hSymbol
       | var id =>
           intro residual residual' state env label offers hRelated hSymbol
           -- Now prove the variable marker case.
           exact correspondence_var_stepIff signature id hRelated hSymbol
       | recur id body =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hBodyOwnership : PactType.ParallelMessageOwnership body := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hBodyProgressOwnership : PactType.ParallelProgressOwnership body := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hBodyFairOwnership : PactType.ParallelFairChoiceOwnership body := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hBodyIH : StepIffStatement signature body := by
             have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf body) hBodySize body rfl hRelated hSymbol
+            exact ih (sizeOf body) hBodySize body hBodyOwnership
+              hBodyProgressOwnership hBodyFairOwnership rfl hRelated hSymbol
           -- Now prove the recursion inductive case from the body hypothesis.
           exact correspondence_recur_stepIff signature id body hBodyIH hRelated
             hSymbol
       | fairChoice id left right =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hBinaryOwnership :
+              PactType.ParallelMessageOwnership left ∧
+                PactType.ParallelMessageOwnership right := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hBinaryProgressOwnership :
+              PactType.ParallelProgressOwnership left ∧
+                PactType.ParallelProgressOwnership right := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hBinaryFairOwnership :
+              PactType.ParallelFairChoiceOwnership left ∧
+                PactType.ParallelFairChoiceOwnership right := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hLeftIH : StepIffStatement signature left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf left) hLeftSize left rfl hRelated hSymbol
+            exact ih (sizeOf left) hLeftSize left hBinaryOwnership.1
+              hBinaryProgressOwnership.1 hBinaryFairOwnership.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf right) hRightSize right rfl hRelated hSymbol
+            exact ih (sizeOf right) hRightSize right hBinaryOwnership.2
+              hBinaryProgressOwnership.2 hBinaryFairOwnership.2 rfl hRelated hSymbol
           -- Now prove the fair-choice inductive case from both child hypotheses.
           exact correspondence_fairChoice_stepIff signature id left right
             hLeftIH hRightIH hRelated hSymbol
       | xoffer elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hOfferOwnership :
+              PactType.ParallelMessageOwnership elseType ∧
+                PactType.ParallelMessageOwnershipBranches branches := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hOfferProgressOwnership :
+              PactType.ParallelProgressOwnership elseType ∧
+                PactType.ParallelProgressOwnershipBranches branches := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hOfferFairOwnership :
+              PactType.ParallelFairChoiceOwnership elseType ∧
+                PactType.ParallelFairChoiceOwnershipBranches branches := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hElseIH : StepIffStatement signature elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
+            exact ih (sizeOf elseType) hElseSize elseType hOfferOwnership.1
+              hOfferProgressOwnership.1 hOfferFairOwnership.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
                 StepIffStatement signature branchType := by
@@ -3837,18 +4087,38 @@ theorem correspondence_stepIff
               rw [← hSize]
               simp_wf
               omega
+            have hBranchOwnership : PactType.ParallelMessageOwnership branchType :=
+              parallelMessageOwnershipBranches_of_mem hOfferOwnership.2 hMember
+            have hBranchProgressOwnership : PactType.ParallelProgressOwnership branchType :=
+              parallelProgressOwnershipBranches_of_mem hOfferProgressOwnership.2 hMember
+            have hBranchFairOwnership : PactType.ParallelFairChoiceOwnership branchType :=
+              parallelFairChoiceOwnershipBranches_of_mem hOfferFairOwnership.2 hMember
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf branchType) hBranchSize branchType rfl hRelated
+            exact ih (sizeOf branchType) hBranchSize branchType hBranchOwnership
+              hBranchProgressOwnership hBranchFairOwnership rfl hRelated
               hSymbol
           -- Now prove the external-offer inductive case from the else and branch hypotheses.
           exact correspondence_xoffer_stepIff signature elseType branches
             hElseIH hBranchesIH hRelated hSymbol
       | offer elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
+          have hOfferOwnership :
+              PactType.ParallelMessageOwnership elseType ∧
+                PactType.ParallelMessageOwnershipBranches branches := by
+            simpa [PactType.ParallelMessageOwnership] using hMessageOwnership
+          have hOfferProgressOwnership :
+              PactType.ParallelProgressOwnership elseType ∧
+                PactType.ParallelProgressOwnershipBranches branches := by
+            simpa [PactType.ParallelProgressOwnership] using hProgIdsOwnership
+          have hOfferFairOwnership :
+              PactType.ParallelFairChoiceOwnership elseType ∧
+                PactType.ParallelFairChoiceOwnershipBranches branches := by
+            simpa [PactType.ParallelFairChoiceOwnership] using hFairIdOwnership
           have hElseIH : StepIffStatement signature elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf elseType) hElseSize elseType rfl hRelated hSymbol
+            exact ih (sizeOf elseType) hElseSize elseType hOfferOwnership.1
+              hOfferProgressOwnership.1 hOfferFairOwnership.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
                 StepIffStatement signature branchType := by
@@ -3861,14 +4131,22 @@ theorem correspondence_stepIff
               rw [← hSize]
               simp_wf
               omega
+            have hBranchOwnership : PactType.ParallelMessageOwnership branchType :=
+              parallelMessageOwnershipBranches_of_mem hOfferOwnership.2 hMember
+            have hBranchProgressOwnership : PactType.ParallelProgressOwnership branchType :=
+              parallelProgressOwnershipBranches_of_mem hOfferProgressOwnership.2 hMember
+            have hBranchFairOwnership : PactType.ParallelFairChoiceOwnership branchType :=
+              parallelFairChoiceOwnershipBranches_of_mem hOfferFairOwnership.2 hMember
             intro residual residual' state env label offers hRelated hSymbol
-            exact ih (sizeOf branchType) hBranchSize branchType rfl hRelated
+            exact ih (sizeOf branchType) hBranchSize branchType hBranchOwnership
+              hBranchProgressOwnership hBranchFairOwnership rfl hRelated
               hSymbol
           -- Now prove the internal-offer inductive case from the else and
           -- branch hypotheses; the per-branch generated-conjunction
           -- correspondence needs its own finite-branch induction, not this
           -- constructor's structural one (see `correspondence_offer_stepIff`).
           exact correspondence_offer_stepIff signature elseType branches
+            hOfferOwnership.2 hOfferProgressOwnership.2 hOfferFairOwnership.2
             hElseIH hBranchesIH hRelated hSymbol
 
 end

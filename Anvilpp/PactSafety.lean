@@ -163,7 +163,7 @@ theorem type_automaton_correspondence
         intro residual residual' state env label offers hRelated hSymbol
         -- Now prove step correspondence by the Lemma 4.5 constructor induction.
         simpa [relation_set, typeAutomaton] using
-          correspondence_stepIff signature processType hRelated hSymbol
+          correspondence_stepIff signature processType hAdmissible hRelated hSymbol
     }⟩
 
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes

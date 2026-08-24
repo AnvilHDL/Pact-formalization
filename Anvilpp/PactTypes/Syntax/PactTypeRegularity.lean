@@ -522,6 +522,202 @@ namespace PactType
       omega
   end
 
+  /-!
+  ### Parallel message ownership
+
+  `MessageIds` forgets polarity and records the message names mentioned by a
+  type.  `MessageActions` keeps polarity and records the concrete message
+  actions mentioned by a type.  Offer branch heads count as message actions,
+  because choosing a branch observes that action before entering the branch
+  body.
+
+  `ParallelMessageOwnership` is the sibling-ownership condition used at
+  parallel nodes.  Away from the synchronizing interface, siblings may not use
+  the same message name.  At the polarized-action level, siblings may not own
+  the same concrete action.  Thus an interface message may be shared only in
+  complementary polarities, which is the shape needed by synchronized steps.
+  -/
+  mutual
+    def MessageIds : PactType → Finset MessageId
+      | .message msg _ => {msg}
+      | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => MessageIds body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          MessageIds left ∪ MessageIds right
+      | .xoffer elseType branches | .offer elseType branches =>
+          MessageIds elseType ∪ BranchMessageIds branches
+    termination_by processType => sizeOf processType
+
+    def BranchMessageIds : List (BareMessage × PactType) → Finset MessageId
+      | [] => ∅
+      | (action, processType) :: rest =>
+          {action.1} ∪ MessageIds processType ∪ BranchMessageIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def MessageActions : PactType → Finset BareMessage
+      | .message msg dir => {(msg, dir)}
+      | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => MessageActions body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          MessageActions left ∪ MessageActions right
+      | .xoffer elseType branches | .offer elseType branches =>
+          MessageActions elseType ∪ BranchMessageActions branches
+    termination_by processType => sizeOf processType
+
+    def BranchMessageActions : List (BareMessage × PactType) → Finset BareMessage
+      | [] => ∅
+      | (action, processType) :: rest =>
+          {action} ∪ MessageActions processType ∪ BranchMessageActions rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-! Progress and fair-choice identifiers are also observable in labels.
+  Parallel siblings therefore own disjoint sets of these identifiers. -/
+  mutual
+    def ProgressIds : PactType → Finset ProcId
+      | .progress pid => {pid}
+      | .message _ _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => ProgressIds body
+      | .choice left right | .seq left right | .fairChoice _ left right |
+          .par left right _ =>
+          ProgressIds left ∪ ProgressIds right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ProgressIds elseType ∪ BranchProgressIds branches
+    termination_by processType => sizeOf processType
+
+    def BranchProgressIds : List (BareMessage × PactType) → Finset ProcId
+      | [] => ∅
+      | (_, processType) :: rest =>
+          ProgressIds processType ∪ BranchProgressIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def FairChoiceIds : PactType → Finset BranchId
+      | .fairChoice bid left right =>
+          {bid} ∪ FairChoiceIds left ∪ FairChoiceIds right
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => ∅
+      | .recur _ body => FairChoiceIds body
+      | .choice left right | .seq left right | .par left right _ =>
+          FairChoiceIds left ∪ FairChoiceIds right
+      | .xoffer elseType branches | .offer elseType branches =>
+          FairChoiceIds elseType ∪ BranchFairChoiceIds branches
+    termination_by processType => sizeOf processType
+
+    def BranchFairChoiceIds : List (BareMessage × PactType) → Finset BranchId
+      | [] => ∅
+      | (_, processType) :: rest =>
+          FairChoiceIds processType ∪ BranchFairChoiceIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def ParallelProgressOwnership : PactType → Prop
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .recur _ body => ParallelProgressOwnership body
+      | .choice left right | .seq left right | .fairChoice _ left right =>
+          ParallelProgressOwnership left ∧ ParallelProgressOwnership right
+      | .par left right _ =>
+          Disjoint (ProgressIds left) (ProgressIds right) ∧
+            ParallelProgressOwnership left ∧ ParallelProgressOwnership right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ParallelProgressOwnership elseType ∧
+            ParallelProgressOwnershipBranches branches
+    termination_by processType => sizeOf processType
+
+    def ParallelProgressOwnershipBranches :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          ParallelProgressOwnership processType ∧
+            Disjoint (ProgressIds processType) (BranchProgressIds rest) ∧
+            ParallelProgressOwnershipBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def ParallelFairChoiceOwnership : PactType → Prop
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .recur _ body => ParallelFairChoiceOwnership body
+      | .choice left right | .seq left right | .fairChoice _ left right =>
+          ParallelFairChoiceOwnership left ∧ ParallelFairChoiceOwnership right
+      | .par left right _ =>
+          Disjoint (FairChoiceIds left) (FairChoiceIds right) ∧
+            ParallelFairChoiceOwnership left ∧ ParallelFairChoiceOwnership right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ParallelFairChoiceOwnership elseType ∧
+            ParallelFairChoiceOwnershipBranches branches
+    termination_by processType => sizeOf processType
+
+    def ParallelFairChoiceOwnershipBranches :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          ParallelFairChoiceOwnership processType ∧
+            Disjoint (FairChoiceIds processType) (BranchFairChoiceIds rest) ∧
+            ParallelFairChoiceOwnershipBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def ParallelMessageOwnership : PactType → Prop
+      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .recur _ body => ParallelMessageOwnership body
+      | .choice left right | .seq left right | .fairChoice _ left right =>
+          ParallelMessageOwnership left ∧ ParallelMessageOwnership right
+      | .par left right interface =>
+          Disjoint (MessageIds left \ interface) (MessageIds right \ interface) ∧
+            Disjoint (MessageActions left) (MessageActions right) ∧
+            ParallelMessageOwnership left ∧ ParallelMessageOwnership right
+      | .xoffer elseType branches | .offer elseType branches =>
+          ParallelMessageOwnership elseType ∧
+            ParallelMessageOwnershipBranches branches
+    termination_by processType => sizeOf processType
+
+    def ParallelMessageOwnershipBranches :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (action, processType) :: rest =>
+          ParallelMessageOwnership processType ∧
+            Disjoint ({action.1} ∪ MessageIds processType) (BranchMessageIds rest) ∧
+            Disjoint ({action} ∪ MessageActions processType)
+              (BranchMessageActions rest) ∧
+            ParallelMessageOwnershipBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
   /- All synchronization interfaces occurring below a type.  This is used by
   the compositional proof only; it does not alter operational future offers. -/
   mutual
