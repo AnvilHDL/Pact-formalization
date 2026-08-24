@@ -28,24 +28,20 @@ lemma relationMembership_recur_cases
     recurRelationShape signature name body (residual, state) := by
   have hFuelEq : typeCompilationFuel (.recur name body) = typeCompilationFuel body + 1 := by
     simp only [typeCompilationFuel]; omega
-  have hWhole :
-      compileTypeFuel signature (typeCompilationFuel (.recur name body))
-        (.recur name body) =
-        buildRecursionAutomaton signature name
-          (compileTypeFuel signature (typeCompilationFuel body) body) := by
-    rw [hFuelEq]
-    show buildRecursionAutomaton signature name
-        (compileTypeFuel signature (typeCompilationFuel body) body) =
-      buildRecursionAutomaton signature name
-        (compileTypeFuel signature (typeCompilationFuel body) body)
-    rfl
-  have hInit : (compileType signature (.recur name body)).initial =
-      TypeAutomatonState.root := by
-    show (compileTypeFuel signature (typeCompilationFuel (.recur name body))
-      (.recur name body)).initial = TypeAutomatonState.root
-    rw [hWhole]
-    simp [buildRecursionAutomaton, finishAutomatonFragment]
-  sorry
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.recur name body)) (.recur name body) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidual, hState⟩ |
+      ⟨entry, hEntry, hResidual, hState⟩
+  · exact Or.inl (Prod.ext hResidual hState)
+  · have hBodyRelated : relationMembership
+        (buildRelationSet body (compileType signature body))
+        entry.1 entry.2 := hEntry
+    exact Or.inr ⟨entry.2, entry.1,
+      Prod.ext hResidual.symm hState.symm, hBodyRelated⟩
   -- refine buildRelationSet_preserves (.recur name body)
   --   (compileType signature (.recur name body))
   --   (recurRelationShape signature name body)
