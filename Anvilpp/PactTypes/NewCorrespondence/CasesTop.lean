@@ -1487,10 +1487,9 @@ theorem correspondence_seq_stepIff
     fun hMem hSym hStep' => (hFirstIH hMem hSym).mp hStep'
   constructor
   · intro hStep
-    rcases relationMembership_seq_cases signature first second
-      (hLeftForward := hLeftForward) hRelated with
+    rcases relationMembership_seq_cases signature first second hRelated with
       hLeft | hRight
-    · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated⟩
+    · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _hSurvives⟩
       cases hEntry
       cases decoratedTypeTransition_seq_cases hStep with
       | step leftTarget childFuture hTarget hNonFinal hChildStep hFuture =>
@@ -1549,7 +1548,7 @@ theorem correspondence_seq_stepIff
         hRightRelated hChildTargetRelated hStep hChildEdge
   · rintro ⟨state', hEdge, hTargetRelated⟩
     cases compileType_seq_edge_cases signature first second
-        (hLeftForward := hLeftForward) hRelated hEdge hTargetRelated with
+        hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
         hFuture =>

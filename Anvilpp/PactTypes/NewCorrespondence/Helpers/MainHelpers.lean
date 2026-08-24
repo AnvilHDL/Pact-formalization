@@ -763,7 +763,9 @@ theorem helper_h12_seq_shape
         (buildRelationSet (.seq left right) (compileType signature (.seq left right)))
         residual state) :
     (∃ ρ q1, residual = .seq ρ right ∧ state = .child 0 q1 ∧
-      relationMembership (buildRelationSet left (compileType signature left)) ρ q1) ∨
+      relationMembership (buildRelationSet left (compileType signature left)) ρ q1 ∧
+      (q1 ∉ (compileType signature left).accepting ∨
+        q1 = (compileType signature left).initial)) ∨
     (∃ q2, state = .child 1 q2 ∧
       relationMembership (buildRelationSet right (compileType signature right)) residual q2) := by
   have hFuelEq : typeCompilationFuel (.seq left right) =
@@ -773,13 +775,30 @@ theorem helper_h12_seq_shape
       buildRelationSetCoreFuel signature (typeCompilationFuel (.seq left right))
         (.seq left right) := hRelated
   rw [hFuelEq] at hMem
-  simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image, Prod.mk.injEq] at hMem
-  rcases hMem with ⟨entry, hEntry, hR, hS⟩ | ⟨entry, hEntry, hR, hS⟩
-  · refine Or.inl ⟨entry.1, entry.2, hR.symm, hS.symm, ?_⟩
+  simp only [buildRelationSetCoreFuel] at hMem
+  rcases Finset.mem_union.mp hMem with hLeft | hRight
+  · rcases Finset.mem_image.mp hLeft with ⟨entry, hEntry, hEq⟩
+    have hEntryMem := (Finset.mem_filter.mp hEntry).1
+    have hSurvives := (Finset.mem_filter.mp hEntry).2
+    injection hEq with hR hS
+    refine Or.inl ⟨entry.1, entry.2, hR.symm, hS.symm, ?_, ?_⟩
     show (entry.1, entry.2) ∈ buildRelationSetCoreFuel signature (typeCompilationFuel left) left
     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl]
-    exact hEntry
-  · refine Or.inr ⟨entry.2, hS.symm, ?_⟩
+    exact hEntryMem
+    have hCompile := compileTypeFuel_eq_of_sufficient signature left
+      (le_max_left (typeCompilationFuel left) (typeCompilationFuel right)) le_rfl
+    rw [hCompile] at hSurvives
+    change entry.2 ∉ (compileTypeFuel signature (typeCompilationFuel left) left).accepting ∨
+      entry.2 = (compileTypeFuel signature (typeCompilationFuel left) left).initial
+    by_cases hAccepting :
+        entry.2 ∈ (compileTypeFuel signature (typeCompilationFuel left) left).accepting
+    · exact Or.inr (by
+        by_contra hNotInitial
+        exact hSurvives (by simp [sequenceDeleted, hAccepting, hNotInitial]))
+    · exact Or.inl hAccepting
+  · rcases Finset.mem_image.mp hRight with ⟨entry, hEntry, hEq⟩
+    injection hEq with hR hS
+    refine Or.inr ⟨entry.2, hS.symm, ?_⟩
     show (residual, entry.2) ∈ buildRelationSetCoreFuel signature (typeCompilationFuel right) right
     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl, ← hR]
     exact hEntry
@@ -1736,10 +1755,12 @@ theorem helper_h13_seq_case
       buildRelationSetCoreFuel signature (typeCompilationFuel (.seq first second))
         (.seq first second) := hRelated
   rw [hFuelEq] at hMem
-  simp only [buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image, Prod.mk.injEq]
-    at hMem
-  rcases hMem with ⟨entry, hEntry, hR, hS⟩ | ⟨entry, hEntry, hR, hS⟩
-  · subst hR; subst hS
+  simp only [buildRelationSetCoreFuel] at hMem
+  rcases Finset.mem_union.mp hMem with hLeft | hRight
+  · rcases Finset.mem_image.mp hLeft with ⟨entry, hEntry, hEq⟩
+    have hEntry := (Finset.mem_filter.mp hEntry).1
+    injection hEq with hR hS
+    subst hR; subst hS
     simp only [childAccepting, Finset.mem_image, childState]
     constructor
     · rintro ⟨q', -, hEq⟩
@@ -1747,7 +1768,9 @@ theorem helper_h13_seq_case
       omega
     · intro hSkip
       exact absurd hSkip (by simp)
-  · subst hR; subst hS
+  · rcases Finset.mem_image.mp hRight with ⟨entry, hEntry, hEq⟩
+    injection hEq with hR hS
+    subst hR; subst hS
     have hEntryRelated :
         relationMembership (buildRelationSet second (compileType signature second))
           entry.1 entry.2 := by

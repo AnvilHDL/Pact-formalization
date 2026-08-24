@@ -32,7 +32,8 @@ def buildRelationSetCoreFuel (signature : TypeAlphabet) :
               (buildRelationSetCoreFuel signature fuel right).image
                 (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
       | .seq left right =>
-          (buildRelationSetCoreFuel signature fuel left).image
+          ((buildRelationSetCoreFuel signature fuel left).filter (fun entry =>
+              entry.2 ∉ sequenceDeleted (compileTypeFuel signature fuel left))).image
               (fun entry => (.seq entry.1 right, TypeAutomatonState.child 0 entry.2)) ∪
             (buildRelationSetCoreFuel signature fuel right).image
               (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
@@ -135,7 +136,9 @@ theorem buildRelationSetCoreFuel_initial_mem (signature : TypeAlphabet) :
           simp only [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, childState, buildRelationSetCoreFuel,
             Finset.mem_union]
-          exact Or.inl (Finset.mem_image.mpr ⟨_, hLeftMem, rfl⟩)
+          exact Or.inl (Finset.mem_image.mpr ⟨_,
+            Finset.mem_filter.mpr ⟨hLeftMem, initial_not_mem_sequenceDeleted _⟩,
+            rfl⟩)
       | par left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -245,9 +248,9 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
               exact ih right ha (hStateEq ▸ ha')
       | seq left right =>
           simp only [buildRelationSetCoreFuel, Finset.mem_union,
-            Finset.mem_image, Prod.mk.injEq] at h h'
-          rcases h with ⟨a, ha, rfl, ha2⟩ | ⟨a, ha, rfl, ha2⟩ <;>
-            rcases h' with ⟨a', ha', rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
+            Finset.mem_image, Finset.mem_filter, Prod.mk.injEq] at h h'
+          rcases h with ⟨a, ⟨ha, _⟩, rfl, ha2⟩ | ⟨a, ha, rfl, ha2⟩ <;>
+            rcases h' with ⟨a', ⟨ha', _⟩, rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
           · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
             have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel left :=
               hStateEq ▸ ha'
@@ -447,16 +450,26 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
             simp [typeCompilationFuel] at hFuel; omega
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
+          have hCompileLeft :
+              compileTypeFuel signature (fuel + 1) left =
+                compileTypeFuel signature fuel left :=
+            compileTypeFuel_eq_of_sufficient signature left
+              (leftFuel := fuel + 1) (rightFuel := fuel)
+              (Nat.le.step hLeft) hLeft
           change
-              (buildRelationSetCoreFuel signature (fuel+1) left).image
+              ((buildRelationSetCoreFuel signature (fuel+1) left).filter (fun entry =>
+                  entry.2 ∉ sequenceDeleted
+                    (compileTypeFuel signature (fuel+1) left))).image
                   (fun entry => (PactType.seq entry.1 right, TypeAutomatonState.child 0 entry.2)) ∪
                 (buildRelationSetCoreFuel signature (fuel+1) right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)) =
-              (buildRelationSetCoreFuel signature fuel left).image
+              ((buildRelationSetCoreFuel signature fuel left).filter (fun entry =>
+                  entry.2 ∉ sequenceDeleted
+                    (compileTypeFuel signature fuel left))).image
                   (fun entry => (PactType.seq entry.1 right, TypeAutomatonState.child 0 entry.2)) ∪
                 (buildRelationSetCoreFuel signature fuel right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
-          rw [ih left hLeft, ih right hRight]
+          rw [ih left hLeft, ih right hRight, hCompileLeft]
       | par left right interface =>
           have hLeft : typeCompilationFuel left ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega

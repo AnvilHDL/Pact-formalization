@@ -12,7 +12,9 @@ def seqRelationShape
     (entry : PactType × TypeAutomatonState) : Prop :=
   (∃ q1 residualLeft, entry = (.seq residualLeft right, .child 0 q1) ∧
       relationMembership (buildRelationSet left (compileType signature left))
-        residualLeft q1) ∨
+        residualLeft q1 ∧
+      (q1 ∉ (compileType signature left).accepting ∨
+        q1 = (compileType signature left).initial)) ∨
     (∃ q2, entry.2 = .child 1 q2 ∧
       relationMembership (buildRelationSet right (compileType signature right))
         entry.1 q2)
@@ -770,32 +772,9 @@ theorem compileType_seq_lift_right_step
     (fun target hTargetStep =>
       decoratedTypeTransition_target_unique hTargetStep hChildStep)
 
-/-- Proves an automaton edge's target is uniquely determined by its full decorated symbol. -/
-lemma compileType_hasEdge_target_unique
-    (signature : TypeAlphabet) (processType : PactType)
-    {source target target' : TypeAutomatonState}
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : (compileType signature processType).HasEdge source env label offers
-      target)
-    (hEdge' : (compileType signature processType).HasEdge source env label offers
-      target') :
-    target = target' := by
-  sorry
-
 /-- Proves every related sequence pair has the sequence shape, given the forward direction of the left child's own step correspondence. -/
 lemma relationMembership_seq_cases
     (signature : TypeAlphabet) (left right : PactType)
-    (hLeftForward :
-      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
-        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
-        relationMembership (buildRelationSet left (compileType signature left))
-          residual' q1 →
-        (TypeAutomatonSymbol.mk env label offers ∈
-          (compileType signature left).alphabet) →
-        DecoratedTypeTransition env residual' label offers target →
-        ∃ q1', (compileType signature left).HasEdge q1 env label offers q1' ∧
-          relationMembership (buildRelationSet left (compileType signature left))
-            target q1')
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
@@ -803,7 +782,13 @@ lemma relationMembership_seq_cases
           (compileType signature (.seq left right)))
         residual state) :
     seqRelationShape signature left right (residual, state) := by
-  sorry
+  rcases helper_h12_seq_shape signature left right hRelated with hLeft | hRight
+  · rcases hLeft with ⟨residualLeft, q1, hResidual, hState,
+      hLeftRelated, hSurvives⟩
+    exact Or.inl ⟨q1, residualLeft, by simp [hResidual, hState],
+      hLeftRelated, hSurvives⟩
+  · rcases hRight with ⟨q2, hState, hRightRelated⟩
+    exact Or.inr ⟨q2, by simpa using hState, hRightRelated⟩
   -- have hWhole :
   --     compileTypeFuel signature (typeCompilationFuel (.seq left right))
   --       (.seq left right) =
@@ -995,17 +980,6 @@ lemma relationMembership_seq_cases
 /-- Proves every public sequence edge leaving a related state belongs to one of the sequence edge families. -/
 theorem compileType_seq_edge_cases
     (signature : TypeAlphabet) (left right : PactType)
-    (hLeftForward :
-      ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
-        {label : TypeLabel} {offers : TypeOfferSummary} {target : PactType},
-        relationMembership (buildRelationSet left (compileType signature left))
-          residual' q1 →
-        (TypeAutomatonSymbol.mk env label offers ∈
-          (compileType signature left).alphabet) →
-        DecoratedTypeTransition env residual' label offers target →
-        ∃ q1', (compileType signature left).HasEdge q1 env label offers q1' ∧
-          relationMembership (buildRelationSet left (compileType signature left))
-            target q1')
     {residual residual' : PactType}
     {state state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1025,9 +999,9 @@ theorem compileType_seq_edge_cases
         residual' state') :
     SeqCompiledEdgeCase signature left right residual residual' state state'
       env label current future := by
-  rcases relationMembership_seq_cases signature left right hLeftForward hRelated with
+  rcases relationMembership_seq_cases signature left right hRelated with
     hLeft | hRight
-  · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated⟩
+  · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _hSurvives⟩
     cases hEntry
     exact helper_h15_sequence_left_public_edge_cases signature left right
       hRelated hLeftRelated hEdge hTarget
@@ -1055,7 +1029,7 @@ theorem compileType_seq_edge_cases
     have hRightTargetRelated :
         relationMembership (buildRelationSet right (compileType signature right))
           residual' childEdge.target := by
-      rcases relationMembership_seq_cases signature left right hLeftForward hTarget with
+      rcases relationMembership_seq_cases signature left right hTarget with
         hTargetLeft | hTargetRight
       · rcases hTargetLeft with ⟨qLeft, leftResidual, hEntry, _hLeftTarget⟩
         have hStateEq := congrArg Prod.snd hEntry

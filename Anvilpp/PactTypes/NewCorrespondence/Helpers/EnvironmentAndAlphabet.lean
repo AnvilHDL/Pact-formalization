@@ -44,7 +44,8 @@ lemma relationMembership_functional
     (hRelated : relationMembership (buildRelationSet ty auto) residual state)
     (hRelated' : relationMembership (buildRelationSet ty auto) residual' state) :
     residual = residual' := by
-  sorry
+  unfold relationMembership buildRelationSet at hRelated hRelated'
+  exact buildRelationSetCore_functional auto.signature ty hRelated hRelated'
 
 
 /-- Proves a step's future offer is contained in the target menu together with its current offer. -/
