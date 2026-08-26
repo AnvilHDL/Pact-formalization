@@ -192,6 +192,36 @@ def projectTypeEnvironmentOffers
     Finset BareMessage :=
   offers.filter fun action => action ∈ alphabet.actions.image typeNeed
 
+/-- The offer-indexed sibling-local environment relation used by the
+decorated parallel rule.
+
+The ordinary case is intentionally indexed by the concrete sibling offer
+sets.  This rules out the spurious situation where the parallel step combines
+one pair of child offers, but the local environment is justified by a
+different sibling offer witness. -/
+inductive LocalTypeOfferEnvironment :
+    TypeEnvironment → Interface → PactType → TypeEnvironment →
+      Finset BareMessage → Finset BareMessage → TypeEnvironment → Prop where
+  | clock (outer : TypeEnvironment) (interface : Interface)
+      (localType : PactType) (current future : Finset BareMessage) :
+      outer.clock = true →
+      LocalTypeOfferEnvironment outer interface localType TypeEnvironment.tock
+        current future TypeEnvironment.tock
+  | ordinary (outer siblingEnv localEnv : TypeEnvironment)
+      (interface : Interface) (localType : PactType)
+      (current future : Finset BareMessage) :
+      outer.clock = false →
+      siblingEnv.clock = false →
+      localEnv.clock = false →
+      localEnv.immediate =
+        projectTypeEnvironmentOffers localType.alphabet outer.immediate ∪
+          restrictTypeOffers interface current →
+      localEnv.future =
+        (projectTypeEnvironmentOffers localType.alphabet outer.future ∪
+          restrictTypeOffers interface future) \ localEnv.immediate →
+      LocalTypeOfferEnvironment outer interface localType siblingEnv current
+        future localEnv
+
 mutual
   @[aesop unsafe]
   inductive TypeOffers :
@@ -320,10 +350,10 @@ mutual
         TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
         ¬ (left' = .skip left'.alphabet ∧ right' = .skip right'.alphabet) →
-        LocalTypeEnvironment outer interface left rightEnv right rightLabel
-          leftEnv →
-        LocalTypeEnvironment outer interface right leftEnv left leftLabel
-          rightEnv →
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv →
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -339,10 +369,10 @@ mutual
           leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel (.skip right.alphabet)
           rightCurrent rightFuture →
-        LocalTypeEnvironment outer interface left rightEnv right rightLabel
-          leftEnv →
-        LocalTypeEnvironment outer interface right leftEnv left leftLabel
-          rightEnv →
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv →
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -378,6 +408,27 @@ mutual
         LocalTypeEnvironment outer interface localType siblingEnv sibling label
           localEnv
 end
+
+theorem LocalTypeOfferEnvironment.toLocalTypeEnvironment
+    {outer siblingEnv localEnv : TypeEnvironment} {interface : Interface}
+    {localType sibling siblingTarget : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hLocal :
+      LocalTypeOfferEnvironment outer interface localType siblingEnv current
+        future localEnv)
+    (hSibling :
+      TypeOffers siblingEnv sibling label siblingTarget current future) :
+    LocalTypeEnvironment outer interface localType siblingEnv sibling label
+      localEnv := by
+  cases hLocal with
+  | clock outer interface localType current hClock =>
+      exact LocalTypeEnvironment.clock outer interface localType sibling label
+        hClock
+  | ordinary outer siblingEnv localEnv interface localType current
+      hOuterClock hSiblingClock hLocalClock hImmediate hFuture =>
+      exact LocalTypeEnvironment.ordinary outer siblingEnv localEnv interface
+        localType sibling siblingTarget label current future hOuterClock
+        hSiblingClock hSibling hLocalClock hImmediate hFuture
 
 end
 

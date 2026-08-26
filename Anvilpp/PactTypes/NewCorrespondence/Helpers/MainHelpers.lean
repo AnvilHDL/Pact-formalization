@@ -1226,14 +1226,13 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
             exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
           have hWitness : PendingAutomatonEdge.mk TypeAutomatonState.root TypeEnvironment.empty
               (AutomatonConstructionLabel.visible TypeLabel.silent) {(msg, dir)}
-              (FutureSpec.explicit ∅) TypeAutomatonState.root ∈
+              (FutureSpec.at TypeAutomatonState.root {(msg, dir)}) TypeAutomatonState.root ∈
               (compileTypeFuel signature (typeCompilationFuel (.message alphabet msg dir))
                 (.message alphabet msg dir)).edges := by
             simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
               Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-            sorry
-            -- refine Or.inl (Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl, ?_⟩, rfl⟩)
-            -- simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
+            refine Or.inl (Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl, ?_⟩, rfl⟩)
+            simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
           obtain ⟨hR, hS⟩ | ⟨hR, hS⟩ :=
             NewCorrespondence.relationMembership_message_cases signature alphabet msg dir hRelated
           · subst hR; subst hS
@@ -2502,15 +2501,14 @@ theorem helper_h14_same_cycle_completion
             set edge : PendingAutomatonEdge :=
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible (TypeLabel.message msg dir),
-                current := {(msg, dir)}, future := FutureSpec.explicit ∅,
+                current := {(msg, dir)}, future := FutureSpec.at TypeAutomatonState.final ∅,
                 target := TypeAutomatonState.final } with hEdgeDef
             have hEdgeMem : edge ∈
                 (compileTypeFuel signature (typeCompilationFuel (.message alphabet msg dir))
                   (.message alphabet msg dir)).edges := by
               simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
                 Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-              sorry
-              -- exact Or.inl (Or.inl ⟨env, ⟨hEnvMem, hHasNeed⟩, hEdgeDef.symm⟩)
+              exact Or.inl (Or.inl ⟨env, ⟨hEnvMem, hHasNeed⟩, hEdgeDef.symm⟩)
             refine ⟨TypeAutomatonState.final,
               Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
             · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
@@ -2584,15 +2582,14 @@ theorem helper_h14_same_cycle_completion
             set edge : PendingAutomatonEdge :=
               { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
                 label := AutomatonConstructionLabel.visible (TypeLabel.progress pid),
-                current := ∅, future := FutureSpec.explicit ∅,
+                current := ∅, future := FutureSpec.at TypeAutomatonState.final ∅,
                 target := TypeAutomatonState.final } with hEdgeDef
             have hEdgeMem : edge ∈
                 (compileTypeFuel signature (typeCompilationFuel (.progress alphabet pid))
                   (.progress alphabet pid)).edges := by
               simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
                 Finset.mem_union, Finset.mem_image]
-              sorry
-              -- exact Or.inl ⟨TypeEnvironment.empty, hEmptyLocal, hEdgeDef.symm⟩
+              exact Or.inl ⟨TypeEnvironment.empty, hEmptyLocal, hEdgeDef.symm⟩
             refine ⟨TypeAutomatonState.final,
               Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
             · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
@@ -3027,10 +3024,12 @@ theorem transition_label_supported
         Finset.mem_union]
       exact Or.inr (branch_action_mem hConditions.2.1)
   | par outer leftEnv rightEnv interface left left' right right' leftLabel
-      rightLabel hLeftStep hRightStep hNonFinal hConditions hLeftIH hRightIH =>
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftStep
+      hLeftOffers hRightStep hRightOffers hNonFinal hConditions hLeftIH hRightIH =>
       exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
-      hLeftStep hRightStep hConditions hLeftIH hRightIH =>
+      leftCurrent leftFuture rightCurrent rightFuture hLeftStep hLeftOffers
+      hRightStep hRightOffers hConditions hLeftIH hRightIH =>
       exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
   | _ =>
       simp_all [LabelSupportedBy, ObservationOwnedBy, TypeLabel.silent,

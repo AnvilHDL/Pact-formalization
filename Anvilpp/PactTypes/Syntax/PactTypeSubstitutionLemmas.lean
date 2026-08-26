@@ -347,7 +347,7 @@ theorem PactType.replaceVar_canCompleteBeforeTock
             canCompleteBeforeTockSubst]
       | var _ other =>
           by_cases hName : name = other
-          · simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
+          · simp [PactType.replaceVar,
               canCompleteBeforeTockSubst, hName]
           · simp [PactType.replaceVar, PactType.CanCompleteBeforeTock,
               canCompleteBeforeTockSubst, hName]

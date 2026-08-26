@@ -25,8 +25,10 @@ inductive ParDecoratedStepCase
       DecoratedTypeTransition rightEnv right rightLabel
         (TypeOfferSummary.mk rightCurrent rightFuture) rightTarget →
       env.WellFormed →
-      LocalTypeEnvironment env interface left rightEnv right rightLabel leftEnv →
-      LocalTypeEnvironment env interface right leftEnv left leftLabel rightEnv →
+      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
+        leftFuture rightEnv →
       TypeLabel.Sync interface leftLabel rightLabel →
       label = TypeLabel.combine interface leftLabel rightLabel →
       current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
@@ -41,8 +43,10 @@ inductive ParDecoratedStepCase
       DecoratedTypeTransition rightEnv right rightLabel
         (TypeOfferSummary.mk rightCurrent rightFuture) (.skip right.alphabet) →
       env.WellFormed →
-      LocalTypeEnvironment env interface left rightEnv right rightLabel leftEnv →
-      LocalTypeEnvironment env interface right leftEnv left leftLabel rightEnv →
+      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
+        leftFuture rightEnv →
       TypeLabel.Sync interface leftLabel rightLabel →
       label = TypeLabel.combine interface leftLabel rightLabel →
       current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
@@ -107,13 +111,15 @@ theorem TypeOffers.toTypeTransition
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftOffers hRightOffers hNotFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       exact TypeTransition.par outer leftEnv rightEnv interface left leftTarget
-        right rightTarget leftLabel rightLabel ihLeft ihRight hNotFinal
+        right rightTarget leftLabel rightLabel leftCurrent leftFuture
+        rightCurrent rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotFinal
         ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocal1 hLocal2 hSide ihLeft ihRight =>
       exact TypeTransition.par_fuse outer leftEnv rightEnv interface left right
-        leftLabel rightLabel ihLeft ihRight
+        leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+        ihLeft hLeftOffers ihRight hRightOffers
         ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
   | clock => trivial
   | ordinary => trivial
@@ -535,6 +541,677 @@ private theorem interface_action_mem_localEnvironmentActions
   refine ⟨(msg, dir.invert), ?_, ?_⟩
   · exact interface_action_mem_localActions signature hInterface hAction
   · cases dir <;> rfl
+
+/-- The syntactic future menu never invents an action that is absent from the
+source syntax.  This is the small footprint fact needed when a parallel
+component is checked against its own fixed alphabet. -/
+private theorem typeFutureOffersFuel_subset_messageActions :
+    ∀ fuel processType,
+      typeFutureOffersFuel fuel processType ⊆ processType.MessageActions := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType
+      simp [typeFutureOffersFuel]
+  | succ fuel ih =>
+      intro processType
+      cases processType with
+      | message alphabet msg dir =>
+          simp [typeFutureOffersFuel, PactType.MessageActions]
+      | progress alphabet pid =>
+          simp [typeFutureOffersFuel, PactType.MessageActions]
+      | tock alphabet =>
+          simp [typeFutureOffersFuel, PactType.MessageActions]
+      | skip alphabet =>
+          simp [typeFutureOffersFuel, PactType.MessageActions]
+      | var alphabet name =>
+          simp [typeFutureOffersFuel, PactType.MessageActions]
+      | recur alphabet name body =>
+          simpa [typeFutureOffersFuel, PactType.MessageActions] using ih body
+      | choice alphabet left right | fairChoice alphabet _ left right =>
+          simpa [typeFutureOffersFuel, PactType.MessageActions] using
+            Finset.union_subset_union (ih left) (ih right)
+      | seq alphabet left right =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          split
+          · exact Finset.union_subset_union (ih left) (ih right)
+          · exact (ih left).trans Finset.subset_union_left
+      | par alphabet left right interface =>
+          intro action hAction
+          simp only [typeFutureOffersFuel, hideTypeOffers,
+            Finset.mem_filter, Finset.mem_union, PactType.MessageActions] at hAction ⊢
+          rcases hAction.1 with hLeft | hRight
+          · exact Or.inl (ih left hLeft)
+          · exact Or.inr (ih right hRight)
+      | xoffer alphabet elseType branches | offer alphabet elseType branches =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          have hHeadSubsetAll : ∀ (bs : List (BareMessage × PactType))
+              branch, branch ∈ bs →
+                {branch.1} ⊆ PactType.BranchMessageActions bs := by
+            intro bs
+            induction bs with
+            | nil =>
+                intro branch hBranch
+                cases hBranch
+            | cons head rest restIH =>
+                intro branch hBranch
+                simp only [List.mem_cons] at hBranch
+                rw [PactType.BranchMessageActions.eq_def]
+                rcases hBranch with rfl | hBranch
+                · exact Finset.subset_union_left.trans Finset.subset_union_left
+                · exact (restIH branch hBranch).trans Finset.subset_union_right
+          have hBodySubsetAll : ∀ (bs : List (BareMessage × PactType))
+              branch, branch ∈ bs →
+                branch.2.MessageActions ⊆
+                  PactType.BranchMessageActions bs := by
+            intro bs
+            induction bs with
+            | nil =>
+                intro branch hBranch
+                cases hBranch
+            | cons head rest restIH =>
+                intro branch hBranch
+                simp only [List.mem_cons] at hBranch
+                rw [PactType.BranchMessageActions.eq_def]
+                rcases hBranch with rfl | hBranch
+                · intro action hAction
+                  exact Finset.mem_union.mpr
+                    (Or.inl (Finset.mem_union.mpr (Or.inr hAction)))
+                · exact (restIH branch hBranch).trans Finset.subset_union_right
+          have hFold : ∀ (rest : List (BareMessage × PactType)) initial,
+              initial ⊆ elseType.MessageActions ∪
+                  PactType.BranchMessageActions branches →
+              (∀ branch ∈ rest, branch ∈ branches) →
+              rest.foldl (fun offers branch =>
+                  offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+                  initial ⊆
+                elseType.MessageActions ∪
+                  PactType.BranchMessageActions branches := by
+            intro rest
+            induction rest with
+            | nil =>
+                intro initial hInitial _
+                simpa using hInitial
+            | cons branch tail tailIH =>
+                intro initial hInitial hRest
+                apply tailIH
+                · apply Finset.union_subset
+                  · apply Finset.union_subset
+                    · exact hInitial
+                    · intro action hAction
+                      have hBranch : branch ∈ branches := hRest branch (by simp)
+                      exact Finset.mem_union.mpr
+                        (Or.inr (hHeadSubsetAll branches branch hBranch hAction))
+                  · intro action hAction
+                    have hBranch : branch ∈ branches := hRest branch (by simp)
+                    have hInBranch : action ∈ branch.2.MessageActions :=
+                      ih branch.2 hAction
+                    exact Finset.mem_union.mpr
+                      (Or.inr (hBodySubsetAll branches branch hBranch hInBranch))
+                · intro other hOther
+                  exact hRest other (by simp [hOther])
+          apply hFold branches (typeFutureOffersFuel fuel elseType)
+          · exact (ih elseType).trans Finset.subset_union_left
+          · simp
+
+private theorem typeFutureOffers_subset_messageActions
+    (processType : PactType) :
+    typeFutureOffers processType ⊆ processType.MessageActions := by
+  exact typeFutureOffersFuel_subset_messageActions _ processType
+
+private theorem branch_body_alphabetWellFormed_of_mem
+    {alphabet : PactTypeAlphabet}
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hMem : (action, branchType) ∈ branches) :
+    branchType.AlphabetWellFormed := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        exact hBranches.2.2.1
+      · exact ih hBranches.2.2.2 hMem
+
+private theorem branch_action_mem_fixedAlphabet_of_mem
+    {alphabet : PactTypeAlphabet}
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hMem : (action, branchType) ∈ branches) :
+    action ∈ alphabet.actions := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        exact hBranches.1
+      · exact ih hBranches.2.2.2 hMem
+
+/-- For alphabet-well-formed syntax, its future menu is contained in the
+fixed alphabet carried by that syntax node. -/
+private theorem typeFutureOffersFuel_subset_fixedAlphabet :
+    ∀ fuel processType, processType.AlphabetWellFormed →
+      typeFutureOffersFuel fuel processType ⊆ processType.alphabet.actions := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hWF
+      simp [typeFutureOffersFuel]
+  | succ fuel ih =>
+      intro processType hWF
+      cases processType with
+      | message alphabet msg dir =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simpa [typeFutureOffersFuel, PactType.alphabet] using hWF.2
+      | progress alphabet pid =>
+          simp [typeFutureOffersFuel]
+      | tock alphabet =>
+          simp [typeFutureOffersFuel]
+      | skip alphabet =>
+          simp [typeFutureOffersFuel]
+      | var alphabet name =>
+          simp [typeFutureOffersFuel]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          change typeFutureOffersFuel fuel body ⊆ alphabet.actions
+          have hBody := ih body hWF.2.2
+          rw [hWF.2.1] at hBody
+          exact hBody
+      | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          exact Finset.union_subset
+            ((ih left hWF.2.2.2.1).trans (by simpa [hWF.2.1]))
+            ((ih right hWF.2.2.2.2).trans (by simpa [hWF.2.2.1]))
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          split
+          · exact Finset.union_subset
+              ((ih left hWF.2.2.2.1).trans (by simpa [hWF.2.1]))
+              ((ih right hWF.2.2.2.2).trans (by simpa [hWF.2.2.1]))
+          · exact (ih left hWF.2.2.2.1).trans (by simpa [hWF.2.1])
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          exact Finset.union_subset
+            ((ih left hWF.2.2.2.2.1).trans (by simpa [hWF.2.2.1]))
+            ((ih right hWF.2.2.2.2.2).trans (by simpa [hWF.2.2.2.1]))
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          intro action hAction
+          simp only [typeFutureOffersFuel, hideTypeOffers,
+            Finset.mem_filter, Finset.mem_union, PactType.alphabet] at hAction ⊢
+          have hCompatible := hWF.2.1
+          rw [hCompatible.parent_eq]
+          simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+            Finset.mem_union]
+          refine ⟨?_, hAction.2⟩
+          rcases hAction.1 with hLeft | hRight
+          · exact Or.inl (ih left hWF.2.2.1 hLeft)
+          · exact Or.inr (ih right hWF.2.2.2 hRight)
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          have hBranchFuture : ∀ branch ∈ branches,
+              typeFutureOffersFuel fuel branch.2 ⊆ alphabet.actions := by
+            intro branch hBranch
+            have hBranchWF := PactType.branch_alphabet_eq_of_mem
+              hWF.2.2.2 hBranch
+            rcases branch with ⟨branchAction, branchType⟩
+            have hEntryWF : branchType.AlphabetWellFormed :=
+              branch_body_alphabetWellFormed_of_mem hWF.2.2.2 hBranch
+            exact (ih branchType hEntryWF).trans (by simpa [hBranchWF])
+          have hBranchHead : ∀ branch ∈ branches,
+              branch.1 ∈ alphabet.actions := by
+            intro branch hBranch
+            rcases branch with ⟨branchAction, branchType⟩
+            exact branch_action_mem_fixedAlphabet_of_mem hWF.2.2.2 hBranch
+          have hFold : ∀ (rest : List (BareMessage × PactType)) initial,
+              initial ⊆ alphabet.actions →
+              (∀ branch ∈ rest, branch ∈ branches) →
+              rest.foldl (fun offers branch =>
+                  offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+                  initial ⊆ alphabet.actions := by
+            intro rest
+            induction rest with
+            | nil =>
+                intro initial hInitial _
+                simpa using hInitial
+            | cons branch tail tailIH =>
+                intro initial hInitial hRest
+                apply tailIH
+                · exact Finset.union_subset
+                    (Finset.union_subset hInitial (by
+                      intro action hAction
+                      have hEq : action = branch.1 := by simpa using hAction
+                      subst action
+                      exact hBranchHead branch (hRest branch (by simp))))
+                    (hBranchFuture branch (hRest branch (by simp)))
+                · intro other hOther
+                  exact hRest other (by simp [hOther])
+          apply hFold branches (typeFutureOffersFuel fuel elseType)
+          · exact (ih elseType hWF.2.2.1).trans (by simpa [hWF.2.1])
+          · simp
+      | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          have hBranchFuture : ∀ branch ∈ branches,
+              typeFutureOffersFuel fuel branch.2 ⊆ alphabet.actions := by
+            intro branch hBranch
+            have hBranchAlphabet := PactType.branch_alphabet_eq_of_mem
+              hWF.2.2.2 hBranch
+            rcases branch with ⟨branchAction, branchType⟩
+            have hBranchWF : branchType.AlphabetWellFormed :=
+              branch_body_alphabetWellFormed_of_mem hWF.2.2.2 hBranch
+            exact (ih branchType hBranchWF).trans
+              (by simpa [hBranchAlphabet])
+          have hBranchHead : ∀ branch ∈ branches,
+              branch.1 ∈ alphabet.actions := by
+            intro branch hBranch
+            rcases branch with ⟨branchAction, branchType⟩
+            exact branch_action_mem_fixedAlphabet_of_mem hWF.2.2.2 hBranch
+          have hFold : ∀ (rest : List (BareMessage × PactType)) initial,
+              initial ⊆ alphabet.actions →
+              (∀ branch ∈ rest, branch ∈ branches) →
+              rest.foldl (fun offers branch =>
+                  offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+                  initial ⊆ alphabet.actions := by
+            intro rest
+            induction rest with
+            | nil =>
+                intro initial hInitial _
+                simpa using hInitial
+            | cons branch tail tailIH =>
+                intro initial hInitial hRest
+                apply tailIH
+                · exact Finset.union_subset
+                    (Finset.union_subset hInitial (by
+                      intro action hAction
+                      have hEq : action = branch.1 := by simpa using hAction
+                      subst action
+                      exact hBranchHead branch (hRest branch (by simp))))
+                    (hBranchFuture branch (hRest branch (by simp)))
+                · intro other hOther
+                  exact hRest other (by simp [hOther])
+          apply hFold branches (typeFutureOffersFuel fuel elseType)
+          · exact (ih elseType hWF.2.2.1).trans (by simpa [hWF.2.1])
+          · simp
+
+private theorem typeFutureOffers_subset_fixedAlphabet
+    (processType : PactType) (hWF : processType.AlphabetWellFormed) :
+    typeFutureOffers processType ⊆ processType.alphabet.actions := by
+  exact typeFutureOffersFuel_subset_fixedAlphabet _ processType hWF
+
+private theorem messageActions_subset_fixedAlphabet
+    (processType : PactType) (hWF : processType.AlphabetWellFormed) :
+    processType.MessageActions ⊆ processType.alphabet.actions := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          PactType.BranchesAlphabetWellFormed processType.alphabet branches →
+          PactType.BranchMessageActions branches ⊆ processType.alphabet.actions := by
+        intro branches hBranchesWF action hAction
+        induction branches with
+        | nil =>
+            simp [PactType.BranchMessageActions] at hAction
+        | cons branch rest restIH =>
+            rcases branch with ⟨branchAction, branchType⟩
+            simp only [PactType.BranchesAlphabetWellFormed] at hBranchesWF
+            rw [PactType.BranchMessageActions.eq_def] at hAction
+            simp only [Finset.mem_union, Finset.mem_singleton] at hAction
+            rcases hAction with hHead | hBody | hRest
+            · simpa [hHead] using hBranchesWF.1
+            · have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType < sizeOf (branchAction, branchType) := by
+                  simp_wf
+                  omega
+                have hHeadSize :
+                    sizeOf (branchAction, branchType) <
+                      sizeOf ((branchAction, branchType) :: rest) := by
+                  simp_wf
+                  omega
+                rw [← hSize]
+                omega
+              have hSubset := ih (sizeOf branchType) hBranchSize branchType rfl
+                hBranchesWF.2.2.1
+              exact (hSubset hBody) ▸? -- placeholder
+            · exact restIH hBranchesWF.2.2.2 hRest
+      cases processType with
+      | message alphabet msg dir =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simpa [PactType.MessageActions, PactType.alphabet] using
+            Finset.singleton_subset_iff.mpr hWF.2
+      | progress alphabet pid | tock alphabet | skip alphabet | var alphabet _ =>
+          simp [PactType.MessageActions]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          exact (ih (sizeOf body) hBodySize body rfl hWF.2.2).trans
+            (by simpa [PactType.alphabet, hWF.2.1])
+      | choice alphabet left right | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.MessageActions, PactType.alphabet]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact Finset.union_subset
+            ((ih (sizeOf left) hLeftSize left rfl hWF.2.2.2.1).trans
+              (by simpa [hWF.2.1]))
+            ((ih (sizeOf right) hRightSize right rfl hWF.2.2.2.2).trans
+              (by simpa [hWF.2.2.1]))
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.MessageActions, PactType.alphabet]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact Finset.union_subset
+            ((ih (sizeOf left) hLeftSize left rfl hWF.2.2.2.2.1).trans
+              (by simpa [hWF.2.2.1]))
+            ((ih (sizeOf right) hRightSize right rfl hWF.2.2.2.2.2).trans
+              (by simpa [hWF.2.2.2.1]))
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          intro action hAction
+          simp only [PactType.MessageActions, PactType.alphabet,
+            Finset.mem_union] at hAction ⊢
+          rw [hWF.2.1.parent_eq]
+          simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+            Finset.mem_union]
+          rcases hAction with hLeftAction | hRightAction
+          · exact ⟨Or.inl ((ih (sizeOf left) (by rw [← hSize]; simp_wf; omega)
+              left rfl hWF.2.2.1) hLeftAction), ?_⟩
+          · exact ⟨Or.inr ((ih (sizeOf right) (by rw [← hSize]; simp_wf; omega)
+              right rfl hWF.2.2.2) hRightAction), ?_⟩
+      | xoffer alphabet elseType branches | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.MessageActions, PactType.alphabet]
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          exact Finset.union_subset
+            ((ih (sizeOf elseType) hElseSize elseType rfl hWF.2.2.1).trans
+              (by simpa [hWF.2.1]))
+            (by
+              intro action hAction
+              exact hBranches branches hWF.2.2.2 hAction)
+
+private theorem typeBranchActions_subset_fixedAlphabet
+    {alphabet : PactTypeAlphabet} :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.BranchesAlphabetWellFormed alphabet branches →
+        typeBranchActions branches ⊆ alphabet.actions
+  | [], _ => by
+      simp [typeBranchActions]
+  | (action, processType) :: rest, hWF => by
+      intro offered hOffered
+      simp only [typeBranchActions, List.map_cons, List.toFinset_cons,
+        Finset.mem_insert] at hOffered
+      simp only [PactType.BranchesAlphabetWellFormed] at hWF
+      rcases hOffered with rfl | hRest
+      · exact hWF.1
+      · exact typeBranchActions_subset_fixedAlphabet rest hWF.2.2.2 hRest
+
+private theorem typeWaitingOffers_subset_fixedAlphabet
+    {alphabet : PactTypeAlphabet} {env : TypeEnvironment}
+    {branches : List (BareMessage × PactType)}
+    (hWF : PactType.BranchesAlphabetWellFormed alphabet branches) :
+    typeWaitingOffers env branches ⊆ alphabet.actions := by
+  intro action hAction
+  simp only [typeWaitingOffers, Finset.mem_inter] at hAction
+  exact typeBranchActions_subset_fixedAlphabet branches hWF hAction.2
+
+private theorem typeOffers_current_subset_fixedAlphabet
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource : source.AlphabetWellFormed)
+    (hOffers : TypeOffers env source label target current future) :
+    current ⊆ source.alphabet.actions := by
+  induction hOffers using TypeOffers.rec
+      (motive_2 := fun _ _ _ _ _ _ _ _ => True) with
+  | action env alphabet msg dir hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      simpa [PactType.alphabet]
+  | action_wait env alphabet msg dir hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      simpa [PactType.alphabet]
+  | choice_left | choice_right | fair_left | fair_right |
+      cycle | cycle_wait | skip | progress | recur | offer_some =>
+      simp [PactType.alphabet]
+  | seq env alphabet left leftTarget right label current childFuture
+      hChild hNotSkip ih =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact (ih hSource.2.2.2.1).trans (by simpa [PactType.alphabet, hSource.2.1])
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild ih =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact (ih hSource.2.2.2.1).trans (by simpa [PactType.alphabet, hSource.2.1])
+  | xoffer_branch env alphabet elseType branches action processType hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      intro offered hOffered
+      simp only [Finset.mem_singleton] at hOffered
+      subst offered
+      exact branch_action_mem_fixedAlphabet_of_mem hSource.2.2.2
+        hConditions.2.1
+  | xoffer_else env alphabet elseType branches hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact typeBranchActions_subset_fixedAlphabet branches hSource.2.2.2
+  | xoffer_wait env alphabet elseType branches hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact typeWaitingOffers_subset_fixedAlphabet hSource.2.2.2
+  | offer_else env alphabet elseType branches hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact typeBranchActions_subset_fixedAlphabet branches hSource.2.2.2
+  | offer_wait env alphabet elseType branches hConditions =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact typeWaitingOffers_subset_fixedAlphabet hSource.2.2.2
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.alphabet] at hAction ⊢
+      rw [hSource.2.1.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+        Finset.mem_union]
+      refine ⟨?_, hAction.2⟩
+      rcases hAction.1 with hLeftAction | hRightAction
+      · exact Or.inl (ihLeft hSource.2.2.1 hLeftAction)
+      · exact Or.inr (ihRight hSource.2.2.2 hRightAction)
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
+      hLocal2 hSide ihLeft ihRight =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.alphabet] at hAction ⊢
+      rw [hSource.2.1.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+        Finset.mem_union]
+      refine ⟨?_, hAction.2⟩
+      rcases hAction.1 with hLeftAction | hRightAction
+      · exact Or.inl (ihLeft hSource.2.2.1 hLeftAction)
+      · exact Or.inr (ihRight hSource.2.2.2 hRightAction)
+  | clock => trivial
+  | ordinary => trivial
+
+private theorem typeOffers_future_subset_fixedAlphabet
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource : source.AlphabetWellFormed)
+    (hTargetAlphabet : target.alphabet = source.alphabet)
+    (hTargetWF : target.AlphabetWellFormed)
+    (hOffers : TypeOffers env source label target current future) :
+    future ⊆ source.alphabet.actions := by
+  intro action hAction
+  have hFuture :=
+    typeOffers_future_subset_target_union_current hOffers hAction
+  rw [Finset.mem_union] at hFuture
+  rcases hFuture with hFuture | hCurrent
+  · have hSubset := typeFutureOffers_subset_fixedAlphabet target hTargetWF
+    simpa [hTargetAlphabet] using hSubset hFuture
+  · exact typeOffers_current_subset_fixedAlphabet hSource hOffers hCurrent
+
+private theorem alphabet_wellFormed_of_type
+    {processType : PactType} (hWF : processType.AlphabetWellFormed) :
+    processType.alphabet.WellFormed := by
+  cases processType <;> simp [PactType.AlphabetWellFormed, PactType.alphabet] at hWF ⊢
+  all_goals exact hWF.1
+
+private theorem typeNeed_injective : Function.Injective typeNeed := by
+  intro left right hEq
+  rcases left with ⟨leftMsg, leftDir⟩
+  rcases right with ⟨rightMsg, rightDir⟩
+  cases leftDir <;> cases rightDir <;>
+    simp [typeNeed, MessageDir.invert] at hEq ⊢
+  exact hEq
+
+private theorem typeNeed_typeNeed (action : BareMessage) :
+    typeNeed (typeNeed action) = action := by
+  rcases action with ⟨msg, dir⟩
+  cases dir <;> simp [typeNeed, MessageDir.invert]
+
+private theorem typeNeed_mem_left_of_right_interface
+    {parent left right : PactTypeAlphabet} {interface : Interface}
+    (hLeftWF : left.WellFormed) (hRightWF : right.WellFormed)
+    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
+    {action : BareMessage}
+    (hAction : action ∈ right.actions) (hInterface : action.1 ∈ interface) :
+    typeNeed action ∈ left.actions := by
+  rcases action with ⟨msg, dir⟩
+  have hComp := hCompatible.complementary msg hInterface
+  cases dir
+  · simp only [typeNeed, MessageDir.invert]
+    rcases hComp with hSendRecv | hRecvSend
+    · exact False.elim (hRightWF msg ⟨hAction, hSendRecv.2⟩)
+    · exact hRecvSend.1
+  · simp only [typeNeed, MessageDir.invert]
+    rcases hComp with hSendRecv | hRecvSend
+    · exact hSendRecv.1
+    · exact False.elim (hRightWF msg ⟨hRecvSend.2, hAction⟩)
+
+private theorem typeNeed_mem_right_of_left_interface
+    {parent left right : PactTypeAlphabet} {interface : Interface}
+    (hLeftWF : left.WellFormed) (hRightWF : right.WellFormed)
+    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
+    {action : BareMessage}
+    (hAction : action ∈ left.actions) (hInterface : action.1 ∈ interface) :
+    typeNeed action ∈ right.actions := by
+  rcases action with ⟨msg, dir⟩
+  have hComp := hCompatible.complementary msg hInterface
+  cases dir
+  · simp only [typeNeed, MessageDir.invert]
+    rcases hComp with hSendRecv | hRecvSend
+    · exact hSendRecv.2
+    · exact False.elim (hLeftWF msg ⟨hAction, hRecvSend.1⟩)
+  · simp only [typeNeed, MessageDir.invert]
+    rcases hComp with hSendRecv | hRecvSend
+    · exact False.elim (hLeftWF msg ⟨hSendRecv.1, hAction⟩)
+    · exact hRecvSend.2
+
+private theorem projected_environment_action_mem_for
+    (signature : TypeAlphabet)
+    {parent local : PactTypeAlphabet} {action : BareMessage}
+    (hOuter :
+      action ∈ signature.localEnvironmentActionsFor parent)
+    (hProjected : action ∈ local.actions.image typeNeed) :
+    action ∈ signature.localEnvironmentActionsFor local := by
+  simp only [TypeAlphabet.localEnvironmentActionsFor,
+    TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+    at hOuter hProjected ⊢
+  rcases hOuter with ⟨outerAction, hOuterAction, hOuterEq⟩
+  rcases hProjected with ⟨localAction, hLocalAction, hLocalEq⟩
+  have hSameNeed : typeNeed localAction = typeNeed outerAction := by
+    rw [hLocalEq, hOuterEq]
+  have hActionEq : localAction = outerAction :=
+    typeNeed_injective hSameNeed
+  subst outerAction
+  exact ⟨localAction, ⟨hOuterAction.1, hLocalAction⟩, hLocalEq⟩
+
+private theorem interface_offer_mem_localEnvironmentActionsFor
+    (signature : TypeAlphabet) {interface : Interface}
+    {local sibling : PactTypeAlphabet} {action : BareMessage}
+    (hInterface : interface ⊆ signature.interface)
+    (hSiblingAction : action ∈ signature.localActionsFor sibling)
+    (hActionInterface : action.1 ∈ interface)
+    (hNeed : typeNeed action ∈ local.actions) :
+    action ∈ signature.localEnvironmentActionsFor local := by
+  simp only [TypeAlphabet.localEnvironmentActionsFor,
+    TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter] at
+    hSiblingAction ⊢
+  refine ⟨typeNeed action, ⟨?_, hNeed⟩, ?_⟩
+  · exact interface_action_mem_localActions signature hInterface (by
+      rcases action with ⟨msg, dir⟩
+      simpa [typeNeed] using hActionInterface)
+  · rw [typeNeed_typeNeed]
+
+private theorem localEnvironmentFor_mem_of_localTypeOfferEnvironment
+    (signature : TypeAlphabet) {parentAlphabet siblingAlphabet : PactTypeAlphabet}
+    {outer localEnv siblingEnv : TypeEnvironment}
+    {interface : Interface} {localType : PactType}
+    {current future : Finset BareMessage}
+    (hInterface : interface ⊆ signature.interface)
+    (hOuter : outer ∈ signature.localEnvironmentsFor parentAlphabet)
+    (hCurrent : current ⊆ signature.localActionsFor siblingAlphabet)
+    (hFuture : future ⊆ signature.localActionsFor siblingAlphabet)
+    (hNeed : ∀ action,
+      action ∈ siblingAlphabet.actions → action.1 ∈ interface →
+        typeNeed action ∈ localType.alphabet.actions)
+    (hLocal :
+      LocalTypeOfferEnvironment outer interface localType siblingEnv current
+        future localEnv) :
+    localEnv ∈ signature.localEnvironmentsFor localType.alphabet := by
+  cases hLocal with
+  | clock outer interface localType current hClock =>
+      simp [TypeAlphabet.localEnvironmentsFor, TypeEnvironment.tock]
+  | ordinary outer siblingEnv localEnv interface localType current
+      hOuterClock hSiblingClock hLocalClock hImmediate hFutureEq =>
+      simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+        Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+        Finset.mem_image] at hOuter ⊢
+      rcases hOuter with hTock | ⟨outerImmediate, hOuterImmediate,
+        outerFuture, hOuterFuture, hOuterEq⟩
+      · subst outer
+        simp [TypeEnvironment.tock] at hOuterClock
+      · subst outer
+        rcases localEnv with ⟨localImmediate, localFuture, localClock⟩
+        simp only at hLocalClock hImmediate hFutureEq
+        subst localClock
+        right
+        refine ⟨localImmediate, ?_, localFuture, ?_, rfl⟩
+        · intro action hAction
+          rw [hImmediate] at hAction
+          simp only [Finset.mem_union, restrictTypeOffers,
+            projectTypeEnvironmentOffers, Finset.mem_filter] at hAction
+          rcases hAction with ⟨hOuterAction, hProjected⟩ |
+              ⟨hCurrentAction, hInterfaceAction⟩
+          · exact projected_environment_action_mem_for signature
+              (hOuterImmediate hOuterAction) hProjected
+          · exact interface_offer_mem_localEnvironmentActionsFor signature
+              hInterface (hCurrent hCurrentAction) hInterfaceAction
+              (hNeed action
+                ((Finset.mem_inter.mp (hCurrent hCurrentAction)).2)
+                hInterfaceAction)
+        · intro action hAction
+          rw [hFutureEq] at hAction
+          simp only [Finset.mem_sdiff, Finset.mem_union, restrictTypeOffers,
+            projectTypeEnvironmentOffers, Finset.mem_filter] at hAction ⊢
+          rcases hAction.1 with ⟨hOuterAction, hProjected⟩ |
+              ⟨hFutureAction, hInterfaceAction⟩
+          · exact ⟨projected_environment_action_mem_for signature
+              (hOuterFuture hOuterAction).1 hProjected, hAction.2⟩
+          · exact ⟨interface_offer_mem_localEnvironmentActionsFor signature
+              hInterface (hFuture hFutureAction) hInterfaceAction
+              (hNeed action
+                ((Finset.mem_inter.mp (hFuture hFutureAction)).2)
+                hInterfaceAction), hAction.2⟩
 
 private theorem localEnvironment_mem_of_localTypeEnvironment
     (signature : TypeAlphabet) {outer localEnv siblingEnv : TypeEnvironment}
@@ -1803,6 +2480,151 @@ theorem relationMembership_messageActions_subset
     residual.MessageActions ⊆ source.MessageActions := by
   exact (buildRelationSetCoreFuel_footprintSubset signature
     (typeCompilationFuel source) source residual state hRelated).2.1
+
+/-- One semantic step cannot introduce a polarized message action that was
+absent from its source syntax. -/
+private theorem typeTransition_target_messageActions_subset
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    (hTransition : TypeTransition env source label target) :
+    target.MessageActions ⊆ source.MessageActions := by
+  induction hTransition with
+  | action | action_wait | cycle | cycle_wait | skip | progress =>
+      simp [PactType.MessageActions]
+  | choice_left | choice_right | fair_left | fair_right =>
+      simp [PactType.MessageActions]
+  | recur env alphabet name body hWF =>
+      have hReplace := replaceVar_footprintWithinReplacement name
+        (.recur alphabet name body) body
+      simp only [footprintWithinReplacement, PactType.MessageActions] at hReplace
+      simpa [PactType.MessageActions] using
+        hReplace.2.1.trans (Finset.union_subset Finset.Subset.rfl
+          Finset.Subset.rfl)
+  | seq_fuse env alphabet skipAlphabet left right label hChild ih =>
+      simpa [PactType.MessageActions] using
+        (Finset.subset_union_right :
+          right.MessageActions ⊆ left.MessageActions ∪ right.MessageActions)
+  | seq env alphabet left leftTarget right label hChild hNotSkip ih =>
+      simpa [PactType.MessageActions] using
+        Finset.union_subset_union ih Finset.Subset.rfl
+  | xoffer_branch env alphabet elseType branches action branchType hConditions =>
+      have hBranch := branchType_footprintSubset hConditions.2.1
+      simpa [PactType.MessageActions] using
+        hBranch.2.1.trans Finset.subset_union_right
+  | xoffer_else env alphabet elseType branches hConditions =>
+      simpa [PactType.MessageActions] using
+        (Finset.subset_union_left : elseType.MessageActions ⊆
+          elseType.MessageActions ∪ PactType.BranchMessageActions branches)
+  | offer_else env alphabet elseType branches hConditions =>
+      simpa [PactType.MessageActions] using
+        (Finset.subset_union_left : elseType.MessageActions ⊆
+          elseType.MessageActions ∪ PactType.BranchMessageActions branches)
+  | xoffer_wait | offer_wait =>
+      exact Finset.Subset.rfl
+  | offer_some env alphabet elseType branches enabled hConditions =>
+      rw [parallelTypeBranchesSelecting_messageActions]
+      simpa [PactType.MessageActions] using
+        (Finset.subset_union_right : PactType.BranchMessageActions branches ⊆
+          elseType.MessageActions ∪ PactType.BranchMessageActions branches)
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeft hLeftOffers hRight hRightOffers hNonFinal hSide hLeftIH hRightIH =>
+      simpa [PactType.MessageActions] using
+        Finset.union_subset_union hLeftIH hRightIH
+  | par_fuse =>
+      simp [PactType.MessageActions]
+
+private theorem typeBranchActions_subset_branchMessageActions
+    (branches : List (BareMessage × PactType)) :
+    typeBranchActions branches ⊆ PactType.BranchMessageActions branches := by
+  induction branches with
+  | nil => simp [typeBranchActions, PactType.BranchMessageActions]
+  | cons head rest ih =>
+      intro action hAction
+      simp only [typeBranchActions, List.map_cons, List.toFinset_cons,
+        Finset.mem_insert] at hAction
+      rw [PactType.BranchMessageActions.eq_def]
+      rcases hAction with hHead | hRest
+      · exact Finset.mem_union.mpr
+          (Or.inl (Finset.mem_union.mpr (Or.inl (by simpa [hHead]))))
+      · exact Finset.mem_union.mpr (Or.inr (ih hRest))
+
+private theorem branchAction_mem_branchMessageActions
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hMem : (action, branchType) ∈ branches) :
+    action ∈ PactType.BranchMessageActions branches := by
+  apply typeBranchActions_subset_branchMessageActions branches
+  simp only [typeBranchActions, List.mem_toFinset, List.mem_map]
+  exact ⟨(action, branchType), hMem, rfl⟩
+
+/-- The current offer of a semantic step is owned by the step's source
+syntax. -/
+private theorem typeOffers_current_subset_messageActions
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future) :
+    current ⊆ source.MessageActions := by
+  induction hOffers using TypeOffers.rec
+      (motive_2 := fun _ _ _ _ _ _ _ _ => True) with
+  | action => simp [PactType.MessageActions]
+  | action_wait => simp [PactType.MessageActions]
+  | choice_left | choice_right | fair_left | fair_right |
+      cycle | cycle_wait | skip | progress | recur | offer_some =>
+      simp [PactType.MessageActions]
+  | seq env alphabet left leftTarget right label current childFuture
+      hChild hNotSkip ih =>
+      simpa [PactType.MessageActions] using
+        ih.trans (Finset.subset_union_left :
+          left.MessageActions ⊆ left.MessageActions ∪ right.MessageActions)
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild ih =>
+      simpa [PactType.MessageActions] using
+        ih.trans (Finset.subset_union_left :
+          left.MessageActions ⊆ left.MessageActions ∪ right.MessageActions)
+  | xoffer_branch env alphabet elseType branches action branchType hConditions =>
+      intro offered hOffered
+      simp only [Finset.mem_singleton] at hOffered
+      subst offered
+      simp only [PactType.MessageActions, Finset.mem_union]
+      exact Or.inr (branchAction_mem_branchMessageActions hConditions.2.1)
+  | xoffer_else => simp [PactType.MessageActions]
+  | xoffer_wait env alphabet elseType branches hConditions =>
+      intro action hAction
+      simp only [typeWaitingOffers, Finset.mem_inter] at hAction
+      rw [PactType.MessageActions.eq_def]
+      exact Finset.mem_union.mpr
+        (Or.inr (typeBranchActions_subset_branchMessageActions branches hAction.2))
+  | offer_else env alphabet elseType branches hConditions =>
+      intro action hAction
+      rw [PactType.MessageActions.eq_def]
+      exact Finset.mem_union.mpr
+        (Or.inr (typeBranchActions_subset_branchMessageActions branches hAction))
+  | offer_wait env alphabet elseType branches hConditions =>
+      intro action hAction
+      simp only [typeWaitingOffers, Finset.mem_inter] at hAction
+      rw [PactType.MessageActions.eq_def]
+      exact Finset.mem_union.mpr
+        (Or.inr (typeBranchActions_subset_branchMessageActions branches hAction.2))
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.MessageActions] at hAction ⊢
+      rcases hAction.1 with hLeftAction | hRightAction
+      · exact Or.inl (ihLeft hLeftAction)
+      · exact Or.inr (ihRight hRightAction)
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
+      hLocal2 hSide ihLeft ihRight =>
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.MessageActions] at hAction ⊢
+      rcases hAction.1 with hLeftAction | hRightAction
+      · exact Or.inl (ihLeft hLeftAction)
+      · exact Or.inr (ihRight hRightAction)
+  | clock => trivial
+  | ordinary => trivial
 
 /-- Defines the related-state shape for a compiled parallel product,
 mirroring `pactproofs.typ`'s own "Related states" bullets verbatim: a

@@ -229,7 +229,10 @@ theorem typeOffers_future_subset_target_union_current
       intro action hAction
       simp at hAction ⊢
       exact Or.inl hAction.1
-  | par =>
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide hLeftIH
+      hRightIH =>
       intro action hAction
       rw [typeFutureOffers_parallel]
       simp only [Finset.mem_union]
@@ -237,32 +240,30 @@ theorem typeOffers_future_subset_target_union_current
       obtain ⟨hAction, hInterface⟩ := hAction
       simp only [Finset.mem_union] at hAction
       rcases hAction with hLeft | hRight
-      · rename_i hLeftOffers hRightOffers _ _ _ _ hLeftIH _ _ _
-        have hLeft' := hLeftIH hLeft
+      · have hLeft' := hLeftIH hLeft
         simp only [Finset.mem_union] at hLeft'
         rcases hLeft' with hFuture | hCurrent
         · exact Or.inl ⟨Finset.mem_union.mpr (Or.inl hFuture), hInterface⟩
         · exact Or.inr ⟨Finset.mem_union.mpr (Or.inl hCurrent), hInterface⟩
-      · rename_i hLeftOffers hRightOffers _ _ _ _ _ hRightIH _ _
-        have hRight' := hRightIH hRight
+      · have hRight' := hRightIH hRight
         simp only [Finset.mem_union] at hRight'
         rcases hRight' with hFuture | hCurrent
         · exact Or.inl ⟨Finset.mem_union.mpr (Or.inr hFuture), hInterface⟩
         · exact Or.inr ⟨Finset.mem_union.mpr (Or.inr hCurrent), hInterface⟩
-  | par_fuse =>
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
+      hLocal1 hLocal2 hSide hLeftIH hRightIH =>
       intro action hAction
       simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
       obtain ⟨hAction, hInterface⟩ := hAction
       simp only [Finset.mem_union] at hAction
       rcases hAction with hLeft | hRight
-      · rename_i hLeftOffers hRightOffers _ _ _ hLeftIH _ _ _
-        have hLeft' := hLeftIH hLeft
+      · have hLeft' := hLeftIH hLeft
         simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
           at hLeft'
         exact ⟨Finset.mem_union.mpr (Or.inl hLeft'), hInterface⟩
-      · rename_i hLeftOffers hRightOffers _ _ _ _ hRightIH _ _
-        have hRight' := hRightIH hRight
+      · have hRight' := hRightIH hRight
         simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
           at hRight'
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
