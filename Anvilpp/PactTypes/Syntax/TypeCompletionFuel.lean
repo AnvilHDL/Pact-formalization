@@ -17,19 +17,19 @@ def typeCanCompleteThisCycleFuel : Nat → PactType → Bool
   | 0, _ => false
   | fuel + 1, processType =>
       match processType with
-      | .message _ _ | .progress _ | .skip => true
-      | .tock | .var _ => false
-      | .recur _ body => typeCanCompleteThisCycleFuel fuel body
-      | .choice left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .skip _ => true
+      | .tock _ | .var _ _ => false
+      | .recur _ _ body => typeCanCompleteThisCycleFuel fuel body
+      | .choice _ left right | .fairChoice _ _ left right =>
           typeCanCompleteThisCycleFuel fuel left ||
             typeCanCompleteThisCycleFuel fuel right
-      | .seq left right =>
+      | .seq _ left right =>
           typeCanCompleteThisCycleFuel fuel left &&
             typeCanCompleteThisCycleFuel fuel right
-      | .par left right _ =>
+      | .par _ left right _ =>
           typeCanCompleteThisCycleFuel fuel left &&
             typeCanCompleteThisCycleFuel fuel right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           typeCanCompleteThisCycleFuel fuel elseType ||
             branches.any fun branch =>
               typeCanCompleteThisCycleFuel fuel branch.2
@@ -48,84 +48,89 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
   | succ fuel ih =>
       intro processType hSize
       cases processType with
-      | message msg dir => rfl
-      | progress pid => rfl
-      | tock => rfl
-      | skip => rfl
-      | var name => rfl
-      | recur name body =>
+      | message alphabet msg dir => rfl
+      | progress alphabet pid => rfl
+      | tock alphabet => rfl
+      | skip alphabet => rfl
+      | var alphabet name => rfl
+      | recur alphabet name body =>
           change typeCanCompleteThisCycleFuel (fuel + 1) body =
             typeCanCompleteThisCycleFuel fuel body
           apply ih
-          have hBody : sizeOf body < sizeOf (PactType.recur name body) := by
+          have hBody : sizeOf body <
+              sizeOf (PactType.recur alphabet name body) := by
             simp_wf
             omega
           omega
-      | choice left right =>
-          change (typeCanCompleteThisCycleFuel (fuel + 1) left ||
-              typeCanCompleteThisCycleFuel (fuel + 1) right) =
-            (typeCanCompleteThisCycleFuel fuel left ||
-              typeCanCompleteThisCycleFuel fuel right)
-          rw [ih left (by
-              have : sizeOf left < sizeOf (PactType.choice left right) := by
-                simp_wf
-                omega
-              omega),
-            ih right (by
-              have : sizeOf right < sizeOf (PactType.choice left right) := by
-                simp_wf
-                omega
-              omega)]
-      | fairChoice bid left right =>
+      | choice alphabet left right =>
           change (typeCanCompleteThisCycleFuel (fuel + 1) left ||
               typeCanCompleteThisCycleFuel (fuel + 1) right) =
             (typeCanCompleteThisCycleFuel fuel left ||
               typeCanCompleteThisCycleFuel fuel right)
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf
                 omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf
                 omega
               omega)]
-      | seq left right =>
-          change (typeCanCompleteThisCycleFuel (fuel + 1) left &&
+      | fairChoice alphabet bid left right =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left ||
               typeCanCompleteThisCycleFuel (fuel + 1) right) =
-            (typeCanCompleteThisCycleFuel fuel left &&
+            (typeCanCompleteThisCycleFuel fuel left ||
               typeCanCompleteThisCycleFuel fuel right)
           rw [ih left (by
-              have : sizeOf left < sizeOf (PactType.seq left right) := by
+              have : sizeOf left <
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
                 simp_wf
                 omega
               omega),
             ih right (by
-              have : sizeOf right < sizeOf (PactType.seq left right) := by
+              have : sizeOf right <
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
                 simp_wf
                 omega
               omega)]
-      | par left right interface =>
+      | seq alphabet left right =>
           change (typeCanCompleteThisCycleFuel (fuel + 1) left &&
               typeCanCompleteThisCycleFuel (fuel + 1) right) =
             (typeCanCompleteThisCycleFuel fuel left &&
               typeCanCompleteThisCycleFuel fuel right)
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.seq alphabet left right) := by
                 simp_wf
                 omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.seq alphabet left right) := by
                 simp_wf
                 omega
               omega)]
-      | xoffer elseType branches =>
+      | par alphabet left right interface =>
+          change (typeCanCompleteThisCycleFuel (fuel + 1) left &&
+              typeCanCompleteThisCycleFuel (fuel + 1) right) =
+            (typeCanCompleteThisCycleFuel fuel left &&
+              typeCanCompleteThisCycleFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.par alphabet left right interface) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.par alphabet left right interface) := by
+                simp_wf
+                omega
+              omega)]
+      | xoffer alphabet elseType branches =>
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -134,7 +139,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 typeCanCompleteThisCycleFuel fuel branch.2))
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.xoffer elseType branches) := by
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
               simp_wf
               omega
             omega)]
@@ -147,7 +152,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
               simp_wf
               omega
             have hList : sizeOf branches <
-                sizeOf (PactType.xoffer elseType branches) := by
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
               simp_wf
               omega
             omega
@@ -157,14 +162,15 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
               simp only [List.any_cons]
               rw [ih branch.2 (hEvery branch (by simp))]
               rw [restIH (by
-                have : sizeOf (PactType.xoffer elseType rest) <
-                    sizeOf (PactType.xoffer elseType (branch :: rest)) := by
+                have : sizeOf (PactType.xoffer alphabet elseType rest) <
+                    sizeOf (PactType.xoffer alphabet elseType
+                      (branch :: rest)) := by
                   simp_wf
                   omega
                 omega) (by
                 intro other hOther
                 exact hEvery other (by simp [hOther]))]
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -173,7 +179,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 typeCanCompleteThisCycleFuel fuel branch.2))
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.offer elseType branches) := by
+                sizeOf (PactType.offer alphabet elseType branches) := by
               simp_wf
               omega
             omega)]
@@ -186,7 +192,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
               simp_wf
               omega
             have hList : sizeOf branches <
-                sizeOf (PactType.offer elseType branches) := by
+                sizeOf (PactType.offer alphabet elseType branches) := by
               simp_wf
               omega
             omega
@@ -196,8 +202,9 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
               simp only [List.any_cons]
               rw [ih branch.2 (hEvery branch (by simp))]
               rw [restIH (by
-                have : sizeOf (PactType.offer elseType rest) <
-                    sizeOf (PactType.offer elseType (branch :: rest)) := by
+                have : sizeOf (PactType.offer alphabet elseType rest) <
+                    sizeOf (PactType.offer alphabet elseType
+                      (branch :: rest)) := by
                   simp_wf
                   omega
                 omega) (by
@@ -218,79 +225,83 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
   | succ fuel ih =>
       intro processType hSize
       cases processType with
-      | message msg dir =>
+      | message alphabet msg dir =>
           simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
-      | progress pid =>
+      | progress alphabet pid =>
           simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
-      | tock =>
+      | tock alphabet =>
           simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
-      | skip =>
+      | skip alphabet =>
           simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
-      | var name =>
+      | var alphabet name =>
           simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
-      | recur name body =>
+      | recur alphabet name body =>
           simp only [typeCanCompleteThisCycleFuel,
             PactType.CanCompleteBeforeTock]
           apply ih
           have hProper : sizeOf body <
-              sizeOf (PactType.recur name body) := by
+              sizeOf (PactType.recur alphabet name body) := by
             simp_wf
             omega
           omega
-      | choice left right =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
-          rw [ih left (by
-              have : sizeOf left < sizeOf (PactType.choice left right) := by
-                simp_wf; omega
-              omega),
-            ih right (by
-              have : sizeOf right < sizeOf (PactType.choice left right) := by
-                simp_wf; omega
-              omega)]
-      | fairChoice bid left right =>
+      | choice alphabet left right =>
           simp only [typeCanCompleteThisCycleFuel,
             PactType.CanCompleteBeforeTock]
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf; omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf; omega
               omega)]
-      | seq left right =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
-          rw [ih left (by
-              have : sizeOf left < sizeOf (PactType.seq left right) := by
-                simp_wf; omega
-              omega),
-            ih right (by
-              have : sizeOf right < sizeOf (PactType.seq left right) := by
-                simp_wf; omega
-              omega)]
-      | par left right interface =>
+      | fairChoice alphabet bid left right =>
           simp only [typeCanCompleteThisCycleFuel,
             PactType.CanCompleteBeforeTock]
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
                 simp_wf; omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
                 simp_wf; omega
               omega)]
-      | xoffer elseType branches =>
+      | seq alphabet left right =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.seq alphabet left right) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.seq alphabet left right) := by
+                simp_wf; omega
+              omega)]
+      | par alphabet left right interface =>
+          simp only [typeCanCompleteThisCycleFuel,
+            PactType.CanCompleteBeforeTock]
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.par alphabet left right interface) := by
+                simp_wf; omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.par alphabet left right interface) := by
+                simp_wf; omega
+              omega)]
+      | xoffer alphabet elseType branches =>
           simp only [typeCanCompleteThisCycleFuel,
             PactType.CanCompleteBeforeTock]
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.xoffer elseType branches) := by
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
               simp_wf; omega
             omega)]
           congr 1
@@ -301,20 +312,22 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
               simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
-                    (PactType.xoffer elseType ((action, branchType) :: rest)) := by
+                    (PactType.xoffer alphabet elseType
+                      ((action, branchType) :: rest)) := by
                   simp_wf; omega
                 omega)]
               rw [restIH (by
-                have : sizeOf (PactType.xoffer elseType rest) < sizeOf
-                    (PactType.xoffer elseType ((action, branchType) :: rest)) := by
+                have : sizeOf (PactType.xoffer alphabet elseType rest) < sizeOf
+                    (PactType.xoffer alphabet elseType
+                      ((action, branchType) :: rest)) := by
                   simp_wf; omega
                 omega)]
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           simp only [typeCanCompleteThisCycleFuel,
             PactType.CanCompleteBeforeTock]
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.offer elseType branches) := by
+                sizeOf (PactType.offer alphabet elseType branches) := by
               simp_wf; omega
             omega)]
           congr 1
@@ -325,12 +338,14 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
               simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
-                    (PactType.offer elseType ((action, branchType) :: rest)) := by
+                    (PactType.offer alphabet elseType
+                      ((action, branchType) :: rest)) := by
                   simp_wf; omega
                 omega)]
               rw [restIH (by
-                have : sizeOf (PactType.offer elseType rest) < sizeOf
-                    (PactType.offer elseType ((action, branchType) :: rest)) := by
+                have : sizeOf (PactType.offer alphabet elseType rest) < sizeOf
+                    (PactType.offer alphabet elseType
+                      ((action, branchType) :: rest)) := by
                   simp_wf; omega
                 omega)]
 
@@ -343,15 +358,15 @@ theorem mustTock_cannotCompleteThisCycleFuel
     | zero => rfl
     | succ fuel =>
         cases processType with
-        | message msg dir => simp [PactType.MustTockBeforeCompletion] at hTock
-        | progress pid => simp [PactType.MustTockBeforeCompletion] at hTock
-        | tock => rfl
-        | skip => simp [PactType.MustTockBeforeCompletion] at hTock
-        | var name => simp [PactType.MustTockBeforeCompletion] at hTock
-        | recur name body =>
+        | message alphabet msg dir => simp [PactType.MustTockBeforeCompletion] at hTock
+        | progress alphabet pid => simp [PactType.MustTockBeforeCompletion] at hTock
+        | tock alphabet => rfl
+        | skip alphabet => simp [PactType.MustTockBeforeCompletion] at hTock
+        | var alphabet name => simp [PactType.MustTockBeforeCompletion] at hTock
+        | recur alphabet name body =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             exact mustTock_cannotCompleteThisCycleFuel body hTock fuel
-        | choice left right =>
+        | choice alphabet left right =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with ⟨hLeft, hRight⟩
             change (typeCanCompleteThisCycleFuel fuel left ||
@@ -359,7 +374,7 @@ theorem mustTock_cannotCompleteThisCycleFuel
             rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel,
               mustTock_cannotCompleteThisCycleFuel right hRight fuel]
             simp
-        | fairChoice bid left right =>
+        | fairChoice alphabet bid left right =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with ⟨hLeft, hRight⟩
             change (typeCanCompleteThisCycleFuel fuel left ||
@@ -367,7 +382,7 @@ theorem mustTock_cannotCompleteThisCycleFuel
             rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel,
               mustTock_cannotCompleteThisCycleFuel right hRight fuel]
             simp
-        | seq left right =>
+        | seq alphabet left right =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with hLeft | hRight
             · change (typeCanCompleteThisCycleFuel fuel left &&
@@ -378,14 +393,14 @@ theorem mustTock_cannotCompleteThisCycleFuel
                 typeCanCompleteThisCycleFuel fuel right) = false
               rw [mustTock_cannotCompleteThisCycleFuel right hRight fuel]
               simp
-        | par left right interface =>
+        | par alphabet left right interface =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with ⟨hLeft, _⟩
             change (typeCanCompleteThisCycleFuel fuel left &&
               typeCanCompleteThisCycleFuel fuel right) = false
             rw [mustTock_cannotCompleteThisCycleFuel left hLeft fuel]
             simp
-        | xoffer elseType branches =>
+        | xoffer alphabet elseType branches =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with ⟨hElse, hBranches⟩
             have hNoBranches :
@@ -410,7 +425,7 @@ theorem mustTock_cannotCompleteThisCycleFuel
             rw [mustTock_cannotCompleteThisCycleFuel elseType hElse fuel,
               hNoBranches]
             simp
-        | offer elseType branches =>
+        | offer alphabet elseType branches =>
             simp only [PactType.MustTockBeforeCompletion] at hTock
             rcases hTock with ⟨hElse, hBranches⟩
             have hNoBranches :
@@ -452,19 +467,19 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
   | zero => rfl
   | succ fuel =>
       cases processType with
-      | message msg dir =>
+      | message alphabet msg dir =>
           simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
-      | progress pid =>
+      | progress alphabet pid =>
           simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
-      | tock => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
-      | skip => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
-      | var other =>
+      | tock alphabet => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | skip alphabet => simp [PactType.replaceVar, typeCanCompleteThisCycleFuel]
+      | var alphabet other =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           have hNe : name ≠ other := by
             intro h
             exact hGuarded h.symm
           simp [PactType.replaceVar, hNe]
-      | recur other body =>
+      | recur alphabet other body =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           by_cases hName : other = name
           · have hTarget : name = other := hName.symm
@@ -477,7 +492,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
               typeCanCompleteThisCycleFuel]
             exact guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement body hGuarded fuel
-      | choice left right =>
+      | choice alphabet left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
@@ -485,7 +500,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement right hRight fuel]
-      | fairChoice bid left right =>
+      | fairChoice alphabet bid left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
@@ -493,7 +508,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement right hRight fuel]
-      | par left right interface =>
+      | par alphabet left right interface =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
@@ -501,7 +516,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement right hRight fuel]
-      | seq left right =>
+      | seq alphabet left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeCanCompleteThisCycleFuel]
@@ -513,7 +528,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
           · simp only [hTock, or_false] at hRight
             rw [guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement right hRight fuel]
-      | xoffer elseType branches =>
+      | xoffer alphabet elseType branches =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hElse, hBranches⟩
           have hBranchesEq :
@@ -536,7 +551,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
           rw [guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement elseType hElse fuel,
             hBranchesEq]
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hElse, hBranches⟩
           have hBranchesEq :

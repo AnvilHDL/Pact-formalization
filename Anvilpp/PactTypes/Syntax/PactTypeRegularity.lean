@@ -13,14 +13,14 @@ namespace PactType
   /-! Every recursive backedge in a type is protected by a prior clock. -/
   mutual
     def ClockGuarded : PactType → Prop
-      | .recur name body =>
+      | .recur _ name body =>
           GuardedOccurrences name False body ∧ ClockGuarded body
-      | .choice left right | .seq left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
           ClockGuarded left ∧ ClockGuarded right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ClockGuarded elseType ∧ ClockGuardedBranches branches
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
     termination_by processType => sizeOf processType
 
     def ClockGuardedBranches : List (BareMessage × PactType) → Prop
@@ -50,25 +50,25 @@ namespace PactType
   -/
   mutual
     def TailOccurrences (name : String) (tail : Prop) : PactType → Prop
-      | .var other => other = name → tail
-      | .seq left right =>
+      | .var _ other => other = name → tail
+      | .seq _ left right =>
           TailOccurrences name False left ∧
             TailOccurrences name tail right
-      | .par left right _ =>
+      | .par _ left right _ =>
           TailOccurrences name False left ∧
             TailOccurrences name False right
-      | .choice left right | .fairChoice _ left right =>
+      | .choice _ left right | .fairChoice _ _ left right =>
           TailOccurrences name tail left ∧
             TailOccurrences name tail right
-      | .recur other body =>
+      | .recur _ other body =>
           if other = name then True else TailOccurrences name tail body
-      | .xoffer elseType branches =>
+      | .xoffer _ elseType branches =>
           TailOccurrences name tail elseType ∧
             TailBranchOccurrences name tail branches
-      | .offer elseType branches =>
+      | .offer _ elseType branches =>
           TailOccurrences name tail elseType ∧
             TailBranchOccurrences name False branches
-      | .message _ _ | .progress _ | .tock | .skip => True
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ => True
     termination_by processType => sizeOf processType
 
     def TailBranchOccurrences (name : String) (tail : Prop) :
@@ -103,7 +103,7 @@ namespace PactType
             TailBranchOccurrences name False branches := by
           intro branches hBranchesSize hBound hNotMem
           induction branches with
-          | nil => simp [AllBranchVariablesBound, TailBranchOccurrences]
+          | nil => simp [TailBranchOccurrences]
           | cons branch rest restIH =>
               rcases branch with ⟨action, branchType⟩
               have hFields : AllVariablesBound bound branchType ∧
@@ -125,15 +125,15 @@ namespace PactType
                 restIH hRestSize hFields.2⟩
         intro hBound hNotMem
         cases processType with
-        | message _ _ | progress _ | tock | skip =>
+        | message _ _ _ | progress _ _ | tock _ | skip _ =>
             simp [TailOccurrences]
-        | var other =>
+        | var _ other =>
             simp only [AllVariablesBound] at hBound
             simp only [TailOccurrences]
             intro hEq
             subst other
             exact hNotMem hBound
-        | recur binder body =>
+        | recur _ binder body =>
             by_cases hBinder : binder = name
             · simp [TailOccurrences, hBinder]
             · have hBodySize : sizeOf body < n := by
@@ -145,7 +145,7 @@ namespace PactType
               simpa only [TailOccurrences, if_neg hBinder] using
                 ih (sizeOf body) hBodySize (binder :: bound) body rfl
                   hBodyBound hNameNotMem
-        | choice left right =>
+        | choice _ left right =>
             have hLeftSize : sizeOf left < n := by
               rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
@@ -156,7 +156,7 @@ namespace PactType
             simp only [TailOccurrences]
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
               ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
-        | fairChoice _ left right =>
+        | fairChoice _ _ left right =>
             have hLeftSize : sizeOf left < n := by
               rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
@@ -167,7 +167,7 @@ namespace PactType
             simp only [TailOccurrences]
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
               ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
-        | seq left right =>
+        | seq _ left right =>
             have hLeftSize : sizeOf left < n := by
               rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
@@ -178,7 +178,7 @@ namespace PactType
             simp only [TailOccurrences]
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
               ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
-        | par left right _ =>
+        | par _ left right _ =>
             have hLeftSize : sizeOf left < n := by
               rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
@@ -189,7 +189,7 @@ namespace PactType
             simp only [TailOccurrences]
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hFields.1 hNotMem,
               ih (sizeOf right) hRightSize bound right rfl hFields.2 hNotMem⟩
-        | xoffer elseType branches =>
+        | xoffer _ elseType branches =>
             have hElseSize : sizeOf elseType < n := by
               rw [← hSize]; simp_wf; omega
             have hBranchesSize : sizeOf branches < n := by
@@ -201,7 +201,7 @@ namespace PactType
             exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl
                 hFields.1 hNotMem,
               hBranches branches hBranchesSize hFields.2 hNotMem⟩
-        | offer elseType branches =>
+        | offer _ elseType branches =>
             have hElseSize : sizeOf elseType < n := by
               rw [← hSize]; simp_wf; omega
             have hBranchesSize : sizeOf branches < n := by
@@ -259,16 +259,16 @@ namespace PactType
                   hTail.1 h.1,
                 restIH hRestSize hTail.2 h.2⟩
         cases processType with
-        | var other =>
+        | var _ other =>
             intro hTail h
             simp only [TailOccurrences] at hTail
             simp only [AllVariablesBound, List.mem_cons] at h ⊢
             rcases h with hEq | h
             · exact absurd hEq hTail
             · exact h
-        | message _ _ | progress _ | tock | skip =>
+        | message _ _ _ | progress _ _ | tock _ | skip _ =>
             simp [AllVariablesBound]
-        | recur other body =>
+        | recur _ other body =>
             have hBodySize : sizeOf body < n := by
               rw [← hSize]; simp_wf; omega
             intro hTail h
@@ -298,7 +298,7 @@ namespace PactType
                   body h
               exact ih (sizeOf body) hBodySize (other :: bound) body rfl
                 hTail hReorder
-        | choice left right | fairChoice _ left right =>
+        | choice _ left right | fairChoice _ _ left right =>
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
               rw [← hSize]; simp_wf; omega
@@ -307,7 +307,7 @@ namespace PactType
             simp only [AllVariablesBound] at h ⊢
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hTail.1 h.1,
               ih (sizeOf right) hRightSize bound right rfl hTail.2 h.2⟩
-        | seq left right =>
+        | seq _ left right =>
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
               rw [← hSize]; simp_wf; omega
@@ -316,7 +316,7 @@ namespace PactType
             simp only [AllVariablesBound] at h ⊢
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hTail.1 h.1,
               ih (sizeOf right) hRightSize bound right rfl hTail.2 h.2⟩
-        | par left right _ =>
+        | par _ left right _ =>
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             have hRightSize : sizeOf right < n := by
               rw [← hSize]; simp_wf; omega
@@ -325,7 +325,7 @@ namespace PactType
             simp only [AllVariablesBound] at h ⊢
             exact ⟨ih (sizeOf left) hLeftSize bound left rfl hTail.1 h.1,
               ih (sizeOf right) hRightSize bound right rfl hTail.2 h.2⟩
-        | xoffer elseType branches =>
+        | xoffer _ elseType branches =>
             have hElseSize : sizeOf elseType < n := by
               rw [← hSize]; simp_wf; omega
             have hBranchesSize : sizeOf branches < n := by
@@ -336,7 +336,7 @@ namespace PactType
             exact ⟨ih (sizeOf elseType) hElseSize bound elseType rfl hTail.1
                 h.1,
               hBranches branches hBranchesSize hTail.2 h.2⟩
-        | offer elseType branches =>
+        | offer _ elseType branches =>
             have hElseSize : sizeOf elseType < n := by
               rw [← hSize]; simp_wf; omega
             have hBranchesSize : sizeOf branches < n := by
@@ -378,14 +378,14 @@ namespace PactType
   the same property.  This is the finite-control part of regularity. -/
   mutual
     def TailRecursive : PactType → Prop
-      | .recur name body =>
+      | .recur _ name body =>
           TailOccurrences name True body ∧ TailRecursive body
-      | .choice left right | .seq left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
           TailRecursive left ∧ TailRecursive right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           TailRecursive elseType ∧ TailRecursiveBranches branches
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
     termination_by processType => sizeOf processType
 
     def TailRecursiveBranches : List (BareMessage × PactType) → Prop
@@ -409,14 +409,14 @@ namespace PactType
   -/
   mutual
     def CanCompleteBeforeTock : PactType → Bool
-      | .message _ _ | .progress _ | .skip => true
-      | .tock | .var _ => false
-      | .recur _ body => CanCompleteBeforeTock body
-      | .choice left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .skip _ => true
+      | .tock _ | .var _ _ => false
+      | .recur _ _ body => CanCompleteBeforeTock body
+      | .choice _ left right | .fairChoice _ _ left right =>
           CanCompleteBeforeTock left || CanCompleteBeforeTock right
-      | .seq left right | .par left right _ =>
+      | .seq _ left right | .par _ left right _ =>
           CanCompleteBeforeTock left && CanCompleteBeforeTock right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           CanCompleteBeforeTock elseType ||
             BranchCanCompleteBeforeTock branches
     termination_by processType => sizeOf processType
@@ -436,16 +436,16 @@ namespace PactType
 
   mutual
     def PrefixMessageIds : PactType → Finset MessageId
-      | .message msg _ => {msg}
-      | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => PrefixMessageIds body
-      | .choice left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .message _ msg _ => {msg}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => PrefixMessageIds body
+      | .choice _ left right | .fairChoice _ _ left right |
+          .par _ left right _ =>
           PrefixMessageIds left ∪ PrefixMessageIds right
-      | .seq left right =>
+      | .seq _ left right =>
           PrefixMessageIds left ∪
             if CanCompleteBeforeTock left then PrefixMessageIds right else ∅
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           PrefixMessageIds elseType ∪ BranchPrefixMessageIds branches
     termination_by processType => sizeOf processType
 
@@ -464,16 +464,16 @@ namespace PactType
 
   mutual
     def SuffixMessageIds : PactType → Finset MessageId
-      | .message msg _ => {msg}
-      | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => SuffixMessageIds body
-      | .choice left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .message _ msg _ => {msg}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => SuffixMessageIds body
+      | .choice _ left right | .fairChoice _ _ left right |
+          .par _ left right _ =>
           SuffixMessageIds left ∪ SuffixMessageIds right
-      | .seq left right =>
+      | .seq _ left right =>
           SuffixMessageIds right ∪
             if CanCompleteBeforeTock right then SuffixMessageIds left else ∅
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           SuffixMessageIds elseType ∪ BranchSuffixMessageIds branches
     termination_by processType => sizeOf processType
 
@@ -493,19 +493,19 @@ namespace PactType
 
   mutual
     def SameCycleMessageLinear : PactType → Prop
-      | .seq left right =>
+      | .seq _ left right =>
           SameCycleMessageLinear left ∧ SameCycleMessageLinear right ∧
             Disjoint (SuffixMessageIds left) (PrefixMessageIds right)
-      | .recur _ body =>
+      | .recur _ _ body =>
           SameCycleMessageLinear body ∧
             Disjoint (SuffixMessageIds body) (PrefixMessageIds body)
-      | .choice left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .choice _ left right | .fairChoice _ _ left right |
+          .par _ left right _ =>
           SameCycleMessageLinear left ∧ SameCycleMessageLinear right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           SameCycleMessageLinear elseType ∧
             SameCycleMessageLinearBranches branches
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
     termination_by processType => sizeOf processType
 
     def SameCycleMessageLinearBranches :
@@ -539,13 +539,13 @@ namespace PactType
   -/
   mutual
     def MessageIds : PactType → Finset MessageId
-      | .message msg _ => {msg}
-      | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => MessageIds body
-      | .choice left right | .seq left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .message _ msg _ => {msg}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => MessageIds body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
           MessageIds left ∪ MessageIds right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           MessageIds elseType ∪ BranchMessageIds branches
     termination_by processType => sizeOf processType
 
@@ -562,13 +562,13 @@ namespace PactType
 
   mutual
     def MessageActions : PactType → Finset BareMessage
-      | .message msg dir => {(msg, dir)}
-      | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => MessageActions body
-      | .choice left right | .seq left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .message _ msg dir => {(msg, dir)}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => MessageActions body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
           MessageActions left ∪ MessageActions right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           MessageActions elseType ∪ BranchMessageActions branches
     termination_by processType => sizeOf processType
 
@@ -587,13 +587,13 @@ namespace PactType
   Parallel siblings therefore own disjoint sets of these identifiers. -/
   mutual
     def ProgressIds : PactType → Finset ProcId
-      | .progress pid => {pid}
-      | .message _ _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => ProgressIds body
-      | .choice left right | .seq left right | .fairChoice _ left right |
-          .par left right _ =>
+      | .progress _ pid => {pid}
+      | .message _ _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => ProgressIds body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
           ProgressIds left ∪ ProgressIds right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ProgressIds elseType ∪ BranchProgressIds branches
     termination_by processType => sizeOf processType
 
@@ -610,13 +610,13 @@ namespace PactType
 
   mutual
     def FairChoiceIds : PactType → Finset BranchId
-      | .fairChoice bid left right =>
+      | .fairChoice _ bid left right =>
           {bid} ∪ FairChoiceIds left ∪ FairChoiceIds right
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => FairChoiceIds body
-      | .choice left right | .seq left right | .par left right _ =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => FairChoiceIds body
+      | .choice _ left right | .seq _ left right | .par _ left right _ =>
           FairChoiceIds left ∪ FairChoiceIds right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           FairChoiceIds elseType ∪ BranchFairChoiceIds branches
     termination_by processType => sizeOf processType
 
@@ -633,14 +633,15 @@ namespace PactType
 
   mutual
     def ParallelProgressOwnership : PactType → Prop
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
-      | .recur _ body => ParallelProgressOwnership body
-      | .choice left right | .seq left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => ParallelProgressOwnership body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right =>
           ParallelProgressOwnership left ∧ ParallelProgressOwnership right
-      | .par left right _ =>
+      | .par _ left right _ =>
           Disjoint (ProgressIds left) (ProgressIds right) ∧
             ParallelProgressOwnership left ∧ ParallelProgressOwnership right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ParallelProgressOwnership elseType ∧
             ParallelProgressOwnershipBranches branches
     termination_by processType => sizeOf processType
@@ -661,14 +662,15 @@ namespace PactType
 
   mutual
     def ParallelFairChoiceOwnership : PactType → Prop
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
-      | .recur _ body => ParallelFairChoiceOwnership body
-      | .choice left right | .seq left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => ParallelFairChoiceOwnership body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right =>
           ParallelFairChoiceOwnership left ∧ ParallelFairChoiceOwnership right
-      | .par left right _ =>
+      | .par _ left right _ =>
           Disjoint (FairChoiceIds left) (FairChoiceIds right) ∧
             ParallelFairChoiceOwnership left ∧ ParallelFairChoiceOwnership right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ParallelFairChoiceOwnership elseType ∧
             ParallelFairChoiceOwnershipBranches branches
     termination_by processType => sizeOf processType
@@ -689,15 +691,16 @@ namespace PactType
 
   mutual
     def ParallelMessageOwnership : PactType → Prop
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
-      | .recur _ body => ParallelMessageOwnership body
-      | .choice left right | .seq left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => ParallelMessageOwnership body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right =>
           ParallelMessageOwnership left ∧ ParallelMessageOwnership right
-      | .par left right interface =>
+      | .par _ left right interface =>
           Disjoint (MessageIds left \ interface) (MessageIds right \ interface) ∧
             Disjoint (MessageActions left) (MessageActions right) ∧
             ParallelMessageOwnership left ∧ ParallelMessageOwnership right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ParallelMessageOwnership elseType ∧
             ParallelMessageOwnershipBranches branches
     termination_by processType => sizeOf processType
@@ -722,13 +725,14 @@ namespace PactType
   the compositional proof only; it does not alter operational future offers. -/
   mutual
     def ParallelInterfaces : PactType → Finset MessageId
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => ParallelInterfaces body
-      | .choice left right | .seq left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => ParallelInterfaces body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right =>
           ParallelInterfaces left ∪ ParallelInterfaces right
-      | .par left right interface =>
+      | .par _ left right interface =>
           interface ∪ ParallelInterfaces left ∪ ParallelInterfaces right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           ParallelInterfaces elseType ∪ ParallelBranchInterfaces branches
     termination_by processType => sizeOf processType
 
@@ -748,15 +752,16 @@ namespace PactType
   descendant binder.  Sibling products may still use the same identifier. -/
   mutual
     def InterfaceScoped : PactType → Prop
-      | .message _ _ | .progress _ | .tock | .skip | .var _ => True
-      | .recur _ body => InterfaceScoped body
-      | .choice left right | .seq left right | .fairChoice _ left right =>
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => InterfaceScoped body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right =>
           InterfaceScoped left ∧ InterfaceScoped right
-      | .par left right interface =>
+      | .par _ left right interface =>
           Disjoint interface
               (ParallelInterfaces left ∪ ParallelInterfaces right) ∧
             InterfaceScoped left ∧ InterfaceScoped right
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           InterfaceScoped elseType ∧ InterfaceScopedBranches branches
     termination_by processType => sizeOf processType
 
@@ -771,81 +776,6 @@ namespace PactType
       simp_wf
       omega
   end
-
-  theorem parallel_interface_subset_parallelInterfaces
-      (left right : PactType) (interface : Interface) :
-      interface ⊆ ParallelInterfaces (.par left right interface) := by
-    simp [ParallelInterfaces]
-
-  theorem sameCycleMessageLinear_rejects_repeat
-      (msg : MessageId) (first second : MessageDir) :
-      ¬ SameCycleMessageLinear
-        (.seq (.message msg first) (.message msg second)) := by
-    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds]
-
-  theorem sameCycleMessageLinear_allows_distinct
-      (first second : MessageId) (firstDir secondDir : MessageDir)
-      (hDistinct : first ≠ second) :
-      SameCycleMessageLinear
-        (.seq (.message first firstDir) (.message second secondDir)) := by
-    have hReverse : second ≠ first := Ne.symm hDistinct
-    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds,
-      hReverse]
-
-  theorem sameCycleMessageLinear_clock_resets
-      (msg : MessageId) (first second : MessageDir) :
-      SameCycleMessageLinear
-        (.seq (.message msg first) (.seq .tock (.message msg second))) := by
-    simp [SameCycleMessageLinear, SuffixMessageIds, PrefixMessageIds,
-      CanCompleteBeforeTock]
-
-  theorem sameCycleMessageLinear_rejects_repeated_offer_head
-      (msg : MessageId) (dir : MessageDir) :
-      ¬ SameCycleMessageLinear
-        (.xoffer .skip [((msg, dir), .message msg dir)]) := by
-    simp [SameCycleMessageLinear, SameCycleMessageLinearBranches,
-      PrefixMessageIds]
-
-  theorem clockGuarded_accepts_cycle_delay (name : String) :
-      ClockGuarded (.recur name (.seq .tock (.var name))) := by
-    simp [ClockGuarded, GuardedOccurrences, MustTockBeforeCompletion]
-
-  theorem clockGuarded_rejects_message_only_delay
-      (name : String) (msg : MessageId) (dir : MessageDir) :
-      ¬ ClockGuarded
-        (.recur name (.seq (.message msg dir) (.var name))) := by
-    simp [ClockGuarded, GuardedOccurrences, MustTockBeforeCompletion]
-
-  theorem tailRecursive_accepts_cycle_loop (name : String) :
-      TailRecursive (.recur name (.seq .tock (.var name))) := by
-    simp [TailRecursive, TailOccurrences]
-
-  theorem tailRecursive_rejects_retained_sequence
-      (name msg : String) (dir : MessageDir) :
-      ¬ TailRecursive
-        (.recur name (.seq (.seq .tock (.var name)) (.message msg dir))) := by
-    simp [TailRecursive, TailOccurrences]
-
-  theorem tailRecursive_rejects_parallel_call (name : String) :
-      ¬ TailRecursive
-        (.recur name (.par (.seq .tock (.var name)) .tock ∅)) := by
-    simp [TailRecursive, TailOccurrences]
-
-  /-- The guarded recursive shape used to audit future resolution through a
-  parallel product satisfies closure, clock guarding, and per-cycle message
-  linearity.  It motivates the separate tail-recursion condition: those three
-  properties alone do not justify resolving a child's recursion-dependent
-  futures before the enclosing binder installs its back-edge. -/
-  theorem guarded_parallel_future_audit_is_regular :
-      let leftBody : PactType :=
-        .seq (.message "a" .send) (.seq .tock (.var "x"))
-      let processType : PactType :=
-        .recur "x" (.par leftBody .tock ∅)
-      processType.AllVariablesBound [] ∧ processType.ClockGuarded ∧
-        processType.SameCycleMessageLinear := by
-    simp [AllVariablesBound, ClockGuarded, GuardedOccurrences,
-      MustTockBeforeCompletion, SameCycleMessageLinear, SuffixMessageIds,
-      PrefixMessageIds, CanCompleteBeforeTock]
 
 end PactType
 

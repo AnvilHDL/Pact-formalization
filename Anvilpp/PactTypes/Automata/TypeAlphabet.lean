@@ -170,20 +170,20 @@ namespace TypeAlphabet
   mutual
     /-- Check that a type uses only declarations from its fixed alphabet. -/
     def Supports (alphabet : TypeAlphabet) : PactType → Prop
-      | .message msg dir =>
+      | .message _ msg dir =>
           (msg, dir) ∈ alphabet.boundary ∨ msg ∈ alphabet.interface
-      | .progress pid => pid ∈ alphabet.progress
-      | .tock | .skip | .var _ => True
-      | .choice left right | .seq left right =>
+      | .progress _ pid => pid ∈ alphabet.progress
+      | .tock _ | .skip _ | .var _ _ => True
+      | .choice _ left right | .seq _ left right =>
           alphabet.Supports left ∧ alphabet.Supports right
-      | .fairChoice bid left right =>
+      | .fairChoice _ bid left right =>
           bid ∈ alphabet.fair ∧
             alphabet.Supports left ∧ alphabet.Supports right
-      | .par left right interface =>
+      | .par _ left right interface =>
           interface ⊆ alphabet.interface ∧
             alphabet.Supports left ∧ alphabet.Supports right
-      | .recur _ body => alphabet.Supports body
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .recur _ _ body => alphabet.Supports body
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           alphabet.Supports elseType ∧ alphabet.SupportsBranches branches
     termination_by processType => sizeOf processType
 

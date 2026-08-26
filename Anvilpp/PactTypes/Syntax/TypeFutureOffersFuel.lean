@@ -13,20 +13,20 @@ def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
   | 0, _ => ∅
   | fuel + 1, processType =>
       match processType with
-      | .message msg dir => {(msg, dir)}
-      | .progress _ | .tock | .skip | .var _ => ∅
-      | .recur _ body => typeFutureOffersFuel fuel body
-      | .choice left right | .fairChoice _ left right =>
+      | .message _ msg dir => {(msg, dir)}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => typeFutureOffersFuel fuel body
+      | .choice _ left right | .fairChoice _ _ left right =>
           typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right
-      | .seq left right =>
+      | .seq _ left right =>
           let leftOffers := typeFutureOffersFuel fuel left
           if typeCanCompleteThisCycleFuel fuel left then
             leftOffers ∪ typeFutureOffersFuel fuel right
           else leftOffers
-      | .par left right interface =>
+      | .par _ left right interface =>
           hideTypeOffers interface
             (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
-      | .xoffer elseType branches | .offer elseType branches =>
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
           branches.foldl (fun offers branch =>
             offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
             (typeFutureOffersFuel fuel elseType)
@@ -45,57 +45,62 @@ private theorem typeFutureOffersFuel_succ_stable :
   | succ fuel ih =>
       intro processType hSize
       cases processType with
-      | message msg dir => rfl
-      | progress pid => rfl
-      | tock => rfl
-      | skip => rfl
-      | var name => rfl
-      | recur name body =>
+      | message alphabet msg dir => rfl
+      | progress alphabet pid => rfl
+      | tock alphabet => rfl
+      | skip alphabet => rfl
+      | var alphabet name => rfl
+      | recur alphabet name body =>
           change typeFutureOffersFuel (fuel + 1) body =
             typeFutureOffersFuel fuel body
           apply ih
-          have : sizeOf body < sizeOf (PactType.recur name body) := by
+          have : sizeOf body <
+              sizeOf (PactType.recur alphabet name body) := by
             simp_wf
             omega
           omega
-      | choice left right =>
-          change (typeFutureOffersFuel (fuel + 1) left ∪
-              typeFutureOffersFuel (fuel + 1) right) =
-            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
-          rw [ih left (by
-              have : sizeOf left < sizeOf (PactType.choice left right) := by
-                simp_wf
-                omega
-              omega),
-            ih right (by
-              have : sizeOf right < sizeOf (PactType.choice left right) := by
-                simp_wf
-                omega
-              omega)]
-      | fairChoice bid left right =>
+      | choice alphabet left right =>
           change (typeFutureOffersFuel (fuel + 1) left ∪
               typeFutureOffersFuel (fuel + 1) right) =
             (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf
                 omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.fairChoice bid left right) := by
+                  sizeOf (PactType.choice alphabet left right) := by
                 simp_wf
                 omega
               omega)]
-      | seq left right =>
+      | fairChoice alphabet bid left right =>
+          change (typeFutureOffersFuel (fuel + 1) left ∪
+              typeFutureOffersFuel (fuel + 1) right) =
+            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
+          rw [ih left (by
+              have : sizeOf left <
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
+                simp_wf
+                omega
+              omega),
+            ih right (by
+              have : sizeOf right <
+                  sizeOf (PactType.fairChoice alphabet bid left right) := by
+                simp_wf
+                omega
+              omega)]
+      | seq alphabet left right =>
           have hLeft : sizeOf left ≤ fuel := by
-            have : sizeOf left < sizeOf (PactType.seq left right) := by
+            have : sizeOf left <
+                sizeOf (PactType.seq alphabet left right) := by
               simp_wf
               omega
             omega
           have hRight : sizeOf right ≤ fuel := by
-            have : sizeOf right < sizeOf (PactType.seq left right) := by
+            have : sizeOf right <
+                sizeOf (PactType.seq alphabet left right) := by
               simp_wf
               omega
             omega
@@ -108,7 +113,7 @@ private theorem typeFutureOffersFuel_succ_stable :
             else typeFutureOffersFuel fuel left)
           rw [typeCanCompleteThisCycleFuel_succ_stable fuel left hLeft,
             ih left hLeft, ih right hRight]
-      | par left right interface =>
+      | par alphabet left right interface =>
           change hideTypeOffers interface
               (typeFutureOffersFuel (fuel + 1) left ∪
                 typeFutureOffersFuel (fuel + 1) right) =
@@ -116,17 +121,17 @@ private theorem typeFutureOffersFuel_succ_stable :
               (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
           rw [ih left (by
               have : sizeOf left <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.par alphabet left right interface) := by
                 simp_wf
                 omega
               omega),
             ih right (by
               have : sizeOf right <
-                  sizeOf (PactType.par left right interface) := by
+                  sizeOf (PactType.par alphabet left right interface) := by
                 simp_wf
                 omega
               omega)]
-      | xoffer elseType branches =>
+      | xoffer alphabet elseType branches =>
           change branches.foldl (fun offers branch =>
               offers ∪ {branch.1} ∪
                 typeFutureOffersFuel (fuel + 1) branch.2)
@@ -136,7 +141,7 @@ private theorem typeFutureOffersFuel_succ_stable :
               (typeFutureOffersFuel fuel elseType)
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.xoffer elseType branches) := by
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
               simp_wf
               omega
             omega)]
@@ -148,7 +153,7 @@ private theorem typeFutureOffersFuel_succ_stable :
               simp_wf
               omega
             have hList : sizeOf branches <
-                sizeOf (PactType.xoffer elseType branches) := by
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
               simp_wf
               omega
             omega
@@ -171,7 +176,7 @@ private theorem typeFutureOffersFuel_succ_stable :
                 intro other hOther
                 exact hSubset other (by simp [hOther])
           exact hFold branches _ (by simp)
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           change branches.foldl (fun offers branch =>
               offers ∪ {branch.1} ∪
                 typeFutureOffersFuel (fuel + 1) branch.2)
@@ -181,7 +186,7 @@ private theorem typeFutureOffersFuel_succ_stable :
               (typeFutureOffersFuel fuel elseType)
           rw [ih elseType (by
             have : sizeOf elseType <
-                sizeOf (PactType.offer elseType branches) := by
+                sizeOf (PactType.offer alphabet elseType branches) := by
               simp_wf
               omega
             omega)]
@@ -193,7 +198,7 @@ private theorem typeFutureOffersFuel_succ_stable :
               simp_wf
               omega
             have hList : sizeOf branches <
-                sizeOf (PactType.offer elseType branches) := by
+                sizeOf (PactType.offer alphabet elseType branches) := by
               simp_wf
               omega
             omega
@@ -240,17 +245,17 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
   | zero => rfl
   | succ fuel =>
       cases processType with
-      | message msg dir => simp [PactType.replaceVar, typeFutureOffersFuel]
-      | progress pid => simp [PactType.replaceVar, typeFutureOffersFuel]
-      | tock => simp [PactType.replaceVar, typeFutureOffersFuel]
-      | skip => simp [PactType.replaceVar, typeFutureOffersFuel]
-      | var other =>
+      | message alphabet msg dir => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | progress alphabet pid => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | tock alphabet => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | skip alphabet => simp [PactType.replaceVar, typeFutureOffersFuel]
+      | var alphabet other =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           have hNe : name ≠ other := by
             intro h
             exact hGuarded h.symm
           simp [PactType.replaceVar, typeFutureOffersFuel, hNe]
-      | recur other body =>
+      | recur alphabet other body =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           by_cases hName : other = name
           · have hTarget : name = other := hName.symm
@@ -262,7 +267,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
             simp only [PactType.replaceVar, typeFutureOffersFuel, hTarget]
             exact guardedOccurrences_replace_typeFutureOffersFuel
               name replacement body hGuarded fuel
-      | choice left right =>
+      | choice alphabet left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeFutureOffersFuel]
@@ -270,7 +275,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_typeFutureOffersFuel
               name replacement right hRight fuel]
-      | fairChoice bid left right =>
+      | fairChoice alphabet bid left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeFutureOffersFuel]
@@ -278,7 +283,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_typeFutureOffersFuel
               name replacement right hRight fuel]
-      | par left right interface =>
+      | par alphabet left right interface =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeFutureOffersFuel]
@@ -286,7 +291,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
               name replacement left hLeft fuel,
             guardedOccurrences_replace_typeFutureOffersFuel
               name replacement right hRight fuel]
-      | seq left right =>
+      | seq alphabet left right =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hLeft, hRight⟩
           simp only [PactType.replaceVar, typeFutureOffersFuel]
@@ -300,7 +305,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
           · simp only [hTock, or_false] at hRight
             rw [guardedOccurrences_replace_typeFutureOffersFuel
               name replacement right hRight fuel]
-      | xoffer elseType branches =>
+      | xoffer alphabet elseType branches =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hElse, hBranches⟩
           have hFold : ∀ initial,
@@ -325,7 +330,7 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
           rw [guardedOccurrences_replace_typeFutureOffersFuel
             name replacement elseType hElse fuel]
           exact hFold _
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hElse, hBranches⟩
           have hFold : ∀ initial,

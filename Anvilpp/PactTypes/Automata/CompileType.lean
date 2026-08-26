@@ -24,24 +24,24 @@ call that it makes.
 -/
 mutual
   def typeCompilationFuel : PactType → Nat
-    | .message _ _ => 1
-    | .progress _ => 1
-    | .tock => 1
-    | .skip => 1
-    | .var _ => 1
-    | .recur _ body => 1 + typeCompilationFuel body
-    | .choice left right =>
+    | .message _ _ _ => 1
+    | .progress _ _ => 1
+    | .tock _ => 1
+    | .skip _ => 1
+    | .var _ _ => 1
+    | .recur _ _ body => 1 + typeCompilationFuel body
+    | .choice _ left right =>
         1 + max (typeCompilationFuel left) (typeCompilationFuel right)
-    | .fairChoice _ left right =>
+    | .fairChoice _ _ left right =>
         1 + max (typeCompilationFuel left) (typeCompilationFuel right)
-    | .seq left right =>
+    | .seq _ left right =>
         1 + max (typeCompilationFuel left) (typeCompilationFuel right)
-    | .par left right _ =>
+    | .par _ left right _ =>
         1 + max (typeCompilationFuel left) (typeCompilationFuel right)
-    | .xoffer elseType branches =>
+    | .xoffer _ elseType branches =>
         1 + max (typeCompilationFuel elseType)
           (typeBranchCompilationFuel branches)
-    | .offer elseType branches =>
+    | .offer _ elseType branches =>
         1 + max (typeCompilationFuel elseType)
           (conjunctiveCompilationFuel branches)
   termination_by processType => sizeOf processType
@@ -93,7 +93,7 @@ theorem typeCompilationFuel_parallelTypeBranches
             typeCompilationFuel, typeBranchCompilationFuel,
             conjunctiveCompilationFuel]
       | cons next tail =>
-          simp [parallelTypeBranches, singletonTypeXOffer,
+          simp [parallelTypeBranches, parallelType, singletonTypeXOffer,
             typeCompilationFuel, typeBranchCompilationFuel,
             conjunctiveCompilationFuel, ih]
 
@@ -123,11 +123,12 @@ theorem typeCompilationFuel_parallelTypeBranchesSelecting
       | cons next tail =>
           by_cases hSelected : (action, processType) = selected
           · subst selected
-            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
+            simp [parallelTypeBranchesSelecting, parallelType,
+              selectedTypeBranch,
               typeCompilationFuel, typeBranchCompilationFuel,
               conjunctiveCompilationFuel,
               typeCompilationFuel_parallelTypeBranches]
-          · simp [parallelTypeBranchesSelecting, hSelected,
+          · simp [parallelTypeBranchesSelecting, parallelType, hSelected,
               singletonTypeXOffer, typeCompilationFuel,
               typeBranchCompilationFuel, conjunctiveCompilationFuel, ih]
 
@@ -176,22 +177,24 @@ def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
   | 0, _, _ => none
   | fuel + 1, processType, state =>
       match processType, state with
-      | .par left right interface, .pair q1 q2 =>
+      | .par _ left right interface, .pair q1 q2 =>
           some (interface, left, right, q1, q2)
-      | .choice left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .choice _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .fairChoice _ left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .fairChoice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .seq left _, .child 0 q => stateProductInfoFuel fuel left q
-      | .seq _ right, .child 1 q => stateProductInfoFuel fuel right q
-      | .recur _ body, .child 0 q => stateProductInfoFuel fuel body q
-      | .xoffer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
-      | .xoffer _ branches, .child (i + 1) q =>
+      | .choice _ left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .choice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .fairChoice _ _ left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .fairChoice _ _ _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .seq _ left _, .child 0 q => stateProductInfoFuel fuel left q
+      | .seq _ _ right, .child 1 q => stateProductInfoFuel fuel right q
+      | .recur _ _ body, .child 0 q => stateProductInfoFuel fuel body q
+      | .xoffer _ elseType _, .child 0 q =>
+          stateProductInfoFuel fuel elseType q
+      | .xoffer _ _ branches, .child (i + 1) q =>
           match branches[i]? with
           | some (_, branchType) => stateProductInfoFuel fuel branchType q
           | none => none
-      | .offer elseType _, .child 0 q => stateProductInfoFuel fuel elseType q
-      | .offer _ branches, .child (i + 1) q =>
+      | .offer _ elseType _, .child 0 q =>
+          stateProductInfoFuel fuel elseType q
+      | .offer _ _ branches, .child (i + 1) q =>
           match branches[i]? with
           | some selected =>
               stateProductInfoFuel fuel
@@ -217,7 +220,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       classical
       match processType with
       -- skip: Q = {root}, i = root, F = {root}; epsilon self-loops.
-      | .skip =>
+      | .skip _ =>
           let idleEnvironments := signature.localEnvironments.filter fun environment =>
             environment.clock = false
           exact finishAutomatonFragment {.root} .root {.root} <|
@@ -230,7 +233,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 target := .root }
 
       -- message: fire to final when its complement is immediate; otherwise wait.
-      | .message msg dir =>
+      | .message _ msg dir =>
           let action : BareMessage := (msg, dir)
           let firingEdges : Finset PendingAutomatonEdge :=
             (signature.localEnvironments.filter fun environment =>
@@ -265,7 +268,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
-      | .tock =>
+      | .tock _ =>
           let actionEdges : Finset PendingAutomatonEdge :=
             signature.localEnvironments.image fun environment =>
               if environment.clock then
@@ -296,7 +299,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
-      | .progress pid =>
+      | .progress _ pid =>
           let actionEdges : Finset PendingAutomatonEdge :=
             signature.localEnvironments.image fun environment =>
               { source := TypeAutomatonState.root
@@ -319,7 +322,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
-      | .var name =>
+      | .var _ name =>
           exact finishAutomatonFragment {.root, .final} .root ∅  <|
             signature.localEnvironments.image fun environment =>
               { source := .root
@@ -330,31 +333,31 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 target := .final }
 
       -- recursion: replace matching variable edges by silent back-edges.
-      | .recur name body =>
+      | .recur _ name body =>
           exact buildRecursionAutomaton signature name
             (compileTypeFuel signature fuel body)
       -- ordinary choice: add a fresh root with two silent selection edges.
-      | .choice left right =>
+      | .choice _ left right =>
           exact buildChoiceAutomaton signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
             TypeLabel.silent TypeLabel.silent
 
       -- fair choice: use the same sum construction with observable outcomes.
-      | .fairChoice bid left right =>
+      | .fairChoice _ bid left right =>
           exact buildChoiceAutomaton signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
             (TypeLabel.fair bid true) (TypeLabel.fair bid false)
 
       -- sequence: redirect transitions entering a left final state into right.
-      | .seq left right =>
+      | .seq _ left right =>
           exact buildSequenceAutomaton signature
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
 
       -- parallel: form the reachable synchronized product on `interface`.
-      | .par left right interface =>
+      | .par _ left right interface =>
           exact buildParallelAutomaton signature interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
@@ -364,7 +367,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
               (min fuel (typeCompilationFuel right)) right)
 
       -- exclusive offer: compile else and every branch independently first.
-      | .xoffer elseType branches =>
+      | .xoffer _ elseType branches =>
           let elseAutomaton := compileTypeFuel signature fuel elseType
           let branchAutomata := branches.map fun branch =>
             (branch.1, compileTypeFuel signature fuel branch.2)
@@ -372,7 +375,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
             signature branches elseAutomaton branchAutomata
 
       -- conjunctive offer: compile its singleton-offer parallel product first.
-      | .offer elseType branches =>
+      | .offer _ elseType branches =>
           let elseAutomaton := compileTypeFuel signature fuel elseType
           let selectedConjunctions := branches.map fun selected =>
             (selected.1, compileTypeFuel signature fuel
@@ -439,12 +442,12 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
       conv_lhs => rw [compileTypeFuel.eq_def]
       conv_rhs => rw [compileTypeFuel.eq_def]
       cases processType with
-      | message msg dir => rfl
-      | progress pid => rfl
-      | tock => rfl
-      | skip => rfl
-      | var name => rfl
-      | recur name body =>
+      | message alphabet msg dir => rfl
+      | progress alphabet pid => rfl
+      | tock alphabet => rfl
+      | skip alphabet => rfl
+      | var alphabet name => rfl
+      | recur alphabet name body =>
           change buildRecursionAutomaton signature name
               (compileTypeFuel signature (fuel + 1) body) =
             buildRecursionAutomaton signature name
@@ -452,7 +455,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
           rw [ih body (by
             simp [typeCompilationFuel] at hFuel
             omega)]
-      | choice left right =>
+      | choice alphabet left right =>
           change buildChoiceAutomaton signature
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
@@ -467,7 +470,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
             ih right (by
               simp [typeCompilationFuel] at hFuel
               omega)]
-      | fairChoice bid left right =>
+      | fairChoice alphabet bid left right =>
           change buildChoiceAutomaton signature
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
@@ -482,7 +485,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
             ih right (by
               simp [typeCompilationFuel] at hFuel
               omega)]
-      | seq left right =>
+      | seq alphabet left right =>
           change buildSequenceAutomaton signature
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right) =
@@ -495,7 +498,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
             ih right (by
               simp [typeCompilationFuel] at hFuel
               omega)]
-      | par left right interface =>
+      | par alphabet left right interface =>
           change buildParallelAutomaton signature interface
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
@@ -522,7 +525,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
               exact hLeft),
             ih right (by
               exact hRight)]
-      | xoffer elseType branches =>
+      | xoffer alphabet elseType branches =>
           change buildExclusiveOfferAutomaton signature branches
               (compileTypeFuel signature (fuel + 1) elseType)
               (branches.map fun branch =>
@@ -561,7 +564,7 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
                 simp [typeBranchCompilationFuel] at hRest ⊢
                 omega
           exact hMap branches hBranches
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           change buildSelectedConjunctiveOfferAutomaton signature branches
               (compileTypeFuel signature (fuel + 1) elseType)
               (branches.map fun selected =>
@@ -802,21 +805,26 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
   | succ fuel ih =>
       intro processType hFuel
       cases processType with
-      | message msg dir => simp [compileTypeFuel, finishAutomatonFragment]
-      | progress pid => simp [compileTypeFuel, finishAutomatonFragment]
-      | tock => simp [compileTypeFuel, finishAutomatonFragment]
-      | skip => simp [compileTypeFuel, finishAutomatonFragment]
-      | var name => simp [compileTypeFuel, finishAutomatonFragment]
-      | recur name body =>
+      | message alphabet msg dir =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | progress alphabet pid =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | tock alphabet =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | skip alphabet =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | var alphabet name =>
+          simp [compileTypeFuel, finishAutomatonFragment]
+      | recur alphabet name body =>
           simp [compileTypeFuel, buildRecursionAutomaton,
             finishAutomatonFragment]
-      | choice left right =>
+      | choice alphabet left right =>
           simp [compileTypeFuel, buildChoiceAutomaton,
             finishAutomatonFragment]
-      | fairChoice bid left right =>
+      | fairChoice alphabet bid left right =>
           simp [compileTypeFuel, buildChoiceAutomaton,
             finishAutomatonFragment]
-      | seq left right =>
+      | seq alphabet left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -826,7 +834,7 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
           simpa [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, childStates, childState,
             initial_not_mem_sequenceDeleted] using hInitial
-      | par left right interface =>
+      | par alphabet left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -839,10 +847,10 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
             finishAutomatonFragment, Finset.mem_insert]
           refine Or.inr (Finset.mem_biUnion.mpr ⟨_, hLeftMem, ?_⟩)
           exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
-      | xoffer elseType branches =>
+      | xoffer alphabet elseType branches =>
           simp [compileTypeFuel, buildExclusiveOfferAutomaton,
             finishAutomatonFragment]
-      | offer elseType branches =>
+      | offer alphabet elseType branches =>
           simp [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
             finishAutomatonFragment]
 
