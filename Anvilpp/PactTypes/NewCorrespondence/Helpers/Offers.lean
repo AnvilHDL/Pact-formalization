@@ -175,49 +175,6 @@ lemma relationMembership_xoffer_cases
     exact Or.inr (Or.inr ⟨item.2, item.1.1, item.1.2, entry.2,
       hGet, rfl, hBranchRelated⟩)
 
-/-- Proves a `.child 0`-tagged state's future menu, in a compiled conjunctive offer, agrees with the else child's own. -/
-theorem computeFutureOf_selectedConjunctiveOffer_else
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType)) (whole : PactType)
-    (hWhole :
-      compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton signature branches
-          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-          (branches.map fun selected => (selected.1, compileTypeFuel signature
-            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-            (parallelTypeBranchesSelecting selected branches))))
-    (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
-    (state : TypeAutomatonState)
-    (hState : state ∈ (compileTypeFuel signature (typeCompilationFuel elseType)
-      elseType).states) :
-    computeFutureOf signature whole (.child 0 state) =
-      computeFutureOf signature elseType state := by
-  sorry
-
-/-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled conjunctive offer, agrees with branch `i`'s generated commit type's own. -/
-theorem computeFutureOf_selectedConjunctiveOffer_branch
-    (signature : TypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType)) (whole : PactType)
-    (hWhole :
-      compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton signature branches
-          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
-          (branches.map fun selected => (selected.1, compileTypeFuel signature
-            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-            (parallelTypeBranchesSelecting selected branches))))
-    (i : Nat) (selected : BareMessage × PactType)
-    (hSelected : branches[i]? = some selected)
-    (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting selected branches) +
-      1 ≤ typeCompilationFuel whole)
-    (state : TypeAutomatonState)
-    (hState : state ∈ (compileTypeFuel signature
-      (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-      (parallelTypeBranchesSelecting selected branches)).states) :
-    computeFutureOf signature whole (.child (i + 1) state) =
-      computeFutureOf signature (parallelTypeBranchesSelecting selected branches)
-        state := by
-  sorry
-
 /-- Characterizes a public conjunctive-offer edge leaving a tagged else-child state as a copy of the else automaton's own outgoing edge. -/
 theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
     (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
@@ -341,6 +298,133 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
         List.mk_mem_zipIdx_iff_getElem?.mpr hBranch,
         Finset.mem_image.mpr ⟨childEdge, hChildEdge, rfl⟩⟩
     · simp [childPendingEdge, childState, hChildSource]
+
+/-- Proves a `.child 0`-tagged state's future menu, in a compiled conjunctive offer, agrees with the else child's own. -/
+theorem computeFutureOf_selectedConjunctiveOffer_else
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) (whole : PactType)
+    (hWhole :
+      compileTypeFuel signature (typeCompilationFuel whole) whole =
+        buildSelectedConjunctiveOfferAutomaton signature branches
+          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+          (branches.map fun selected => (selected.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches))))
+    (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
+    (hProductInfo : ∀ visited,
+      stateProductInfo whole (.child 0 visited) =
+        stateProductInfo elseType visited)
+    (state : TypeAutomatonState)
+    (hState : state ∈ (compileTypeFuel signature (typeCompilationFuel elseType)
+      elseType).states) :
+    computeFutureOf signature whole (.child 0 state) =
+      computeFutureOf signature elseType state := by
+  classical
+  let elseFragment :=
+    compileTypeFuel signature (typeCompilationFuel elseType) elseType
+  let selectedConjunctions := branches.map fun selected =>
+    (selected.1, compileTypeFuel signature
+      (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+      (parallelTypeBranchesSelecting selected branches))
+  let parentFragment :=
+    buildSelectedConjunctiveOfferAutomaton signature branches elseFragment
+      selectedConjunctions
+  have hCard : elseFragment.states.card ≤ parentFragment.states.card := by
+    have hTaggedCard :
+        (childStates 0 elseFragment).card = elseFragment.states.card := by
+      unfold childStates
+      apply Finset.card_image_of_injective
+      intro first second hEq
+      simpa [childState] using hEq
+    change elseFragment.states.card ≤ parentFragment.states.card
+    rw [← hTaggedCard]
+    apply Finset.card_le_card
+    intro tagged hTagged
+    simp only [parentFragment, buildSelectedConjunctiveOfferAutomaton,
+      finishAutomatonFragment, Finset.mem_union]
+    exact Or.inl (Or.inr hTagged)
+  unfold computeFutureOf
+  exact computeFutureOfFuel_child_embedding signature whole elseType
+    (typeCompilationFuel whole) (typeCompilationFuel elseType)
+    parentFragment elseFragment 0 hWhole rfl
+    (typeCompilationFuel_sufficient whole)
+    (typeCompilationFuel_sufficient elseType) hFuel hProductInfo
+    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else
+      signature branches elseFragment selectedConjunctions q edge)
+    hCard state (by simpa [elseFragment] using hState)
+
+/-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled conjunctive offer, agrees with branch `i`'s generated commit type's own. -/
+theorem computeFutureOf_selectedConjunctiveOffer_branch
+    (signature : TypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType)) (whole : PactType)
+    (hWhole :
+      compileTypeFuel signature (typeCompilationFuel whole) whole =
+        buildSelectedConjunctiveOfferAutomaton signature branches
+          (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
+          (branches.map fun selected => (selected.1, compileTypeFuel signature
+            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+            (parallelTypeBranchesSelecting selected branches))))
+    (i : Nat) (selected : BareMessage × PactType)
+    (hSelected : branches[i]? = some selected)
+    (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting selected branches) +
+      1 ≤ typeCompilationFuel whole)
+    (hProductInfo : ∀ visited,
+      stateProductInfo whole (.child (i + 1) visited) =
+        stateProductInfo (parallelTypeBranchesSelecting selected branches)
+          visited)
+    (state : TypeAutomatonState)
+    (hState : state ∈ (compileTypeFuel signature
+      (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
+      (parallelTypeBranchesSelecting selected branches)).states) :
+    computeFutureOf signature whole (.child (i + 1) state) =
+      computeFutureOf signature (parallelTypeBranchesSelecting selected branches)
+        state := by
+  classical
+  let elseFragment :=
+    compileTypeFuel signature (typeCompilationFuel elseType) elseType
+  let selectedConjunctions := branches.map fun branch =>
+    (branch.1, compileTypeFuel signature
+      (typeCompilationFuel (parallelTypeBranchesSelecting branch branches))
+      (parallelTypeBranchesSelecting branch branches))
+  let branchType := parallelTypeBranchesSelecting selected branches
+  let branchFragment :=
+    compileTypeFuel signature (typeCompilationFuel branchType) branchType
+  let parentFragment :=
+    buildSelectedConjunctiveOfferAutomaton signature branches elseFragment
+      selectedConjunctions
+  have hBranchFragment :
+      selectedConjunctions[i]? = some (selected.1, branchFragment) := by
+    simp [selectedConjunctions, branchFragment, branchType, List.getElem?_map,
+      hSelected]
+  have hCard : branchFragment.states.card ≤ parentFragment.states.card := by
+    have hTaggedCard :
+        (childStates (i + 1) branchFragment).card =
+          branchFragment.states.card := by
+      unfold childStates
+      apply Finset.card_image_of_injective
+      intro first second hEq
+      simpa [childState] using hEq
+    change branchFragment.states.card ≤ parentFragment.states.card
+    rw [← hTaggedCard]
+    apply Finset.card_le_card
+    intro tagged hTagged
+    have hIndexed : tagged ∈ indexedFragmentStates selectedConjunctions := by
+      rw [indexedFragmentStates, mem_foldl_union_iff]
+      exact Or.inr ⟨((selected.1, branchFragment), i),
+        List.mk_mem_zipIdx_iff_getElem?.mpr hBranchFragment, hTagged⟩
+    simp only [parentFragment, buildSelectedConjunctiveOfferAutomaton,
+      finishAutomatonFragment, Finset.mem_union]
+    exact Or.inr hIndexed
+  unfold computeFutureOf
+  exact computeFutureOfFuel_child_embedding signature whole branchType
+    (typeCompilationFuel whole) (typeCompilationFuel branchType)
+    parentFragment branchFragment (i + 1) hWhole rfl
+    (typeCompilationFuel_sufficient whole)
+    (typeCompilationFuel_sufficient branchType) hFuel hProductInfo
+    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
+      signature branches elseFragment selectedConjunctions i selected.1
+      branchFragment hBranchFragment q edge)
+    hCard state (by simpa [branchFragment] using hState)
 
 /-- Relates a branch's generated commit type found by index after mapping compiled fragments in to the same branch found by index in the original list. -/
 theorem branches_map_selecting_getElem?_eq_some_iff

@@ -11,7 +11,8 @@ noncomputable section
 
 /-- The unfiltered synchronized edges of a parallel product. Completing
 component pairs are redirected to the dedicated `.final` state. -/
-def parallelRawTransitionEdges (interface : Interface)
+def parallelRawTransitionEdges (signature : TypeAlphabet)
+    (leftAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -21,7 +22,8 @@ def parallelRawTransitionEdges (interface : Interface)
   exact
     allLeftEdges.biUnion fun leftEdge =>
     (allRightEdges.filter fun rightEdge =>
-      syncAutomatonEdges interface leftEdge rightEdge).image fun rightEdge =>
+      syncAutomatonEdges signature leftAlphabet rightAlphabet interface
+        leftEdge rightEdge).image fun rightEdge =>
         let bothAccept :=
           leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
         let target : TypeAutomatonState :=
@@ -38,9 +40,10 @@ def parallelRawTransitionEdges (interface : Interface)
           target := target }
 
 /-- The non-clock idle edges attached to the completed parallel state. -/
-def parallelDoneEdges (signature : TypeAlphabet) : Finset PendingAutomatonEdge := by
+def parallelDoneEdges (signature : TypeAlphabet)
+    (alphabet : PactTypeAlphabet) : Finset PendingAutomatonEdge := by
   classical
-  exact (signature.localEnvironments.filter fun environment =>
+  exact ((signature.localEnvironmentsFor alphabet).filter fun environment =>
     environment.clock = false).image fun environment =>
       { source := TypeAutomatonState.final
         environment := environment
@@ -50,54 +53,73 @@ def parallelDoneEdges (signature : TypeAlphabet) : Finset PendingAutomatonEdge :
         target := .final }
 
 /-- One raw graph step used by the paper's `Reach` side condition. -/
-def ParallelRawStep (signature : TypeAlphabet) (interface : Interface)
+def ParallelRawStep (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
     (source target : TypeAutomatonState) : Prop :=
-  ∃ edge ∈ parallelRawTransitionEdges interface left right
+  ∃ edge ∈ parallelRawTransitionEdges signature leftAlphabet rightAlphabet
+      interface left right
       leftFuture rightFuture ∪
-      parallelDoneEdges signature,
+      parallelDoneEdges signature parentAlphabet,
     edge.source = source ∧ edge.target = target
 
 /-- Joint reachability in the raw synchronized product. This is the
 `Reach(τ₁ ∥_I τ₂)` premise appearing in `SyncEdges_I` in the paper. -/
-def ParallelReachable (signature : TypeAlphabet) (interface : Interface)
+def ParallelReachable (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
     (state : TypeAutomatonState) : Prop :=
   Relation.ReflTransGen
-    (ParallelRawStep signature interface left right leftFuture rightFuture)
+    (ParallelRawStep signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right leftFuture rightFuture)
     (.pair left.initial right.initial) state
 
-theorem parallelReachable_initial (signature : TypeAlphabet) (interface : Interface)
+theorem parallelReachable_initial (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
-    ParallelReachable signature interface left right leftFuture rightFuture
+    ParallelReachable signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right leftFuture rightFuture
       (.pair left.initial right.initial) :=
   Relation.ReflTransGen.refl
 
 theorem ParallelReachable.tail_raw
-    {signature : TypeAlphabet} {interface : Interface}
+    {signature : TypeAlphabet}
+    {parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet}
+    {interface : Interface}
     {left right : AutomatonFragment} {source target : TypeAutomatonState}
     {leftFuture rightFuture : TypeAutomatonState → Finset BareMessage}
-    (hSource : ParallelReachable signature interface left right
+    (hSource : ParallelReachable signature parentAlphabet leftAlphabet
+      rightAlphabet interface left right
       leftFuture rightFuture source)
-    (hStep : ParallelRawStep signature interface left right
+    (hStep : ParallelRawStep signature parentAlphabet leftAlphabet
+      rightAlphabet interface left right
       leftFuture rightFuture source target) :
-    ParallelReachable signature interface left right
+    ParallelReachable signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right
       leftFuture rightFuture target :=
   Relation.ReflTransGen.tail hSource hStep
 
 /-- A raw synchronized edge extends a jointly reachable source to its target. -/
 theorem ParallelReachable.target_of_rawTransition
-    {signature : TypeAlphabet} {interface : Interface}
+    {signature : TypeAlphabet}
+    {parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet}
+    {interface : Interface}
     {left right : AutomatonFragment} {edge : PendingAutomatonEdge}
     {leftFuture rightFuture : TypeAutomatonState → Finset BareMessage}
-    (hSource : ParallelReachable signature interface left right
+    (hSource : ParallelReachable signature parentAlphabet leftAlphabet
+      rightAlphabet interface left right
       leftFuture rightFuture edge.source)
-    (hEdge : edge ∈ parallelRawTransitionEdges interface left right
+    (hEdge : edge ∈ parallelRawTransitionEdges signature leftAlphabet
+      rightAlphabet interface left right
       leftFuture rightFuture) :
-    ParallelReachable signature interface left right
+    ParallelReachable signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right
       leftFuture rightFuture edge.target :=
   hSource.tail_raw ⟨edge, Finset.mem_union_left _ hEdge, rfl, rfl⟩
 
@@ -112,7 +134,9 @@ target is the target pair.  Finally, only product edges whose source is
 reachable from `(i₁,i₂)` are retained, and `q_done` receives the usual
 non-clock silent idle self-loop.
 -/
-def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
+def buildParallelAutomaton (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
     AutomatonFragment := by
@@ -125,21 +149,26 @@ def buildParallelAutomaton (signature : TypeAlphabet) (interface : Interface)
   -- `F_τ = {q_done}` exactly: a raw product state is not accepting on its own.
   let accepting : Finset TypeAutomatonState := {TypeAutomatonState.final}
   let transitionEdges :=
-    (parallelRawTransitionEdges interface left right
+    (parallelRawTransitionEdges signature leftAlphabet rightAlphabet interface
+      left right
       leftFuture rightFuture).filter fun edge =>
-      ParallelReachable signature interface left right
+      ParallelReachable signature parentAlphabet leftAlphabet rightAlphabet
+        interface left right
         leftFuture rightFuture edge.source
   let product := finishAutomatonFragment
     states (.pair left.initial right.initial) accepting
-      (transitionEdges ∪ parallelDoneEdges signature)
+      (transitionEdges ∪ parallelDoneEdges signature parentAlphabet)
   exact product
 
 theorem buildParallelAutomaton_futureTargetsInStates
-    (signature : TypeAlphabet) (interface : Interface) (left right : AutomatonFragment)
+    (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface) (left right : AutomatonFragment)
     (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
     (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightEdgeTargets : ∀ edge ∈ right.edges, edge.target ∈ right.states) :
-    (buildParallelAutomaton signature interface left right
+    (buildParallelAutomaton signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right
       leftFuture rightFuture).FutureTargetsInStates := by
   classical
   intro edge hEdge target removed hFuture

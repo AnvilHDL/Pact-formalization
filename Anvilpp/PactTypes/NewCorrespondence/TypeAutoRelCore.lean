@@ -45,7 +45,8 @@ def buildRelationSetCoreFuel (signature : TypeAlphabet) :
           insert (PactType.skip alphabet, TypeAutomatonState.final)
             (((Finset.product (buildRelationSetCoreFuel signature fuel left)
                 (buildRelationSetCoreFuel signature fuel right)).filter fun entry =>
-                  ParallelReachable signature interface
+                  ParallelReachable signature alphabet left.alphabet
+                    right.alphabet interface
                     (compileTypeFuel signature fuel left)
                     (compileTypeFuel signature fuel right)
                     (compiledChildFutureFuel signature fuel left)
@@ -166,7 +167,8 @@ theorem buildRelationSetCoreFuel_initial_mem (signature : TypeAlphabet) :
             ((left, (compileTypeFuel signature fuel left).initial),
               (right, (compileTypeFuel signature fuel right).initial)),
             Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hLeftMem, hRightMem⟩,
-              parallelReachable_initial signature interface
+              parallelReachable_initial signature alphabet left.alphabet
+                right.alphabet interface
                 (compileTypeFuel signature fuel left)
                 (compileTypeFuel signature fuel right)
                 (compiledChildFutureFuel signature fuel left)
@@ -534,7 +536,8 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
           change insert (PactType.skip alphabet, TypeAutomatonState.final)
               (((Finset.product (buildRelationSetCoreFuel signature (fuel+1) left)
                   (buildRelationSetCoreFuel signature (fuel+1) right)).filter fun entry =>
-                    ParallelReachable signature interface
+                    ParallelReachable signature alphabet left.alphabet
+                      right.alphabet interface
                       (compileTypeFuel signature (fuel+1) left)
                       (compileTypeFuel signature (fuel+1) right)
                       (compiledChildFutureFuel signature (fuel+1) left)
@@ -546,7 +549,8 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
             insert (PactType.skip alphabet, TypeAutomatonState.final)
               (((Finset.product (buildRelationSetCoreFuel signature fuel left)
                   (buildRelationSetCoreFuel signature fuel right)).filter fun entry =>
-                    ParallelReachable signature interface
+                    ParallelReachable signature alphabet left.alphabet
+                      right.alphabet interface
                       (compileTypeFuel signature fuel left)
                       (compileTypeFuel signature fuel right)
                       (compiledChildFutureFuel signature fuel left)
@@ -935,7 +939,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                   current := current
                   future := .at target current
                   target := target }
-            have hRawEdge : rawEdge ∈ parallelRawTransitionEdges interface
+            have hRawEdge : rawEdge ∈ parallelRawTransitionEdges signature
+                left.alphabet right.alphabet interface
                 (compileTypeFuel signature fuel left)
                 (compileTypeFuel signature fuel right)
                 (compiledChildFutureFuel signature fuel left)
@@ -1259,6 +1264,26 @@ def relationMembership
 def buildRelationSet (ty : PactType) (auto : TypeAutomaton) :
     Finset (PactType × TypeAutomatonState) :=
   buildRelationSetCore auto.signature ty
+
+/-- The one-step obligation shared by every constructor case of the
+type--automaton correspondence proof.  It lives with the relation core so
+individual constructor cases can be checked in separate modules. -/
+def StepIffStatement
+    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+  ∀ {residual residual' : PactType} {state : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
+    relationMembership
+      (buildRelationSet processType (compileType signature processType))
+      residual state →
+    ({ environment := env, label := label, offers := offers } :
+        TypeAutomatonSymbol) ∈ (compileType signature processType).alphabet →
+    (DecoratedTypeTransition env residual label offers residual' ↔
+      ∃ state',
+        (compileType signature processType).HasEdge state env label offers
+          state' ∧
+        relationMembership
+          (buildRelationSet processType (compileType signature processType))
+          residual' state')
 
 /-- The generated relation contains its initial residual/state seed pair. -/
 theorem buildRelationSet_initial (ty : PactType) (auto : TypeAutomaton)

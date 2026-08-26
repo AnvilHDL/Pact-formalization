@@ -3,6 +3,7 @@ import Anvilpp.PactTypes.NewCorrespondence.CompileWFHelpers
 import Anvilpp.ProofHelpers
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.Top
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.AlphabetPreservation
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.EnvironmentAndAlphabet
 
 namespace Pact
 
@@ -40,10 +41,11 @@ theorem correspondence_skip_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabetFor_environment_mem signature alphabet
+      hSignatureSymbol
   have hLocal := hEnvironment
   have hWellFormed := localEnvironment_wellFormed signature hEnvironment
   constructor
@@ -120,10 +122,11 @@ theorem correspondence_message_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabetFor_environment_mem signature alphabet
+      hSignatureSymbol
   have hLocal := hEnvironment
   have hWellFormed := localEnvironment_wellFormed signature hEnvironment
   constructor
@@ -307,10 +310,11 @@ theorem correspondence_tock_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabetFor_environment_mem signature alphabet
+      hSignatureSymbol
   have hLocal := hEnvironment
   have hWellFormed := localEnvironment_wellFormed signature hEnvironment
   constructor
@@ -477,10 +481,11 @@ theorem correspondence_progress_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hEnvironment :=
-    NewCorrespondence.transitionAlphabet_environment_mem signature hSignatureSymbol
+    NewCorrespondence.transitionAlphabetFor_environment_mem signature alphabet
+      hSignatureSymbol
   have hLocal := hEnvironment
   have hWellFormed := localEnvironment_wellFormed signature hEnvironment
   constructor
@@ -583,28 +588,12 @@ theorem correspondence_progress_stepIff
         exact ⟨TypeTransition.skip env alphabet ⟨hWellFormed, hClock⟩,
           TypeOffers.skip env alphabet ⟨hWellFormed, hClock⟩⟩
 
-/-- Defines the one-step correspondence proposition used by the Lemma 4.5 induction. -/
-def StepIffStatement
-    (signature : TypeAlphabet) (processType : PactType) : Prop :=
-  ∀ {residual residual' : PactType} {state : TypeAutomatonState}
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
-    relationMembership
-      (buildRelationSet processType (compileType signature processType))
-      residual state →
-    ({ environment := env, label := label, offers := offers } :
-        TypeAutomatonSymbol) ∈ (compileType signature processType).alphabet →
-    (DecoratedTypeTransition env residual label offers residual' ↔
-      ∃ state',
-        (compileType signature processType).HasEdge state env label offers
-          state' ∧
-        relationMembership
-          (buildRelationSet processType (compileType signature processType))
-          residual' state')
-
 /-- Step correspondence for ordinary binary choice `τ1 + τ2`. -/
 theorem correspondence_choice_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hLeftAlphabet : left.alphabet = alphabet)
+    (hRightAlphabet : right.alphabet = alphabet)
     (hLeftIH : StepIffStatement signature left)
     (hRightIH : StepIffStatement signature right) :
     StepIffStatement signature (.choice alphabet left right) := by
@@ -614,7 +603,7 @@ theorem correspondence_choice_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
@@ -645,6 +634,26 @@ theorem correspondence_choice_stepIff
   have hFuelRight :
       typeCompilationFuel right + 1 ≤ typeCompilationFuel (.choice alphabet left right) := by
     simp only [typeCompilationFuel]; omega
+  have hLeftProductInfo : ∀ visited,
+      stateProductInfo (.choice alphabet left right) (.child 0 visited) =
+        stateProductInfo left visited := by
+    intro visited
+    show stateProductInfoFuel (typeCompilationFuel (.choice alphabet left right))
+        (.choice alphabet left right) (.child 0 visited) =
+      stateProductInfoFuel (typeCompilationFuel left) left visited
+    rw [hFuelEq]
+    exact stateProductInfoFuel_eq_of_sufficient' left visited
+      (le_max_left _ _) le_rfl
+  have hRightProductInfo : ∀ visited,
+      stateProductInfo (.choice alphabet left right) (.child 1 visited) =
+        stateProductInfo right visited := by
+    intro visited
+    show stateProductInfoFuel (typeCompilationFuel (.choice alphabet left right))
+        (.choice alphabet left right) (.child 1 visited) =
+      stateProductInfoFuel (typeCompilationFuel right) right visited
+    rw [hFuelEq]
+    exact stateProductInfoFuel_eq_of_sufficient' right visited
+      (le_max_right _ _) le_rfl
   rcases relationMembership_choice_cases signature alphabet left right hRelated with
     hRoot | ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
   · -- root case: `residual` represents `τ1 + τ2` itself
@@ -656,6 +665,7 @@ theorem correspondence_choice_stepIff
         typeFutureOffers left := by
       rw [computeFutureOf_binaryChoice_left signature left right TypeLabel.silent
         TypeLabel.silent (.choice alphabet left right) hWhole hFuelLeft
+        hLeftProductInfo
         (compileTypeFuel signature (typeCompilationFuel left) left).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel left) left le_rfl)]
       show computeFutureOf signature left (compileType signature left).initial =
@@ -667,6 +677,7 @@ theorem correspondence_choice_stepIff
         typeFutureOffers right := by
       rw [computeFutureOf_binaryChoice_right signature left right TypeLabel.silent
         TypeLabel.silent (.choice alphabet left right) hWhole hFuelRight
+        hRightProductInfo
         (compileTypeFuel signature (typeCompilationFuel right) right).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel right) right le_rfl)]
       show computeFutureOf signature right (compileType signature right).initial =
@@ -674,7 +685,7 @@ theorem correspondence_choice_stepIff
       exact helper_h15_future_offers_agree signature
         (buildRelationSet_initial right (compileType signature right))
     have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabet_environment_mem signature hSignatureSymbol
+      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
     have hLeftPending :
         ({ source := TypeAutomatonState.root, environment := env,
@@ -722,7 +733,7 @@ theorem correspondence_choice_stepIff
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
-              signature.transitionAlphabet := by
+              signature.transitionAlphabetFor alphabet := by
           rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
           exact hSignatureSymbol
         have hEdgeFact : (compileType signature (.choice alphabet left right)).HasEdge
@@ -749,7 +760,7 @@ theorem correspondence_choice_stepIff
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
-              signature.transitionAlphabet := by
+              signature.transitionAlphabetFor alphabet := by
           rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
           exact hSignatureSymbol
         have hEdgeFact : (compileType signature (.choice alphabet left right)).HasEdge
@@ -847,8 +858,8 @@ theorem correspondence_choice_stepIff
     have hLeftSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature left).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor left.alphabet
+      simpa [hLeftAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ := (hLeftIH hLeftRelated hLeftSymbol).mp hStep
@@ -856,7 +867,7 @@ theorem correspondence_choice_stepIff
           (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice alphabet left right)
           (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hLeftSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature left q q'
           env label (TypeOfferSummary.mk current future)
@@ -880,7 +891,8 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left signature left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelLeft t hStateMem]
+                (.choice alphabet left right) hWhole hFuelLeft hLeftProductInfo
+                t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 0 q', hOuterEdge, ?_⟩
@@ -905,8 +917,7 @@ theorem correspondence_choice_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature left q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.choice alphabet left right) hEdge)]
+          (by simpa [compileType] using hLeftSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -920,7 +931,8 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left signature left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelLeft t hStateMem]
+                (.choice alphabet left right) hWhole hFuelLeft hLeftProductInfo
+                t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -940,8 +952,8 @@ theorem correspondence_choice_stepIff
     have hRightSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature right).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor right.alphabet
+      simpa [hRightAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -950,7 +962,7 @@ theorem correspondence_choice_stepIff
           (.child 1 q) env label (TypeOfferSummary.mk current future) (.child 1 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.choice alphabet left right)
           (.child 1 q) (.child 1 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hRightSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature right q q'
           env label (TypeOfferSummary.mk current future)
@@ -974,7 +986,8 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right signature left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelRight t hStateMem]
+                (.choice alphabet left right) hWhole hFuelRight hRightProductInfo
+                t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 1 q', hOuterEdge, ?_⟩
@@ -999,8 +1012,7 @@ theorem correspondence_choice_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature right q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.choice alphabet left right) hEdge)]
+          (by simpa [compileType] using hRightSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -1014,7 +1026,8 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right signature left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelRight t hStateMem]
+                (.choice alphabet left right) hWhole hFuelRight hRightProductInfo
+                t hStateMem]
       have hTargetEq : state' = .child 1 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -1033,6 +1046,8 @@ theorem correspondence_choice_stepIff
 theorem correspondence_fairChoice_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (bid : BranchId) (left right : PactType)
+    (hLeftAlphabet : left.alphabet = alphabet)
+    (hRightAlphabet : right.alphabet = alphabet)
     (hLeftIH : StepIffStatement signature left)
     (hRightIH : StepIffStatement signature right) :
     StepIffStatement signature (.fairChoice alphabet bid left right) := by
@@ -1042,7 +1057,7 @@ theorem correspondence_fairChoice_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
@@ -1074,6 +1089,28 @@ theorem correspondence_fairChoice_stepIff
   have hFuelRight :
       typeCompilationFuel right + 1 ≤ typeCompilationFuel (.fairChoice alphabet bid left right) := by
     simp only [typeCompilationFuel]; omega
+  have hLeftProductInfo : ∀ visited,
+      stateProductInfo (.fairChoice alphabet bid left right) (.child 0 visited) =
+        stateProductInfo left visited := by
+    intro visited
+    show stateProductInfoFuel
+        (typeCompilationFuel (.fairChoice alphabet bid left right))
+        (.fairChoice alphabet bid left right) (.child 0 visited) =
+      stateProductInfoFuel (typeCompilationFuel left) left visited
+    rw [hFuelEq]
+    exact stateProductInfoFuel_eq_of_sufficient' left visited
+      (le_max_left _ _) le_rfl
+  have hRightProductInfo : ∀ visited,
+      stateProductInfo (.fairChoice alphabet bid left right) (.child 1 visited) =
+        stateProductInfo right visited := by
+    intro visited
+    show stateProductInfoFuel
+        (typeCompilationFuel (.fairChoice alphabet bid left right))
+        (.fairChoice alphabet bid left right) (.child 1 visited) =
+      stateProductInfoFuel (typeCompilationFuel right) right visited
+    rw [hFuelEq]
+    exact stateProductInfoFuel_eq_of_sufficient' right visited
+      (le_max_right _ _) le_rfl
   rcases relationMembership_fairChoice_cases signature alphabet bid left right hRelated with
     hRoot | ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
   · -- root case: `residual` represents `τ1 ⧺η τ2` itself
@@ -1085,6 +1122,7 @@ theorem correspondence_fairChoice_stepIff
         typeFutureOffers left := by
       rw [computeFutureOf_binaryChoice_left signature left right (TypeLabel.fair bid true)
         (TypeLabel.fair bid false) (.fairChoice alphabet bid left right) hWhole hFuelLeft
+        hLeftProductInfo
         (compileTypeFuel signature (typeCompilationFuel left) left).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel left) left le_rfl)]
       show computeFutureOf signature left (compileType signature left).initial =
@@ -1096,6 +1134,7 @@ theorem correspondence_fairChoice_stepIff
         typeFutureOffers right := by
       rw [computeFutureOf_binaryChoice_right signature left right (TypeLabel.fair bid true)
         (TypeLabel.fair bid false) (.fairChoice alphabet bid left right) hWhole hFuelRight
+        hRightProductInfo
         (compileTypeFuel signature (typeCompilationFuel right) right).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel right) right le_rfl)]
       show computeFutureOf signature right (compileType signature right).initial =
@@ -1103,7 +1142,7 @@ theorem correspondence_fairChoice_stepIff
       exact helper_h15_future_offers_agree signature
         (buildRelationSet_initial right (compileType signature right))
     have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabet_environment_mem signature hSignatureSymbol
+      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
     have hLeftPending :
         ({ source := TypeAutomatonState.root, environment := env,
@@ -1149,7 +1188,7 @@ theorem correspondence_fairChoice_stepIff
         · have hSignatureSymbol' :
               TypeAutomatonSymbol.mk env (TypeLabel.fair bid true)
                 (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
-                signature.transitionAlphabet := by
+                signature.transitionAlphabetFor alphabet := by
             rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
             exact hSignatureSymbol
           have hEdgeFact : (compileType signature (.fairChoice alphabet bid left right)).HasEdge
@@ -1182,7 +1221,7 @@ theorem correspondence_fairChoice_stepIff
         · have hSignatureSymbol' :
               TypeAutomatonSymbol.mk env (TypeLabel.fair bid false)
                 (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
-                signature.transitionAlphabet := by
+                signature.transitionAlphabetFor alphabet := by
             rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
             exact hSignatureSymbol
           have hEdgeFact : (compileType signature (.fairChoice alphabet bid left right)).HasEdge
@@ -1282,8 +1321,8 @@ theorem correspondence_fairChoice_stepIff
     have hLeftSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature left).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor left.alphabet
+      simpa [hLeftAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ := (hLeftIH hLeftRelated hLeftSymbol).mp hStep
@@ -1291,7 +1330,7 @@ theorem correspondence_fairChoice_stepIff
           (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice alphabet bid left right)
           (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hLeftSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature left q q'
           env label (TypeOfferSummary.mk current future)
@@ -1315,7 +1354,8 @@ theorem correspondence_fairChoice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left signature left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-                (.fairChoice alphabet bid left right) hWhole hFuelLeft t hStateMem]
+                (.fairChoice alphabet bid left right) hWhole hFuelLeft
+                hLeftProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 0 q', hOuterEdge, ?_⟩
@@ -1340,8 +1380,7 @@ theorem correspondence_fairChoice_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature left q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.fairChoice alphabet bid left right) hEdge)]
+          (by simpa [compileType] using hLeftSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -1355,7 +1394,8 @@ theorem correspondence_fairChoice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left signature left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-                (.fairChoice alphabet bid left right) hWhole hFuelLeft t hStateMem]
+                (.fairChoice alphabet bid left right) hWhole hFuelLeft
+                hLeftProductInfo t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -1375,8 +1415,8 @@ theorem correspondence_fairChoice_stepIff
     have hRightSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature right).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor right.alphabet
+      simpa [hRightAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -1385,7 +1425,7 @@ theorem correspondence_fairChoice_stepIff
           (.child 1 q) env label (TypeOfferSummary.mk current future) (.child 1 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.fairChoice alphabet bid left right)
           (.child 1 q) (.child 1 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hRightSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature right q q'
           env label (TypeOfferSummary.mk current future)
@@ -1409,7 +1449,8 @@ theorem correspondence_fairChoice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right signature left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-                (.fairChoice alphabet bid left right) hWhole hFuelRight t hStateMem]
+                (.fairChoice alphabet bid left right) hWhole hFuelRight
+                hRightProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 1 q', hOuterEdge, ?_⟩
@@ -1434,8 +1475,7 @@ theorem correspondence_fairChoice_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature right q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.fairChoice alphabet bid left right) hEdge)]
+          (by simpa [compileType] using hRightSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -1449,7 +1489,8 @@ theorem correspondence_fairChoice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right signature left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-                (.fairChoice alphabet bid left right) hWhole hFuelRight t hStateMem]
+                (.fairChoice alphabet bid left right) hWhole hFuelRight
+                hRightProductInfo t hStateMem]
       have hTargetEq : state' = .child 1 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -1468,6 +1509,8 @@ theorem correspondence_fairChoice_stepIff
 theorem correspondence_seq_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (first second : PactType)
+    (hFirstAlphabet : first.alphabet = alphabet)
+    (hSecondAlphabet : second.alphabet = alphabet)
     (hFirstIH : StepIffStatement signature first)
     (hSecondIH : StepIffStatement signature second) :
     StepIffStatement signature (.seq alphabet first second) := by
@@ -1477,7 +1520,7 @@ theorem correspondence_seq_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hLeftForward :
       ∀ {residual' : PactType} {q1 : TypeAutomatonState} {env : TypeEnvironment}
@@ -1507,11 +1550,12 @@ theorem correspondence_seq_stepIff
                 (compileType signature first).alphabet := by
             change TypeAutomatonSymbol.mk env label
                 (TypeOfferSummary.mk current childFuture) ∈
-              signature.transitionAlphabet
-            exact transitionAlphabet_of_typeOffers_target_subset signature
-              hSignatureSymbol hChildStep.2
-              (typeFutureOffers_subset_sequence_left_sdiff_union
-                alphabet leftTarget second current)
+              signature.transitionAlphabetFor first.alphabet
+            simpa [hFirstAlphabet] using
+              transitionAlphabetFor_of_typeOffers_target_subset signature
+                alphabet hSignatureSymbol hChildStep.2
+                (typeFutureOffers_subset_sequence_left_sdiff_union
+                  alphabet leftTarget second current)
           rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
             ⟨q', hChildEdge, hChildTargetRelated⟩
           exact ⟨.child 0 q', compileType_seq_lift_left_step signature alphabet
@@ -1528,10 +1572,11 @@ theorem correspondence_seq_stepIff
                 (compileType signature first).alphabet := by
             change TypeAutomatonSymbol.mk env label
                 (TypeOfferSummary.mk current childFuture) ∈
-              signature.transitionAlphabet
-            exact transitionAlphabet_of_typeOffers_target_subset signature
-              hSignatureSymbol hChildOffers
-              (by simp [typeFutureOffers, typeFutureOffersFuel])
+              signature.transitionAlphabetFor first.alphabet
+            simpa [hFirstAlphabet] using
+              transitionAlphabetFor_of_typeOffers_target_subset signature
+                alphabet hSignatureSymbol hChildOffers
+                (by simp [typeFutureOffers, typeFutureOffersFuel])
           have hChildStep : DecoratedTypeTransition env leftResidual label
               (TypeOfferSummary.mk current childFuture)
               (.skip offerSkipAlphabet) :=
@@ -1553,15 +1598,17 @@ theorem correspondence_seq_stepIff
           TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
             (compileType signature second).alphabet := by
         change TypeAutomatonSymbol.mk env label
-            (TypeOfferSummary.mk current future) ∈ signature.transitionAlphabet
-        exact hSignatureSymbol
+            (TypeOfferSummary.mk current future) ∈
+              signature.transitionAlphabetFor second.alphabet
+        simpa [hSecondAlphabet] using hSignatureSymbol
       rcases (hSecondIH hRightRelated hChildSymbol).mp hStep with
         ⟨q', hChildEdge, hChildTargetRelated⟩
-      exact compileType_seq_lift_right_step signature alphabet first second hRelated
-        hRightRelated hChildTargetRelated hStep hChildEdge
+      exact compileType_seq_lift_right_step signature alphabet first second
+        hSecondAlphabet hRelated hRightRelated hChildTargetRelated hStep
+        hChildEdge
   · rintro ⟨state', hEdge, hTargetRelated⟩
     cases compileType_seq_edge_cases signature alphabet first second
-        hRelated hEdge hTargetRelated with
+        hFirstAlphabet hSecondAlphabet hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
         hFuture =>
@@ -1623,12 +1670,14 @@ theorem correspondence_seq_stepIff
         exact (hSecondIH hRightRelated hChildSymbol).mpr
           ⟨q', hChildEdge, hRightTargetRelated⟩
 
-set_option maxHeartbeats 4000000 in
+set_option maxHeartbeats 20000000 in
 /-- Step correspondence for interleaved parallel composition `τ1 ‖_I τ2`. -/
 theorem correspondence_par_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
     (hInterface : interface ⊆ signature.interface)
+    (hParentAlphabet : alphabet =
+      PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
     (hAlphabetCoherent :
       (.par alphabet left right interface : PactType).AlphabetCoherent)
     (hLeftIH : StepIffStatement signature left)
@@ -1640,7 +1689,7 @@ theorem correspondence_par_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   rcases relationMembership_par_cases signature alphabet left right interface
     hRelated with
@@ -1652,13 +1701,13 @@ theorem correspondence_par_stepIff
     have hParCoherent := hAlphabetCoherent
     simp only [PactType.AlphabetCoherent] at hParCoherent
     have hResidualLeftAlphabet := relationMembership_alphabet_eq signature left
-      residualLeft q1 hParCoherent.2.1 hLeftRelated
+      residualLeft q1 hParCoherent.1 hLeftRelated
     have hResidualRightAlphabet := relationMembership_alphabet_eq signature right
-      residualRight q2 hParCoherent.2.2 hRightRelated
+      residualRight q2 hParCoherent.2 hRightRelated
     have hSourceAlphabet : alphabet = PactTypeAlphabet.mergeHidden
         residualLeft.alphabet residualRight.alphabet interface := by
       rw [hResidualLeftAlphabet, hResidualRightAlphabet]
-      exact hParCoherent.1
+      exact hParentAlphabet
     constructor
     · intro hStep
       cases decoratedTypeTransition_par_cases hStep with
@@ -1666,9 +1715,13 @@ theorem correspondence_par_stepIff
           leftCurrent leftFuture rightCurrent rightFuture hTargetEq hNonFinal
           hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq hCurrentEq hFutureEq =>
           obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
-            transitionAlphabet_of_par_component signature residualLeft residualRight
-              interface hWF hInterface hLocal1 hLocal2 hSync hLabelEq
-              (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol)
+            transitionAlphabet_of_par_component
+              (leftCurrent := leftCurrent) (leftFuture := leftFuture)
+              (rightCurrent := rightCurrent) (rightFuture := rightFuture)
+              signature residualLeft residualRight interface hWF hInterface
+              hLocal1 hLocal2 hSync hLabelEq
+              (transitionAlphabetFor_subset_transitionAlphabet signature alphabet
+                (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol))
           have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
               (TypeOfferSummary.mk leftCurrent leftFuture) ∈
               (compileType signature left).alphabet := by
@@ -1715,9 +1768,13 @@ theorem correspondence_par_stepIff
           rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq
           hCurrentEq hFutureEq =>
           obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
-            transitionAlphabet_of_par_component signature residualLeft residualRight
-              interface hWF hInterface hLocal1 hLocal2 hSync hLabelEq
-              (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol)
+            transitionAlphabet_of_par_component
+              (leftCurrent := leftCurrent) (leftFuture := leftFuture)
+              (rightCurrent := rightCurrent) (rightFuture := rightFuture)
+              signature residualLeft residualRight interface hWF hInterface
+              hLocal1 hLocal2 hSync hLabelEq
+              (transitionAlphabetFor_subset_transitionAlphabet signature alphabet
+                (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol))
           have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
               (TypeOfferSummary.mk leftCurrent leftFuture) ∈
               (compileType signature left).alphabet := by
@@ -1776,10 +1833,15 @@ theorem correspondence_par_stepIff
                 (hideTypeOffers interface (leftOffers.current ∪ rightOffers.current))
                 (hideTypeOffers interface (leftOffers.future ∪ rightOffers.future))) ∈
             signature.transitionAlphabet := by
-        rw [← hCurrentEq, ← hFutureEq]; exact hSignatureSymbol
+        rw [← hCurrentEq, ← hFutureEq]
+        exact transitionAlphabetFor_subset_transitionAlphabet signature alphabet
+          hSignatureSymbol
       obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
-        transitionAlphabet_of_par_component signature residualLeft residualRight
-          interface hWF hInterface hLocal1 hLocal2 hSync hLabelEq hSymbolMem'
+        transitionAlphabet_of_par_component
+          (leftCurrent := leftOffers.current) (leftFuture := leftOffers.future)
+          (rightCurrent := rightOffers.current) (rightFuture := rightOffers.future)
+          signature residualLeft residualRight interface hWF hInterface hLocal1
+          hLocal2 hSync hLabelEq hSymbolMem'
       have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel leftOffers ∈
           (compileType signature left).alphabet := by
         change TypeAutomatonSymbol.mk leftEnv leftLabel leftOffers ∈
@@ -1804,12 +1866,12 @@ theorem correspondence_par_stepIff
           relationMembership_of_accepting signature right hBothAccept.2
         have hLeftSkipAlphabet : leftSkipAlphabet = residualLeft.alphabet := by
           have hTargetAlphabet := relationMembership_alphabet_eq signature left
-            (.skip leftSkipAlphabet) q1' hParCoherent.2.1 hLeftAcceptRelated
+            (.skip leftSkipAlphabet) q1' hParCoherent.1 hLeftAcceptRelated
           simpa [PactType.alphabet] using
             hTargetAlphabet.trans hResidualLeftAlphabet.symm
         have hRightSkipAlphabet : rightSkipAlphabet = residualRight.alphabet := by
           have hTargetAlphabet := relationMembership_alphabet_eq signature right
-            (.skip rightSkipAlphabet) q2' hParCoherent.2.2 hRightAcceptRelated
+            (.skip rightSkipAlphabet) q2' hParCoherent.2 hRightAcceptRelated
           simpa [PactType.alphabet] using
             hTargetAlphabet.trans hResidualRightAlphabet.symm
         subst leftSkipAlphabet
@@ -1943,6 +2005,7 @@ theorem correspondence_par_stepIff
 theorem correspondence_recur_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
+    (hBodyAlphabet : body.alphabet = alphabet)
     (hBodyIH : StepIffStatement signature body) :
     StepIffStatement signature (.recur alphabet name body) := by
   intro residual residual' state env label offers hRelated hSymbol
@@ -1952,7 +2015,7 @@ theorem correspondence_recur_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hFuelEq : typeCompilationFuel (.recur alphabet name body) = typeCompilationFuel body + 1 := by
     simp only [typeCompilationFuel]; omega
@@ -1970,7 +2033,7 @@ theorem correspondence_recur_stepIff
     obtain ⟨hResidualEq, hStateEq⟩ := hRoot
     subst hResidualEq; subst hStateEq
     have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabet_environment_mem signature hSignatureSymbol
+      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hHeaderPending :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
@@ -2089,7 +2152,10 @@ theorem correspondence_recur_stepIff
     subst hResidualEq; subst hStateEq
     have hBodySymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature body).alphabet := by
-      simpa [compileType] using hSignatureSymbol
+      change TypeAutomatonSymbol.mk env label
+          (TypeOfferSummary.mk current future) ∈
+        signature.transitionAlphabetFor body.alphabet
+      simpa [hBodyAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨residual0, hResidual'Eq, hBodyStep⟩ :=
@@ -2190,7 +2256,8 @@ theorem correspondence_recur_stepIff
               exact helper_h15_recursion_future_offers_agree signature alphabet name body
                 (buildRelationSet_initial body (compileType signature body))
             have hEnvMem : env ∈ signature.localEnvironments :=
-              transitionAlphabet_environment_mem signature hSignatureSymbol
+              transitionAlphabetFor_environment_mem signature alphabet
+                hSignatureSymbol
             have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
             rw [hResidualEqAgain, hLabelEq, hResidualEq]
             simp only [PactType.replaceVar]
@@ -2243,6 +2310,9 @@ theorem correspondence_xoffer_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (elseType : PactType)
     (branches : List (BareMessage × PactType))
+    (hElseAlphabet : elseType.alphabet = alphabet)
+    (hBranchAlphabet : ∀ action branchType,
+      (action, branchType) ∈ branches → branchType.alphabet = alphabet)
     (hElseIH : StepIffStatement signature elseType)
     (hBranchesIH :
       ∀ action branchType, (action, branchType) ∈ branches →
@@ -2254,7 +2324,7 @@ theorem correspondence_xoffer_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
@@ -2294,6 +2364,34 @@ theorem correspondence_xoffer_stepIff
     intro branch hBranch
     have h1 := typeCompilationFuel_le_typeBranchCompilationFuel branches branch hBranch
     simp only [typeCompilationFuel]; omega
+  have hElseProductInfo : ∀ visited,
+      stateProductInfo (.xoffer alphabet elseType branches) (.child 0 visited) =
+        stateProductInfo elseType visited := by
+    intro visited
+    show stateProductInfoFuel
+        (typeCompilationFuel (.xoffer alphabet elseType branches))
+        (.xoffer alphabet elseType branches) (.child 0 visited) =
+      stateProductInfoFuel (typeCompilationFuel elseType) elseType visited
+    rw [hFuelEq]
+    exact stateProductInfoFuel_eq_of_sufficient' elseType visited
+      (le_max_left _ _) le_rfl
+  have hBranchProductInfo : ∀ i action branchType,
+      branches[i]? = some (action, branchType) → ∀ visited,
+        stateProductInfo (.xoffer alphabet elseType branches)
+            (.child (i + 1) visited) =
+          stateProductInfo branchType visited := by
+    intro i action branchType hBranch visited
+    show stateProductInfoFuel
+        (typeCompilationFuel (.xoffer alphabet elseType branches))
+        (.xoffer alphabet elseType branches) (.child (i + 1) visited) =
+      stateProductInfoFuel (typeCompilationFuel branchType) branchType visited
+    rw [hFuelEq]
+    simp only [stateProductInfoFuel, hBranch]
+    exact stateProductInfoFuel_eq_of_sufficient' branchType visited
+      (le_trans
+        (typeCompilationFuel_le_typeBranchCompilationFuel branches
+          (action, branchType) (List.mem_of_getElem? hBranch))
+        (le_max_right _ _)) le_rfl
   rcases relationMembership_xoffer_cases signature alphabet elseType branches
     hRelated with
     hRoot | ⟨q, hStateEq, hElseRelated⟩ |
@@ -2307,6 +2405,7 @@ theorem correspondence_xoffer_stepIff
           elseType).initial) = typeFutureOffers elseType := by
       rw [computeFutureOf_exclusiveOffer_else signature elseType branches
         (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+        hElseProductInfo
         (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
           le_rfl)]
@@ -2315,7 +2414,7 @@ theorem correspondence_xoffer_stepIff
       exact helper_h15_future_offers_agree signature
         (buildRelationSet_initial elseType (compileType signature elseType))
     have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabet_environment_mem signature hSignatureSymbol
+      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
     have hRootRelated : relationMembership
         (buildRelationSet (.xoffer alphabet elseType branches)
@@ -2351,6 +2450,7 @@ theorem correspondence_xoffer_stepIff
           rw [computeFutureOf_exclusiveOffer_branch signature elseType branches
             (.xoffer alphabet elseType branches) hWhole index branchAction actualTarget hBranchGet
             (hBranchFuelStrict (branchAction, actualTarget) hBranchMem)
+            (hBranchProductInfo index branchAction actualTarget hBranchGet)
             (compileTypeFuel signature (typeCompilationFuel actualTarget)
               actualTarget).initial (compileTypeFuel_initial_mem signature
               (typeCompilationFuel actualTarget) actualTarget le_rfl)]
@@ -2361,7 +2461,7 @@ theorem correspondence_xoffer_stepIff
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env (TypeLabel.message branchAction.1 branchAction.2)
               (TypeOfferSummary.mk {branchAction} (typeFutureOffers actualTarget)) ∈
-              signature.transitionAlphabet := by
+              signature.transitionAlphabetFor alphabet := by
           rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
           exact hSignatureSymbol
         have hBranchPending :
@@ -2422,7 +2522,7 @@ theorem correspondence_xoffer_stepIff
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers elseType)) ∈
-              signature.transitionAlphabet := by
+              signature.transitionAlphabetFor alphabet := by
           rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
           exact hSignatureSymbol
         have hElsePending :
@@ -2469,7 +2569,8 @@ theorem correspondence_xoffer_stepIff
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk (typeWaitingOffers env branches)
                 (typeFutureOffers (.xoffer alphabet elseType branches) \
-                  typeWaitingOffers env branches)) ∈ signature.transitionAlphabet := by
+                  typeWaitingOffers env branches)) ∈
+              signature.transitionAlphabetFor alphabet := by
           rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
           exact hSignatureSymbol
         have hWaitPending :
@@ -2572,6 +2673,7 @@ theorem correspondence_xoffer_stepIff
             rw [computeFutureOf_exclusiveOffer_branch signature elseType branches
               (.xoffer alphabet elseType branches) hWhole index branchAction branchType' hBranchGet
               (hBranchFuelStrict (branchAction, branchType') hBranchMem)
+              (hBranchProductInfo index branchAction branchType' hBranchGet)
               (compileTypeFuel signature (typeCompilationFuel branchType')
                 branchType').initial (compileTypeFuel_initial_mem signature
                 (typeCompilationFuel branchType') branchType' le_rfl)]
@@ -2658,6 +2760,7 @@ theorem correspondence_xoffer_stepIff
           rw [← hPFuture, Finset.sdiff_empty]
           rw [computeFutureOf_exclusiveOffer_else signature elseType branches
             (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+            hElseProductInfo
             (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
             (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
               le_rfl)]
@@ -2691,8 +2794,8 @@ theorem correspondence_xoffer_stepIff
     have hElseSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature elseType).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor elseType.alphabet
+      simpa [hElseAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -2701,7 +2804,7 @@ theorem correspondence_xoffer_stepIff
           (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.xoffer alphabet elseType branches)
           (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hElseSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature elseType q q'
           env label (TypeOfferSummary.mk current future)
@@ -2723,7 +2826,8 @@ theorem correspondence_xoffer_stepIff
                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else signature elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict t hStateMem]
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+                hElseProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 0 q', hOuterEdge, ?_⟩
@@ -2748,8 +2852,7 @@ theorem correspondence_xoffer_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.xoffer alphabet elseType branches) hEdge)]
+          (by simpa [compileType] using hElseSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -2762,7 +2865,8 @@ theorem correspondence_xoffer_stepIff
                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else signature elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict t hStateMem]
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+                hElseProductInfo t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -2786,8 +2890,8 @@ theorem correspondence_xoffer_stepIff
     have hBranchSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature branchType).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor branchType.alphabet
+      simpa [hBranchAlphabet action branchType hBranchMem] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -2806,7 +2910,7 @@ theorem correspondence_xoffer_stepIff
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.xoffer alphabet elseType branches)
           (.child (i + 1) q) (.child (i + 1) q') env label
           (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hBranchSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature branchType
           q q' env label (TypeOfferSummary.mk current future)
@@ -2835,7 +2939,8 @@ theorem correspondence_xoffer_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_branch signature elseType branches
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
-                (hBranchFuelStrict (action, branchType) hBranchMem) t hStateMem]
+                (hBranchFuelStrict (action, branchType) hBranchMem)
+                (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child (i + 1) q', hOuterEdge, ?_⟩
@@ -2869,8 +2974,7 @@ theorem correspondence_xoffer_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature branchType q childEdge.target
           env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.xoffer alphabet elseType branches) hEdge)]
+          (by simpa [compileType] using hBranchSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -2885,7 +2989,8 @@ theorem correspondence_xoffer_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_branch signature elseType branches
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
-                (hBranchFuelStrict (action, branchType) hBranchMem) t hStateMem]
+                (hBranchFuelStrict (action, branchType) hBranchMem)
+                (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
       have hTargetEq : state' = .child (i + 1) childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -2910,208 +3015,305 @@ theorem correspondence_xoffer_stepIff
         exact (hBranchesIH action branchType hBranchMem hBranchRelated hBranchSymbol).mpr
           ⟨childEdge.target, hInnerEdgeMem, hBranchRelatedAgain⟩
 
-/-- Step correspondence for the fully-unselected parallel singleton-offer product generated below a conjunctive offer, by induction on the finite branch list. -/
-theorem correspondence_parallelTypeBranches_stepIff
+/-- Step correspondence for the worker that partitions an offer alphabet over
+its generated singleton components. -/
+theorem correspondence_parallelTypeBranchesWithin_stepIff
     (signature : TypeAlphabet) :
     ∀ (alphabet : PactTypeAlphabet)
       (branches : List (BareMessage × PactType)),
-      PactType.BranchesAlphabetCoherent alphabet branches →
+      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
       (∀ action branchType, (action, branchType) ∈ branches →
-        StepIffStatement signature branchType) →
-      StepIffStatement signature (parallelTypeBranches branches) := by
+        ∀ branchAlphabet,
+          StepIffStatement signature
+            (branchType.reannotate branchAlphabet)) →
+      StepIffStatement signature
+        (parallelTypeBranchesWithin alphabet branches) := by
   intro alphabet branches
-  induction branches with
+  induction branches generalizing alphabet with
   | nil =>
       intro _ _
+      change StepIffStatement signature (.skip alphabet)
+      exact correspondence_skip_stepIff signature alphabet
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      intro hCoherent hBranchesIH
+      cases rest with
+      | nil =>
+          have hProcessIH : StepIffStatement signature
+              (processType.reannotate alphabet) :=
+            hBranchesIH action processType (by simp) alphabet
+          change StepIffStatement signature
+            (.xoffer alphabet (.skip alphabet)
+              [(action, processType.reannotate alphabet)])
+          exact correspondence_xoffer_stepIff signature alphabet
+            (.skip alphabet) [(action, processType.reannotate alphabet)] rfl
+            (by intro a t hMem; simpa using
+              congrArg PactType.alphabet (congrArg Prod.snd
+                (List.mem_singleton.mp hMem)))
+            (correspondence_skip_stepIff signature alphabet)
+            (by
+              intro a t hMem
+              have hEq := List.mem_singleton.mp hMem
+              cases hEq
+              unfold StepIffStatement at hProcessIH ⊢
+              intro residual residual' state env label offers hRelated hSymbol
+              exact hProcessIH hRelated hSymbol)
+      | cons next tail =>
+          let leftAlphabet :=
+            PactTypeAlphabet.branchPart alphabet (action, processType)
+          let rightAlphabet := PactTypeAlphabet.remove alphabet leftAlphabet
+          have hLeftIH : StepIffStatement signature
+              (singletonTypeXOfferAt leftAlphabet (action, processType)) := by
+            change StepIffStatement signature
+              (.xoffer leftAlphabet (.skip leftAlphabet)
+                [(action, processType.reannotate leftAlphabet)])
+            exact correspondence_xoffer_stepIff signature leftAlphabet
+              (.skip leftAlphabet)
+              [(action, processType.reannotate leftAlphabet)] rfl
+              (by intro a t hMem; simpa using
+                congrArg PactType.alphabet (congrArg Prod.snd
+                  (List.mem_singleton.mp hMem)))
+              (correspondence_skip_stepIff signature leftAlphabet)
+              (by
+                intro a t hMem
+                have hEq := List.mem_singleton.mp hMem
+                cases hEq
+                have hBranchIH :=
+                  hBranchesIH action processType (by simp) leftAlphabet
+                unfold StepIffStatement at hBranchIH ⊢
+                intro residual residual' state env label offers hRelated hSymbol
+                exact hBranchIH hRelated hSymbol)
+          have hRightIH : StepIffStatement signature
+              (parallelTypeBranchesWithin rightAlphabet (next :: tail)) :=
+            ih rightAlphabet
+              (fun item hItem => hCoherent item (by simp [hItem]))
+              (fun a t hMem branchAlphabet =>
+                hBranchesIH a t (by simp [hMem]) branchAlphabet)
+          have hWholeCoherent :
+              (.par alphabet
+                (singletonTypeXOfferAt leftAlphabet (action, processType))
+                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅ :
+                PactType).AlphabetCoherent := by
+            simpa [parallelTypeBranchesWithin, leftAlphabet, rightAlphabet] using
+              parallelTypeBranchesWithin_alphabet_coherent alphabet
+                ((action, processType) :: next :: tail) hCoherent
+          have hParIH : StepIffStatement signature
+              (.par alphabet
+                (singletonTypeXOfferAt leftAlphabet (action, processType))
+                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅) :=
+            correspondence_par_stepIff signature alphabet
+              (singletonTypeXOfferAt leftAlphabet (action, processType))
+              (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅
+              (by simp)
+              (by
+                simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
+                  using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
+                    alphabet (action, processType))
+              hWholeCoherent hLeftIH hRightIH
+          change StepIffStatement signature
+            (.par alphabet
+              (singletonTypeXOfferAt leftAlphabet (action, processType))
+              (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅)
+          exact hParIH
+
+/-- Step correspondence for the generated, fully unselected branch product. -/
+theorem correspondence_parallelTypeBranches_stepIff
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (hAlphabetBranches : PactType.BranchesAlphabetCoherent alphabet branches)
+    (hBranchesIH : ∀ action branchType,
+      (action, branchType) ∈ branches → ∀ branchAlphabet,
+        StepIffStatement signature (branchType.reannotate branchAlphabet)) :
+    StepIffStatement signature (parallelTypeBranches branches) := by
+  cases branches with
+  | nil =>
       change StepIffStatement signature (.skip PactTypeAlphabet.empty)
       exact correspondence_skip_stepIff signature PactTypeAlphabet.empty
-  | cons branch rest ih =>
-      intro hAlphabetBranches hBranchesIH
-      rcases branch with ⟨action, processType⟩
-      have hAllAlphabet := hAlphabetBranches
-      simp only [PactType.BranchesAlphabetCoherent] at hAlphabetBranches
-      have hProcessTypeIH : StepIffStatement signature processType := by
-        intro residual residual' state env label offers hRelated hSymbol
-        exact hBranchesIH action processType List.mem_cons_self hRelated hSymbol
-      have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
-          StepIffStatement signature b := by
-        intro a b hMem
-        rw [List.mem_singleton] at hMem
-        rw [show b = processType from congrArg Prod.snd hMem]
-        intro residual residual' state env label offers hRelated hSymbol
-        exact hProcessTypeIH hRelated hSymbol
-      have hRestBranchesIH : ∀ a b, (a, b) ∈ rest →
-          StepIffStatement signature b := by
-        intro a b hMem residual residual' state env label offers hRelated hSymbol
-        exact hBranchesIH a b (List.mem_cons_of_mem _ hMem) hRelated hSymbol
-      cases rest with
-      | nil =>
-          change StepIffStatement signature
-            (.xoffer processType.alphabet (.skip processType.alphabet)
-              [(action, processType)])
-          exact correspondence_xoffer_stepIff signature processType.alphabet
-            (.skip processType.alphabet) [(action, processType)]
-            (correspondence_skip_stepIff signature processType.alphabet)
-            hSingletonIH
-      | cons next tail =>
-          have hRestIH : StepIffStatement signature
-              (parallelTypeBranches (next :: tail)) := by
-            intro residual residual' state env label offers hRelated hSymbol
-            exact ih hAlphabetBranches.2.2 hRestBranchesIH hRelated hSymbol
-          have hWholeCoherent :=
-            (parallelTypeBranches_alphabet_coherent
-              (alphabet := alphabet) (branches :=
-                (action, processType) :: next :: tail) (by simp)
-              hAllAlphabet).2
-          have hLeftIH : StepIffStatement signature
-              (singletonTypeXOffer (action, processType)) := by
-            intro residual residual' state env label offers hRelated hSymbol
-            exact correspondence_xoffer_stepIff signature
-              processType.alphabet (.skip processType.alphabet)
-              [(action, processType)]
-              (correspondence_skip_stepIff signature processType.alphabet)
-              hSingletonIH hRelated hSymbol
-          have hParIH : StepIffStatement signature
-              (parallelType (singletonTypeXOffer (action, processType))
-                (parallelTypeBranches (next :: tail)) ∅) := by
-            intro residual residual' state env label offers hRelated hSymbol
-            exact correspondence_par_stepIff signature
-              (PactTypeAlphabet.mergeHidden
-                (singletonTypeXOffer (action, processType)).alphabet
-                (parallelTypeBranches (next :: tail)).alphabet ∅)
-              (singletonTypeXOffer (action, processType))
-              (parallelTypeBranches (next :: tail)) ∅ (by simp)
-              (by simpa [parallelType] using hWholeCoherent)
-              hLeftIH hRestIH hRelated hSymbol
-          intro residual residual' state env label offers hRelated hSymbol
-          simpa [parallelTypeBranches] using hParIH hRelated hSymbol
+  | cons branch rest =>
+      change StepIffStatement signature
+        (parallelTypeBranchesWithin branch.2.alphabet (branch :: rest))
+      exact correspondence_parallelTypeBranchesWithin_stepIff signature
+        branch.2.alphabet (branch :: rest)
+        (fun item hItem =>
+          (branchesAlphabetCoherent_of_mem hAlphabetBranches hItem).2)
+        hBranchesIH
 
-/-- Step correspondence for the parallel singleton-offer product generated for a
-specific enabled branch below a conjunctive offer, by induction on the finite
-branch list, reusing the exclusive-offer/sequence/parallel cases already proved. -/
-theorem correspondence_parallelTypeBranchesSelecting_stepIff
+/-- Step correspondence for the generated branch product after one branch is
+selected. -/
+theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
     (signature : TypeAlphabet) :
-    ∀ (alphabet : PactTypeAlphabet)
+    ∀ (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
       (branches : List (BareMessage × PactType)),
-      PactType.BranchesAlphabetCoherent alphabet branches →
+      selected ∈ branches →
+      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
       (∀ action branchType, (action, branchType) ∈ branches →
-        StepIffStatement signature branchType) →
-      ∀ selected ∈ branches,
-        StepIffStatement signature (parallelTypeBranchesSelecting selected branches) := by
-  intro alphabet branches
-  induction branches with
+        ∀ branchAlphabet,
+          StepIffStatement signature
+            (branchType.reannotate branchAlphabet)) →
+      StepIffStatement signature
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) := by
+  intro alphabet selected branches
+  induction branches generalizing alphabet with
   | nil =>
-      intro _ _ selected hMem
+      intro hMem
       cases hMem
   | cons branch rest ih =>
-      intro hAlphabetBranches hBranchesIH selected hMem
       rcases branch with ⟨action, processType⟩
-      have hAllAlphabet := hAlphabetBranches
-      simp only [PactType.BranchesAlphabetCoherent] at hAlphabetBranches
-      have hProcessTypeIH : StepIffStatement signature processType := by
-        intro residual residual' state env label offers hRelated hSymbol
-        exact hBranchesIH action processType List.mem_cons_self hRelated hSymbol
-      have hSingletonIH : ∀ a b, (a, b) ∈ [(action, processType)] →
-          StepIffStatement signature b := by
-        intro a b hMem'
-        rw [List.mem_singleton] at hMem'
-        rw [show b = processType from congrArg Prod.snd hMem']
-        intro residual residual' state env label offers hRelated hSymbol
-        exact hProcessTypeIH hRelated hSymbol
-      have hRestBranchesIH : ∀ a b, (a, b) ∈ rest →
-          StepIffStatement signature b := by
-        intro a b hMem' residual residual' state env label offers hRelated hSymbol
-        exact hBranchesIH a b (List.mem_cons_of_mem _ hMem') hRelated hSymbol
-      rw [List.mem_cons] at hMem
+      intro hSelected hCoherent hBranchesIH
       cases rest with
       | nil =>
-          rcases hMem with hEq | hMem
-          · have hSelectedEq : selected = (action, processType) := hEq
-            subst selected
-            have hSeqIH : StepIffStatement signature
-              (.seq processType.alphabet
-                (.message processType.alphabet action.1 action.2) processType) := by
-              intro residual residual' state env label offers hRelated hSymbol
-              exact correspondence_seq_stepIff signature processType.alphabet
-                (.message processType.alphabet action.1 action.2) processType
-                (correspondence_message_stepIff signature processType.alphabet
-                  action.1 action.2) hProcessTypeIH hRelated hSymbol
-            rw [parallelTypeBranchesSelecting_singleton_self]
-            intro residual residual' state env label offers hRelated hSymbol
-            exact hSeqIH hRelated hSymbol
-          · cases hMem
+          have hEq : selected = (action, processType) := by simpa using hSelected
+          subst selected
+          have hSeq : StepIffStatement signature
+              (.seq alphabet (.message alphabet action.1 action.2)
+                (processType.reannotate alphabet)) :=
+            correspondence_seq_stepIff signature alphabet
+              (.message alphabet action.1 action.2)
+              (processType.reannotate alphabet) rfl
+              (PactType.reannotate_alphabet alphabet processType)
+              (correspondence_message_stepIff signature alphabet action.1 action.2)
+              (hBranchesIH action processType (by simp) alphabet)
+          simp only [parallelTypeBranchesSelectingWithin, if_pos rfl]
+          unfold selectedTypeBranchAt
+          exact hSeq
       | cons next tail =>
-          intro residual residual' state env label offers hRelated hSymbol
-          by_cases hSelf : (action, processType) = selected
-          · subst selected
-            simp [parallelTypeBranchesSelecting] at hRelated hSymbol ⊢
-            have hRestPlainIH : StepIffStatement signature
-                (parallelTypeBranches (next :: tail)) := by
-              intro residual residual' state env label offers hRelated hSymbol
-              exact correspondence_parallelTypeBranches_stepIff signature alphabet
-                (next :: tail) hAlphabetBranches.2.2 hRestBranchesIH
-                hRelated hSymbol
-            have hWholeCoherent :=
-                (parallelTypeBranchesSelecting_alphabet_coherent
-                  (alphabet := alphabet) List.mem_cons_self hAllAlphabet).2
-            have hHeadIH : StepIffStatement signature
-                (selectedTypeBranch (action, processType)) := by
-              intro residual residual' state env label offers hRelated hSymbol
-              exact correspondence_seq_stepIff signature processType.alphabet
-                (.message processType.alphabet action.1 action.2) processType
-                (correspondence_message_stepIff signature processType.alphabet
-                  action.1 action.2) hProcessTypeIH hRelated hSymbol
+          let leftAlphabet :=
+            PactTypeAlphabet.branchPart alphabet (action, processType)
+          let rightAlphabet := PactTypeAlphabet.remove alphabet leftAlphabet
+          simp only [parallelTypeBranchesSelectingWithin]
+          split
+          next hHead =>
+            subst selected
+            have hLeftIH : StepIffStatement signature
+                (selectedTypeBranchAt leftAlphabet (action, processType)) := by
+              change StepIffStatement signature
+                (.seq leftAlphabet (.message leftAlphabet action.1 action.2)
+                  (processType.reannotate leftAlphabet))
+              exact correspondence_seq_stepIff signature leftAlphabet
+                (.message leftAlphabet action.1 action.2)
+                (processType.reannotate leftAlphabet) rfl
+                (PactType.reannotate_alphabet leftAlphabet processType)
+                (correspondence_message_stepIff signature leftAlphabet
+                  action.1 action.2)
+                (hBranchesIH action processType (by simp) leftAlphabet)
+            have hRightIH : StepIffStatement signature
+                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) :=
+              correspondence_parallelTypeBranchesWithin_stepIff signature
+                rightAlphabet (next :: tail)
+                (fun item hItem => hCoherent item (by simp [hItem]))
+                (fun a t hMem branchAlphabet =>
+                  hBranchesIH a t (by simp [hMem]) branchAlphabet)
+            have hWholeCoherent :
+                (.par alphabet
+                  (selectedTypeBranchAt leftAlphabet (action, processType))
+                  (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅ :
+                  PactType).AlphabetCoherent := by
+              simpa [parallelTypeBranchesSelectingWithin, leftAlphabet,
+                rightAlphabet] using
+                parallelTypeBranchesSelectingWithin_alphabet_coherent alphabet
+                  (action, processType) ((action, processType) :: next :: tail)
+                  hCoherent
             have hParIH : StepIffStatement signature
-                (parallelType (selectedTypeBranch (action, processType))
-                  (parallelTypeBranches (next :: tail)) ∅) := by
-              intro residual residual' state env label offers hRelated hSymbol
-              exact correspondence_par_stepIff signature
-                (PactTypeAlphabet.mergeHidden
-                  (selectedTypeBranch (action, processType)).alphabet
-                  (parallelTypeBranches (next :: tail)).alphabet ∅)
-                (selectedTypeBranch (action, processType))
-                (parallelTypeBranches (next :: tail)) ∅ (by simp)
-                (by simpa [parallelTypeBranchesSelecting, parallelType]
-                  using hWholeCoherent)
-                hHeadIH hRestPlainIH hRelated hSymbol
-            exact hParIH hRelated hSymbol
-          · rcases hMem with hEq | hMemRest
-            · exact absurd hEq.symm hSelf
-            · simp [parallelTypeBranchesSelecting, hSelf] at hRelated hSymbol ⊢
-              have hRestIH : StepIffStatement signature
-                  (parallelTypeBranchesSelecting selected (next :: tail)) := by
-                intro residual residual' state env label offers hRelated hSymbol
-                exact ih hAlphabetBranches.2.2 hRestBranchesIH selected hMemRest
-                  hRelated hSymbol
-              have hWholeCoherent :=
-                (parallelTypeBranchesSelecting_alphabet_coherent
-                  (alphabet := alphabet)
-                  (List.mem_cons_of_mem (action, processType) hMemRest)
-                  hAllAlphabet).2
-              have hHeadIH : StepIffStatement signature
-                  (singletonTypeXOffer (action, processType)) := by
-                intro residual residual' state env label offers hRelated hSymbol
-                exact correspondence_xoffer_stepIff signature
-                  processType.alphabet (.skip processType.alphabet)
-                  [(action, processType)]
-                  (correspondence_skip_stepIff signature processType.alphabet)
-                  hSingletonIH hRelated hSymbol
-              have hParIH : StepIffStatement signature
-                  (parallelType (singletonTypeXOffer (action, processType))
-                    (parallelTypeBranchesSelecting selected (next :: tail)) ∅) := by
-                intro residual residual' state env label offers hRelated hSymbol
-                exact correspondence_par_stepIff signature
-                  (PactTypeAlphabet.mergeHidden
-                    (singletonTypeXOffer (action, processType)).alphabet
-                    (parallelTypeBranchesSelecting selected
-                      (next :: tail)).alphabet ∅)
-                  (singletonTypeXOffer (action, processType))
-                  (parallelTypeBranchesSelecting selected (next :: tail)) ∅
-                  (by simp)
-                  (by simpa [parallelTypeBranchesSelecting, hSelf, parallelType]
-                    using hWholeCoherent)
-                  hHeadIH hRestIH hRelated hSymbol
-              exact hParIH hRelated hSymbol
+                (.par alphabet
+                  (selectedTypeBranchAt leftAlphabet (action, processType))
+                  (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅) :=
+              correspondence_par_stepIff signature alphabet
+                (selectedTypeBranchAt leftAlphabet (action, processType))
+                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅
+                (by simp)
+                (by
+                  simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
+                    using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
+                      alphabet (action, processType))
+                hWholeCoherent hLeftIH hRightIH
+            change StepIffStatement signature
+              (.par alphabet
+                (selectedTypeBranchAt leftAlphabet (action, processType))
+                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅)
+            exact hParIH
+          next hHead =>
+            have hTailMem : selected ∈ next :: tail := by
+              simpa [List.mem_cons, hHead] using hSelected
+            have hLeftIH : StepIffStatement signature
+                (singletonTypeXOfferAt leftAlphabet (action, processType)) := by
+              change StepIffStatement signature
+                (.xoffer leftAlphabet (.skip leftAlphabet)
+                  [(action, processType.reannotate leftAlphabet)])
+              exact correspondence_xoffer_stepIff signature leftAlphabet
+                (.skip leftAlphabet)
+                [(action, processType.reannotate leftAlphabet)] rfl
+                (by intro a t hMem; simpa using
+                  congrArg PactType.alphabet (congrArg Prod.snd
+                    (List.mem_singleton.mp hMem)))
+                (correspondence_skip_stepIff signature leftAlphabet)
+                (by
+                  intro a t hMem
+                  have hEq := List.mem_singleton.mp hMem
+                  cases hEq
+                  have hBranchIH :=
+                    hBranchesIH action processType (by simp) leftAlphabet
+                  unfold StepIffStatement at hBranchIH ⊢
+                  intro residual residual' state env label offers hRelated hSymbol
+                  exact hBranchIH hRelated hSymbol)
+            have hRightIH : StepIffStatement signature
+                (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                  (next :: tail)) :=
+              ih rightAlphabet hTailMem
+                (fun item hItem => hCoherent item (by simp [hItem]))
+                (fun a t hMem branchAlphabet =>
+                  hBranchesIH a t (by simp [hMem]) branchAlphabet)
+            have hWholeCoherent :
+                (.par alphabet
+                  (singletonTypeXOfferAt leftAlphabet (action, processType))
+                  (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                    (next :: tail)) ∅ : PactType).AlphabetCoherent := by
+              simpa [parallelTypeBranchesSelectingWithin, hHead, leftAlphabet,
+                rightAlphabet] using
+                parallelTypeBranchesSelectingWithin_alphabet_coherent alphabet
+                  selected ((action, processType) :: next :: tail) hCoherent
+            have hParIH : StepIffStatement signature
+                (.par alphabet
+                  (singletonTypeXOfferAt leftAlphabet (action, processType))
+                  (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                    (next :: tail)) ∅) :=
+              correspondence_par_stepIff signature alphabet
+                (singletonTypeXOfferAt leftAlphabet (action, processType))
+                (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                  (next :: tail)) ∅ (by simp)
+                (by
+                  simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
+                    using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
+                      alphabet (action, processType))
+                hWholeCoherent hLeftIH hRightIH
+            change StepIffStatement signature
+              (.par alphabet
+                (singletonTypeXOfferAt leftAlphabet (action, processType))
+                (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                  (next :: tail)) ∅)
+            exact hParIH
+
+/-- Step correspondence for the public selected-branch product. -/
+theorem correspondence_parallelTypeBranchesSelecting_stepIff
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (hAlphabetBranches : PactType.BranchesAlphabetCoherent alphabet branches)
+    (hBranchesIH : ∀ action branchType,
+      (action, branchType) ∈ branches → ∀ branchAlphabet,
+        StepIffStatement signature (branchType.reannotate branchAlphabet))
+    (selected : BareMessage × PactType) (hSelected : selected ∈ branches) :
+    StepIffStatement signature
+      (parallelTypeBranchesSelecting selected branches) := by
+  cases branches with
+  | nil => cases hSelected
+  | cons branch rest =>
+      change StepIffStatement signature
+        (parallelTypeBranchesSelectingWithin branch.2.alphabet selected
+          (branch :: rest))
+      exact correspondence_parallelTypeBranchesSelectingWithin_stepIff signature
+        branch.2.alphabet selected (branch :: rest) hSelected
+        (fun item hItem =>
+          (branchesAlphabetCoherent_of_mem hAlphabetBranches hItem).2)
+        hBranchesIH
 
 set_option maxHeartbeats 4000000 in
 /-- Step correspondence for conjunctive offer `⋀(τ0,B)`. -/
@@ -3121,10 +3323,13 @@ theorem correspondence_offer_stepIff
     (branches : List (BareMessage × PactType))
     (hAlphabetBranches :
       PactType.BranchesAlphabetCoherent alphabet branches)
+    (hElseAlphabet : elseType.alphabet = alphabet)
     (hElseIH : StepIffStatement signature elseType)
     (hBranchesIH :
       ∀ action branchType, (action, branchType) ∈ branches →
-        StepIffStatement signature branchType) :
+        ∀ branchAlphabet,
+          StepIffStatement signature
+            (branchType.reannotate branchAlphabet)) :
     StepIffStatement signature (.offer alphabet elseType branches) := by
   intro residual residual' state env label offers hRelated hSymbol
   -- A generated branch commit is a finite parallel product already covered
@@ -3135,7 +3340,7 @@ theorem correspondence_offer_stepIff
   rcases offers with ⟨current, future⟩
   have hSignatureSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   have hElseFuelStrict : typeCompilationFuel elseType + 1 ≤
       typeCompilationFuel (.offer alphabet elseType branches) := by
@@ -3183,6 +3388,36 @@ theorem correspondence_offer_stepIff
           rw [typeCompilationFuel_parallelTypeBranchesSelecting]
           exact le_max_right _ _)
         le_rfl
+  have hElseProductInfo : ∀ visited,
+      stateProductInfo (.offer alphabet elseType branches) (.child 0 visited) =
+        stateProductInfo elseType visited := by
+    intro visited
+    unfold stateProductInfo
+    rw [hFuelEq]
+    simp only [stateProductInfoFuel]
+    exact stateProductInfoFuel_eq_of_sufficient elseType visited
+      (by
+        simp only [TypeCompilationFuelSufficient]
+        exact le_max_left _ _)
+      (typeCompilationFuel_sufficient elseType)
+  have hBranchProductInfo : ∀ i selected,
+      branches[i]? = some selected → ∀ visited,
+        stateProductInfo (.offer alphabet elseType branches)
+            (.child (i + 1) visited) =
+          stateProductInfo (parallelTypeBranchesSelecting selected branches)
+            visited := by
+    intro i selected hSelected visited
+    unfold stateProductInfo
+    rw [hFuelEq]
+    simp only [stateProductInfoFuel, hSelected]
+    exact stateProductInfoFuel_eq_of_sufficient
+      (parallelTypeBranchesSelecting selected branches) visited
+      (by
+        simp only [TypeCompilationFuelSufficient]
+        rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+        exact le_max_right _ _)
+      (typeCompilationFuel_sufficient
+        (parallelTypeBranchesSelecting selected branches))
   rcases relationMembership_offer_cases signature alphabet elseType branches hRelated with
     hRoot | ⟨q, hStateEq, hElseRelated⟩ |
     ⟨i, selected, q, hSelectedEq, hStateEq, hBranchRelated⟩
@@ -3194,7 +3429,7 @@ theorem correspondence_offer_stepIff
         (.child 0 (compileTypeFuel signature (typeCompilationFuel elseType)
           elseType).initial) = typeFutureOffers elseType := by
       rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
-        (.offer alphabet elseType branches) hWhole hElseFuelStrict
+        (.offer alphabet elseType branches) hWhole hElseFuelStrict hElseProductInfo
         (compileTypeFuel signature (typeCompilationFuel elseType) elseType).initial
         (compileTypeFuel_initial_mem signature (typeCompilationFuel elseType) elseType
           le_rfl)]
@@ -3203,7 +3438,7 @@ theorem correspondence_offer_stepIff
       exact helper_h15_future_offers_agree signature
         (buildRelationSet_initial elseType (compileType signature elseType))
     have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabet_environment_mem signature hSignatureSymbol
+      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
     have hRootRelated : relationMembership
         (buildRelationSet (.offer alphabet elseType branches)
@@ -3231,7 +3466,7 @@ theorem correspondence_offer_stepIff
               typeFutureOffers (parallelTypeBranchesSelecting enabled branches) := by
             rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
               (.offer alphabet elseType branches) hWhole index enabled hSelectedGet
-              (hBranchFuelStrict enabled)
+              (hBranchFuelStrict enabled) (hBranchProductInfo index enabled hSelectedGet)
               (compileTypeFuel signature
                 (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
                 (parallelTypeBranchesSelecting enabled branches)).initial
@@ -3248,7 +3483,7 @@ theorem correspondence_offer_stepIff
               TypeAutomatonSymbol.mk env TypeLabel.silent
                 (TypeOfferSummary.mk ∅ (typeFutureOffers
                   (parallelTypeBranchesSelecting enabled branches))) ∈
-                signature.transitionAlphabet := by
+        signature.transitionAlphabetFor alphabet := by
             rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
             exact hSignatureSymbol
           have hEnabledPending :
@@ -3318,7 +3553,7 @@ theorem correspondence_offer_stepIff
           have hSignatureSymbol' :
               TypeAutomatonSymbol.mk env TypeLabel.silent
                 (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType)) ∈
-                signature.transitionAlphabet := by
+                signature.transitionAlphabetFor alphabet := by
             rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
             exact hSignatureSymbol
           have hElsePending :
@@ -3368,7 +3603,8 @@ theorem correspondence_offer_stepIff
               TypeAutomatonSymbol.mk env TypeLabel.silent
                 (TypeOfferSummary.mk (typeWaitingOffers env branches)
                   (typeFutureOffers (.offer alphabet elseType branches) \
-                    typeWaitingOffers env branches)) ∈ signature.transitionAlphabet := by
+                    typeWaitingOffers env branches)) ∈
+                signature.transitionAlphabetFor alphabet := by
             rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
             exact hSignatureSymbol
           have hWaitPending :
@@ -3477,6 +3713,7 @@ theorem correspondence_offer_stepIff
             rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
               (.offer alphabet elseType branches) hWhole index (branchAction, branchType') hSelectedGet
               (hBranchFuelStrict (branchAction, branchType'))
+              (hBranchProductInfo index (branchAction, branchType') hSelectedGet)
               (compileTypeFuel signature (typeCompilationFuel
                 (parallelTypeBranchesSelecting (branchAction, branchType') branches))
                 (parallelTypeBranchesSelecting (branchAction, branchType') branches)).initial
@@ -3607,8 +3844,8 @@ theorem correspondence_offer_stepIff
     have hElseSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈ (compileType signature elseType).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor elseType.alphabet
+      simpa [hElseAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -3617,7 +3854,7 @@ theorem correspondence_offer_stepIff
           (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer alphabet elseType branches)
           (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hElseSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature elseType q q'
           env label (TypeOfferSummary.mk current future)
@@ -3639,7 +3876,8 @@ theorem correspondence_offer_stepIff
                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
-                (.offer alphabet elseType branches) hWhole hElseFuelStrict t hStateMem]
+                (.offer alphabet elseType branches) hWhole hElseFuelStrict hElseProductInfo
+                t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 0 q', hOuterEdge, ?_⟩
@@ -3665,8 +3903,7 @@ theorem correspondence_offer_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target env
           label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.offer alphabet elseType branches) hEdge)]
+          (by simpa [compileType] using hElseSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -3679,7 +3916,8 @@ theorem correspondence_offer_stepIff
                 (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_selectedConjunctiveOffer_else signature elseType branches
-                (.offer alphabet elseType branches) hWhole hElseFuelStrict t hStateMem]
+                (.offer alphabet elseType branches) hWhole hElseFuelStrict hElseProductInfo
+                t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -3708,8 +3946,13 @@ theorem correspondence_offer_stepIff
         (TypeOfferSummary.mk current future) ∈
         (compileType signature (parallelTypeBranchesSelecting selected branches)).alphabet := by
       change TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet
-      exact hSignatureSymbol
+        signature.transitionAlphabetFor
+          (parallelTypeBranchesSelecting selected branches).alphabet
+      have hGeneratedAlphabet :
+          (parallelTypeBranchesSelecting selected branches).alphabet = alphabet :=
+        (parallelTypeBranchesSelecting_alphabet_coherent hSelectedMem
+          hAlphabetBranches).1
+      simpa [hGeneratedAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
       obtain ⟨q', hChildEdge, hChildTargetRelated⟩ :=
@@ -3729,7 +3972,7 @@ theorem correspondence_offer_stepIff
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer alphabet elseType branches)
           (.child (i + 1) q) (.child (i + 1) q') env label
           (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hBranchSymbol)]
+          hSignatureSymbol]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
           (parallelTypeBranchesSelecting selected branches)
@@ -3763,7 +4006,8 @@ theorem correspondence_offer_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
                 (.offer alphabet elseType branches) hWhole i selected hSelectedEq
-                (hBranchFuelStrict selected) t hStateMem]
+                (hBranchFuelStrict selected) (hBranchProductInfo i selected hSelectedEq)
+                t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child (i + 1) q', hOuterEdge, ?_⟩
@@ -3804,8 +4048,7 @@ theorem correspondence_offer_stepIff
         rw [compileType_hasEdge_iff_hasResolvedEdge signature
           (parallelTypeBranchesSelecting selected branches) q childEdge.target
           env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using
-            compileType_hasEdge_symbol_mem signature (.offer alphabet elseType branches) hEdge)]
+          (by simpa [compileType] using hBranchSymbol)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -3821,7 +4064,8 @@ theorem correspondence_offer_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_selectedConjunctiveOffer_branch signature elseType branches
                 (.offer alphabet elseType branches) hWhole i selected hSelectedEq
-                (hBranchFuelStrict selected) t hStateMem]
+                (hBranchFuelStrict selected) (hBranchProductInfo i selected hSelectedEq)
+                t hStateMem]
       have hTargetEq : state' = .child (i + 1) childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -3854,7 +4098,8 @@ theorem correspondence_var_stepIff
   subst hResidual
   subst hState
   have hSignatureSymbol :
-      TypeAutomatonSymbol.mk env label offers ∈ signature.transitionAlphabet := by
+      TypeAutomatonSymbol.mk env label offers ∈
+        signature.transitionAlphabetFor alphabet := by
     simpa [compileType] using hSymbol
   constructor
   · intro hStep
@@ -3951,7 +4196,8 @@ theorem correspondence_stepIff
             exact ih (sizeOf right) hRightSize right hSupports.2
               hAlphabetWF.2.2.2.2 rfl hRelated hSymbol
           exact correspondence_choice_stepIff signature alphabet left right
-            hLeftIH hRightIH hRelated hSymbol
+            hAlphabetWF.2.1 hAlphabetWF.2.2.1 hLeftIH hRightIH hRelated
+            hSymbol
       | seq alphabet first second =>
           intro residual residual' state env label offers hRelated hSymbol
           simp only [TypeAlphabet.Supports] at hSupports
@@ -3967,7 +4213,8 @@ theorem correspondence_stepIff
             exact ih (sizeOf second) hSecondSize second hSupports.2
               hAlphabetWF.2.2.2.2 rfl hRelated hSymbol
           exact correspondence_seq_stepIff signature alphabet first second
-            hFirstIH hSecondIH hRelated hSymbol
+            hAlphabetWF.2.1 hAlphabetWF.2.2.1 hFirstIH hSecondIH hRelated
+            hSymbol
       | par alphabet left right interface =>
           intro residual residual' state env label offers hRelated hSymbol
           simp only [TypeAlphabet.Supports] at hSupports
@@ -3986,7 +4233,8 @@ theorem correspondence_stepIff
             exact ih (sizeOf right) hRightSize right hSupports.2.2
               hAlphabetWF.2.2.2 rfl hRelated hSymbol
           exact correspondence_par_stepIff signature alphabet left right interface
-            hSupports.1 hParentCoherent hLeftIH hRightIH hRelated hSymbol
+            hSupports.1 hAlphabetWF.2.1.parent_eq hParentCoherent hLeftIH
+            hRightIH hRelated hSymbol
       | var alphabet id =>
           intro residual residual' state env label offers hRelated hSymbol
           exact correspondence_var_stepIff signature alphabet id hRelated hSymbol
@@ -3999,8 +4247,8 @@ theorem correspondence_stepIff
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf body) hBodySize body hSupports hAlphabetWF.2.2 rfl
               hRelated hSymbol
-          exact correspondence_recur_stepIff signature alphabet id body hBodyIH
-            hRelated hSymbol
+          exact correspondence_recur_stepIff signature alphabet id body
+            hAlphabetWF.2.1 hBodyIH hRelated hSymbol
       | fairChoice alphabet id left right =>
           intro residual residual' state env label offers hRelated hSymbol
           simp only [TypeAlphabet.Supports] at hSupports
@@ -4016,7 +4264,8 @@ theorem correspondence_stepIff
             exact ih (sizeOf right) hRightSize right hSupports.2.2
               hAlphabetWF.2.2.2.2.2 rfl hRelated hSymbol
           exact correspondence_fairChoice_stepIff signature alphabet id left right
-            hLeftIH hRightIH hRelated hSymbol
+            hAlphabetWF.2.2.1 hAlphabetWF.2.2.2.1 hLeftIH hRightIH hRelated
+            hSymbol
       | xoffer alphabet elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
           simp only [TypeAlphabet.Supports] at hSupports
@@ -4046,6 +4295,9 @@ theorem correspondence_stepIff
             exact ih (sizeOf branchType) hBranchSize branchType hBranchSupports
               hBranchAlphabetWF rfl hRelated hSymbol
           exact correspondence_xoffer_stepIff signature alphabet elseType branches
+            hAlphabetWF.2.1
+            (fun action branchType hMember =>
+              PactType.branch_alphabet_eq_of_mem hAlphabetWF.2.2.2 hMember)
             hElseIH hBranchesIH hRelated hSymbol
       | offer alphabet elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol
@@ -4080,7 +4332,8 @@ theorem correspondence_stepIff
             exact ih (sizeOf branchType) hBranchSize branchType hBranchSupports
               hBranchAlphabetWF rfl hRelated hSymbol
           exact correspondence_offer_stepIff signature alphabet elseType branches
-            hOfferCoherent.2.2 hElseIH hBranchesIH hRelated hSymbol
+            hOfferCoherent.2.2 hAlphabetWF.2.1 hElseIH hBranchesIH hRelated
+            hSymbol
 
 end
 

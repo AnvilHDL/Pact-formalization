@@ -13,9 +13,13 @@ open Classical
 The paper's admissible recursive types: variables are closed, every recursive
 backedge is preceded by at least one synchronized clock step, recursive calls
 are tail terminating, a message is exchanged at most once per cycle, and
-nested parallel binders have lexically disjoint interfaces
-(`pactautomatonconstruction.typ`, "Regularity"; unchanged by this
-redevelopment).
+nested parallel binders have lexically disjoint interfaces.
+
+At source parallel nodes, ownership is recorded by the fixed child alphabets.
+Conjunctive offers later turn their branches into an internal parallel
+product.  Their branch bodies initially share the enclosing offer alphabet,
+so the three ownership predicates are retained here to justify the disjoint
+alphabet partition used by that generated product.
 
 Tail termination is the finite-control part of regularity.  It ensures that a
 shared backedge never has to retain a newly generated sequence, parallel, or

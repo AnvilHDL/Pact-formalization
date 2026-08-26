@@ -163,6 +163,86 @@ namespace TypeAlphabet
       alphabet.localOfferSets.image fun future =>
         { current := current, future := future }
 
+  /-- Actions from the surrounding signature that belong to one fixed type
+  alphabet.  The intersection keeps malformed annotations from enlarging the
+  signature; admissible types make it redundant for every action they use. -/
+  def localActionsFor (signature : TypeAlphabet)
+      (alphabet : PactTypeAlphabet) : Finset BareMessage :=
+    signature.localActions ∩ alphabet.actions
+
+  /-- Environment actions visible to a type with fixed alphabet `alphabet`. -/
+  def localEnvironmentActionsFor (signature : TypeAlphabet)
+      (alphabet : PactTypeAlphabet) : Finset BareMessage :=
+    (signature.localActionsFor alphabet).image typeNeed
+
+  /-- Well-formed environments over one type's fixed action alphabet. -/
+  def localEnvironmentsFor (signature : TypeAlphabet)
+      (alphabet : PactTypeAlphabet) : Finset TypeEnvironment :=
+    {TypeEnvironment.tock} ∪
+      (signature.localEnvironmentActionsFor alphabet).powerset.biUnion
+        fun immediate =>
+          (signature.localEnvironmentActionsFor alphabet \ immediate).powerset.image
+            fun future =>
+              { immediate := immediate, future := future, clock := false }
+
+  /-- Offer summaries over one type's fixed action alphabet. -/
+  def localOfferSummariesFor (signature : TypeAlphabet)
+      (alphabet : PactTypeAlphabet) : Finset TypeOfferSummary :=
+    (signature.localActionsFor alphabet).powerset.biUnion fun current =>
+      (signature.localActionsFor alphabet).powerset.image fun future =>
+        { current := current, future := future }
+
+  theorem localActionsFor_subset_localActions (signature : TypeAlphabet)
+      (alphabet : PactTypeAlphabet) :
+      signature.localActionsFor alphabet ⊆ signature.localActions := by
+    intro action hAction
+    exact (Finset.mem_inter.mp hAction).1
+
+  theorem localEnvironmentActionsFor_subset_localEnvironmentActions
+      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
+      signature.localEnvironmentActionsFor alphabet ⊆
+        signature.localEnvironmentActions := by
+    apply Finset.image_mono
+    exact localActionsFor_subset_localActions signature alphabet
+
+  theorem localEnvironmentsFor_subset_localEnvironments
+      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
+      signature.localEnvironmentsFor alphabet ⊆
+        signature.localEnvironments := by
+    intro environment hEnvironment
+    simp only [localEnvironmentsFor, localEnvironments, Finset.mem_union,
+      Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+      Finset.mem_image] at hEnvironment ⊢
+    rcases hEnvironment with hTock | ⟨immediate, hImmediate, future,
+      hFuture, rfl⟩
+    · exact Or.inl hTock
+    · right
+      refine ⟨immediate, hImmediate.trans
+        (localEnvironmentActionsFor_subset_localEnvironmentActions
+          signature alphabet), future, ?_, rfl⟩
+      intro action hAction
+      have hMember := hFuture hAction
+      simp only [Finset.mem_sdiff] at hMember ⊢
+      exact ⟨
+        localEnvironmentActionsFor_subset_localEnvironmentActions
+          signature alphabet hMember.1,
+        hMember.2⟩
+
+  theorem localOfferSummariesFor_subset_localOfferSummaries
+      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
+      signature.localOfferSummariesFor alphabet ⊆
+        signature.localOfferSummaries := by
+    intro offers hOffers
+    simp only [localOfferSummariesFor, localOfferSummaries, localOfferSets,
+      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+      at hOffers ⊢
+    rcases hOffers with ⟨current, hCurrent, future, hFuture, rfl⟩
+    exact ⟨current,
+      hCurrent.trans (localActionsFor_subset_localActions signature alphabet),
+      future,
+      hFuture.trans (localActionsFor_subset_localActions signature alphabet),
+      rfl⟩
+
   /-
   Validate a type against a previously chosen alphabet.  This checks use of
   the signature; it does not synthesize or enlarge the signature from syntax.
@@ -214,6 +294,18 @@ def TypeAlphabet.transitionAlphabet
   alphabet.localEnvironments.biUnion fun environment =>
     alphabet.localLabels.biUnion fun label =>
       alphabet.localOfferSummaries.image fun offers =>
+        { environment := environment, label := label, offers := offers }
+
+/-- The public transition alphabet of one fixed type alphabet.  Labels remain
+drawn from the surrounding signature because a parallel node may emit a
+resolved observation for an interface hidden from its boundary action set.
+Environments and offers are restricted to the actions owned by this type. -/
+def TypeAlphabet.transitionAlphabetFor
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
+    Finset TypeAutomatonSymbol :=
+  (signature.localEnvironmentsFor alphabet).biUnion fun environment =>
+    signature.localLabels.biUnion fun label =>
+      (signature.localOfferSummariesFor alphabet).image fun offers =>
         { environment := environment, label := label, offers := offers }
 
 end

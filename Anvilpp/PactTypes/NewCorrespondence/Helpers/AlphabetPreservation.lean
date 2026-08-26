@@ -24,10 +24,8 @@ mutual
     | .fairChoice alphabet _ left right =>
         left.alphabet = alphabet ∧ right.alphabet = alphabet ∧
           left.AlphabetCoherent ∧ right.AlphabetCoherent
-    | .par alphabet left right interface =>
-        alphabet = PactTypeAlphabet.mergeHidden left.alphabet right.alphabet
-          interface ∧
-          left.AlphabetCoherent ∧ right.AlphabetCoherent
+    | .par _ left right _ =>
+        left.AlphabetCoherent ∧ right.AlphabetCoherent
     | .recur alphabet _ body =>
         body.alphabet = alphabet ∧ body.AlphabetCoherent
     | .xoffer alphabet elseType branches
@@ -116,8 +114,7 @@ theorem PactType.alphabetCoherent_of_wellFormed :
           simp only [PactType.AlphabetCoherent]
           have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          exact ⟨hWellFormed.2.1.1,
-            ih (sizeOf left) hLeftSize left rfl hWellFormed.2.2.1,
+          exact ⟨ih (sizeOf left) hLeftSize left rfl hWellFormed.2.2.1,
             ih (sizeOf right) hRightSize right rfl hWellFormed.2.2.2⟩
       | recur alphabet name body =>
           intro hWellFormed
@@ -143,121 +140,168 @@ theorem PactType.alphabetCoherent_of_wellFormed :
             ih (sizeOf elseType) hElseSize elseType rfl hWellFormed.2.2.1,
             hBranches alphabet branches hBranchesSize hWellFormed.2.2.2⟩
 
-private theorem singletonTypeXOffer_alphabetCoherent
-    {alphabet : PactTypeAlphabet} {branch : BareMessage × PactType}
-    (hBranch : branch.2.alphabet = alphabet ∧
-      branch.2.AlphabetCoherent) :
-    (singletonTypeXOffer branch).AlphabetCoherent := by
-  rcases branch with ⟨action, branchType⟩
-  simp only [singletonTypeXOffer, PactType.AlphabetCoherent,
-    PactType.BranchesAlphabetCoherent]
-  exact ⟨rfl, trivial, trivial, hBranch.2, trivial⟩
+theorem PactType.reannotate_alphabetCoherent
+    (alphabet : PactTypeAlphabet) :
+    ∀ processType : PactType, processType.AlphabetCoherent →
+      (processType.reannotate alphabet).AlphabetCoherent := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType alphabet with
+  | _ n ih =>
+      have hBranches : ∀ sourceAlphabet
+          (branches : List (BareMessage × PactType)),
+          sizeOf branches < n → ∀ branchAlphabet,
+          PactType.BranchesAlphabetCoherent sourceAlphabet branches →
+          PactType.BranchesAlphabetCoherent branchAlphabet
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro sourceAlphabet branches hBranchesSize branchAlphabet hCoherent
+        induction branches with
+        | nil =>
+            rw [PactType.reannotateBranches_nil]
+            simp [PactType.BranchesAlphabetCoherent]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            rw [PactType.reannotateBranches_cons]
+            simp only [PactType.BranchesAlphabetCoherent] at hCoherent ⊢
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            exact ⟨PactType.reannotate_alphabet branchAlphabet branchType,
+              ih (sizeOf branchType) hBranchSize branchAlphabet branchType rfl
+                hCoherent.2.1,
+              restIH hRestSize hCoherent.2.2⟩
+      intro hCoherent
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.AlphabetCoherent]
+      | choice _ left right | seq _ left right | fairChoice _ _ left right =>
+          simp only [PactType.reannotate, PactType.AlphabetCoherent]
+          simp only [PactType.AlphabetCoherent] at hCoherent
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨PactType.reannotate_alphabet alphabet left,
+            PactType.reannotate_alphabet alphabet right,
+            ih (sizeOf left) hLeftSize alphabet left rfl hCoherent.2.2.1,
+            ih (sizeOf right) hRightSize alphabet right rfl hCoherent.2.2.2⟩
+      | par _ left right interface =>
+          simp only [PactType.reannotate, PactType.AlphabetCoherent]
+          simp only [PactType.AlphabetCoherent] at hCoherent
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨
+            ih (sizeOf left) hLeftSize
+              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
+                right.alphabet interface) left rfl hCoherent.1,
+            ih (sizeOf right) hRightSize
+              (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
+                interface) right rfl hCoherent.2⟩
+      | recur _ _ body =>
+          simp only [PactType.reannotate, PactType.AlphabetCoherent]
+          simp only [PactType.AlphabetCoherent] at hCoherent
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨PactType.reannotate_alphabet alphabet body,
+            ih (sizeOf body) hBodySize alphabet body rfl hCoherent.2⟩
+      | xoffer _ elseType branches | offer _ elseType branches =>
+          simp only [PactType.reannotate, PactType.AlphabetCoherent]
+          simp only [PactType.AlphabetCoherent] at hCoherent
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          exact ⟨PactType.reannotate_alphabet alphabet elseType,
+            ih (sizeOf elseType) hElseSize alphabet elseType rfl hCoherent.2.1,
+            hBranches _ branches hBranchesSize alphabet hCoherent.2.2⟩
 
-private theorem selectedTypeBranch_alphabetCoherent
-    {branch : BareMessage × PactType}
+theorem singletonTypeXOfferAt_alphabetCoherent
+    (alphabet : PactTypeAlphabet) {branch : BareMessage × PactType}
     (hBranch : branch.2.AlphabetCoherent) :
-    (selectedTypeBranch branch).AlphabetCoherent := by
+    (singletonTypeXOfferAt alphabet branch).AlphabetCoherent := by
   rcases branch with ⟨action, branchType⟩
-  simpa [selectedTypeBranch, PactType.AlphabetCoherent, PactType.alphabet]
-    using hBranch
+  simp only [singletonTypeXOfferAt, PactType.AlphabetCoherent,
+    PactType.BranchesAlphabetCoherent, PactType.alphabet]
+  exact ⟨trivial, trivial, PactType.reannotate_alphabet alphabet branchType,
+    PactType.reannotate_alphabetCoherent alphabet branchType hBranch, trivial⟩
 
-theorem parallelTypeBranches_alphabet_coherent
-    {alphabet : PactTypeAlphabet} :
-    ∀ {branches : List (BareMessage × PactType)},
-      branches ≠ [] →
-      PactType.BranchesAlphabetCoherent alphabet branches →
-      (parallelTypeBranches branches).alphabet = alphabet ∧
-        (parallelTypeBranches branches).AlphabetCoherent := by
-  intro branches hNonempty hBranches
-  induction branches with
-  | nil => exact False.elim (hNonempty rfl)
-  | cons branch rest ih =>
-      cases rest with
-      | nil =>
-          rcases branch with ⟨action, branchType⟩
-          simp only [PactType.BranchesAlphabetCoherent] at hBranches
-          exact ⟨by simpa using hBranches.1,
-            singletonTypeXOffer_alphabetCoherent ⟨hBranches.1,
-              hBranches.2.1⟩⟩
-      | cons next tail =>
-          rcases branch with ⟨action, branchType⟩
-          simp only [PactType.BranchesAlphabetCoherent] at hBranches
-          obtain ⟨hTailAlphabet, hTailCoherent⟩ :=
-            ih (by simp) hBranches.2.2
-          have hHeadCoherent :=
-            singletonTypeXOffer_alphabetCoherent
-              (branch := (action, branchType)) ⟨hBranches.1,
-              hBranches.2.1⟩
-          constructor
-          · change PactTypeAlphabet.mergeHidden branchType.alphabet
-                (parallelTypeBranches (next :: tail)).alphabet ∅ = alphabet
-            rw [hBranches.1, hTailAlphabet]
-            simp
-          · simp [parallelTypeBranches, parallelType,
-              PactType.AlphabetCoherent, hHeadCoherent, hTailCoherent]
+theorem selectedTypeBranchAt_alphabetCoherent
+    (alphabet : PactTypeAlphabet) {branch : BareMessage × PactType}
+    (hBranch : branch.2.AlphabetCoherent) :
+    (selectedTypeBranchAt alphabet branch).AlphabetCoherent := by
+  rcases branch with ⟨action, branchType⟩
+  simp only [selectedTypeBranchAt, PactType.AlphabetCoherent,
+    PactType.alphabet]
+  exact ⟨trivial, PactType.reannotate_alphabet alphabet branchType, trivial,
+    PactType.reannotate_alphabetCoherent alphabet branchType hBranch⟩
 
-theorem parallelTypeBranchesSelecting_alphabet_coherent
-    {alphabet : PactTypeAlphabet} {selected : BareMessage × PactType} :
-    ∀ {branches : List (BareMessage × PactType)},
-      selected ∈ branches →
-      PactType.BranchesAlphabetCoherent alphabet branches →
-      (parallelTypeBranchesSelecting selected branches).alphabet = alphabet ∧
-        (parallelTypeBranchesSelecting selected branches).AlphabetCoherent := by
-  intro branches hSelected hBranches
-  induction branches with
-  | nil => cases hSelected
-  | cons branch rest ih =>
-      cases rest with
-      | nil =>
-          have hEq : selected = branch := by simpa using hSelected
-          subst selected
-          rcases branch with ⟨action, branchType⟩
-          simp only [PactType.BranchesAlphabetCoherent] at hBranches
-          rw [parallelTypeBranchesSelecting_singleton_self]
-          exact ⟨by simpa using hBranches.1,
-            selectedTypeBranch_alphabetCoherent hBranches.2.1⟩
-      | cons next tail =>
-          rcases branch with ⟨action, branchType⟩
-          simp only [PactType.BranchesAlphabetCoherent] at hBranches
-          by_cases hHead : (action, branchType) = selected
-          · subst selected
-            obtain ⟨hTailAlphabet, hTailCoherent⟩ :=
-              parallelTypeBranches_alphabet_coherent (by simp) hBranches.2.2
-            have hHeadCoherent :=
-              selectedTypeBranch_alphabetCoherent
-                (branch := (action, branchType)) hBranches.2.1
-            constructor
-            · simp only [parallelTypeBranchesSelecting, if_true, parallelType,
-                  PactType.alphabet]
-              change PactTypeAlphabet.mergeHidden branchType.alphabet
-                  (parallelTypeBranches (next :: tail)).alphabet ∅ = alphabet
-              rw [hBranches.1, hTailAlphabet]
-              simp
-            · simp [parallelTypeBranchesSelecting, parallelType,
-                PactType.AlphabetCoherent, hHeadCoherent, hTailCoherent]
-          · have hSelectedTail : selected ∈ next :: tail := by
-              simp only [List.mem_cons] at hSelected
-              rcases hSelected with hSelectedHead | hSelectedTail
-              · exact False.elim (hHead hSelectedHead.symm)
-              · simpa [List.mem_cons] using hSelectedTail
-            obtain ⟨hTailAlphabet, hTailCoherent⟩ :=
-              ih hSelectedTail hBranches.2.2
-            have hHeadCoherent :=
-              singletonTypeXOffer_alphabetCoherent
-                (branch := (action, branchType)) ⟨hBranches.1,
-                hBranches.2.1⟩
-            constructor
-            · simp only [parallelTypeBranchesSelecting, if_neg hHead,
-                  parallelType, PactType.alphabet]
-              change PactTypeAlphabet.mergeHidden branchType.alphabet
-                  (parallelTypeBranchesSelecting selected
-                    (next :: tail)).alphabet ∅ = alphabet
-              rw [hBranches.1, hTailAlphabet]
-              simp
-            · simp [parallelTypeBranchesSelecting, hHead, parallelType,
-                PactType.AlphabetCoherent, hHeadCoherent, hTailCoherent]
+theorem parallelTypeBranchesWithin_alphabet_coherent
+    (alphabet : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
+      (parallelTypeBranchesWithin alphabet branches).AlphabetCoherent
+  | [], _ => by simp [parallelTypeBranchesWithin, PactType.AlphabetCoherent]
+  | [branch], hBranches => by
+      exact singletonTypeXOfferAt_alphabetCoherent alphabet
+        (hBranches branch (by simp))
+  | branch :: next :: rest, hBranches => by
+      simp only [parallelTypeBranchesWithin, PactType.AlphabetCoherent]
+      exact ⟨
+        singletonTypeXOfferAt_alphabetCoherent
+          (PactTypeAlphabet.branchPart alphabet branch)
+          (hBranches branch (by simp)),
+        parallelTypeBranchesWithin_alphabet_coherent
+          (PactTypeAlphabet.remove alphabet
+            (PactTypeAlphabet.branchPart alphabet branch)) (next :: rest)
+          (fun item hItem => hBranches item (by simp [hItem]))⟩
 
-private theorem branchesAlphabetCoherent_of_mem
+theorem parallelTypeBranchesSelectingWithin_alphabet_coherent
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
+      PactType.AlphabetCoherent
+        (parallelTypeBranchesSelectingWithin alphabet selected branches)
+  | [], _ => by simp [parallelTypeBranchesSelectingWithin,
+      PactType.AlphabetCoherent]
+  | [branch], hBranches => by
+      by_cases hSelected : branch = selected
+      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected]
+        exact selectedTypeBranchAt_alphabetCoherent alphabet
+          (hBranches branch (by simp))
+      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected]
+        exact singletonTypeXOfferAt_alphabetCoherent alphabet
+          (hBranches branch (by simp))
+  | branch :: next :: rest, hBranches => by
+      by_cases hSelected : branch = selected
+      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected,
+          PactType.AlphabetCoherent]
+        exact ⟨
+          selectedTypeBranchAt_alphabetCoherent
+            (PactTypeAlphabet.branchPart alphabet branch)
+            (hBranches branch (by simp)),
+          parallelTypeBranchesWithin_alphabet_coherent
+            (PactTypeAlphabet.remove alphabet
+              (PactTypeAlphabet.branchPart alphabet branch)) (next :: rest)
+            (fun item hItem => hBranches item (by simp [hItem]))⟩
+      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected,
+          PactType.AlphabetCoherent]
+        exact ⟨
+          singletonTypeXOfferAt_alphabetCoherent
+            (PactTypeAlphabet.branchPart alphabet branch)
+            (hBranches branch (by simp)),
+          parallelTypeBranchesSelectingWithin_alphabet_coherent
+            (PactTypeAlphabet.remove alphabet
+              (PactTypeAlphabet.branchPart alphabet branch)) selected
+            (next :: rest)
+            (fun item hItem => hBranches item (by simp [hItem]))⟩
+
+theorem branchesAlphabetCoherent_of_mem
     {alphabet : PactTypeAlphabet} {branches : List (BareMessage × PactType)}
     {branch : BareMessage × PactType}
     (hBranches : PactType.BranchesAlphabetCoherent alphabet branches)
@@ -273,6 +317,71 @@ private theorem branchesAlphabetCoherent_of_mem
       · cases hHead
         exact ⟨hBranches.1, hBranches.2.1⟩
       · exact ih hBranches.2.2 hTail
+
+@[simp] theorem parallelTypeBranchesWithin_alphabet
+    (alphabet : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      (parallelTypeBranchesWithin alphabet branches).alphabet = alphabet
+  | [] => by simp [parallelTypeBranchesWithin, PactType.alphabet]
+  | [branch] => by
+      simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+        PactType.alphabet]
+  | branch :: next :: rest => by
+      simp [parallelTypeBranchesWithin, PactType.alphabet]
+
+@[simp] theorem parallelTypeBranchesSelectingWithin_alphabet
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      (parallelTypeBranchesSelectingWithin alphabet selected branches).alphabet =
+        alphabet
+  | [] => by simp [parallelTypeBranchesSelectingWithin, PactType.alphabet]
+  | [branch] => by
+      by_cases hSelected : branch = selected <;>
+        simp [parallelTypeBranchesSelectingWithin, hSelected,
+          selectedTypeBranchAt, singletonTypeXOfferAt, PactType.alphabet]
+  | branch :: next :: rest => by
+      by_cases hSelected : branch = selected <;>
+        simp [parallelTypeBranchesSelectingWithin, hSelected,
+          PactType.alphabet]
+
+theorem parallelTypeBranches_alphabet_coherent
+    {alphabet : PactTypeAlphabet} :
+    ∀ {branches : List (BareMessage × PactType)},
+      branches ≠ [] →
+      PactType.BranchesAlphabetCoherent alphabet branches →
+      (parallelTypeBranches branches).alphabet = alphabet ∧
+        (parallelTypeBranches branches).AlphabetCoherent := by
+  intro branches hNonempty hBranches
+  cases branches with
+  | nil => exact False.elim (hNonempty rfl)
+  | cons branch rest =>
+      have hFirstAlphabet : branch.2.alphabet = alphabet :=
+        (branchesAlphabetCoherent_of_mem hBranches (by simp)).1
+      constructor
+      · simpa [parallelTypeBranches] using hFirstAlphabet
+      · apply parallelTypeBranchesWithin_alphabet_coherent
+        intro item hItem
+        exact (branchesAlphabetCoherent_of_mem hBranches hItem).2
+
+theorem parallelTypeBranchesSelecting_alphabet_coherent
+    {alphabet : PactTypeAlphabet} {selected : BareMessage × PactType} :
+    ∀ {branches : List (BareMessage × PactType)},
+      selected ∈ branches →
+      PactType.BranchesAlphabetCoherent alphabet branches →
+      (parallelTypeBranchesSelecting selected branches).alphabet = alphabet ∧
+        (parallelTypeBranchesSelecting selected branches).AlphabetCoherent := by
+  intro branches hSelected hBranches
+  cases branches with
+  | nil => cases hSelected
+  | cons branch rest =>
+      have hFirstAlphabet : branch.2.alphabet = alphabet :=
+        (branchesAlphabetCoherent_of_mem hBranches (by simp)).1
+      constructor
+      · simpa [parallelTypeBranchesSelecting] using
+          hFirstAlphabet
+      · apply parallelTypeBranchesSelectingWithin_alphabet_coherent
+        intro item hItem
+        exact (branchesAlphabetCoherent_of_mem hBranches hItem).2
 
 /-- Every residual represented by a compiled state retains the fixed alphabet
 of the source type.  The proof follows the structural relation clauses; the

@@ -72,6 +72,180 @@ decreasing_by
     omega
 end
 
+theorem typeCompilationFuel_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    typeCompilationFuel (processType.reannotate alphabet) =
+      typeCompilationFuel processType := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType alphabet with
+  | _ n ih =>
+      have hBranch : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet,
+          typeBranchCompilationFuel
+              (PactType.reannotateBranches branchAlphabet branches) =
+            typeBranchCompilationFuel branches := by
+        intro branches hBranches branchAlphabet
+        induction branches with
+        | nil => simp [PactType.reannotateBranches,
+            typeBranchCompilationFuel]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            simp only [PactType.reannotateBranches_cons,
+              typeBranchCompilationFuel]
+            rw [ih (sizeOf branchType) hType branchAlphabet branchType rfl,
+              restIH hRest]
+      have hConj : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet,
+          conjunctiveCompilationFuel
+              (PactType.reannotateBranches branchAlphabet branches) =
+            conjunctiveCompilationFuel branches := by
+        intro branches hBranches branchAlphabet
+        induction branches with
+        | nil => simp [PactType.reannotateBranches,
+            conjunctiveCompilationFuel]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            cases rest with
+            | nil =>
+                simp [PactType.reannotateBranches,
+                  conjunctiveCompilationFuel,
+                  ih (sizeOf branchType) hType branchAlphabet branchType rfl]
+            | cons next tail =>
+                rcases next with ⟨nextAction, nextType⟩
+                have hRestEq := restIH hRest
+                rw [PactType.reannotateBranches_cons] at hRestEq
+                rw [PactType.reannotateBranches_cons,
+                  PactType.reannotateBranches_cons]
+                simp only [conjunctiveCompilationFuel]
+                rw [ih (sizeOf branchType) hType branchAlphabet branchType rfl,
+                  hRestEq]
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, typeCompilationFuel]
+      | recur _ _ body =>
+          have hBody : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf body) hBody alphabet body rfl]
+      | choice _ left right =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf left) hLeft alphabet left rfl,
+            ih (sizeOf right) hRight alphabet right rfl]
+      | seq _ left right =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf left) hLeft alphabet left rfl,
+            ih (sizeOf right) hRight alphabet right rfl]
+      | fairChoice _ _ left right =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf left) hLeft alphabet left rfl,
+            ih (sizeOf right) hRight alphabet right rfl]
+      | par _ left right interface =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf left) hLeft
+              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
+                right.alphabet interface) left rfl,
+            ih (sizeOf right) hRight
+              (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
+                interface) right rfl]
+      | xoffer _ elseType branches =>
+          have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranches : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf elseType) hElse alphabet elseType rfl,
+            hBranch branches hBranches alphabet]
+      | offer _ elseType branches =>
+          have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranches : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, typeCompilationFuel,
+            ih (sizeOf elseType) hElse alphabet elseType rfl,
+            hBranch branches hBranches alphabet,
+            hConj branches hBranches alphabet]
+
+theorem typeCompilationFuel_parallelTypeBranchesWithin
+    (alphabet : PactTypeAlphabet) : ∀ branches,
+    typeCompilationFuel (parallelTypeBranchesWithin alphabet branches) =
+      conjunctiveCompilationFuel branches
+  | [] => by
+      simp [parallelTypeBranchesWithin, typeCompilationFuel,
+        conjunctiveCompilationFuel]
+  | [(_, processType)] => by
+      simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+        typeCompilationFuel, typeBranchCompilationFuel,
+        conjunctiveCompilationFuel,
+        typeCompilationFuel_reannotate]
+  | (action, processType) :: next :: rest => by
+      simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+        typeCompilationFuel, typeBranchCompilationFuel,
+        conjunctiveCompilationFuel,
+        typeCompilationFuel_reannotate,
+        typeCompilationFuel_parallelTypeBranchesWithin]
+
+theorem typeCompilationFuel_parallelTypeBranchesSelectingWithin
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType) :
+    ∀ branches,
+    typeCompilationFuel
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) =
+      conjunctiveCompilationFuel branches
+  | [] => by
+      simp [parallelTypeBranchesSelectingWithin, typeCompilationFuel,
+        conjunctiveCompilationFuel]
+  | [branch] => by
+      rcases branch with ⟨action, processType⟩
+      by_cases hSelected : (action, processType) = selected
+      · subst selected
+        simp [parallelTypeBranchesSelectingWithin,
+          selectedTypeBranchAt, typeCompilationFuel,
+          conjunctiveCompilationFuel, typeCompilationFuel_reannotate]
+      · simp [parallelTypeBranchesSelectingWithin, hSelected,
+          singletonTypeXOfferAt, typeCompilationFuel,
+          typeBranchCompilationFuel,
+          conjunctiveCompilationFuel, typeCompilationFuel_reannotate]
+  | (action, processType) :: next :: rest => by
+      by_cases hSelected : (action, processType) = selected
+      · subst selected
+        simp [parallelTypeBranchesSelectingWithin,
+          selectedTypeBranchAt, typeCompilationFuel,
+          conjunctiveCompilationFuel, typeCompilationFuel_reannotate,
+          typeCompilationFuel_parallelTypeBranchesWithin]
+      · simp [parallelTypeBranchesSelectingWithin, hSelected,
+          singletonTypeXOfferAt, typeCompilationFuel,
+          typeBranchCompilationFuel,
+          conjunctiveCompilationFuel, typeCompilationFuel_reannotate,
+          typeCompilationFuel_parallelTypeBranchesSelectingWithin]
+
 /--
 The auxiliary budget is exactly the budget of the parallel type generated for
 a conjunctive offer.  This is the non-structural recursive call that motivates
@@ -81,21 +255,12 @@ theorem typeCompilationFuel_parallelTypeBranches
     (branches : List (BareMessage × PactType)) :
     typeCompilationFuel (parallelTypeBranches branches) =
       conjunctiveCompilationFuel branches := by
-  induction branches with
-  | nil =>
-      simp [parallelTypeBranches, typeCompilationFuel,
-        conjunctiveCompilationFuel]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          simp [parallelTypeBranches, singletonTypeXOffer,
-            typeCompilationFuel, typeBranchCompilationFuel,
-            conjunctiveCompilationFuel]
-      | cons next tail =>
-          simp [parallelTypeBranches, parallelType, singletonTypeXOffer,
-            typeCompilationFuel, typeBranchCompilationFuel,
-            conjunctiveCompilationFuel, ih]
+  cases branches with
+  | nil => simp [parallelTypeBranches, typeCompilationFuel,
+      conjunctiveCompilationFuel]
+  | cons branch rest =>
+      exact typeCompilationFuel_parallelTypeBranchesWithin
+        branch.2.alphabet (branch :: rest)
 
 /-- Forcing one singleton branch removes only its synthetic else outcome and
 does not change the compilation budget of the generated parallel product. -/
@@ -104,33 +269,12 @@ theorem typeCompilationFuel_parallelTypeBranchesSelecting
     (branches : List (BareMessage × PactType)) :
     typeCompilationFuel (parallelTypeBranchesSelecting selected branches) =
       conjunctiveCompilationFuel branches := by
-  induction branches with
-  | nil =>
-      simp [parallelTypeBranchesSelecting, typeCompilationFuel,
-        conjunctiveCompilationFuel]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          by_cases hSelected : (action, processType) = selected
-          · subst selected
-            simp [parallelTypeBranchesSelecting, selectedTypeBranch,
-              typeCompilationFuel, typeBranchCompilationFuel,
-              conjunctiveCompilationFuel]
-          · simp [parallelTypeBranchesSelecting, hSelected,
-              singletonTypeXOffer, typeCompilationFuel,
-              typeBranchCompilationFuel, conjunctiveCompilationFuel]
-      | cons next tail =>
-          by_cases hSelected : (action, processType) = selected
-          · subst selected
-            simp [parallelTypeBranchesSelecting, parallelType,
-              selectedTypeBranch,
-              typeCompilationFuel, typeBranchCompilationFuel,
-              conjunctiveCompilationFuel,
-              typeCompilationFuel_parallelTypeBranches]
-          · simp [parallelTypeBranchesSelecting, parallelType, hSelected,
-              singletonTypeXOffer, typeCompilationFuel,
-              typeBranchCompilationFuel, conjunctiveCompilationFuel, ih]
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, typeCompilationFuel,
+      conjunctiveCompilationFuel]
+  | cons branch rest =>
+      exact typeCompilationFuel_parallelTypeBranchesSelectingWithin
+        branch.2.alphabet selected (branch :: rest)
 
 /-- `fuel` covers every recursive call made while compiling `processType`. -/
 def TypeCompilationFuelSufficient
@@ -168,6 +312,33 @@ theorem typeCompilationFuel_le_typeBranchCompilationFuel
       · simp [typeBranchCompilationFuel]
       · exact le_trans (ih hRest) (by
           simp [typeBranchCompilationFuel])
+
+/-- Every continuation in a conjunctive offer fits within the compilation
+budget of the generated branch product. -/
+theorem typeCompilationFuel_le_conjunctiveCompilationFuel
+    (branches : List (BareMessage × PactType))
+    (entry : BareMessage × PactType) (hEntry : entry ∈ branches) :
+    typeCompilationFuel entry.2 ≤ conjunctiveCompilationFuel branches := by
+  induction branches with
+  | nil => simp at hEntry
+  | cons head rest ih =>
+      rcases head with ⟨action, processType⟩
+      simp only [List.mem_cons] at hEntry
+      cases rest with
+      | nil =>
+          have hEq : entry = (action, processType) := by
+            simpa using hEntry
+          subst entry
+          simp [conjunctiveCompilationFuel]
+          omega
+      | cons next tail =>
+          rcases hEntry with hHead | hRest
+          · subst entry
+            simp [conjunctiveCompilationFuel]
+            omega
+          · exact le_trans (ih hRest) (by
+              simp [conjunctiveCompilationFuel]
+              omega)
 
 /-- Recover the parallel subterm represented by a product-shaped state after
 peeling the constructor tags introduced by compilation. -/
@@ -357,8 +528,9 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (compileTypeFuel signature fuel right)
 
       -- parallel: form the reachable synchronized product on `interface`.
-      | .par _ left right interface =>
-          exact buildParallelAutomaton signature interface
+      | .par alphabet left right interface =>
+          exact buildParallelAutomaton signature alphabet left.alphabet
+            right.alphabet interface
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
             (computeFutureOfFuel signature
@@ -499,14 +671,16 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
               simp [typeCompilationFuel] at hFuel
               omega)]
       | par alphabet left right interface =>
-          change buildParallelAutomaton signature interface
+          change buildParallelAutomaton signature alphabet left.alphabet
+              right.alphabet interface
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
               (computeFutureOfFuel signature
                 (min (fuel + 1) (typeCompilationFuel left)) left)
               (computeFutureOfFuel signature
                 (min (fuel + 1) (typeCompilationFuel right)) right) =
-            buildParallelAutomaton signature interface
+            buildParallelAutomaton signature alphabet left.alphabet
+              right.alphabet interface
               (compileTypeFuel signature fuel left)
               (compileTypeFuel signature fuel right)
               (computeFutureOfFuel signature
@@ -712,7 +886,8 @@ def compileType
   let constructed := compileTypeFuel signature fuel processType
   let constructedEdges :=
     resolvedAutomatonEdges signature processType constructed
-  let transitionAlphabet := signature.transitionAlphabet
+  let transitionAlphabet :=
+    signature.transitionAlphabetFor processType.alphabet
   let edges : Finset TypeAutomatonEdge := constructedEdges.biUnion fun edge =>
     match edge.label with
     | .variable _ => ∅
@@ -734,6 +909,12 @@ def compileType
     alphabet := transitionAlphabet
     edges := edges }
 
+@[simp] theorem compileType_alphabet
+    (signature : TypeAlphabet) (processType : PactType) :
+    (compileType signature processType).alphabet =
+      signature.transitionAlphabetFor processType.alphabet := by
+  rfl
+
 /-- Once a symbol belongs to the fixed alphabet, public edge membership is
 exactly resolved membership in the constructor fragment. -/
 theorem compileType_hasEdge_iff_hasResolvedEdge
@@ -741,7 +922,7 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
     (source target : TypeAutomatonState) (env : TypeEnvironment)
     (label : TypeLabel) (offers : TypeOfferSummary)
     (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet) :
+      signature.transitionAlphabetFor processType.alphabet) :
     (compileType signature processType).HasEdge source env label offers target ↔
       AutomatonFragment.HasResolvedEdge signature processType
         (compileTypeFuel signature (typeCompilationFuel processType) processType)
@@ -750,6 +931,30 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
   simp [TypeAutomaton.HasEdge, compileType,
     AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdges,
     resolveAutomatonEdgesWith, hSymbol]
+  aesop
+
+/-- Once the visible symbol is admitted by the type's fixed alphabet, a
+public edge is equivalently the corresponding resolved fragment edge. -/
+theorem compileType_hasEdge_iff_resolvedEdge_mem
+    (signature : TypeAlphabet) (processType : PactType)
+    (source target : TypeAutomatonState) (env : TypeEnvironment)
+    (label : TypeLabel) (offers : TypeOfferSummary)
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabetFor processType.alphabet) :
+    (compileType signature processType).HasEdge source env label offers target ↔
+      ({ source := source,
+          environment := env,
+          label := .visible label,
+          current := offers.current,
+          future := offers.future,
+          target := target } : AutomatonFragmentEdge) ∈
+        resolveAutomatonEdgesWith
+          (compileTypeFuel signature (typeCompilationFuel processType)
+            processType)
+          (computeFutureOf signature processType) := by
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature processType source
+    target env label offers hSymbol]
+  simp [AutomatonFragment.HasResolvedEdge, resolveAutomatonEdgesWith]
   aesop
 
 /-- The source of every compiled transition belongs to the exported state

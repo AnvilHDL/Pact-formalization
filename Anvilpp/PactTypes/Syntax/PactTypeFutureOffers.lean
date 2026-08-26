@@ -183,6 +183,15 @@ Environment-indexed current/future offers and the sibling-local environment
 relation are mutually defined: parallel offers depend on the two local steps,
 while each local environment depends on the sibling step's offers.
 -/
+
+/-- Restrict a boundary environment menu to the actions visible to a type
+with fixed alphabet `alphabet`.  Environments contain the complementary
+polarities needed by type actions, so the projection uses `typeNeed`. -/
+def projectTypeEnvironmentOffers
+    (alphabet : PactTypeAlphabet) (offers : Finset BareMessage) :
+    Finset BareMessage :=
+  offers.filter fun action => action ∈ alphabet.actions.image typeNeed
+
 mutual
   @[aesop unsafe]
   inductive TypeOffers :
@@ -311,8 +320,10 @@ mutual
         TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
         ¬ (left' = .skip left'.alphabet ∧ right' = .skip right'.alphabet) →
-        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv →
-        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv →
+        LocalTypeEnvironment outer interface left rightEnv right rightLabel
+          leftEnv →
+        LocalTypeEnvironment outer interface right leftEnv left leftLabel
+          rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -328,8 +339,10 @@ mutual
           leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel (.skip right.alphabet)
           rightCurrent rightFuture →
-        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv →
-        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv →
+        LocalTypeEnvironment outer interface left rightEnv right rightLabel
+          leftEnv →
+        LocalTypeEnvironment outer interface right leftEnv left leftLabel
+          rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -342,25 +355,28 @@ mutual
   /-- The erased sibling-aware local-environment relation. -/
   @[aesop unsafe]
   inductive LocalTypeEnvironment :
-      TypeEnvironment → Interface → TypeEnvironment → PactType →
+      TypeEnvironment → Interface → PactType → TypeEnvironment → PactType →
         TypeLabel → TypeEnvironment → Prop where
     | clock (outer : TypeEnvironment) (interface : Interface)
-        (sibling : PactType) (label : TypeLabel) :
+        (localType sibling : PactType) (label : TypeLabel) :
         outer.clock = true →
-        LocalTypeEnvironment outer interface TypeEnvironment.tock
+        LocalTypeEnvironment outer interface localType TypeEnvironment.tock
           sibling label TypeEnvironment.tock
     | ordinary (outer siblingEnv localEnv : TypeEnvironment)
-        (interface : Interface) (sibling siblingTarget : PactType)
+        (interface : Interface) (localType sibling siblingTarget : PactType)
         (label : TypeLabel) (current future : Finset BareMessage) :
         outer.clock = false →
         siblingEnv.clock = false →
         TypeOffers siblingEnv sibling label siblingTarget current future →
         localEnv.clock = false →
         localEnv.immediate =
-          outer.immediate ∪ restrictTypeOffers interface current →
+          projectTypeEnvironmentOffers localType.alphabet outer.immediate ∪
+            restrictTypeOffers interface current →
         localEnv.future =
-          (outer.future ∪ restrictTypeOffers interface future) \ localEnv.immediate →
-        LocalTypeEnvironment outer interface siblingEnv sibling label localEnv
+          (projectTypeEnvironmentOffers localType.alphabet outer.future ∪
+            restrictTypeOffers interface future) \ localEnv.immediate →
+        LocalTypeEnvironment outer interface localType siblingEnv sibling label
+          localEnv
 end
 
 end

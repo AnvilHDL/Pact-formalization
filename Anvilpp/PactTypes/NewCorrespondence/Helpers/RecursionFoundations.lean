@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.ExclusiveOffer
+import Anvilpp.PactTypes.Syntax.PactTypeSubstitutionLemmas
 
 namespace Pact
 
@@ -32,48 +33,125 @@ lemma relationMembership_recur_child
     Prod.mk.injEq]
   exact Or.inr ⟨(residual, state), hRelated, rfl, rfl⟩
 
-theorem decoratedTypeTransition_replaceVar_iff
+def recurRelationShape
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
+    (entry : PactType × TypeAutomatonState) : Prop :=
+  entry = (.recur alphabet name body, TypeAutomatonState.root) ∨
+    (∃ q residual,
+      entry =
+        (residual.replaceVar name (.recur alphabet name body), .child 0 q) ∧
+      relationMembership (buildRelationSet body (compileType signature body))
+        residual q)
+
+/-- Proves every related recursion pair has the recursion shape. -/
+lemma relationMembership_recur_cases
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated :
+      relationMembership
+        (buildRelationSet (.recur alphabet name body)
+          (compileType signature (.recur alphabet name body)))
+        residual state) :
+    recurRelationShape signature alphabet name body (residual, state) := by
+  have hFuelEq : typeCompilationFuel (.recur alphabet name body) =
+      typeCompilationFuel body + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.recur alphabet name body))
+        (.recur alphabet name body) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidual, hState⟩ |
+      ⟨entry, hEntry, hResidual, hState⟩
+  · exact Or.inl (Prod.ext hResidual hState)
+  · have hBodyRelated : relationMembership
+        (buildRelationSet body (compileType signature body))
+        entry.1 entry.2 := hEntry
+    exact Or.inr ⟨entry.2, entry.1,
+      Prod.ext hResidual.symm hState.symm, hBodyRelated⟩
+
+/-- Substitution is harmless in a residual where the recursive variable has no
+active occurrence.
+
+This intentionally replaces the old unconditional
+`decoratedTypeTransition_replaceVar_iff`.  That old statement is false:
+substituting `μX.body` for `X` can create an unfold step and can also change
+the future-offer component of a decorated step.  At the recursion call site,
+use this lemma only for copied body residuals whose tail-regularity premise
+gives `residual.TailOccurrences name False`.  The marker/backedge case must be
+handled separately by the recursion unfold rule. -/
+theorem decoratedTypeTransition_replaceVar_eq_of_tailOccurrences_false
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     (residual : PactType)
+    (hTail : residual.TailOccurrences name False)
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
     {target : PactType} :
     DecoratedTypeTransition env
       (residual.replaceVar name (.recur alphabet name body)) label
       offers target ↔
-      ∃ residual',
-        target = residual'.replaceVar name (.recur alphabet name body) ∧
-        DecoratedTypeTransition env residual label offers residual' := by
-  sorry
+      DecoratedTypeTransition env residual label offers target := by
+  rw [PactType.replaceVar_eq_self_of_tailOccurrences_false name
+    (.recur alphabet name body) residual hTail]
 
-/-- States that a marker-labelled body edge is always sourced at a state representing the open variable it marks. -/
-theorem compileTypeFuel_marker_represents_var
-    (signature : TypeAlphabet) (name : String) (body : PactType)
+/-- Atomic marker-source fact for a bare variable.
+
+For an arbitrary recursion body, the analogous statement is not true without
+the paper's tail-recursion premise.  A marker labelled `name` can be copied
+through choices and offers, but tail regularity is what rules out marker
+sources under sequence-left, parallel, and conjunctive-offer contexts.  The
+recursion correspondence caller should therefore first split the copied
+non-marker edge from the marker/backedge edge, then prove the arbitrary-body
+marker case by induction using `body.TailOccurrences name True`, reducing the
+base case to this lemma. -/
+theorem compileTypeFuel_var_marker_represents_var
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (name : String)
     {q : TypeAutomatonState} {residual : PactType}
     (hMem :
-      relationMembership (buildRelationSet body (compileType signature body))
+      relationMembership
+        (buildRelationSet (.var alphabet name)
+          (compileType signature (.var alphabet name)))
         residual q)
     {bodyEdge : PendingAutomatonEdge}
-    (hBodyEdge : bodyEdge ∈
-      (compileTypeFuel signature (typeCompilationFuel body) body).edges)
-    (hSource : bodyEdge.source = q)
-    (hMarkerLabel : bodyEdge.label = .variable name) :
+    (_hBodyEdge : bodyEdge ∈
+      (compileTypeFuel signature (typeCompilationFuel (.var alphabet name))
+        (.var alphabet name)).edges)
+    (_hSource : bodyEdge.source = q)
+    (_hMarkerLabel : bodyEdge.label = .variable name) :
     residual = .var residual.alphabet name := by
-  sorry
+  have hRelated : (residual, q) ∈
+      buildRelationSetCoreFuel signature (typeCompilationFuel (.var alphabet name))
+        (.var alphabet name) := hMem
+  simp only [typeCompilationFuel, buildRelationSetCoreFuel,
+    Finset.mem_singleton, Prod.mk.injEq] at hRelated
+  obtain ⟨hResidual, _⟩ := hRelated
+  subst hResidual
+  rfl
 
-/-- Proves a `.child 0`-tagged state's future menu, in a compiled recursion, agrees with the body's own. -/
-theorem computeFutureOf_recursion_child
-    (signature : TypeAlphabet) (name : String) (body : PactType) (whole : PactType)
-    (hWhole :
-      compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildRecursionAutomaton signature name
-          (compileTypeFuel signature (typeCompilationFuel body) body))
-    (hFuelBody : typeCompilationFuel body + 1 ≤ typeCompilationFuel whole)
-    (state : TypeAutomatonState)
-    (hState : state ∈ (compileTypeFuel signature (typeCompilationFuel body)
-      body).states) :
-    computeFutureOf signature whole (.child 0 state) =
-      computeFutureOf signature body state := by
-  sorry
+/-- Future agreement for a recursion child in the form used by the relation.
+
+This intentionally replaces the old "child future equals body future" lemma.
+That old statement ignores installed recursion backedges.  The useful fact is
+the H15-shaped one below: once a body state is related to `residual`, the
+future menu at the tagged recursion state is the future menu of the substituted
+residual.  Copied non-marker edges and marker/backedge edges should both
+normalize their future fields through this relation-aware statement. -/
+theorem computeFutureOf_recursion_child_related
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
+    {state : TypeAutomatonState} {residual : PactType}
+    (hRelated :
+      relationMembership (buildRelationSet body (compileType signature body))
+        residual state) :
+    computeFutureOf signature (.recur alphabet name body) (.child 0 state) =
+      typeFutureOffers
+        (residual.replaceVar name (.recur alphabet name body)) := by
+  exact helper_h15_future_offers_agree signature
+    (relationMembership_recur_child signature alphabet name body residual
+      hRelated)
 
 /-- Proves H15's future agreement for a recursion-tagged state, substituted for the open variable. -/
 lemma helper_h15_recursion_future_offers_agree
@@ -86,9 +164,8 @@ lemma helper_h15_recursion_future_offers_agree
     computeFutureOf signature (.recur alphabet name body) (.child 0 q) =
       typeFutureOffers
         (residual.replaceVar name (.recur alphabet name body)) := by
-  exact helper_h15_future_offers_agree signature
-    (relationMembership_recur_child signature alphabet name body residual
-      hRelated)
+  exact computeFutureOf_recursion_child_related signature alphabet name body
+    hRelated
 
 
 end

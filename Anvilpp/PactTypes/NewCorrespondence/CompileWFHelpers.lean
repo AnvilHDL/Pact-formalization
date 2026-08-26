@@ -8,14 +8,16 @@ namespace NewCorrespondence
 
 noncomputable section
 
-/-- Proves that any exported edge of `compileType` uses a symbol from the signature alphabet. -/
+/-- Proves that any exported edge uses a symbol from the fixed alphabet of
+the compiled type. -/
 lemma compileType_hasEdge_symbol_mem
     (signature : TypeAlphabet) (processType : PactType)
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
     (hEdge : (compileType signature processType).HasEdge source env label offers
       target) :
-    TypeAutomatonSymbol.mk env label offers ∈ signature.transitionAlphabet := by
+    TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabetFor processType.alphabet := by
   classical
   simp [TypeAutomaton.HasEdge, compileType] at hEdge
   rcases hEdge with ⟨edge, _hEdge, hMem⟩
@@ -24,7 +26,7 @@ lemma compileType_hasEdge_symbol_mem
       by_cases hSymbol :
           TypeAutomatonSymbol.mk edge.environment actual
             (TypeOfferSummary.mk edge.current edge.future) ∈
-              signature.transitionAlphabet
+              signature.transitionAlphabetFor processType.alphabet
       · simp [hLabel, hSymbol] at hMem
         rcases hMem with ⟨rfl, ⟨rfl, rfl, rfl⟩, rfl⟩
         exact hSymbol
@@ -50,6 +52,37 @@ lemma transitionAlphabet_environment_mem
   injection hEq with hEnvEq _ _
   simpa [hEnvEq] using hEnv0
 
+/-- A symbol in a type's fixed public alphabet uses an environment over that
+same fixed alphabet. -/
+lemma transitionAlphabetFor_localEnvironment_mem
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabetFor alphabet) :
+    env ∈ signature.localEnvironmentsFor alphabet := by
+  classical
+  unfold TypeAlphabet.transitionAlphabetFor at hSymbol
+  rw [Finset.mem_biUnion] at hSymbol
+  rcases hSymbol with ⟨env0, hEnv0, hRest⟩
+  rw [Finset.mem_biUnion] at hRest
+  rcases hRest with ⟨_label0, _hLabel0, hImage⟩
+  rw [Finset.mem_image] at hImage
+  rcases hImage with ⟨_offers0, _hOffers0, hEq⟩
+  injection hEq with hEnvEq _ _
+  simpa [hEnvEq] using hEnv0
+
+/-- A symbol in a type's fixed public alphabet also uses an environment from
+the surrounding compiler signature. -/
+lemma transitionAlphabetFor_environment_mem
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabetFor alphabet) :
+    env ∈ signature.localEnvironments := by
+  exact TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
+    signature alphabet
+    (transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol)
+
 /-- Proves that compiled `skip` has the non-clock silent self-loop edge. -/
 lemma compileType_skip_edge
     (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
@@ -57,7 +90,8 @@ lemma compileType_skip_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.skip alphabet)).HasEdge .root env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .root := by
   classical
@@ -160,7 +194,8 @@ lemma compileType_message_action_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hNeed : env.hasNeed (msg, dir))
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.message msg dir)
-      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.message alphabet msg dir)).HasEdge .root env
       (TypeLabel.message msg dir) (TypeOfferSummary.mk {(msg, dir)} ∅)
       .final := by
@@ -314,7 +349,8 @@ lemma compileType_message_wait_edge
     (hNoNeed : ¬ env.hasNeed (msg, dir))
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.message alphabet msg dir)).HasEdge .root env
       TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅) .root := by
   classical
@@ -341,7 +377,8 @@ lemma compileType_message_final_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.message alphabet msg dir)).HasEdge .final env
       TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
@@ -419,7 +456,8 @@ lemma compileType_tock_action_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = true)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.tock
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.tock alphabet)).HasEdge .root env TypeLabel.tock
       (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
@@ -444,7 +482,8 @@ lemma compileType_tock_wait_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.tock alphabet)).HasEdge .root env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .root := by
   classical
@@ -469,7 +508,8 @@ lemma compileType_tock_final_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.tock alphabet)).HasEdge .final env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
@@ -585,7 +625,8 @@ lemma compileType_progress_action_edge
     (pid : ProcId) {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.progress pid)
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.progress alphabet pid)).HasEdge .root env
       (TypeLabel.progress pid) (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
@@ -611,7 +652,8 @@ lemma compileType_progress_final_edge
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
+      (TypeOfferSummary.mk ∅ ∅) ∈
+        signature.transitionAlphabetFor alphabet) :
     (compileType signature (.progress alphabet pid)).HasEdge .final env
       TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) .final := by
   classical

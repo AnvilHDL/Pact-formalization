@@ -1741,7 +1741,8 @@ theorem helper_h13_par_case
       (.par alphabet left right interface)).accepting = _
     rw [hFuelEq]
     rw [compileTypeFuel.eq_def]
-    show (buildParallelAutomaton signature interface
+    show (buildParallelAutomaton signature alphabet left.alphabet right.alphabet
+      interface
       (compileTypeFuel signature
         (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
       (compileTypeFuel signature
@@ -1959,10 +1960,14 @@ every branch's own continuation type. -/
 theorem helper_h13_parallelTypeBranchesSelecting
     (signature : TypeAlphabet) (selected : BareMessage × PactType)
     (branches : List (BareMessage × PactType))
-    (hBranchesH13 : ∀ branch ∈ branches, ∀ {residual : PactType} {state : TypeAutomatonState},
-      relationMembership (buildRelationSet branch.2 (compileType signature branch.2)) residual
-        state →
-      (state ∈ (compileType signature branch.2).accepting ↔
+    (hBranchesH13 : ∀ branch ∈ branches, ∀ branchAlphabet,
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership
+          (buildRelationSet (branch.2.reannotate branchAlphabet)
+            (compileType signature (branch.2.reannotate branchAlphabet)))
+          residual state →
+      (state ∈ (compileType signature
+          (branch.2.reannotate branchAlphabet)).accepting ↔
         residual = .skip residual.alphabet))
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated : relationMembership
@@ -1981,17 +1986,20 @@ theorem helper_h13_parallelTypeBranchesSelecting
       simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
         finishAutomatonFragment]
   | [branch] =>
-      simp only [parallelTypeBranchesSelecting] at hRelated ⊢
+      simp only [parallelTypeBranchesSelecting,
+        parallelTypeBranchesSelectingWithin] at hRelated ⊢
       by_cases hSel : branch = selected
       · rw [if_pos hSel] at hRelated ⊢
-        simp only [selectedTypeBranch] at hRelated ⊢
+        simp only [selectedTypeBranchAt] at hRelated ⊢
         exact helper_h13_seq_case signature branch.2.alphabet
-          (.message branch.2.alphabet branch.1.1 branch.1.2) branch.2
-          (hBranchesH13 branch (by simp)) hRelated
+          (.message branch.2.alphabet branch.1.1 branch.1.2)
+          (branch.2.reannotate branch.2.alphabet)
+          (hBranchesH13 branch (by simp) branch.2.alphabet) hRelated
       · rw [if_neg hSel] at hRelated ⊢
-        simp only [singletonTypeXOffer] at hRelated ⊢
+        simp only [singletonTypeXOfferAt] at hRelated ⊢
         exact helper_h13_xoffer_case signature branch.2.alphabet
-          (.skip branch.2.alphabet) [branch]
+          (.skip branch.2.alphabet)
+          [(branch.1, branch.2.reannotate branch.2.alphabet)]
           (fun hR => by
             obtain ⟨hR', hS'⟩ :=
               NewCorrespondence.relationMembership_skip_cases signature
@@ -2001,21 +2009,23 @@ theorem helper_h13_parallelTypeBranchesSelecting
               finishAutomatonFragment])
           (by
             intro branch' hBranch' residual state hR
-            have hEq : branch' = branch := by simpa using hBranch'
-            rw [hEq] at hR ⊢
-            exact hBranchesH13 branch (by simp) hR)
+            have hEq : branch' =
+                (branch.1, branch.2.reannotate branch.2.alphabet) := by
+              simpa using hBranch'
+            subst branch'
+            exact hBranchesH13 branch (by simp) branch.2.alphabet hR)
           hRelated
   | branch :: b2 :: rest =>
-      simp only [parallelTypeBranchesSelecting] at hRelated ⊢
+      simp only [parallelTypeBranchesSelecting,
+        parallelTypeBranchesSelectingWithin] at hRelated ⊢
       by_cases hSel : branch = selected
       · rw [if_pos hSel] at hRelated ⊢
         exact helper_h13_par_case signature
-          (parallelType (selectedTypeBranch branch) (parallelTypeBranches (b2 :: rest)) ∅).alphabet
+          branch.2.alphabet
           _ _ ∅ hRelated
       · rw [if_neg hSel] at hRelated ⊢
         exact helper_h13_par_case signature
-          (parallelType (singletonTypeXOffer branch)
-            (parallelTypeBranchesSelecting selected (b2 :: rest)) ∅).alphabet
+          branch.2.alphabet
           _ _ ∅ hRelated
 
 /-- Helper Lemma H13: final states represent completion. -/
@@ -2028,7 +2038,7 @@ lemma helper_h13_final_states_represent_completion
         residual state) :
     state ∈ (compileType signature processType).accepting ↔
       residual = .skip residual.alphabet := by
-  induction hSize : sizeOf processType using Nat.strong_induction_on
+  induction hFuel : typeCompilationFuel processType using Nat.strong_induction_on
       generalizing processType residual state with
   | _ n ih =>
     cases processType with
@@ -2063,8 +2073,10 @@ lemma helper_h13_final_states_represent_completion
         subst hResidualEq; subst hStateEq
         simp [compileType, typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
     | choice alphabet left right =>
-        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hLeftSize : typeCompilationFuel left < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -2106,22 +2118,24 @@ lemma helper_h13_final_states_represent_completion
           constructor
           · rintro (⟨q', hq', hEq⟩ | ⟨q', hq', hEq⟩)
             · injection hEq with _ hEq'
-              exact (ih (sizeOf left) hLeftSize hLeftRelated rfl).mp (hEq' ▸ hq')
+              exact (ih (typeCompilationFuel left) hLeftSize hLeftRelated rfl).mp (hEq' ▸ hq')
             · exact absurd hEq (by simp)
           · intro hSkip
-            exact Or.inl ⟨q, (ih (sizeOf left) hLeftSize hLeftRelated rfl).mpr hSkip, rfl⟩
+            exact Or.inl ⟨q, (ih (typeCompilationFuel left) hLeftSize hLeftRelated rfl).mpr hSkip, rfl⟩
         · subst hStateEq
           simp only [childAccepting, Finset.mem_union, Finset.mem_image, childState]
           constructor
           · rintro (⟨q', hq', hEq⟩ | ⟨q', hq', hEq⟩)
             · exact absurd hEq (by simp)
             · injection hEq with _ hEq'
-              exact (ih (sizeOf right) hRightSize hRightRelated rfl).mp (hEq' ▸ hq')
+              exact (ih (typeCompilationFuel right) hRightSize hRightRelated rfl).mp (hEq' ▸ hq')
           · intro hSkip
-            exact Or.inr ⟨q, (ih (sizeOf right) hRightSize hRightRelated rfl).mpr hSkip, rfl⟩
+            exact Or.inr ⟨q, (ih (typeCompilationFuel right) hRightSize hRightRelated rfl).mpr hSkip, rfl⟩
     | fairChoice alphabet bid left right =>
-        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        have hLeftSize : typeCompilationFuel left < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
         have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -2164,21 +2178,23 @@ lemma helper_h13_final_states_represent_completion
           constructor
           · rintro (⟨q', hq', hEq⟩ | ⟨q', hq', hEq⟩)
             · injection hEq with _ hEq'
-              exact (ih (sizeOf left) hLeftSize hLeftRelated rfl).mp (hEq' ▸ hq')
+              exact (ih (typeCompilationFuel left) hLeftSize hLeftRelated rfl).mp (hEq' ▸ hq')
             · exact absurd hEq (by simp)
           · intro hSkip
-            exact Or.inl ⟨q, (ih (sizeOf left) hLeftSize hLeftRelated rfl).mpr hSkip, rfl⟩
+            exact Or.inl ⟨q, (ih (typeCompilationFuel left) hLeftSize hLeftRelated rfl).mpr hSkip, rfl⟩
         · subst hStateEq
           simp only [childAccepting, Finset.mem_union, Finset.mem_image, childState]
           constructor
           · rintro (⟨q', hq', hEq⟩ | ⟨q', hq', hEq⟩)
             · exact absurd hEq (by simp)
             · injection hEq with _ hEq'
-              exact (ih (sizeOf right) hRightSize hRightRelated rfl).mp (hEq' ▸ hq')
+              exact (ih (typeCompilationFuel right) hRightSize hRightRelated rfl).mp (hEq' ▸ hq')
           · intro hSkip
-            exact Or.inr ⟨q, (ih (sizeOf right) hRightSize hRightRelated rfl).mpr hSkip, rfl⟩
+            exact Or.inr ⟨q, (ih (typeCompilationFuel right) hRightSize hRightRelated rfl).mpr hSkip, rfl⟩
     | recur alphabet name body =>
-        have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+        have hBodySize : typeCompilationFuel body < n := by
+          rw [← hFuel]
+          simp [typeCompilationFuel]
         have hFuelEq : typeCompilationFuel (.recur alphabet name body) = typeCompilationFuel body + 1 := by
           simp only [typeCompilationFuel]; omega
         have hAcceptEq : (compileType signature (.recur alphabet name body)).accepting =
@@ -2204,7 +2220,7 @@ lemma helper_h13_final_states_represent_completion
           have hEntryRelated :
               relationMembership (buildRelationSet body (compileType signature body))
                 entry.1 entry.2 := hEntry
-          have hIH := ih (sizeOf body) hBodySize hEntryRelated rfl
+          have hIH := ih (typeCompilationFuel body) hBodySize hEntryRelated rfl
           simp only [childAccepting, Finset.mem_image, childState]
           constructor
           · rintro ⟨q', hq', hEq⟩
@@ -2216,42 +2232,58 @@ lemma helper_h13_final_states_represent_completion
               at hSkip
             exact ⟨entry.2, hIH.mpr hSkip, rfl⟩
     | seq alphabet first second =>
-        have hSecondSize : sizeOf second < n := by rw [← hSize]; simp_wf; omega
+        have hSecondSize : typeCompilationFuel second < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
         exact helper_h13_seq_case signature alphabet first second
-          (fun hR => ih (sizeOf second) hSecondSize hR rfl) hRelated
+          (fun hR => ih (typeCompilationFuel second) hSecondSize hR rfl) hRelated
     | par alphabet left right interface =>
         exact helper_h13_par_case signature alphabet left right interface hRelated
     | xoffer alphabet elseType branches =>
-        have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
-        have hBranchesSize : ∀ branch ∈ branches, sizeOf branch.2 < n := by
+        have hElseSize : typeCompilationFuel elseType < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        have hBranchesSize : ∀ branch ∈ branches,
+            typeCompilationFuel branch.2 < n := by
           intro branch hBranch
-          have hEntry : sizeOf branch < sizeOf branches := List.sizeOf_lt_of_mem hBranch
-          have hComponent : sizeOf branch.2 < sizeOf branch := by
-            obtain ⟨action, branchType⟩ := branch
-            simp; omega
-          rw [← hSize]; simp_wf; omega
+          have hLe := typeCompilationFuel_le_typeBranchCompilationFuel
+            branches branch hBranch
+          rw [← hFuel]
+          simp only [typeCompilationFuel]
+          omega
         exact helper_h13_xoffer_case signature alphabet elseType branches
-          (fun hR => ih (sizeOf elseType) hElseSize hR rfl)
+          (fun hR => ih (typeCompilationFuel elseType) hElseSize hR rfl)
           (by
             intro branch hBranch residual state hR
-            exact ih (sizeOf branch.2) (hBranchesSize branch hBranch) hR rfl)
+            exact ih (typeCompilationFuel branch.2)
+              (hBranchesSize branch hBranch) hR rfl)
           hRelated
     | offer alphabet elseType branches =>
-        have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
-        have hBranchesSize : ∀ branch ∈ branches, sizeOf branch.2 < n := by
+        have hElseSize : typeCompilationFuel elseType < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        have hBranchesSize : ∀ branch ∈ branches,
+            typeCompilationFuel branch.2 < n := by
           intro branch hBranch
-          have hEntry : sizeOf branch < sizeOf branches := List.sizeOf_lt_of_mem hBranch
-          have hComponent : sizeOf branch.2 < sizeOf branch := by
-            obtain ⟨action, branchType⟩ := branch
-            simp; omega
-          rw [← hSize]; simp_wf; omega
-        have hBranchesH13 : ∀ branch ∈ branches, ∀ {residual : PactType}
+          have hLe := typeCompilationFuel_le_conjunctiveCompilationFuel
+            branches branch hBranch
+          rw [← hFuel]
+          simp only [typeCompilationFuel]
+          omega
+        have hBranchesH13 : ∀ branch ∈ branches, ∀ branchAlphabet,
+            ∀ {residual : PactType}
             {state : TypeAutomatonState},
-            relationMembership (buildRelationSet branch.2 (compileType signature branch.2))
+            relationMembership
+              (buildRelationSet (branch.2.reannotate branchAlphabet)
+                (compileType signature (branch.2.reannotate branchAlphabet)))
               residual state →
-            (state ∈ (compileType signature branch.2).accepting ↔ residual = .skip residual.alphabet) := by
-          intro branch hBranch residual state hR
-          exact ih (sizeOf branch.2) (hBranchesSize branch hBranch) hR rfl
+            (state ∈ (compileType signature
+                (branch.2.reannotate branchAlphabet)).accepting ↔
+              residual = .skip residual.alphabet) := by
+          intro branch hBranch branchAlphabet residual state hR
+          have hBranchFuel : typeCompilationFuel
+              (branch.2.reannotate branchAlphabet) < n := by
+            rw [typeCompilationFuel_reannotate]
+            exact hBranchesSize branch hBranch
+          exact ih (typeCompilationFuel (branch.2.reannotate branchAlphabet))
+            hBranchFuel hR rfl
         have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
             max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -2305,7 +2337,7 @@ lemma helper_h13_final_states_represent_completion
             rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
               (le_max_left _ _) le_rfl]
             exact ha
-          have hIH := ih (sizeOf elseType) hElseSize hEntryRelated rfl
+          have hIH := ih (typeCompilationFuel elseType) hElseSize hEntryRelated rfl
           simp only [Finset.mem_union, childAccepting, Finset.mem_image, childState,
             indexedFragmentAccepting, mem_foldl_union_iff, Finset.notMem_empty, false_or]
           constructor
@@ -2714,6 +2746,28 @@ theorem helper_h14_same_cycle_completion
     | xoffer alphabet elseType branches => sorry
     | offer alphabet elseType branches => sorry
 
+/-- Helper Lemma H15, resolved-edge form: a resolved constructor edge carries
+the target menu after removing its current offer. -/
+lemma helper_h15_resolved_edge_future_offers_agree
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      AutomatonFragment.HasResolvedEdge signature processType
+        (compileTypeFuel signature (typeCompilationFuel processType) processType)
+        source env label (TypeOfferSummary.mk current future) target) :
+    future = typeFutureOffers residual' \ current := by
+  sorry -- TODO(section7): prove with global H15 and constructor future-shape.
+
 /-- Helper Lemma H15, edge form: a public edge carries the target menu after removing its current offer. -/
 lemma helper_h15_edge_future_offers_agree
     (signature : TypeAlphabet) {processType residual residual' : PactType}
@@ -2732,7 +2786,13 @@ lemma helper_h15_edge_future_offers_agree
       (compileType signature processType).HasEdge source env label
         (TypeOfferSummary.mk current future) target) :
     future = typeFutureOffers residual' \ current := by
-  sorry -- TODO(section7): derive from global future agreement and edge resolution.
+  have hSymbol := NewCorrespondence.compileType_hasEdge_symbol_mem signature
+    processType hEdge
+  have hResolved :=
+    (compileType_hasEdge_iff_hasResolvedEdge signature processType source
+      target env label (TypeOfferSummary.mk current future) hSymbol).mp hEdge
+  exact helper_h15_resolved_edge_future_offers_agree signature hSource hTarget
+    hResolved
 
 /-! ## Type-label ownership and synchronized recovery -/
 
@@ -3346,435 +3406,414 @@ theorem supported_labels_recover
 
 /-! ## Ownership of generated conjunctive-offer branch products -/
 
-/-- The generated parallel branch product mentions exactly the message names occurring in the source branch list. -/
-theorem parallelTypeBranches_messageIds (branches : List (BareMessage × PactType)) :
-    PactType.MessageIds (parallelTypeBranches branches) =
+/-- Reannotation changes only fixed alphabets.  It preserves the structural
+message, progress, and fair-choice footprints used by ownership. -/
+theorem PactType.reannotate_ownership_data
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.MessageIds (processType.reannotate alphabet) =
+        PactType.MessageIds processType ∧
+      PactType.MessageActions (processType.reannotate alphabet) =
+        PactType.MessageActions processType ∧
+      PactType.ProgressIds (processType.reannotate alphabet) =
+        PactType.ProgressIds processType ∧
+      PactType.FairChoiceIds (processType.reannotate alphabet) =
+        PactType.FairChoiceIds processType ∧
+      (PactType.ParallelMessageOwnership (processType.reannotate alphabet) ↔
+        PactType.ParallelMessageOwnership processType) ∧
+      (PactType.ParallelProgressOwnership (processType.reannotate alphabet) ↔
+        PactType.ParallelProgressOwnership processType) ∧
+      (PactType.ParallelFairChoiceOwnership (processType.reannotate alphabet) ↔
+        PactType.ParallelFairChoiceOwnership processType) := by
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType alphabet with
+  | _ n ih =>
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet,
+          PactType.BranchMessageIds
+              (PactType.reannotateBranches branchAlphabet branches) =
+              PactType.BranchMessageIds branches ∧
+            PactType.BranchMessageActions
+              (PactType.reannotateBranches branchAlphabet branches) =
+              PactType.BranchMessageActions branches ∧
+            PactType.BranchProgressIds
+              (PactType.reannotateBranches branchAlphabet branches) =
+              PactType.BranchProgressIds branches ∧
+            PactType.BranchFairChoiceIds
+              (PactType.reannotateBranches branchAlphabet branches) =
+              PactType.BranchFairChoiceIds branches ∧
+            (PactType.ParallelMessageOwnershipBranches
+                (PactType.reannotateBranches branchAlphabet branches) ↔
+              PactType.ParallelMessageOwnershipBranches branches) ∧
+            (PactType.ParallelProgressOwnershipBranches
+                (PactType.reannotateBranches branchAlphabet branches) ↔
+              PactType.ParallelProgressOwnershipBranches branches) ∧
+            (PactType.ParallelFairChoiceOwnershipBranches
+                (PactType.reannotateBranches branchAlphabet branches) ↔
+              PactType.ParallelFairChoiceOwnershipBranches branches) := by
+        intro branches hBranchesSize branchAlphabet
+        induction branches with
+        | nil =>
+            simp [PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds,
+              PactType.ParallelMessageOwnershipBranches,
+              PactType.ParallelProgressOwnershipBranches,
+              PactType.ParallelFairChoiceOwnershipBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hTypeFacts :=
+              ih (sizeOf branchType) hType branchAlphabet branchType rfl
+            have hRestFacts := restIH hRest
+            simp only [PactType.reannotateBranches_cons,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds,
+              PactType.ParallelMessageOwnershipBranches,
+              PactType.ParallelProgressOwnershipBranches,
+              PactType.ParallelFairChoiceOwnershipBranches]
+            simp only [hTypeFacts.1, hTypeFacts.2.1, hTypeFacts.2.2.1,
+              hTypeFacts.2.2.2.1, hTypeFacts.2.2.2.2.1,
+              hTypeFacts.2.2.2.2.2.1, hTypeFacts.2.2.2.2.2.2,
+              hRestFacts.1, hRestFacts.2.1, hRestFacts.2.2.1,
+              hRestFacts.2.2.2.1, hRestFacts.2.2.2.2.1,
+              hRestFacts.2.2.2.2.2.1, hRestFacts.2.2.2.2.2.2]
+            simp
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership]
+      | recur _ _ body =>
+          have hBody : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simpa [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership] using
+              ih (sizeOf body) hBody alphabet body rfl
+      | choice _ left right | seq _ left right =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership,
+            ih (sizeOf left) hLeft alphabet left rfl,
+            ih (sizeOf right) hRight alphabet right rfl]
+      | fairChoice _ _ left right =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership,
+            ih (sizeOf left) hLeft alphabet left rfl,
+            ih (sizeOf right) hRight alphabet right rfl]
+      | par _ left right interface =>
+          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership,
+            ih (sizeOf left) hLeft
+              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
+                right.alphabet interface) left rfl,
+            ih (sizeOf right) hRight
+              (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
+                interface) right rfl]
+      | xoffer _ elseType branches | offer _ elseType branches =>
+          have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership,
+            ih (sizeOf elseType) hElse alphabet elseType rfl,
+            hBranches branches hBranchSize alphabet]
+
+@[simp] theorem PactType.messageIds_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.MessageIds (processType.reannotate alphabet) =
+      PactType.MessageIds processType :=
+  (PactType.reannotate_ownership_data alphabet processType).1
+
+@[simp] theorem PactType.messageActions_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.MessageActions (processType.reannotate alphabet) =
+      PactType.MessageActions processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.1
+
+@[simp] theorem PactType.progressIds_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.ProgressIds (processType.reannotate alphabet) =
+      PactType.ProgressIds processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.2.1
+
+@[simp] theorem PactType.fairChoiceIds_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.FairChoiceIds (processType.reannotate alphabet) =
+      PactType.FairChoiceIds processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.2.2.1
+
+@[simp] theorem PactType.parallelMessageOwnership_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.ParallelMessageOwnership (processType.reannotate alphabet) ↔
+      PactType.ParallelMessageOwnership processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.2.2.2.1
+
+@[simp] theorem PactType.parallelProgressOwnership_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.ParallelProgressOwnership (processType.reannotate alphabet) ↔
+      PactType.ParallelProgressOwnership processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.2.2.2.2.1
+
+@[simp] theorem PactType.parallelFairChoiceOwnership_reannotate
+    (alphabet : PactTypeAlphabet) (processType : PactType) :
+    PactType.ParallelFairChoiceOwnership (processType.reannotate alphabet) ↔
+      PactType.ParallelFairChoiceOwnership processType :=
+  (PactType.reannotate_ownership_data alphabet processType).2.2.2.2.2.2
+
+/-- The generated branch-product worker preserves message names. -/
+theorem parallelTypeBranchesWithin_messageIds
+    (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType)) :
+    PactType.MessageIds (parallelTypeBranchesWithin alphabet branches) =
       PactType.BranchMessageIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.MessageIds, PactType.BranchMessageIds]
+  induction branches generalizing alphabet with
+  | nil => simp [parallelTypeBranchesWithin, PactType.MessageIds,
+      PactType.BranchMessageIds]
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
       cases rest with
       | nil =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.MessageIds,
-            PactType.BranchMessageIds]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.MessageIds, PactType.BranchMessageIds]
       | cons next tail =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.MessageIds,
-            PactType.BranchMessageIds, ih]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.MessageIds, PactType.BranchMessageIds, ih]
 
-/-- The generated parallel branch product mentions exactly the polarized message actions occurring in the source branch list. -/
-theorem parallelTypeBranches_messageActions (branches : List (BareMessage × PactType)) :
-    PactType.MessageActions (parallelTypeBranches branches) =
+/-- The generated branch-product worker preserves polarized message actions. -/
+theorem parallelTypeBranchesWithin_messageActions
+    (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType)) :
+    PactType.MessageActions (parallelTypeBranchesWithin alphabet branches) =
       PactType.BranchMessageActions branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.MessageActions,
+  induction branches generalizing alphabet with
+  | nil => simp [parallelTypeBranchesWithin, PactType.MessageActions,
       PactType.BranchMessageActions]
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
       cases rest with
       | nil =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.MessageActions,
-            PactType.BranchMessageActions]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.MessageActions, PactType.BranchMessageActions]
       | cons next tail =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.MessageActions,
-            PactType.BranchMessageActions, ih]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.MessageActions, PactType.BranchMessageActions, ih]
 
-/-- The generated parallel branch product preserves the branch list's progress identifiers. -/
-theorem parallelTypeBranches_progressIds (branches : List (BareMessage × PactType)) :
-    PactType.ProgressIds (parallelTypeBranches branches) =
+/-- The generated branch-product worker preserves progress identifiers. -/
+theorem parallelTypeBranchesWithin_progressIds
+    (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType)) :
+    PactType.ProgressIds (parallelTypeBranchesWithin alphabet branches) =
       PactType.BranchProgressIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.ProgressIds, PactType.BranchProgressIds]
+  induction branches generalizing alphabet with
+  | nil => simp [parallelTypeBranchesWithin, PactType.ProgressIds,
+      PactType.BranchProgressIds]
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
       cases rest with
       | nil =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.ProgressIds,
-            PactType.BranchProgressIds]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.ProgressIds, PactType.BranchProgressIds]
       | cons next tail =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.ProgressIds,
-            PactType.BranchProgressIds, ih]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.ProgressIds, PactType.BranchProgressIds, ih]
 
-/-- The generated parallel branch product preserves the branch list's fair-choice identifiers. -/
-theorem parallelTypeBranches_fairChoiceIds (branches : List (BareMessage × PactType)) :
-    PactType.FairChoiceIds (parallelTypeBranches branches) =
+/-- The generated branch-product worker preserves fair-choice identifiers. -/
+theorem parallelTypeBranchesWithin_fairChoiceIds
+    (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType)) :
+    PactType.FairChoiceIds (parallelTypeBranchesWithin alphabet branches) =
       PactType.BranchFairChoiceIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.FairChoiceIds,
+  induction branches generalizing alphabet with
+  | nil => simp [parallelTypeBranchesWithin, PactType.FairChoiceIds,
       PactType.BranchFairChoiceIds]
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
       cases rest with
       | nil =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.FairChoiceIds,
-            PactType.BranchFairChoiceIds]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.FairChoiceIds, PactType.BranchFairChoiceIds]
       | cons next tail =>
-          simp [parallelTypeBranches, parallelType, parallelType, singletonTypeXOffer, PactType.FairChoiceIds,
-            PactType.BranchFairChoiceIds, ih]
+          simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.FairChoiceIds, PactType.BranchFairChoiceIds, ih]
+
+/-- The generated parallel branch product mentions exactly the message names occurring in the source branch list. -/
+theorem parallelTypeBranches_messageIds (branches : List (BareMessage × PactType)) :
+    PactType.MessageIds (parallelTypeBranches branches) =
+      PactType.BranchMessageIds branches := by
+  cases branches with
+  | nil => simp [parallelTypeBranches, PactType.MessageIds,
+      PactType.BranchMessageIds]
+  | cons branch rest =>
+      exact parallelTypeBranchesWithin_messageIds branch.2.alphabet
+        (branch :: rest)
+
+/-- The generated parallel branch product mentions exactly the polarized message actions occurring in the source branch list. -/
+theorem parallelTypeBranches_messageActions (branches : List (BareMessage × PactType)) :
+    PactType.MessageActions (parallelTypeBranches branches) =
+      PactType.BranchMessageActions branches := by
+  cases branches with
+  | nil => simp [parallelTypeBranches, PactType.MessageActions,
+      PactType.BranchMessageActions]
+  | cons branch rest =>
+      exact parallelTypeBranchesWithin_messageActions branch.2.alphabet
+        (branch :: rest)
+
+/-- The generated parallel branch product preserves the branch list's progress identifiers. -/
+theorem parallelTypeBranches_progressIds (branches : List (BareMessage × PactType)) :
+    PactType.ProgressIds (parallelTypeBranches branches) =
+      PactType.BranchProgressIds branches := by
+  cases branches with
+  | nil => simp [parallelTypeBranches, PactType.ProgressIds,
+      PactType.BranchProgressIds]
+  | cons branch rest =>
+      exact parallelTypeBranchesWithin_progressIds branch.2.alphabet
+        (branch :: rest)
+
+/-- The generated parallel branch product preserves the branch list's fair-choice identifiers. -/
+theorem parallelTypeBranches_fairChoiceIds (branches : List (BareMessage × PactType)) :
+    PactType.FairChoiceIds (parallelTypeBranches branches) =
+      PactType.BranchFairChoiceIds branches := by
+  cases branches with
+  | nil => simp [parallelTypeBranches, PactType.FairChoiceIds,
+      PactType.BranchFairChoiceIds]
+  | cons branch rest =>
+      exact parallelTypeBranchesWithin_fairChoiceIds branch.2.alphabet
+        (branch :: rest)
+
+/-- Selecting a generated branch preserves the structural ownership data. -/
+theorem parallelTypeBranchesSelectingWithin_ownershipData
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType)) :
+    PactType.MessageIds
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) =
+        PactType.BranchMessageIds branches ∧
+      PactType.MessageActions
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) =
+        PactType.BranchMessageActions branches ∧
+      PactType.ProgressIds
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) =
+        PactType.BranchProgressIds branches ∧
+      PactType.FairChoiceIds
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) =
+        PactType.BranchFairChoiceIds branches := by
+  induction branches generalizing alphabet with
+  | nil =>
+      simp [parallelTypeBranchesSelectingWithin, PactType.MessageIds,
+        PactType.MessageActions, PactType.ProgressIds, PactType.FairChoiceIds,
+        PactType.BranchMessageIds, PactType.BranchMessageActions,
+        PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, processType⟩
+      cases rest with
+      | nil =>
+          by_cases hSelected : (action, processType) = selected
+          · subst selected
+            simp [parallelTypeBranchesSelectingWithin,
+              selectedTypeBranchAt, singletonTypeXOfferAt,
+              PactType.MessageIds, PactType.MessageActions,
+              PactType.ProgressIds, PactType.FairChoiceIds,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+          · simp [parallelTypeBranchesSelectingWithin, hSelected,
+              selectedTypeBranchAt, singletonTypeXOfferAt,
+              PactType.MessageIds, PactType.MessageActions,
+              PactType.ProgressIds, PactType.FairChoiceIds,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+      | cons next tail =>
+          by_cases hSelected : (action, processType) = selected
+          · subst selected
+            simp [parallelTypeBranchesSelectingWithin,
+              selectedTypeBranchAt, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds, PactType.BranchMessageIds,
+              PactType.BranchMessageActions, PactType.BranchProgressIds,
+              PactType.BranchFairChoiceIds,
+              parallelTypeBranchesWithin_messageIds,
+              parallelTypeBranchesWithin_messageActions,
+              parallelTypeBranchesWithin_progressIds,
+              parallelTypeBranchesWithin_fairChoiceIds]
+          · simp [parallelTypeBranchesSelectingWithin, hSelected,
+              singletonTypeXOfferAt, PactType.MessageIds,
+              PactType.MessageActions, PactType.ProgressIds,
+              PactType.FairChoiceIds, PactType.BranchMessageIds,
+              PactType.BranchMessageActions, PactType.BranchProgressIds,
+              PactType.BranchFairChoiceIds, ih]
 
 /-- Selecting a generated branch preserves the message-name set of the complete branch list. -/
 theorem parallelTypeBranchesSelecting_messageIds
     (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
     PactType.MessageIds (parallelTypeBranchesSelecting selected branches) =
       PactType.BranchMessageIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.MessageIds,
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.MessageIds,
       PactType.BranchMessageIds]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.MessageIds, PactType.BranchMessageIds]
-      | cons next tail =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.MessageIds, PactType.BranchMessageIds, ih,
-            parallelTypeBranches_messageIds]
+  | cons branch rest =>
+      exact (parallelTypeBranchesSelectingWithin_ownershipData
+        branch.2.alphabet selected (branch :: rest)).1
 
 /-- Selecting a generated branch preserves the polarized message-action set of the complete branch list. -/
 theorem parallelTypeBranchesSelecting_messageActions
     (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
     PactType.MessageActions (parallelTypeBranchesSelecting selected branches) =
       PactType.BranchMessageActions branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.MessageActions,
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.MessageActions,
       PactType.BranchMessageActions]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.MessageActions, PactType.BranchMessageActions]
-      | cons next tail =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.MessageActions, PactType.BranchMessageActions, ih,
-            parallelTypeBranches_messageActions]
+  | cons branch rest =>
+      exact (parallelTypeBranchesSelectingWithin_ownershipData
+        branch.2.alphabet selected (branch :: rest)).2.1
 
 /-- Selecting a generated branch preserves the progress-identifier set of the complete branch list. -/
 theorem parallelTypeBranchesSelecting_progressIds
     (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
     PactType.ProgressIds (parallelTypeBranchesSelecting selected branches) =
       PactType.BranchProgressIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.ProgressIds,
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.ProgressIds,
       PactType.BranchProgressIds]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.ProgressIds, PactType.BranchProgressIds]
-      | cons next tail =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.ProgressIds, PactType.BranchProgressIds, ih,
-            parallelTypeBranches_progressIds]
+  | cons branch rest =>
+      exact (parallelTypeBranchesSelectingWithin_ownershipData
+        branch.2.alphabet selected (branch :: rest)).2.2.1
 
 /-- Selecting a generated branch preserves the fair-choice-identifier set of the complete branch list. -/
 theorem parallelTypeBranchesSelecting_fairChoiceIds
     (selected : BareMessage × PactType) (branches : List (BareMessage × PactType)) :
     PactType.FairChoiceIds (parallelTypeBranchesSelecting selected branches) =
       PactType.BranchFairChoiceIds branches := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.FairChoiceIds,
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.FairChoiceIds,
       PactType.BranchFairChoiceIds]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      cases rest with
-      | nil =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.FairChoiceIds, PactType.BranchFairChoiceIds]
-      | cons next tail =>
-          simp [parallelTypeBranchesSelecting]
-          split <;> simp [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.FairChoiceIds, PactType.BranchFairChoiceIds, ih,
-            parallelTypeBranches_fairChoiceIds]
-
-/-- Pairwise message ownership of a branch list is preserved by its generated parallel product. -/
-theorem parallelTypeBranches_messageOwnership
-    (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelMessageOwnershipBranches branches) :
-    PactType.ParallelMessageOwnership (parallelTypeBranches branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.ParallelMessageOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelMessageOwnership processType ∧
-            Disjoint ({action.1} ∪ PactType.MessageIds processType)
-              (PactType.BranchMessageIds rest) ∧
-            Disjoint ({action} ∪ PactType.MessageActions processType)
-              (PactType.BranchMessageActions rest) ∧
-            PactType.ParallelMessageOwnershipBranches rest := by
-        simpa [PactType.ParallelMessageOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simpa [parallelTypeBranches, parallelType, singletonTypeXOffer,
-            PactType.ParallelMessageOwnership,
-            PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
-            PactType.BranchMessageActions] using hPieces
-      | cons next tail =>
-          have hRight := ih hPieces.2.2.2
-          simp only [parallelTypeBranches, parallelType, PactType.ParallelMessageOwnership,
-            Finset.sdiff_empty]
-          refine ⟨?_, ?_, ?_, hRight⟩
-          · simpa [parallelType, singletonTypeXOffer, PactType.MessageIds,
-              PactType.BranchMessageIds, parallelTypeBranches_messageIds] using hPieces.2.1
-          · simpa [parallelType, singletonTypeXOffer, PactType.MessageActions,
-              PactType.BranchMessageActions, parallelTypeBranches_messageActions] using hPieces.2.2.1
-          · simpa [parallelType, singletonTypeXOffer, PactType.ParallelMessageOwnership,
-              PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
-              PactType.BranchMessageActions] using hPieces.1
-
-/-- Pairwise progress-identifier ownership of a branch list is preserved by its generated parallel product. -/
-theorem parallelTypeBranches_progressOwnership
-    (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelProgressOwnershipBranches branches) :
-    PactType.ParallelProgressOwnership (parallelTypeBranches branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.ParallelProgressOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelProgressOwnership processType ∧
-            Disjoint (PactType.ProgressIds processType)
-              (PactType.BranchProgressIds rest) ∧
-            PactType.ParallelProgressOwnershipBranches rest := by
-        simpa [PactType.ParallelProgressOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simpa [parallelTypeBranches, parallelType, singletonTypeXOffer,
-            PactType.ParallelProgressOwnership,
-            PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
-            using hPieces
-      | cons next tail =>
-          have hRight := ih hPieces.2.2
-          simp only [parallelTypeBranches, parallelType, PactType.ParallelProgressOwnership]
-          refine ⟨?_, ?_, hRight⟩
-          · simpa [parallelType, singletonTypeXOffer, PactType.ProgressIds,
-              PactType.BranchProgressIds, parallelTypeBranches_progressIds] using hPieces.2.1
-          · simpa [parallelType, singletonTypeXOffer, PactType.ParallelProgressOwnership,
-              PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
-              using hPieces.1
-
-/-- Pairwise fair-choice-identifier ownership of a branch list is preserved by its generated parallel product. -/
-theorem parallelTypeBranches_fairChoiceOwnership
-    (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelFairChoiceOwnershipBranches branches) :
-    PactType.ParallelFairChoiceOwnership (parallelTypeBranches branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.ParallelFairChoiceOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelFairChoiceOwnership processType ∧
-            Disjoint (PactType.FairChoiceIds processType)
-              (PactType.BranchFairChoiceIds rest) ∧
-            PactType.ParallelFairChoiceOwnershipBranches rest := by
-        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simpa [parallelTypeBranches, parallelType, singletonTypeXOffer,
-            PactType.ParallelFairChoiceOwnership,
-            PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
-            using hPieces
-      | cons next tail =>
-          have hRight := ih hPieces.2.2
-          simp only [parallelTypeBranches, parallelType, PactType.ParallelFairChoiceOwnership]
-          refine ⟨?_, ?_, hRight⟩
-          · simpa [parallelType, singletonTypeXOffer, PactType.FairChoiceIds,
-              PactType.BranchFairChoiceIds, parallelTypeBranches_fairChoiceIds] using hPieces.2.1
-          · simpa [parallelType, singletonTypeXOffer, PactType.ParallelFairChoiceOwnership,
-              PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
-              using hPieces.1
-
-/-- Selecting one generated branch preserves the branch list's pairwise message ownership. -/
-theorem parallelTypeBranchesSelecting_messageOwnership
-    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelMessageOwnershipBranches branches) :
-    PactType.ParallelMessageOwnership
-      (parallelTypeBranchesSelecting selected branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.ParallelMessageOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelMessageOwnership processType ∧
-            Disjoint ({action.1} ∪ PactType.MessageIds processType)
-              (PactType.BranchMessageIds rest) ∧
-            Disjoint ({action} ∪ PactType.MessageActions processType)
-              (PactType.BranchMessageActions rest) ∧
-            PactType.ParallelMessageOwnershipBranches rest := by
-        simpa [PactType.ParallelMessageOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simp only [parallelTypeBranchesSelecting]
-          split <;> simpa [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.ParallelMessageOwnership,
-            PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
-            PactType.BranchMessageActions] using hPieces
-      | cons next tail =>
-          simp only [parallelTypeBranchesSelecting]
-          split
-          · simp only [parallelType, PactType.ParallelMessageOwnership, Finset.sdiff_empty]
-            refine ⟨?_, ?_, ?_, parallelTypeBranches_messageOwnership _ hPieces.2.2.2⟩
-            · simpa [parallelType, selectedTypeBranch, PactType.MessageIds,
-                parallelTypeBranches_messageIds] using hPieces.2.1
-            · simpa [parallelType, selectedTypeBranch, PactType.MessageActions,
-                parallelTypeBranches_messageActions] using hPieces.2.2.1
-            · simpa [parallelType, selectedTypeBranch, PactType.ParallelMessageOwnership] using hPieces.1
-          · simp only [parallelType, PactType.ParallelMessageOwnership, Finset.sdiff_empty]
-            refine ⟨?_, ?_, ?_, ih hPieces.2.2.2⟩
-            · simpa [parallelType, singletonTypeXOffer, PactType.MessageIds,
-                PactType.BranchMessageIds, parallelTypeBranchesSelecting_messageIds] using hPieces.2.1
-            · simpa [parallelType, singletonTypeXOffer, PactType.MessageActions,
-                PactType.BranchMessageActions, parallelTypeBranchesSelecting_messageActions]
-                using hPieces.2.2.1
-            · simpa [parallelType, singletonTypeXOffer, PactType.ParallelMessageOwnership,
-                PactType.ParallelMessageOwnershipBranches, PactType.BranchMessageIds,
-                PactType.BranchMessageActions] using hPieces.1
-
-/-- Selecting one generated branch preserves the branch list's pairwise progress-identifier ownership. -/
-theorem parallelTypeBranchesSelecting_progressOwnership
-    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelProgressOwnershipBranches branches) :
-    PactType.ParallelProgressOwnership
-      (parallelTypeBranchesSelecting selected branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.ParallelProgressOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelProgressOwnership processType ∧
-            Disjoint (PactType.ProgressIds processType)
-              (PactType.BranchProgressIds rest) ∧
-            PactType.ParallelProgressOwnershipBranches rest := by
-        simpa [PactType.ParallelProgressOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simp only [parallelTypeBranchesSelecting]
-          split <;> simpa [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.ParallelProgressOwnership,
-            PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
-            using hPieces
-      | cons next tail =>
-          simp only [parallelTypeBranchesSelecting]
-          split
-          · simp only [parallelType, PactType.ParallelProgressOwnership]
-            refine ⟨?_, ?_, parallelTypeBranches_progressOwnership _ hPieces.2.2⟩
-            · simpa [parallelType, selectedTypeBranch, PactType.ProgressIds,
-                parallelTypeBranches_progressIds] using hPieces.2.1
-            · simpa [parallelType, selectedTypeBranch, PactType.ParallelProgressOwnership] using hPieces.1
-          · simp only [parallelType, PactType.ParallelProgressOwnership]
-            refine ⟨?_, ?_, ih hPieces.2.2⟩
-            · simpa [parallelType, singletonTypeXOffer, PactType.ProgressIds,
-                PactType.BranchProgressIds, parallelTypeBranchesSelecting_progressIds] using hPieces.2.1
-            · simpa [parallelType, singletonTypeXOffer, PactType.ParallelProgressOwnership,
-                PactType.ParallelProgressOwnershipBranches, PactType.BranchProgressIds]
-                using hPieces.1
-
-/-- Selecting one generated branch preserves the branch list's pairwise fair-choice-identifier ownership. -/
-theorem parallelTypeBranchesSelecting_fairChoiceOwnership
-    (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
-    (hOwnership : PactType.ParallelFairChoiceOwnershipBranches branches) :
-    PactType.ParallelFairChoiceOwnership
-      (parallelTypeBranchesSelecting selected branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.ParallelFairChoiceOwnership]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces :
-          PactType.ParallelFairChoiceOwnership processType ∧
-            Disjoint (PactType.FairChoiceIds processType)
-              (PactType.BranchFairChoiceIds rest) ∧
-            PactType.ParallelFairChoiceOwnershipBranches rest := by
-        simpa [PactType.ParallelFairChoiceOwnershipBranches] using hOwnership
-      cases rest with
-      | nil =>
-          simp only [parallelTypeBranchesSelecting]
-          split <;> simpa [parallelType, selectedTypeBranch, singletonTypeXOffer,
-            PactType.ParallelFairChoiceOwnership,
-            PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
-            using hPieces
-      | cons next tail =>
-          simp only [parallelTypeBranchesSelecting]
-          split
-          · simp only [parallelType, PactType.ParallelFairChoiceOwnership]
-            refine ⟨?_, ?_, parallelTypeBranches_fairChoiceOwnership _ hPieces.2.2⟩
-            · simpa [parallelType, selectedTypeBranch, PactType.FairChoiceIds,
-                parallelTypeBranches_fairChoiceIds] using hPieces.2.1
-            · simpa [parallelType, selectedTypeBranch, PactType.ParallelFairChoiceOwnership] using hPieces.1
-          · simp only [parallelType, PactType.ParallelFairChoiceOwnership]
-            refine ⟨?_, ?_, ih hPieces.2.2⟩
-            · simpa [parallelType, singletonTypeXOffer, PactType.FairChoiceIds,
-                PactType.BranchFairChoiceIds, parallelTypeBranchesSelecting_fairChoiceIds] using hPieces.2.1
-            · simpa [parallelType, singletonTypeXOffer, PactType.ParallelFairChoiceOwnership,
-                PactType.ParallelFairChoiceOwnershipBranches, PactType.BranchFairChoiceIds]
-              using hPieces.1
-
-/-- The generated parallel product of conjunctive-offer branches remains tail
-recursive when every source branch is tail recursive. -/
-theorem parallelTypeBranches_tailRecursive
-    (branches : List (BareMessage × PactType))
-    (hTail : PactType.TailRecursiveBranches branches) :
-    PactType.TailRecursive (parallelTypeBranches branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranches, parallelType, PactType.TailRecursive]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces : PactType.TailRecursive processType ∧
-          PactType.TailRecursiveBranches rest := by
-        simpa [PactType.TailRecursiveBranches] using hTail
-      have hSingletonTail : PactType.TailRecursive
-          (singletonTypeXOffer (action, processType)) := by
-        simpa [parallelType, singletonTypeXOffer, PactType.TailRecursive,
-          PactType.TailRecursiveBranches] using hPieces.1
-      cases rest with
-      | nil =>
-          simpa [parallelTypeBranches] using hSingletonTail
-      | cons next tail =>
-          simpa [parallelTypeBranches, parallelType, PactType.TailRecursive] using
-            And.intro hSingletonTail (ih hPieces.2)
-
-/-- Selecting one conjunctive-offer branch also preserves tail recursion of
-the generated parallel product. -/
-theorem parallelTypeBranchesSelecting_tailRecursive
-    (selected : BareMessage × PactType)
-    (branches : List (BareMessage × PactType))
-    (hTail : PactType.TailRecursiveBranches branches) :
-    PactType.TailRecursive (parallelTypeBranchesSelecting selected branches) := by
-  induction branches with
-  | nil => simp [parallelTypeBranchesSelecting, parallelType, PactType.TailRecursive]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, processType⟩
-      have hPieces : PactType.TailRecursive processType ∧
-          PactType.TailRecursiveBranches rest := by
-        simpa [PactType.TailRecursiveBranches] using hTail
-      have hSingletonTail : PactType.TailRecursive
-          (singletonTypeXOffer (action, processType)) := by
-        simpa [parallelType, singletonTypeXOffer, PactType.TailRecursive,
-          PactType.TailRecursiveBranches] using hPieces.1
-      cases rest with
-      | nil =>
-          by_cases hSelf : (action, processType) = selected
-          · simpa [parallelTypeBranchesSelecting, parallelType, parallelType, selectedTypeBranch, hSelf,
-              PactType.TailRecursive] using hPieces.1
-          · simpa [parallelTypeBranchesSelecting, parallelType, parallelType, singletonTypeXOffer, hSelf,
-              PactType.TailRecursive] using hSingletonTail
-      | cons next tail =>
-          by_cases hSelf : (action, processType) = selected
-          · simpa [parallelTypeBranchesSelecting, parallelType, parallelType, selectedTypeBranch, hSelf,
-              PactType.TailRecursive] using
-              And.intro hPieces.1
-                (parallelTypeBranches_tailRecursive (next :: tail) hPieces.2)
-          · simpa [parallelTypeBranchesSelecting, parallelType, parallelType, singletonTypeXOffer, hSelf,
-              PactType.TailRecursive] using And.intro hSingletonTail (ih hPieces.2)
+  | cons branch rest =>
+      exact (parallelTypeBranchesSelectingWithin_ownershipData
+        branch.2.alphabet selected (branch :: rest)).2.2.2
 
 end
 

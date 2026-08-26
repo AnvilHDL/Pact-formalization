@@ -24,10 +24,11 @@ lemma helper_h1_erasure_preserves_offers
 /-- Helper Lemma H1: erasure preserves sibling-local environments. -/
 lemma helper_h1_erasure_preserves_local_environment
     {outer siblingEnv localEnv : Environment} {interface : Interface}
-    {sibling : Proc} {label : Label}
+    {localProc sibling : Proc} {label : Label}
     (hLocal :
       LocalEnvironment outer interface siblingEnv sibling label localEnv) :
     LocalTypeEnvironment (eraseEnvironment outer) interface
+      (inferProcess localProc)
       (eraseEnvironment siblingEnv) (inferProcess sibling) (eraseLabel label)
       (eraseEnvironment localEnv) := by
   sorry -- TODO(section7): combine local-env inversion with offer erasure.

@@ -178,8 +178,10 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition rightEnv right rightLabel right' →
       ¬ (left' = .skip left'.alphabet ∧ right' = .skip right'.alphabet) →
       (outer.WellFormed ∧
-        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv ∧
-        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv ∧
+        LocalTypeEnvironment outer interface left rightEnv right rightLabel
+          leftEnv ∧
+        LocalTypeEnvironment outer interface right leftEnv left leftLabel
+          rightEnv ∧
         TypeLabel.Sync interface leftLabel rightLabel) →
       --
       TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
@@ -192,8 +194,10 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition leftEnv left leftLabel (.skip left.alphabet) →
       TypeTransition rightEnv right rightLabel (.skip right.alphabet) →
       (outer.WellFormed ∧
-        LocalTypeEnvironment outer interface rightEnv right rightLabel leftEnv ∧
-        LocalTypeEnvironment outer interface leftEnv left leftLabel rightEnv ∧
+        LocalTypeEnvironment outer interface left rightEnv right rightLabel
+          leftEnv ∧
+        LocalTypeEnvironment outer interface right leftEnv left leftLabel
+          rightEnv ∧
         TypeLabel.Sync interface leftLabel rightLabel) →
       --
       TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
