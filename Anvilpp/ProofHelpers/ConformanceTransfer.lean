@@ -86,7 +86,7 @@ lemma helper_h6_abstraction_process_substitution
 
 /-- Helper Lemma H6: abstraction reflects literal `skip`. -/
 lemma helper_h6_abstraction_skip_iff (process : Proc) :
-    inferProcess process = .skip ↔ process = .skip := by
+    inferProcess process = .skip (processAlphabet process) ↔ process = .skip := by
   sorry -- TODO(section7): inspect the abstraction clauses.
 
 

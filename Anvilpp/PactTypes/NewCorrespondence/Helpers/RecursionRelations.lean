@@ -8,29 +8,34 @@ open Classical
 open Pact.NewCorrespondence
 
 def recurRelationShape
-    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
     (entry : PactType × TypeAutomatonState) : Prop :=
-  entry = (.recur name body, TypeAutomatonState.root) ∨
+  entry = (.recur alphabet name body, TypeAutomatonState.root) ∨
     (∃ q residual,
-      entry = (residual.replaceVar name (.recur name body), .child 0 q) ∧
+      entry =
+        (residual.replaceVar name (.recur alphabet name body), .child 0 q) ∧
       relationMembership (buildRelationSet body (compileType signature body))
         residual q)
 
 /-- Proves every related recursion pair has the recursion shape. -/
 lemma relationMembership_recur_cases
-    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.recur name body)
-          (compileType signature (.recur name body)))
+        (buildRelationSet (.recur alphabet name body)
+          (compileType signature (.recur alphabet name body)))
         residual state) :
-    recurRelationShape signature name body (residual, state) := by
-  have hFuelEq : typeCompilationFuel (.recur name body) = typeCompilationFuel body + 1 := by
+    recurRelationShape signature alphabet name body (residual, state) := by
+  have hFuelEq : typeCompilationFuel (.recur alphabet name body) =
+      typeCompilationFuel body + 1 := by
     simp only [typeCompilationFuel]; omega
   have hMem : (residual, state) ∈
       buildRelationSetCoreFuel signature
-        (typeCompilationFuel (.recur name body)) (.recur name body) := hRelated
+        (typeCompilationFuel (.recur alphabet name body))
+        (.recur alphabet name body) := hRelated
   rw [hFuelEq] at hMem
   simp only [buildRelationSetCoreFuel, Finset.mem_insert,
     Finset.mem_image, Prod.mk.injEq] at hMem

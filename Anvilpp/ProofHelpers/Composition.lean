@@ -14,7 +14,7 @@ def composeTypes : List PactType → List Interface → Option PactType
   | [processType], [] => some processType
   | processType :: next :: rest, interface :: interfaces =>
       match composeTypes (next :: rest) interfaces with
-      | some suffix => some (.par processType suffix interface)
+      | some suffix => some (parallelType processType suffix interface)
       | none => none
   | _, _ => none
 

@@ -66,20 +66,20 @@ def HonestTypeStrategy (initial : PactType) (strategy : TypeStrategy) : Prop :=
 mutual
   /-- Fair-choice identifiers occurring in a type, `cal(Eta)(τ)`. -/
   def typeFairIds : PactType → Finset BranchId
-    | .message _ _ => ∅
-    | .progress _ => ∅
-    | .tock => ∅
-    | .skip => ∅
-    | .var _ => ∅
-    | .choice left right => typeFairIds left ∪ typeFairIds right
-    | .seq left right => typeFairIds left ∪ typeFairIds right
-    | .par left right _ => typeFairIds left ∪ typeFairIds right
-    | .recur _ body => typeFairIds body
-    | .fairChoice bid left right =>
+    | .message _ _ _ => ∅
+    | .progress _ _ => ∅
+    | .tock _ => ∅
+    | .skip _ => ∅
+    | .var _ _ => ∅
+    | .choice _ left right => typeFairIds left ∪ typeFairIds right
+    | .seq _ left right => typeFairIds left ∪ typeFairIds right
+    | .par _ left right _ => typeFairIds left ∪ typeFairIds right
+    | .recur _ _ body => typeFairIds body
+    | .fairChoice _ bid left right =>
         {bid} ∪ typeFairIds left ∪ typeFairIds right
-    | .xoffer elseType branches =>
+    | .xoffer _ elseType branches =>
         typeFairIds elseType ∪ typeBranchFairIds branches
-    | .offer elseType branches =>
+    | .offer _ elseType branches =>
         typeFairIds elseType ∪ typeBranchFairIds branches
   termination_by processType => sizeOf processType
 

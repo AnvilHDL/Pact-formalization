@@ -8,10 +8,11 @@ open Classical
 open Pact.NewCorrespondence
 
 def xofferRelationShape
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     (entry : PactType × TypeAutomatonState) : Prop :=
-  entry = (.xoffer elseType branches, TypeAutomatonState.root) ∨
+  entry = (.xoffer alphabet elseType branches, TypeAutomatonState.root) ∨
     (∃ q, entry.2 = .child 0 q ∧
       relationMembership
         (buildRelationSet elseType (compileType signature elseType))
@@ -24,39 +25,41 @@ def xofferRelationShape
         entry.1 q)
 
 lemma relationMembership_xoffer_root
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) :
     relationMembership
-      (buildRelationSet (.xoffer elseType branches)
-        (compileType signature (.xoffer elseType branches)))
-      (.xoffer elseType branches) .root := by
-  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+      (buildRelationSet (.xoffer alphabet elseType branches)
+        (compileType signature (.xoffer alphabet elseType branches)))
+      (.xoffer alphabet elseType branches) .root := by
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
-  show ((.xoffer elseType branches : PactType), .root) ∈
+  show ((.xoffer alphabet elseType branches : PactType), .root) ∈
     buildRelationSetCoreFuel signature
-      (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+      (typeCompilationFuel (.xoffer alphabet elseType branches)) (.xoffer alphabet elseType branches)
   rw [hFuelEq]
   simp [buildRelationSetCoreFuel]
 
 lemma relationMembership_xoffer_else
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) {residual : PactType}
     {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet elseType (compileType signature elseType))
       residual state) :
     relationMembership
-      (buildRelationSet (.xoffer elseType branches)
-        (compileType signature (.xoffer elseType branches)))
+      (buildRelationSet (.xoffer alphabet elseType branches)
+        (compileType signature (.xoffer alphabet elseType branches)))
       residual (.child 0 state) := by
-  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
   show (residual, .child 0 state) ∈ buildRelationSetCoreFuel signature
-    (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+    (typeCompilationFuel (.xoffer alphabet elseType branches)) (.xoffer alphabet elseType branches)
   rw [hFuelEq]
   simp only [buildRelationSetCoreFuel]
   apply Finset.mem_insert_of_mem
@@ -68,7 +71,8 @@ lemma relationMembership_xoffer_else
   exact hRelated
 
 lemma relationMembership_xoffer_branch
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     {index : Nat} {action : BareMessage} {branchType residual : PactType}
     {state : TypeAutomatonState}
@@ -77,10 +81,10 @@ lemma relationMembership_xoffer_branch
       (buildRelationSet branchType (compileType signature branchType))
       residual state) :
     relationMembership
-      (buildRelationSet (.xoffer elseType branches)
-        (compileType signature (.xoffer elseType branches)))
+      (buildRelationSet (.xoffer alphabet elseType branches)
+        (compileType signature (.xoffer alphabet elseType branches)))
       residual (.child (index + 1) state) := by
-  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
@@ -92,7 +96,7 @@ lemma relationMembership_xoffer_branch
       (action, branchType) hMem).trans (le_max_right _ _)
   show (residual, .child (index + 1) state) ∈
     buildRelationSetCoreFuel signature
-      (typeCompilationFuel (.xoffer elseType branches)) (.xoffer elseType branches)
+      (typeCompilationFuel (.xoffer alphabet elseType branches)) (.xoffer alphabet elseType branches)
   rw [hFuelEq]
   simp only [buildRelationSetCoreFuel]
   apply Finset.mem_insert_of_mem
@@ -110,22 +114,24 @@ lemma relationMembership_xoffer_branch
 set_option maxHeartbeats 4000000 in
 /-- Proves every related exclusive-offer pair has the exclusive-offer shape. -/
 lemma relationMembership_xoffer_cases
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.xoffer elseType branches)
-          (compileType signature (.xoffer elseType branches)))
+        (buildRelationSet (.xoffer alphabet elseType branches)
+          (compileType signature (.xoffer alphabet elseType branches)))
         residual state) :
-    xofferRelationShape signature elseType branches (residual, state) := by
-  have hFuelEq : typeCompilationFuel (.xoffer elseType branches) =
+    xofferRelationShape signature alphabet elseType branches
+      (residual, state) := by
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]; omega
   have hMem : (residual, state) ∈
       buildRelationSetCoreFuel signature
-        (typeCompilationFuel (.xoffer elseType branches))
-        (.xoffer elseType branches) := hRelated
+        (typeCompilationFuel (.xoffer alphabet elseType branches))
+        (.xoffer alphabet elseType branches) := hRelated
   rw [hFuelEq] at hMem
   simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
     mem_foldl_union_iff, Finset.notMem_empty, false_or,
@@ -362,10 +368,11 @@ theorem branches_map_selecting_getElem?_eq_some_iff
 
 /-- Defines the related-state shape for a compiled conjunctive offer: the root represents the whole offer, a tagged child represents a residual of `τ0` or a generated branch commit. -/
 def offerRelationShape
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     (entry : PactType × TypeAutomatonState) : Prop :=
-  entry = (.offer elseType branches, TypeAutomatonState.root) ∨
+  entry = (.offer alphabet elseType branches, TypeAutomatonState.root) ∨
     (∃ q, entry.2 = .child 0 q ∧
       relationMembership
         (buildRelationSet elseType (compileType signature elseType))
@@ -380,39 +387,41 @@ def offerRelationShape
         entry.1 q)
 
 lemma relationMembership_offer_root
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) :
     relationMembership
-      (buildRelationSet (.offer elseType branches)
-        (compileType signature (.offer elseType branches)))
-      (.offer elseType branches) .root := by
-  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+      (buildRelationSet (.offer alphabet elseType branches)
+        (compileType signature (.offer alphabet elseType branches)))
+      (.offer alphabet elseType branches) .root := by
+  have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
-  show ((.offer elseType branches : PactType), .root) ∈
+  show ((.offer alphabet elseType branches : PactType), .root) ∈
     buildRelationSetCoreFuel signature
-      (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+      (typeCompilationFuel (.offer alphabet elseType branches)) (.offer alphabet elseType branches)
   rw [hFuelEq]
   simp [buildRelationSetCoreFuel]
 
 lemma relationMembership_offer_else
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) {residual : PactType}
     {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet elseType (compileType signature elseType))
       residual state) :
     relationMembership
-      (buildRelationSet (.offer elseType branches)
-        (compileType signature (.offer elseType branches)))
+      (buildRelationSet (.offer alphabet elseType branches)
+        (compileType signature (.offer alphabet elseType branches)))
       residual (.child 0 state) := by
-  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+  have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
   show (residual, .child 0 state) ∈ buildRelationSetCoreFuel signature
-    (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+    (typeCompilationFuel (.offer alphabet elseType branches)) (.offer alphabet elseType branches)
   rw [hFuelEq]
   simp only [buildRelationSetCoreFuel]
   apply Finset.mem_insert_of_mem
@@ -424,7 +433,8 @@ lemma relationMembership_offer_else
   exact hRelated
 
 lemma relationMembership_offer_selected
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     {index : Nat} {selected : BareMessage × PactType} {residual : PactType}
     {state : TypeAutomatonState}
@@ -434,10 +444,10 @@ lemma relationMembership_offer_selected
         (compileType signature (parallelTypeBranchesSelecting selected branches)))
       residual state) :
     relationMembership
-      (buildRelationSet (.offer elseType branches)
-        (compileType signature (.offer elseType branches)))
+      (buildRelationSet (.offer alphabet elseType branches)
+        (compileType signature (.offer alphabet elseType branches)))
       residual (.child (index + 1) state) := by
-  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+  have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]
     omega
@@ -448,7 +458,7 @@ lemma relationMembership_offer_selected
     exact le_max_right _ _
   show (residual, .child (index + 1) state) ∈
     buildRelationSetCoreFuel signature
-      (typeCompilationFuel (.offer elseType branches)) (.offer elseType branches)
+      (typeCompilationFuel (.offer alphabet elseType branches)) (.offer alphabet elseType branches)
   rw [hFuelEq]
   simp only [buildRelationSetCoreFuel]
   apply Finset.mem_insert_of_mem
@@ -465,22 +475,24 @@ lemma relationMembership_offer_selected
 set_option maxHeartbeats 4000000 in
 /-- Proves every related conjunctive-offer pair has the conjunctive-offer shape. -/
 lemma relationMembership_offer_cases
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (elseType : PactType)
     (branches : List (BareMessage × PactType))
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.offer elseType branches)
-          (compileType signature (.offer elseType branches)))
+        (buildRelationSet (.offer alphabet elseType branches)
+          (compileType signature (.offer alphabet elseType branches)))
         residual state) :
-    offerRelationShape signature elseType branches (residual, state) := by
-  have hFuelEq : typeCompilationFuel (.offer elseType branches) =
+    offerRelationShape signature alphabet elseType branches
+      (residual, state) := by
+  have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
       max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]; omega
   have hMem : (residual, state) ∈
       buildRelationSetCoreFuel signature
-        (typeCompilationFuel (.offer elseType branches))
-        (.offer elseType branches) := hRelated
+        (typeCompilationFuel (.offer alphabet elseType branches))
+        (.offer alphabet elseType branches) := hRelated
   rw [hFuelEq] at hMem
   simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
     mem_foldl_union_iff, Finset.notMem_empty, false_or,

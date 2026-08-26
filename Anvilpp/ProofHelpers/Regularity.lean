@@ -35,15 +35,16 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
 /-- Types admitted by the canonical construction relative to a fixed alphabet. -/
 def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
   signature.WellFormed ∧ signature.Supports processType ∧
-    ClosedGuardedRegular processType
+    processType.AlphabetWellFormed ∧ ClosedGuardedRegular processType
 
 /-- `skip` cannot take its silent operational step in a clock environment. -/
-theorem skip_has_no_clock_transition :
+theorem skip_has_no_clock_transition {alphabet : PactTypeAlphabet} :
     ¬ ∃ target,
-      TypeTransition TypeEnvironment.tock .skip TypeLabel.silent target := by
+      TypeTransition TypeEnvironment.tock (.skip alphabet) TypeLabel.silent
+        target := by
   rintro ⟨target, transition⟩
   cases transition with
-  | skip _ conditions =>
+  | skip _ _ conditions =>
       simp [TypeEnvironment.tock] at conditions
 
 /-- Proposition 4.1's underlying notion of omega-regularity. -/

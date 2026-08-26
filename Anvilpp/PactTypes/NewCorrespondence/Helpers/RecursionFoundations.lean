@@ -10,18 +10,20 @@ open Pact.NewCorrespondence
 /-- Lift a body relation pair through the recursion substitution and child
 state tag. -/
 lemma relationMembership_recur_child
-    (signature : TypeAlphabet) (name : String) (body residual : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body residual : PactType)
     {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet body (compileType signature body)) residual state) :
     relationMembership
-      (buildRelationSet (.recur name body)
-        (compileType signature (.recur name body)))
-      (residual.replaceVar name (.recur name body)) (.child 0 state) := by
-  show (residual.replaceVar name (.recur name body), .child 0 state) ∈
+      (buildRelationSet (.recur alphabet name body)
+        (compileType signature (.recur alphabet name body)))
+      (residual.replaceVar name (.recur alphabet name body)) (.child 0 state) := by
+  show (residual.replaceVar name (.recur alphabet name body), .child 0 state) ∈
     buildRelationSetCoreFuel signature
-      (typeCompilationFuel (.recur name body)) (.recur name body)
-  have hFuelEq : typeCompilationFuel (.recur name body) =
+      (typeCompilationFuel (.recur alphabet name body))
+      (.recur alphabet name body)
+  have hFuelEq : typeCompilationFuel (.recur alphabet name body) =
       typeCompilationFuel body + 1 := by
     simp only [typeCompilationFuel]
     omega
@@ -31,12 +33,15 @@ lemma relationMembership_recur_child
   exact Or.inr ⟨(residual, state), hRelated, rfl, rfl⟩
 
 theorem decoratedTypeTransition_replaceVar_iff
-    (name : String) (body : PactType) (residual : PactType)
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    (residual : PactType)
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
     {target : PactType} :
-    DecoratedTypeTransition env (residual.replaceVar name (.recur name body)) label
+    DecoratedTypeTransition env
+      (residual.replaceVar name (.recur alphabet name body)) label
       offers target ↔
-      ∃ residual', target = residual'.replaceVar name (.recur name body) ∧
+      ∃ residual',
+        target = residual'.replaceVar name (.recur alphabet name body) ∧
         DecoratedTypeTransition env residual label offers residual' := by
   sorry
 
@@ -52,7 +57,7 @@ theorem compileTypeFuel_marker_represents_var
       (compileTypeFuel signature (typeCompilationFuel body) body).edges)
     (hSource : bodyEdge.source = q)
     (hMarkerLabel : bodyEdge.label = .variable name) :
-    residual = .var name := by
+    residual = .var residual.alphabet name := by
   sorry
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled recursion, agrees with the body's own. -/
@@ -72,15 +77,18 @@ theorem computeFutureOf_recursion_child
 
 /-- Proves H15's future agreement for a recursion-tagged state, substituted for the open variable. -/
 lemma helper_h15_recursion_future_offers_agree
-    (signature : TypeAlphabet) (name : String) (body : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType)
     {residual : PactType} {q : TypeAutomatonState}
     (hRelated :
       relationMembership (buildRelationSet body (compileType signature body))
         residual q) :
-    computeFutureOf signature (.recur name body) (.child 0 q) =
-      typeFutureOffers (residual.replaceVar name (.recur name body)) := by
+    computeFutureOf signature (.recur alphabet name body) (.child 0 q) =
+      typeFutureOffers
+        (residual.replaceVar name (.recur alphabet name body)) := by
   exact helper_h15_future_offers_agree signature
-    (relationMembership_recur_child signature name body residual hRelated)
+    (relationMembership_recur_child signature alphabet name body residual
+      hRelated)
 
 
 end

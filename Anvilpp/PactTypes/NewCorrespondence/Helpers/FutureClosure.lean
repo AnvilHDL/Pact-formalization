@@ -263,7 +263,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
   | succ fuel ih =>
       intro processType hFuel
       cases processType with
-      | message msg dir =>
+      | message _ msg dir =>
           intro edge hEdge
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_union, Finset.mem_image] at hEdge
@@ -271,14 +271,14 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             (⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩) |
               ⟨environment, _, rfl⟩ <;>
             simp [compileTypeFuel, finishAutomatonFragment]
-      | progress pid =>
+      | progress _ pid =>
           intro edge hEdge
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_union, Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ |
             ⟨environment, _, rfl⟩ <;>
             simp [compileTypeFuel, finishAutomatonFragment]
-      | tock =>
+      | tock _ =>
           intro edge hEdge
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_union, Finset.mem_image] at hEdge
@@ -287,19 +287,19 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           · by_cases hClock : environment.clock <;>
               simp [hClock, compileTypeFuel, finishAutomatonFragment]
           · simp [compileTypeFuel, finishAutomatonFragment]
-      | skip =>
+      | skip _ =>
           intro edge hEdge
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_image] at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp [compileTypeFuel, finishAutomatonFragment]
-      | var name =>
+      | var _ name =>
           intro edge hEdge
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_image] at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp [compileTypeFuel, finishAutomatonFragment]
-      | recur name body =>
+      | recur _ name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -307,7 +307,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           exact buildRecursionAutomaton_edgeTargetsInStates signature name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
-      | choice left right =>
+      | choice _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -321,7 +321,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             (ih left hLeft) (ih right hRight)
             (compileTypeFuel_initial_mem signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | fairChoice bid left right =>
+      | fairChoice _ bid left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -335,7 +335,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             (.fair bid false) (ih left hLeft) (ih right hRight)
             (compileTypeFuel_initial_mem signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | seq left right =>
+      | seq _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -348,7 +348,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             (compileTypeFuel signature fuel right) (ih left hLeft)
             (ih right hRight)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | par left right interface =>
+      | par _ left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -362,7 +362,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             (compiledChildFutureFuel signature fuel left)
             (compiledChildFutureFuel signature fuel right)
             (ih left hLeft) (ih right hRight)
-      | xoffer elseType branches =>
+      | xoffer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -387,7 +387,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact compileTypeFuel_initial_mem signature fuel original.2
               (hBranches original hOriginal)
-      | offer elseType branches =>
+      | offer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -428,7 +428,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
   | succ fuel ih =>
       intro processType hFuel
       cases processType with
-      | message msg dir =>
+      | message _ msg dir =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_union, Finset.mem_image] at hEdge
@@ -439,7 +439,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             rcases hFuture with ⟨rfl, rfl⟩ <;>
             simp [compileTypeFuel, finishAutomatonFragment]
 
-      | progress pid =>
+      | progress _ pid =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
@@ -447,26 +447,26 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             simp at hFuture
           rcases hFuture with ⟨rfl, rfl⟩
           simp [compileTypeFuel, finishAutomatonFragment]
-      | tock =>
+      | tock _ =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩
           · split at hFuture <;> simp at hFuture
           · simp at hFuture
-      | skip =>
+      | skip _ =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp at hFuture
-      | var name =>
+      | var _ name =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp at hFuture
-      | recur name body =>
+      | recur _ name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -474,7 +474,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           exact buildRecursionAutomaton_futureTargetsInStates signature name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
-      | choice left right =>
+      | choice _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -488,7 +488,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             TypeLabel.silent (ih left hLeft) (ih right hRight)
             (compileTypeFuel_initial_mem signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | fairChoice bid left right =>
+      | fairChoice _ bid left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -502,7 +502,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             (TypeLabel.fair bid false) (ih left hLeft) (ih right hRight)
             (compileTypeFuel_initial_mem signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | seq left right =>
+      | seq _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -515,7 +515,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             (compileTypeFuel signature fuel right) (ih right hRight)
             (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
             (compileTypeFuel_initial_mem signature fuel right hRight)
-      | par left right interface =>
+      | par _ left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -530,7 +530,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             (compiledChildFutureFuel signature fuel right)
             (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
             (compileTypeFuel_edgeTargetsInStates signature fuel right hRight)
-      | xoffer elseType branches =>
+      | xoffer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -561,7 +561,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
               exact compileTypeFuel_initial_mem signature fuel original.2
                 (hBranches original hOriginal))
           simpa [compileTypeFuel] using hResult
-      | offer elseType branches =>
+      | offer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -622,12 +622,12 @@ private theorem stateProductInfoFuel_succ_stable :
   | succ fuel ih =>
       intro processType state hFuel
       cases processType with
-      | message msg dir => cases state <;> rfl
-      | progress pid => cases state <;> rfl
-      | tock => cases state <;> rfl
-      | skip => cases state <;> rfl
-      | var name => cases state <;> rfl
-      | recur name body =>
+      | message _ msg dir => cases state <;> rfl
+      | progress _ pid => cases state <;> rfl
+      | tock _ => cases state <;> rfl
+      | skip _ => cases state <;> rfl
+      | var _ name => cases state <;> rfl
+      | recur _ name body =>
           cases state with
           | child index q =>
               cases index with
@@ -639,7 +639,7 @@ private theorem stateProductInfoFuel_succ_stable :
               | succ index =>
                   cases index <;> rfl
           | _ => rfl
-      | choice left right =>
+      | choice _ left right =>
           cases state with
           | child index q =>
               cases index with
@@ -657,7 +657,7 @@ private theorem stateProductInfoFuel_succ_stable :
                       omega
                   | succ index => rfl
           | _ => rfl
-      | fairChoice bid left right =>
+      | fairChoice _ bid left right =>
           cases state with
           | child index q =>
               cases index with
@@ -675,7 +675,7 @@ private theorem stateProductInfoFuel_succ_stable :
                       omega
                   | succ index => rfl
           | _ => rfl
-      | seq left right =>
+      | seq _ left right =>
           cases state with
           | child index q =>
               cases index with
@@ -693,9 +693,9 @@ private theorem stateProductInfoFuel_succ_stable :
                       omega
                   | succ index => rfl
           | _ => rfl
-      | par left right interface =>
+      | par _ left right interface =>
           cases state <;> rfl
-      | xoffer elseType branches =>
+      | xoffer _ elseType branches =>
           cases state with
           | child index q =>
               cases index with
@@ -723,7 +723,7 @@ private theorem stateProductInfoFuel_succ_stable :
                       simp [typeCompilationFuel] at hFuel ⊢
                       omega
           | _ => rfl
-      | offer elseType branches =>
+      | offer _ elseType branches =>
           cases state with
           | child index q =>
               cases index with
@@ -792,12 +792,12 @@ theorem stateProductInfoFuel_component_fuel_lt :
       intro processType state interface componentLeft componentRight q1 q2
         hFuel hInfo
       cases processType with
-      | message msg dir => cases state <;> simp [stateProductInfoFuel] at hInfo
-      | progress pid => cases state <;> simp [stateProductInfoFuel] at hInfo
-      | tock => cases state <;> simp [stateProductInfoFuel] at hInfo
-      | skip => cases state <;> simp [stateProductInfoFuel] at hInfo
-      | var name => cases state <;> simp [stateProductInfoFuel] at hInfo
-      | recur name body =>
+      | message _ msg dir => cases state <;> simp [stateProductInfoFuel] at hInfo
+      | progress _ pid => cases state <;> simp [stateProductInfoFuel] at hInfo
+      | tock _ => cases state <;> simp [stateProductInfoFuel] at hInfo
+      | skip _ => cases state <;> simp [stateProductInfoFuel] at hInfo
+      | var _ name => cases state <;> simp [stateProductInfoFuel] at hInfo
+      | recur _ name body =>
           cases state with
           | child index state =>
               cases index with
@@ -813,7 +813,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
               | succ index =>
                   cases index <;> simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
-      | choice left right =>
+      | choice _ left right =>
           cases state with
           | child index state =>
               cases index with
@@ -839,7 +839,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                       constructor <;> omega
                   | succ index => simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
-      | fairChoice bid left right =>
+      | fairChoice _ bid left right =>
           cases state with
           | child index state =>
               cases index with
@@ -865,7 +865,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                       constructor <;> omega
                   | succ index => simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
-      | seq left right =>
+      | seq _ left right =>
           cases state with
           | child index state =>
               cases index with
@@ -891,7 +891,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                       constructor <;> omega
                   | succ index => simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
-      | par left right productInterface =>
+      | par _ left right productInterface =>
           cases state with
           | pair leftState rightState =>
               simp only [stateProductInfoFuel, Option.some.injEq,
@@ -900,7 +900,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
               simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
               constructor <;> omega
           | _ => simp [stateProductInfoFuel] at hInfo
-      | xoffer elseType branches =>
+      | xoffer _ elseType branches =>
           cases state with
           | child index state =>
               cases index with
@@ -937,7 +937,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                           (by simpa [hBranch] using hInfo)
                       constructor <;> omega
           | _ => simp [stateProductInfoFuel] at hInfo
-      | offer elseType branches =>
+      | offer _ elseType branches =>
           cases state with
           | child index state =>
               cases index with

@@ -52,15 +52,16 @@ lemma transitionAlphabet_environment_mem
 
 /-- Proves that compiled `skip` has the non-clock silent self-loop edge. -/
 lemma compileType_skip_edge
-    (signature : TypeAlphabet) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature .skip).HasEdge .root env TypeLabel.silent
+    (compileType signature (.skip alphabet)).HasEdge .root env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .root := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature .skip
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.skip alphabet)
     .root .root env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
   refine ⟨
     { source := .root
@@ -74,17 +75,18 @@ lemma compileType_skip_edge
 
 /-- Proves that every compiled `skip` edge is the non-clock silent root self-loop. -/
 lemma compileType_skip_edge_cases
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {current future : Finset BareMessage}
-    (hEdge : (compileType signature .skip).HasEdge source env label
+    (hEdge : (compileType signature (.skip alphabet)).HasEdge source env label
       (TypeOfferSummary.mk current future) target) :
     source = .root ∧ target = .root ∧ label = TypeLabel.silent ∧
       current = ∅ ∧ future = ∅ ∧ env.clock = false := by
   classical
-  have hSymbol := compileType_hasEdge_symbol_mem signature .skip hEdge
+  have hSymbol := compileType_hasEdge_symbol_mem signature (.skip alphabet) hEdge
   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-    .skip source target env label (TypeOfferSummary.mk current future)
+    (.skip alphabet) source target env label
+    (TypeOfferSummary.mk current future)
     hSymbol).mp hEdge
   rcases hResolved with ⟨edge, hPending, hSource, hEnv, hLabel,
     hCurrent, hFuture, hTarget⟩
@@ -106,15 +108,19 @@ lemma compileType_skip_edge_cases
 future offers: its only edge is its own idle self-loop, and that self-loop's
 future field is genuinely `.explicit ∅`, so there is nothing to reference. -/
 lemma computeFutureOf_message_final
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
-    computeFutureOf signature (.message msg dir) .final = ∅ := by
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir) :
+    computeFutureOf signature (.message alphabet msg dir) .final = ∅ := by
   classical
-  show computeFutureOfFuel signature (typeCompilationFuel (.message msg dir))
-    (.message msg dir) .final = ∅
+  show computeFutureOfFuel signature
+    (typeCompilationFuel (.message alphabet msg dir))
+    (.message alphabet msg dir) .final = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
   have hReferences :
-      ({ states := (compileTypeFuel signature 1 (.message msg dir)).states,
-          edges := (compileTypeFuel signature 1 (.message msg dir)).edges } :
+      ({ states := (compileTypeFuel signature 1
+            (.message alphabet msg dir)).states,
+          edges := (compileTypeFuel signature 1
+            (.message alphabet msg dir)).edges } :
         PendingAutomaton).referencedStates .final = ∅ := by
     simp only [PendingAutomaton.referencedStates, typeCompilationFuel, compileTypeFuel,
       finishAutomatonFragment, Finset.mem_filter, Finset.mem_union, Finset.mem_image]
@@ -130,7 +136,8 @@ lemma computeFutureOf_message_final
   rw [PendingAutomaton.futureReachable_eq_singleton_of_referencedStates_eq_empty _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
-      stateProductInfo (.message msg dir) TypeAutomatonState.final = none := by
+      stateProductInfo (.message alphabet msg dir)
+        TypeAutomatonState.final = none := by
     simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   rw [hNoProduct]
   simp only [Finset.union_empty]
@@ -147,17 +154,19 @@ lemma computeFutureOf_message_final
 
 /-- Proves that compiled message has the firing edge when the action is needed now. -/
 lemma compileType_message_action_edge
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir)
     {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hNeed : env.hasNeed (msg, dir))
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.message msg dir)
       (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature (.message msg dir)).HasEdge .root env
+    (compileType signature (.message alphabet msg dir)).HasEdge .root env
       (TypeLabel.message msg dir) (TypeOfferSummary.mk {(msg, dir)} ∅)
       .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.message msg dir)
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature
+    (.message alphabet msg dir)
     .root .final env (TypeLabel.message msg dir)
     (TypeOfferSummary.mk {(msg, dir)} ∅) hSymbol]
   refine ⟨
@@ -173,15 +182,20 @@ lemma compileType_message_action_edge
 
 /-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
 lemma computeFutureOf_message_root
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir) :
-    computeFutureOf signature (.message msg dir) .root = {(msg, dir)} := by
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir) :
+    computeFutureOf signature (.message alphabet msg dir) .root =
+      {(msg, dir)} := by
   classical
-  show computeFutureOfFuel signature (typeCompilationFuel (.message msg dir))
-    (.message msg dir) .root = {(msg, dir)}
+  show computeFutureOfFuel signature
+    (typeCompilationFuel (.message alphabet msg dir))
+    (.message alphabet msg dir) .root = {(msg, dir)}
   simp only [typeCompilationFuel, computeFutureOfFuel]
   set pending : PendingAutomaton :=
-    { states := (compileTypeFuel signature 1 (.message msg dir)).states,
-      edges := (compileTypeFuel signature 1 (.message msg dir)).edges } with hPendingDef
+    { states := (compileTypeFuel signature 1
+          (.message alphabet msg dir)).states,
+      edges := (compileTypeFuel signature 1
+          (.message alphabet msg dir)).edges } with hPendingDef
   have hReferencesFinal : pending.referencedStates .final = ∅ := by
     simp only [hPendingDef, PendingAutomaton.referencedStates, typeCompilationFuel,
       compileTypeFuel, finishAutomatonFragment, Finset.mem_filter, Finset.mem_union,
@@ -233,10 +247,12 @@ lemma computeFutureOf_message_root
   have hLower : TypeAutomatonState.root ∈ pending.futureReachable TypeAutomatonState.root :=
     pending.mem_futureReachable_self TypeAutomatonState.root
   have hNoProductRoot :
-      stateProductInfo (.message msg dir) TypeAutomatonState.root = none := by
+      stateProductInfo (.message alphabet msg dir)
+        TypeAutomatonState.root = none := by
     simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   have hNoProductFinal :
-      stateProductInfo (.message msg dir) TypeAutomatonState.final = none := by
+      stateProductInfo (.message alphabet msg dir)
+        TypeAutomatonState.final = none := by
     simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   have hOffersRoot : pending.offersAt TypeAutomatonState.root = {(msg, dir)} := by
     apply Finset.ext
@@ -291,17 +307,19 @@ lemma computeFutureOf_message_root
 
 /-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
 lemma compileType_message_wait_edge
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir)
     {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hNoNeed : ¬ env.hasNeed (msg, dir))
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk {(msg, dir)} ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature (.message msg dir)).HasEdge .root env
+    (compileType signature (.message alphabet msg dir)).HasEdge .root env
       TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅) .root := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.message msg dir)
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature
+    (.message alphabet msg dir)
     .root .root env TypeLabel.silent
     (TypeOfferSummary.mk {(msg, dir)} ∅) hSymbol]
   refine ⟨
@@ -317,16 +335,18 @@ lemma compileType_message_wait_edge
 
 /-- Proves that compiled message has the final-state non-clock idle edge. -/
 lemma compileType_message_final_edge
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir)
     {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature (.message msg dir)).HasEdge .final env
+    (compileType signature (.message alphabet msg dir)).HasEdge .final env
       TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.message msg dir)
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature
+    (.message alphabet msg dir)
     .final .final env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
   refine ⟨
     { source := .final
@@ -340,10 +360,12 @@ lemma compileType_message_final_edge
 
 /-- Proves that every compiled message edge is fire, wait, or final idle. -/
 lemma compileType_message_edge_cases
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir)
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {current future : Finset BareMessage}
-    (hEdge : (compileType signature (.message msg dir)).HasEdge source env label
+    (hEdge : (compileType signature (.message alphabet msg dir)).HasEdge
+      source env label
       (TypeOfferSummary.mk current future) target) :
     (source = .root ∧ target = .final ∧
         label = TypeLabel.message msg dir ∧ current = {(msg, dir)} ∧
@@ -355,10 +377,11 @@ lemma compileType_message_edge_cases
         current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
 
   classical
-  have hSymbol := compileType_hasEdge_symbol_mem signature (.message msg dir)
+  have hSymbol := compileType_hasEdge_symbol_mem signature
+    (.message alphabet msg dir)
     hEdge
   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-    (.message msg dir) source target env label
+    (.message alphabet msg dir) source target env label
     (TypeOfferSummary.mk current future) hSymbol).mp hEdge
   rcases hResolved with ⟨edge, hPending, hSource, hEnv, hLabel,
     hCurrent, hFuture, hTarget⟩
@@ -391,15 +414,16 @@ lemma compileType_message_edge_cases
 
 /-- Proves that compiled `#` has the clock edge in a clock environment. -/
 lemma compileType_tock_action_edge
-    (signature : TypeAlphabet) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = true)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.tock
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature .tock).HasEdge .root env TypeLabel.tock
+    (compileType signature (.tock alphabet)).HasEdge .root env TypeLabel.tock
       (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature .tock
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.tock alphabet)
     .root .final env TypeLabel.tock (TypeOfferSummary.mk ∅ ∅) hSymbol]
   refine ⟨
     { source := .root
@@ -415,15 +439,16 @@ lemma compileType_tock_action_edge
 
 /-- Proves that compiled `#` has the non-clock waiting edge. -/
 lemma compileType_tock_wait_edge
-    (signature : TypeAlphabet) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature .tock).HasEdge .root env TypeLabel.silent
+    (compileType signature (.tock alphabet)).HasEdge .root env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .root := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature .tock
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.tock alphabet)
     .root .root env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
   refine ⟨
     { source := .root
@@ -439,15 +464,16 @@ lemma compileType_tock_wait_edge
 
 /-- Proves that compiled `#` has the final-state non-clock idle edge. -/
 lemma compileType_tock_final_edge
-    (signature : TypeAlphabet) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature .tock).HasEdge .final env TypeLabel.silent
+    (compileType signature (.tock alphabet)).HasEdge .final env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature .tock
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.tock alphabet)
     .final .final env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
   refine ⟨
     { source := .final
@@ -461,10 +487,10 @@ lemma compileType_tock_final_edge
 
 /-- Proves that every compiled `#` edge is clock fire, non-clock wait, or final idle. -/
 lemma compileType_tock_edge_cases
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {current future : Finset BareMessage}
-    (hEdge : (compileType signature .tock).HasEdge source env label
+    (hEdge : (compileType signature (.tock alphabet)).HasEdge source env label
       (TypeOfferSummary.mk current future) target) :
     (source = .root ∧ target = .final ∧ label = TypeLabel.tock ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = true) ∨
@@ -473,9 +499,10 @@ lemma compileType_tock_edge_cases
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   classical
-  have hSymbol := compileType_hasEdge_symbol_mem signature .tock hEdge
+  have hSymbol := compileType_hasEdge_symbol_mem signature (.tock alphabet) hEdge
   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-    .tock source target env label (TypeOfferSummary.mk current future)
+    (.tock alphabet) source target env label
+    (TypeOfferSummary.mk current future)
     hSymbol).mp hEdge
   rcases hResolved with ⟨edge, hPending, hSource, hEnv, hLabel,
     hCurrent, hFuture, hTarget⟩
@@ -511,15 +538,18 @@ lemma compileType_tock_edge_cases
 future offers: its only edge is its own idle self-loop, whose future field is
 genuinely `.explicit ∅`, so there is nothing to reference. -/
 lemma computeFutureOf_progress_final
-    (signature : TypeAlphabet) (pid : ProcId) :
-    computeFutureOf signature (.progress pid) .final = ∅ := by
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet} (pid : ProcId) :
+    computeFutureOf signature (.progress alphabet pid) .final = ∅ := by
   classical
-  show computeFutureOfFuel signature (typeCompilationFuel (.progress pid))
-    (.progress pid) .final = ∅
+  show computeFutureOfFuel signature
+    (typeCompilationFuel (.progress alphabet pid))
+    (.progress alphabet pid) .final = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
   have hReferences :
-      ({ states := (compileTypeFuel signature 1 (.progress pid)).states,
-          edges := (compileTypeFuel signature 1 (.progress pid)).edges } :
+      ({ states := (compileTypeFuel signature 1
+            (.progress alphabet pid)).states,
+          edges := (compileTypeFuel signature 1
+            (.progress alphabet pid)).edges } :
         PendingAutomaton).referencedStates .final = ∅ := by
     simp only [PendingAutomaton.referencedStates, typeCompilationFuel, compileTypeFuel,
       finishAutomatonFragment, Finset.mem_filter, Finset.mem_union, Finset.mem_image]
@@ -534,7 +564,8 @@ lemma computeFutureOf_progress_final
   rw [PendingAutomaton.futureReachable_eq_singleton_of_referencedStates_eq_empty _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
-      stateProductInfo (.progress pid) TypeAutomatonState.final = none := by
+      stateProductInfo (.progress alphabet pid)
+        TypeAutomatonState.final = none := by
     simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   rw [hNoProduct]
   simp only [Finset.union_empty]
@@ -550,14 +581,16 @@ lemma computeFutureOf_progress_final
 
 /-- Proves that compiled progress has the root-to-final progress edge. -/
 lemma compileType_progress_action_edge
-    (signature : TypeAlphabet) (pid : ProcId) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (pid : ProcId) {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.progress pid)
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature (.progress pid)).HasEdge .root env
+    (compileType signature (.progress alphabet pid)).HasEdge .root env
       (TypeLabel.progress pid) (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.progress pid)
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature
+    (.progress alphabet pid)
     .root .final env (TypeLabel.progress pid) (TypeOfferSummary.mk ∅ ∅)
     hSymbol]
   refine ⟨
@@ -573,15 +606,17 @@ lemma compileType_progress_action_edge
 
 /-- Proves that compiled progress has the final-state non-clock idle edge. -/
 lemma compileType_progress_final_edge
-    (signature : TypeAlphabet) (pid : ProcId) {env : TypeEnvironment}
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (pid : ProcId) {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
     (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
       (TypeOfferSummary.mk ∅ ∅) ∈ signature.transitionAlphabet) :
-    (compileType signature (.progress pid)).HasEdge .final env
+    (compileType signature (.progress alphabet pid)).HasEdge .final env
       TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) .final := by
   classical
-  rw [compileType_hasEdge_iff_hasResolvedEdge signature (.progress pid)
+  rw [compileType_hasEdge_iff_hasResolvedEdge signature
+    (.progress alphabet pid)
     .final .final env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅)
     hSymbol]
   refine ⟨
@@ -596,20 +631,22 @@ lemma compileType_progress_final_edge
 
 /-- Proves that every compiled progress edge is progress fire or final idle. -/
 lemma compileType_progress_edge_cases
-    (signature : TypeAlphabet) (pid : ProcId)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet} (pid : ProcId)
     {source target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {current future : Finset BareMessage}
-    (hEdge : (compileType signature (.progress pid)).HasEdge source env label
+    (hEdge : (compileType signature (.progress alphabet pid)).HasEdge
+      source env label
       (TypeOfferSummary.mk current future) target) :
     (source = .root ∧ target = .final ∧ label = TypeLabel.progress pid ∧
         current = ∅ ∧ future = ∅) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   classical
-  have hSymbol := compileType_hasEdge_symbol_mem signature (.progress pid)
+  have hSymbol := compileType_hasEdge_symbol_mem signature
+    (.progress alphabet pid)
     hEdge
   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-    (.progress pid) source target env label
+    (.progress alphabet pid) source target env label
     (TypeOfferSummary.mk current future) hSymbol).mp hEdge
   rcases hResolved with ⟨edge, hPending, hSource, hEnv, hLabel,
     hCurrent, hFuture, hTarget⟩
@@ -634,150 +671,137 @@ lemma compileType_progress_edge_cases
 
 /-- Proves that any decorated message fire step from `a` targets `skip`. -/
 lemma decorated_message_action_target
-    {env : TypeEnvironment} {msg : MessageId} {dir : MessageDir}
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {msg : MessageId} {dir : MessageDir}
     {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.message msg dir)
+    (hStep : DecoratedTypeTransition env (.message alphabet msg dir)
       (TypeLabel.message msg dir) offers target) :
-    target = .skip := by
+    target = .skip alphabet := by
   generalize hLabelEq : TypeLabel.message msg dir = actualLabel at hStep
   cases hStep.1 <;> simp [TypeLabel.message, TypeLabel.silent] at hLabelEq ⊢
 
 /-- Proves that any decorated message wait step from `a` stays at `a`. -/
 lemma decorated_message_wait_target
-    {env : TypeEnvironment} {msg : MessageId} {dir : MessageDir}
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {msg : MessageId} {dir : MessageDir}
     {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.message msg dir)
+    (hStep : DecoratedTypeTransition env (.message alphabet msg dir)
       TypeLabel.silent offers target) :
-    target = .message msg dir := by
+    target = .message alphabet msg dir := by
   generalize hLabelEq : TypeLabel.silent = actualLabel at hStep
   cases hStep.1 <;> simp [TypeLabel.message, TypeLabel.silent] at hLabelEq ⊢
 
 /-- Proves that any decorated step from `skip` targets `skip`. -/
 lemma decorated_skip_target
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {label : TypeLabel} {offers : TypeOfferSummary}
     {target : PactType}
-    (hStep : DecoratedTypeTransition env .skip label offers target) :
-    target = .skip := by
+    (hStep : DecoratedTypeTransition env (.skip alphabet) label offers target) :
+    target = .skip alphabet := by
   generalize hLabelEq : label = actualLabel at hStep
   cases hStep.1
   simp_all
 
 /-- Proves that any decorated clock step from `#` targets `skip`. -/
 lemma decorated_tock_action_target
-    {env : TypeEnvironment} {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env .tock TypeLabel.tock offers target) :
-    target = .skip := by
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {offers : TypeOfferSummary} {target : PactType}
+    (hStep : DecoratedTypeTransition env (.tock alphabet) TypeLabel.tock
+      offers target) :
+    target = .skip alphabet := by
   generalize hLabelEq : TypeLabel.tock = actualLabel at hStep
   cases hStep.1 <;> simp [TypeLabel.silent] at hLabelEq ⊢
 
 /-- Proves that any decorated non-clock wait step from `#` stays at `#`. -/
 lemma decorated_tock_wait_target
-    {env : TypeEnvironment} {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env .tock TypeLabel.silent offers target) :
-    target = .tock := by
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {offers : TypeOfferSummary} {target : PactType}
+    (hStep : DecoratedTypeTransition env (.tock alphabet) TypeLabel.silent
+      offers target) :
+    target = .tock alphabet := by
   generalize hLabelEq : TypeLabel.silent = actualLabel at hStep
   cases hStep.1 <;> simp [TypeLabel.silent] at hLabelEq ⊢
 
 /-- Proves that any decorated progress step from `$t` targets `skip`. -/
 lemma decorated_progress_target
-    {env : TypeEnvironment} {pid : ProcId} {offers : TypeOfferSummary}
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {pid : ProcId} {offers : TypeOfferSummary}
     {target : PactType}
-    (hStep : DecoratedTypeTransition env (.progress pid)
+    (hStep : DecoratedTypeTransition env (.progress alphabet pid)
       (TypeLabel.progress pid) offers target) :
-    target = .skip := by
+    target = .skip alphabet := by
   generalize hLabelEq : TypeLabel.progress pid = actualLabel at hStep
   cases hStep.1
   all_goals simp [TypeLabel.progress] at hLabelEq ⊢
-
-/-- Defines the `skip` relation shape as exactly `(skip, root)`. -/
-def skipRelationShape (entry : PactType × TypeAutomatonState) :
-    Prop :=
-  entry.1 = .skip ∧ entry.2 = .root
 
 /-- Proves that any generated `skip` relation member has the `skip` relation
 shape. Provenance-directed relation (Task 4): `buildRelationSetCoreFuel`'s
 `.skip` case is the literal singleton `{(.skip, .root)}`, so this is now a
 direct `Finset` unfold, no worklist-closure induction needed. -/
 lemma relationMembership_skip_cases
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet .skip (compileType signature .skip))
+        (buildRelationSet (.skip alphabet)
+          (compileType signature (.skip alphabet)))
         residual state) :
-    residual = .skip ∧ state = .root := by
+    residual = .skip alphabet ∧ state = .root := by
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_singleton,
     Prod.mk.injEq] at hRelated
   exact hRelated
 
-/-- Defines the message relation shape as `(a, root)` or `(skip, final)`. -/
-def messageRelationShape
-    (msg : MessageId) (dir : MessageDir)
-    (entry : PactType × TypeAutomatonState) : Prop :=
-  (entry.1 = .message msg dir ∧ entry.2 = .root) ∨
-    (entry.1 = .skip ∧ entry.2 = .final)
-
 /-- Proves that any generated message relation member is one of the two PDF
 pairs. See `relationMembership_skip_cases`'s doc comment for the
 Task-4-enabled proof shape. -/
 lemma relationMembership_message_cases
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (msg : MessageId) (dir : MessageDir)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.message msg dir)
-          (compileType signature (.message msg dir)))
+        (buildRelationSet (.message alphabet msg dir)
+          (compileType signature (.message alphabet msg dir)))
         residual state) :
-    (residual = .message msg dir ∧ state = .root) ∨
-      (residual = .skip ∧ state = .final) := by
+    (residual = .message alphabet msg dir ∧ state = .root) ∨
+      (residual = .skip alphabet ∧ state = .final) := by
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated
   exact hRelated
-
-/-- Defines the `#` relation shape as `(#, root)` or `(skip, final)`. -/
-def tockRelationShape
-    (entry : PactType × TypeAutomatonState) : Prop :=
-  (entry.1 = .tock ∧ entry.2 = .root) ∨
-    (entry.1 = .skip ∧ entry.2 = .final)
 
 /-- Proves that any generated `#` relation member is one of the two PDF
 pairs. See `relationMembership_skip_cases`'s doc comment for the
 Task-4-enabled proof shape. -/
 lemma relationMembership_tock_cases
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet .tock (compileType signature .tock))
+        (buildRelationSet (.tock alphabet)
+          (compileType signature (.tock alphabet)))
         residual state) :
-    (residual = .tock ∧ state = .root) ∨
-      (residual = .skip ∧ state = .final) := by
+    (residual = .tock alphabet ∧ state = .root) ∨
+      (residual = .skip alphabet ∧ state = .final) := by
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated
   exact hRelated
 
-/-- Defines the progress relation shape as `($t, root)` or `(skip, final)`. -/
-def progressRelationShape
-    (pid : ProcId) (entry : PactType × TypeAutomatonState) : Prop :=
-  (entry.1 = .progress pid ∧ entry.2 = .root) ∨
-    (entry.1 = .skip ∧ entry.2 = .final)
-
 /-- Proves that any generated progress relation member is one of the two PDF
 pairs. See `relationMembership_skip_cases`'s doc comment for the
 Task-4-enabled proof shape. -/
 lemma relationMembership_progress_cases
-    (signature : TypeAlphabet) (pid : ProcId)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (pid : ProcId)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.progress pid)
-          (compileType signature (.progress pid)))
+        (buildRelationSet (.progress alphabet pid)
+          (compileType signature (.progress alphabet pid)))
         residual state) :
-    (residual = .progress pid ∧ state = .root) ∨
-      (residual = .skip ∧ state = .final) := by
+    (residual = .progress alphabet pid ∧ state = .root) ∨
+      (residual = .skip alphabet ∧ state = .final) := by
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel, Finset.mem_insert,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated

@@ -85,61 +85,65 @@ lemma relationMembership_binaryChoice_right
   exact hRelated
 
 lemma relationMembership_choice_left
-    (signature : TypeAlphabet) (left right residual : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right residual : PactType)
     {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet left (compileType signature left)) residual state) :
     relationMembership
-      (buildRelationSet (.choice left right)
-        (compileType signature (.choice left right)))
+      (buildRelationSet (.choice alphabet left right)
+        (compileType signature (.choice alphabet left right)))
       residual (.child 0 state) := by
-  apply relationMembership_binaryChoice_left signature (.choice left right)
+  apply relationMembership_binaryChoice_left signature
+    (.choice alphabet left right)
     left right residual rfl
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
 
 lemma relationMembership_choice_right
-    (signature : TypeAlphabet) (left right residual : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right residual : PactType)
     {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet right (compileType signature right)) residual state) :
     relationMembership
-      (buildRelationSet (.choice left right)
-        (compileType signature (.choice left right)))
+      (buildRelationSet (.choice alphabet left right)
+        (compileType signature (.choice alphabet left right)))
       residual (.child 1 state) := by
-  apply relationMembership_binaryChoice_right signature (.choice left right)
+  apply relationMembership_binaryChoice_right signature
+    (.choice alphabet left right)
     left right residual rfl
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
 
 lemma relationMembership_fairChoice_left
-    (signature : TypeAlphabet) (bid : BranchId)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (bid : BranchId)
     (left right residual : PactType) {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet left (compileType signature left)) residual state) :
     relationMembership
-      (buildRelationSet (.fairChoice bid left right)
-        (compileType signature (.fairChoice bid left right)))
+      (buildRelationSet (.fairChoice alphabet bid left right)
+        (compileType signature (.fairChoice alphabet bid left right)))
       residual (.child 0 state) := by
   apply relationMembership_binaryChoice_left signature
-    (.fairChoice bid left right) left right residual rfl
+    (.fairChoice alphabet bid left right) left right residual rfl
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
 
 lemma relationMembership_fairChoice_right
-    (signature : TypeAlphabet) (bid : BranchId)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (bid : BranchId)
     (left right residual : PactType) {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet right (compileType signature right)) residual state) :
     relationMembership
-      (buildRelationSet (.fairChoice bid left right)
-        (compileType signature (.fairChoice bid left right)))
+      (buildRelationSet (.fairChoice alphabet bid left right)
+        (compileType signature (.fairChoice alphabet bid left right)))
       residual (.child 1 state) := by
   apply relationMembership_binaryChoice_right signature
-    (.fairChoice bid left right) left right residual rfl
+    (.fairChoice alphabet bid left right) left right residual rfl
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
@@ -175,38 +179,41 @@ lemma relationMembership_binaryChoice_cases
 
 /-- Proves every related choice pair has the binary-choice shape. -/
 lemma relationMembership_choice_cases
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : PactType)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.choice left right)
-          (compileType signature (.choice left right)))
+        (buildRelationSet (.choice alphabet left right)
+          (compileType signature (.choice alphabet left right)))
         residual state) :
-    binaryChoiceRelationShape signature (.choice left right) left right
+    binaryChoiceRelationShape signature (.choice alphabet left right) left right
       (residual, state) := by
-  have hFuelEq : typeCompilationFuel (.choice left right) =
+  have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
   exact relationMembership_binaryChoice_cases signature
-    (.choice left right) left right rfl hFuelEq hRelated
+    (.choice alphabet left right) left right rfl hFuelEq hRelated
 
 /-- Proves every related fair-choice pair has the binary-choice shape. -/
 lemma relationMembership_fairChoice_cases
-    (signature : TypeAlphabet) (bid : BranchId) (left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (bid : BranchId) (left right : PactType)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
-        (buildRelationSet (.fairChoice bid left right)
-          (compileType signature (.fairChoice bid left right)))
+        (buildRelationSet (.fairChoice alphabet bid left right)
+          (compileType signature (.fairChoice alphabet bid left right)))
         residual state) :
-    binaryChoiceRelationShape signature (.fairChoice bid left right) left
+    binaryChoiceRelationShape signature (.fairChoice alphabet bid left right) left
       right (residual, state) := by
-  have hFuelEq : typeCompilationFuel (.fairChoice bid left right) =
+  have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
   have hWhole :
-      compileTypeFuel signature (typeCompilationFuel (.fairChoice bid left right))
-        (.fairChoice bid left right) =
+      compileTypeFuel signature
+        (typeCompilationFuel (.fairChoice alphabet bid left right))
+        (.fairChoice alphabet bid left right) =
         buildChoiceAutomaton signature
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
@@ -226,7 +233,7 @@ lemma relationMembership_fairChoice_cases
     rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
       compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
   exact relationMembership_binaryChoice_cases signature
-    (.fairChoice bid left right) left right rfl hFuelEq hRelated
+    (.fairChoice alphabet bid left right) left right rfl hFuelEq hRelated
 
 
 end

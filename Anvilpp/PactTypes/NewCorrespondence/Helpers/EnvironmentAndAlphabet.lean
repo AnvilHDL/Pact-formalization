@@ -275,8 +275,8 @@ theorem subset_sdiff_union_self {α : Type} [DecidableEq α]
 
 /-- Proves that the left residual's future menu is contained in the enclosing sequence menu. -/
 theorem typeFutureOffers_subset_sequence_left
-    (left right : PactType) :
-    typeFutureOffers left ⊆ typeFutureOffers (.seq left right) := by
+    (alphabet : PactTypeAlphabet) (left right : PactType) :
+    typeFutureOffers left ⊆ typeFutureOffers (.seq alphabet left right) := by
   intro action hAction
   rw [typeFutureOffers_sequence]
   by_cases hComplete : left.CanCompleteBeforeTock
@@ -285,11 +285,12 @@ theorem typeFutureOffers_subset_sequence_left
 
 /-- Proves that a child sequence target menu is covered by the parent sequence offer envelope. -/
 theorem typeFutureOffers_subset_sequence_left_sdiff_union
-    (left right : PactType) (current : Finset BareMessage) :
+    (alphabet : PactTypeAlphabet) (left right : PactType)
+    (current : Finset BareMessage) :
     typeFutureOffers left ⊆
-      (typeFutureOffers (.seq left right) \ current) ∪ current :=
-  (typeFutureOffers_subset_sequence_left left right).trans
-    (subset_sdiff_union_self (typeFutureOffers (.seq left right)) current)
+      (typeFutureOffers (.seq alphabet left right) \ current) ∪ current :=
+  (typeFutureOffers_subset_sequence_left alphabet left right).trans
+    (subset_sdiff_union_self (typeFutureOffers (.seq alphabet left right)) current)
 
 
 end
