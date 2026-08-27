@@ -59,7 +59,8 @@ theorem correspondence_par_stepIff
               (leftCurrent := leftCurrent) (leftFuture := leftFuture)
               (rightCurrent := rightCurrent) (rightFuture := rightFuture)
               signature residualLeft residualRight interface hWF hInterface
-              hLocal1 hLocal2 hSync hLabelEq
+              (hLocal1.toLocalTypeEnvironment hRightStep.2)
+              (hLocal2.toLocalTypeEnvironment hLeftStep.2) hSync hLabelEq
               (transitionAlphabetFor_subset_transitionAlphabet signature alphabet
                 (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol))
           have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
@@ -112,7 +113,8 @@ theorem correspondence_par_stepIff
               (leftCurrent := leftCurrent) (leftFuture := leftFuture)
               (rightCurrent := rightCurrent) (rightFuture := rightFuture)
               signature residualLeft residualRight interface hWF hInterface
-              hLocal1 hLocal2 hSync hLabelEq
+              (hLocal1.toLocalTypeEnvironment hRightStep.2)
+              (hLocal2.toLocalTypeEnvironment hLeftStep.2) hSync hLabelEq
               (transitionAlphabetFor_subset_transitionAlphabet signature alphabet
                 (hCurrentEq ▸ hFutureEq ▸ hSignatureSymbol))
           have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
