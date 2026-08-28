@@ -13,7 +13,13 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
     (signature : TypeAlphabet) :
     ∀ (alphabet : PactTypeAlphabet)
       (branches : List (BareMessage × PactType)),
-      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
+      alphabet.WellFormed →
+      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
+        branch.2.AlphabetWellFormed ∧
+        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
+      List.Pairwise (fun b1 b2 => Disjoint
+        ({b1.1} ∪ PactType.MessageActions b1.2)
+        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         ∀ branchAlphabet,
           StepIffStatement signature
@@ -23,12 +29,13 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
   intro alphabet branches
   induction branches generalizing alphabet with
   | nil =>
-      intro _ _
+      intro _ _ _ _
       change StepIffStatement signature (.skip alphabet)
       exact correspondence_skip_stepIff signature alphabet
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
-      intro hCoherent hBranchesIH
+      intro hAlphaWF hBranchesWF hPairwise hBranchesIH
+      have hHeadWF := hBranchesWF (action, processType) (by simp)
       cases rest with
       | nil =>
           have hProcessIH : StepIffStatement signature
@@ -54,6 +61,16 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
           let leftAlphabet :=
             PactTypeAlphabet.branchPart alphabet (action, processType)
           let rightAlphabet := PactTypeAlphabet.remove alphabet leftAlphabet
+          have hLeftAlphaWF : leftAlphabet.WellFormed :=
+            PactTypeAlphabet.branchPart_wellFormed hAlphaWF (action, processType)
+          have hRightAlphaWF : rightAlphabet.WellFormed :=
+            PactTypeAlphabet.remove_wellFormed hAlphaWF
+          have hHeadAction : action ∈ leftAlphabet.actions := by
+            simp only [leftAlphabet, PactTypeAlphabet.branchPart, Finset.mem_inter]
+            exact ⟨hHeadWF.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
+          have hLeftBranchIH : StepIffStatement signature
+              (processType.reannotate leftAlphabet) :=
+            hBranchesIH action processType (by simp) leftAlphabet
           have hLeftIH : StepIffStatement signature
               (singletonTypeXOfferAt leftAlphabet (action, processType)) := by
             change StepIffStatement signature
@@ -70,25 +87,35 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
                 intro a t hMem
                 have hEq := List.mem_singleton.mp hMem
                 cases hEq
-                have hBranchIH :=
-                  hBranchesIH action processType (by simp) leftAlphabet
-                unfold StepIffStatement at hBranchIH ⊢
+                unfold StepIffStatement at hLeftBranchIH ⊢
                 intro residual residual' state env label offers hRelated hSymbol
-                exact hBranchIH hRelated hSymbol)
+                exact hLeftBranchIH hRelated hSymbol)
+          rw [List.pairwise_cons] at hPairwise
+          obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
+          have hRestWF : ∀ item ∈ next :: tail, item.1 ∈ rightAlphabet.actions ∧
+              item.2.AlphabetWellFormed ∧
+              ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet item.2 :=
+            fun item hItem =>
+              have hItemBranches := hBranchesWF item (List.mem_cons_of_mem _ hItem)
+              ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
+                  (hHeadDisjoint item hItem),
+                hItemBranches.2.1, hItemBranches.2.2⟩
           have hRightIH : StepIffStatement signature
               (parallelTypeBranchesWithin rightAlphabet (next :: tail)) :=
-            ih rightAlphabet
-              (fun item hItem => hCoherent item (by simp [hItem]))
+            ih rightAlphabet hRightAlphaWF hRestWF hTailPairwise
               (fun a t hMem branchAlphabet =>
                 hBranchesIH a t (by simp [hMem]) branchAlphabet)
-          have hWholeCoherent :
-              (.par alphabet
-                (singletonTypeXOfferAt leftAlphabet (action, processType))
-                (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅ :
-                PactType).AlphabetCoherent := by
-            simpa [parallelTypeBranchesWithin, leftAlphabet, rightAlphabet] using
-              parallelTypeBranchesWithin_alphabet_coherent alphabet
-                ((action, processType) :: next :: tail) hCoherent
+          have hLeftWF : (singletonTypeXOfferAt leftAlphabet
+              (action, processType)).AlphabetWellFormed :=
+            singletonTypeXOfferAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
+              hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+          have hRightWF : (parallelTypeBranchesWithin rightAlphabet
+              (next :: tail)).AlphabetWellFormed :=
+            parallelTypeBranchesWithin_alphabet_wellFormed rightAlphabet hRightAlphaWF
+              (next :: tail) hTailPairwise hRestWF
+          have hCompatible :=
+            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
+              (action, processType)
           have hParIH : StepIffStatement signature
               (.par alphabet
                 (singletonTypeXOfferAt leftAlphabet (action, processType))
@@ -101,7 +128,14 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
                 simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
                   using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
                     alphabet (action, processType))
-              hWholeCoherent hLeftIH hRightIH
+              (by simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt] using hCompatible)
+              hLeftWF hRightWF
+              (PactType.alphabetCoherent_of_wellFormed _
+                (by
+                  simp only [PactType.AlphabetWellFormed]
+                  refine ⟨hAlphaWF, ?_, hLeftWF, hRightWF⟩
+                  simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt] using hCompatible))
+              hLeftIH hRightIH
           change StepIffStatement signature
             (.par alphabet
               (singletonTypeXOfferAt leftAlphabet (action, processType))
@@ -112,7 +146,13 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
 theorem correspondence_parallelTypeBranches_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
-    (hAlphabetBranches : PactType.BranchesAlphabetCoherent alphabet branches)
+    (hAlphaWF : alphabet.WellFormed)
+    (hAlphabetBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
+      ({b1.1} ∪ PactType.MessageActions b1.2)
+      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
+    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
+      PactType.ReannotationSafe targetAlphabet branch.2)
     (hBranchesIH : ∀ action branchType,
       (action, branchType) ∈ branches → ∀ branchAlphabet,
         StepIffStatement signature (branchType.reannotate branchAlphabet)) :
@@ -122,13 +162,20 @@ theorem correspondence_parallelTypeBranches_stepIff
       change StepIffStatement signature (.skip PactTypeAlphabet.empty)
       exact correspondence_skip_stepIff signature PactTypeAlphabet.empty
   | cons branch rest =>
+      rcases branch with ⟨action, branchType⟩
+      have hBranchAlphaEq : branchType.alphabet = alphabet :=
+        PactType.branch_alphabet_eq_of_mem (branch := (action, branchType))
+          hAlphabetBranches (by simp)
       change StepIffStatement signature
-        (parallelTypeBranchesWithin branch.2.alphabet (branch :: rest))
+        (parallelTypeBranchesWithin branchType.alphabet ((action, branchType) :: rest))
+      rw [hBranchAlphaEq]
       exact correspondence_parallelTypeBranchesWithin_stepIff signature
-        branch.2.alphabet (branch :: rest)
-        (fun item hItem =>
-          (branchesAlphabetCoherent_of_mem hAlphabetBranches hItem).2)
-        hBranchesIH
+        alphabet ((action, branchType) :: rest) hAlphaWF
+        (fun branch hMem =>
+          ⟨branch_action_mem_fixedAlphabet_of_mem hAlphabetBranches hMem,
+            branch_body_alphabetWellFormed_of_mem hAlphabetBranches hMem,
+            hSafe branch hMem⟩)
+        hPairwise hBranchesIH
 
 /-- Step correspondence for the generated branch product after one branch is
 selected. -/
@@ -137,7 +184,13 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
     ∀ (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
       (branches : List (BareMessage × PactType)),
       selected ∈ branches →
-      (∀ branch ∈ branches, branch.2.AlphabetCoherent) →
+      alphabet.WellFormed →
+      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
+        branch.2.AlphabetWellFormed ∧
+        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
+      List.Pairwise (fun b1 b2 => Disjoint
+        ({b1.1} ∪ PactType.MessageActions b1.2)
+        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         ∀ branchAlphabet,
           StepIffStatement signature
@@ -151,11 +204,15 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
       cases hMem
   | cons branch rest ih =>
       rcases branch with ⟨action, processType⟩
-      intro hSelected hCoherent hBranchesIH
+      intro hSelected hAlphaWF hBranchesWF hPairwise hBranchesIH
+      have hHeadWF := hBranchesWF (action, processType) (by simp)
       cases rest with
       | nil =>
           have hEq : selected = (action, processType) := by simpa using hSelected
           subst selected
+          have hHeadBranchIH : StepIffStatement signature
+              (processType.reannotate alphabet) :=
+            hBranchesIH action processType (by simp) alphabet
           have hSeq : StepIffStatement signature
               (.seq alphabet (.message alphabet action.1 action.2)
                 (processType.reannotate alphabet)) :=
@@ -164,14 +221,38 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
               (processType.reannotate alphabet) rfl
               (PactType.reannotate_alphabet alphabet processType)
               (correspondence_message_stepIff signature alphabet action.1 action.2)
-              (hBranchesIH action processType (by simp) alphabet)
-          simp only [parallelTypeBranchesSelectingWithin, if_pos rfl]
+              hHeadBranchIH
+          change StepIffStatement signature
+            (if (action, processType) = (action, processType) then
+              selectedTypeBranchAt alphabet (action, processType)
+            else singletonTypeXOfferAt alphabet (action, processType))
+          rw [if_pos rfl]
           unfold selectedTypeBranchAt
           exact hSeq
       | cons next tail =>
           let leftAlphabet :=
             PactTypeAlphabet.branchPart alphabet (action, processType)
           let rightAlphabet := PactTypeAlphabet.remove alphabet leftAlphabet
+          have hLeftAlphaWF : leftAlphabet.WellFormed :=
+            PactTypeAlphabet.branchPart_wellFormed hAlphaWF (action, processType)
+          have hRightAlphaWF : rightAlphabet.WellFormed :=
+            PactTypeAlphabet.remove_wellFormed hAlphaWF
+          have hHeadAction : action ∈ leftAlphabet.actions := by
+            simp only [leftAlphabet, PactTypeAlphabet.branchPart, Finset.mem_inter]
+            exact ⟨hHeadWF.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
+          rw [List.pairwise_cons] at hPairwise
+          obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
+          have hCompatible :=
+            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
+              (action, processType)
+          have hRestWF : ∀ item ∈ next :: tail, item.1 ∈ rightAlphabet.actions ∧
+              item.2.AlphabetWellFormed ∧
+              ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet item.2 :=
+            fun item hItem =>
+              have hItemBranches := hBranchesWF item (List.mem_cons_of_mem _ hItem)
+              ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
+                  (hHeadDisjoint item hItem),
+                hItemBranches.2.1, hItemBranches.2.2⟩
           simp only [parallelTypeBranchesSelectingWithin]
           split
           next hHead =>
@@ -191,20 +272,17 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
             have hRightIH : StepIffStatement signature
                 (parallelTypeBranchesWithin rightAlphabet (next :: tail)) :=
               correspondence_parallelTypeBranchesWithin_stepIff signature
-                rightAlphabet (next :: tail)
-                (fun item hItem => hCoherent item (by simp [hItem]))
+                rightAlphabet (next :: tail) hRightAlphaWF hRestWF hTailPairwise
                 (fun a t hMem branchAlphabet =>
                   hBranchesIH a t (by simp [hMem]) branchAlphabet)
-            have hWholeCoherent :
-                (.par alphabet
-                  (selectedTypeBranchAt leftAlphabet (action, processType))
-                  (parallelTypeBranchesWithin rightAlphabet (next :: tail)) ∅ :
-                  PactType).AlphabetCoherent := by
-              simpa [parallelTypeBranchesSelectingWithin, leftAlphabet,
-                rightAlphabet] using
-                parallelTypeBranchesSelectingWithin_alphabet_coherent alphabet
-                  (action, processType) ((action, processType) :: next :: tail)
-                  hCoherent
+            have hLeftWF : (selectedTypeBranchAt leftAlphabet
+                (action, processType)).AlphabetWellFormed :=
+              selectedTypeBranchAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
+                hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+            have hRightWF : (parallelTypeBranchesWithin rightAlphabet
+                (next :: tail)).AlphabetWellFormed :=
+              parallelTypeBranchesWithin_alphabet_wellFormed rightAlphabet hRightAlphaWF
+                (next :: tail) hTailPairwise hRestWF
             have hParIH : StepIffStatement signature
                 (.par alphabet
                   (selectedTypeBranchAt leftAlphabet (action, processType))
@@ -217,7 +295,17 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                   simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
                     using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
                       alphabet (action, processType))
-                hWholeCoherent hLeftIH hRightIH
+                (by
+                  simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
+                    using hCompatible)
+                hLeftWF hRightWF
+                (PactType.alphabetCoherent_of_wellFormed _
+                  (by
+                    simp only [PactType.AlphabetWellFormed]
+                    refine ⟨hAlphaWF, ?_, hLeftWF, hRightWF⟩
+                    simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
+                      using hCompatible))
+                hLeftIH hRightIH
             change StepIffStatement signature
               (.par alphabet
                 (selectedTypeBranchAt leftAlphabet (action, processType))
@@ -225,7 +313,13 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
             exact hParIH
           next hHead =>
             have hTailMem : selected ∈ next :: tail := by
-              simpa [List.mem_cons, hHead] using hSelected
+              simp only [List.mem_cons] at hSelected
+              rcases hSelected with hSelected | hSelected
+              · exact absurd hSelected.symm hHead
+              · simp [List.mem_cons, hSelected]
+            have hLeftBranchIH : StepIffStatement signature
+                (processType.reannotate leftAlphabet) :=
+              hBranchesIH action processType (by simp) leftAlphabet
             have hLeftIH : StepIffStatement signature
                 (singletonTypeXOfferAt leftAlphabet (action, processType)) := by
               change StepIffStatement signature
@@ -242,27 +336,23 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                   intro a t hMem
                   have hEq := List.mem_singleton.mp hMem
                   cases hEq
-                  have hBranchIH :=
-                    hBranchesIH action processType (by simp) leftAlphabet
-                  unfold StepIffStatement at hBranchIH ⊢
+                  unfold StepIffStatement at hLeftBranchIH ⊢
                   intro residual residual' state env label offers hRelated hSymbol
-                  exact hBranchIH hRelated hSymbol)
+                  exact hLeftBranchIH hRelated hSymbol)
             have hRightIH : StepIffStatement signature
                 (parallelTypeBranchesSelectingWithin rightAlphabet selected
                   (next :: tail)) :=
-              ih rightAlphabet hTailMem
-                (fun item hItem => hCoherent item (by simp [hItem]))
+              ih rightAlphabet hTailMem hRightAlphaWF hRestWF hTailPairwise
                 (fun a t hMem branchAlphabet =>
                   hBranchesIH a t (by simp [hMem]) branchAlphabet)
-            have hWholeCoherent :
-                (.par alphabet
-                  (singletonTypeXOfferAt leftAlphabet (action, processType))
-                  (parallelTypeBranchesSelectingWithin rightAlphabet selected
-                    (next :: tail)) ∅ : PactType).AlphabetCoherent := by
-              simpa [parallelTypeBranchesSelectingWithin, hHead, leftAlphabet,
-                rightAlphabet] using
-                parallelTypeBranchesSelectingWithin_alphabet_coherent alphabet
-                  selected ((action, processType) :: next :: tail) hCoherent
+            have hLeftWF : (singletonTypeXOfferAt leftAlphabet
+                (action, processType)).AlphabetWellFormed :=
+              singletonTypeXOfferAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
+                hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+            have hRightWF : (parallelTypeBranchesSelectingWithin rightAlphabet selected
+                (next :: tail)).AlphabetWellFormed :=
+              parallelTypeBranchesSelectingWithin_alphabet_wellFormed rightAlphabet
+                hRightAlphaWF selected (next :: tail) hTailPairwise hRestWF
             have hParIH : StepIffStatement signature
                 (.par alphabet
                   (singletonTypeXOfferAt leftAlphabet (action, processType))
@@ -276,7 +366,17 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                   simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
                     using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
                       alphabet (action, processType))
-                hWholeCoherent hLeftIH hRightIH
+                (by
+                  simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
+                    using hCompatible)
+                hLeftWF hRightWF
+                (PactType.alphabetCoherent_of_wellFormed _
+                  (by
+                    simp only [PactType.AlphabetWellFormed]
+                    refine ⟨hAlphaWF, ?_, hLeftWF, hRightWF⟩
+                    simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
+                      using hCompatible))
+                hLeftIH hRightIH
             change StepIffStatement signature
               (.par alphabet
                 (singletonTypeXOfferAt leftAlphabet (action, processType))
@@ -288,7 +388,13 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
 theorem correspondence_parallelTypeBranchesSelecting_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
-    (hAlphabetBranches : PactType.BranchesAlphabetCoherent alphabet branches)
+    (hAlphaWF : alphabet.WellFormed)
+    (hAlphabetBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
+      ({b1.1} ∪ PactType.MessageActions b1.2)
+      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
+    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
+      PactType.ReannotationSafe targetAlphabet branch.2)
     (hBranchesIH : ∀ action branchType,
       (action, branchType) ∈ branches → ∀ branchAlphabet,
         StepIffStatement signature (branchType.reannotate branchAlphabet))
@@ -298,14 +404,21 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
   cases branches with
   | nil => cases hSelected
   | cons branch rest =>
+      rcases branch with ⟨action, branchType⟩
+      have hBranchAlphaEq : branchType.alphabet = alphabet :=
+        PactType.branch_alphabet_eq_of_mem (branch := (action, branchType))
+          hAlphabetBranches (by simp)
       change StepIffStatement signature
-        (parallelTypeBranchesSelectingWithin branch.2.alphabet selected
-          (branch :: rest))
+        (parallelTypeBranchesSelectingWithin branchType.alphabet selected
+          ((action, branchType) :: rest))
+      rw [hBranchAlphaEq]
       exact correspondence_parallelTypeBranchesSelectingWithin_stepIff signature
-        branch.2.alphabet selected (branch :: rest) hSelected
-        (fun item hItem =>
-          (branchesAlphabetCoherent_of_mem hAlphabetBranches hItem).2)
-        hBranchesIH
+        alphabet selected ((action, branchType) :: rest) hSelected hAlphaWF
+        (fun branch hMem =>
+          ⟨branch_action_mem_fixedAlphabet_of_mem hAlphabetBranches hMem,
+            branch_body_alphabetWellFormed_of_mem hAlphabetBranches hMem,
+            hSafe branch hMem⟩)
+        hPairwise hBranchesIH
 
 set_option maxHeartbeats 4000000 in
 /-- Step correspondence for conjunctive offer `⋀(τ0,B)`. -/
@@ -313,8 +426,14 @@ theorem correspondence_offer_stepIff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (elseType : PactType)
     (branches : List (BareMessage × PactType))
+    (hAlphaWF : alphabet.WellFormed)
     (hAlphabetBranches :
-      PactType.BranchesAlphabetCoherent alphabet branches)
+      PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
+      ({b1.1} ∪ PactType.MessageActions b1.2)
+      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
+    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
+      PactType.ReannotationSafe targetAlphabet branch.2)
     (hElseAlphabet : elseType.alphabet = alphabet)
     (hElseIH : StepIffStatement signature elseType)
     (hBranchesIH :
@@ -933,7 +1052,8 @@ theorem correspondence_offer_stepIff
     have hBranchIH : StepIffStatement signature
         (parallelTypeBranchesSelecting selected branches) :=
       correspondence_parallelTypeBranchesSelecting_stepIff signature alphabet
-        branches hAlphabetBranches hBranchesIH selected hSelectedMem
+        branches hAlphaWF hAlphabetBranches hPairwise hSafe hBranchesIH selected
+        hSelectedMem
     have hBranchSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈
         (compileType signature (parallelTypeBranchesSelecting selected branches)).alphabet := by
@@ -942,8 +1062,8 @@ theorem correspondence_offer_stepIff
           (parallelTypeBranchesSelecting selected branches).alphabet
       have hGeneratedAlphabet :
           (parallelTypeBranchesSelecting selected branches).alphabet = alphabet :=
-        (parallelTypeBranchesSelecting_alphabet_coherent hSelectedMem
-          hAlphabetBranches).1
+        (parallelTypeBranchesSelecting_alphabet_wellFormed hAlphaWF hSelectedMem
+          hAlphabetBranches hPairwise hSafe).1
       simpa [hGeneratedAlphabet] using hSignatureSymbol
     constructor
     · intro hStep
@@ -1083,4 +1203,3 @@ theorem correspondence_offer_stepIff
 end
 
 end Pact
-

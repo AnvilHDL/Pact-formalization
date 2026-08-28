@@ -382,53 +382,7 @@ mutual
           (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
           (hideTypeOffers interface (leftFuture ∪ rightFuture))
 
-  /-- The erased sibling-aware local-environment relation. -/
-  @[aesop unsafe]
-  inductive LocalTypeEnvironment :
-      TypeEnvironment → Interface → PactType → TypeEnvironment → PactType →
-        TypeLabel → TypeEnvironment → Prop where
-    | clock (outer : TypeEnvironment) (interface : Interface)
-        (localType sibling : PactType) (label : TypeLabel) :
-        outer.clock = true →
-        LocalTypeEnvironment outer interface localType TypeEnvironment.tock
-          sibling label TypeEnvironment.tock
-    | ordinary (outer siblingEnv localEnv : TypeEnvironment)
-        (interface : Interface) (localType sibling siblingTarget : PactType)
-        (label : TypeLabel) (current future : Finset BareMessage) :
-        outer.clock = false →
-        siblingEnv.clock = false →
-        TypeOffers siblingEnv sibling label siblingTarget current future →
-        localEnv.clock = false →
-        localEnv.immediate =
-          projectTypeEnvironmentOffers localType.alphabet outer.immediate ∪
-            restrictTypeOffers interface current →
-        localEnv.future =
-          (projectTypeEnvironmentOffers localType.alphabet outer.future ∪
-            restrictTypeOffers interface future) \ localEnv.immediate →
-        LocalTypeEnvironment outer interface localType siblingEnv sibling label
-          localEnv
 end
-
-theorem LocalTypeOfferEnvironment.toLocalTypeEnvironment
-    {outer siblingEnv localEnv : TypeEnvironment} {interface : Interface}
-    {localType sibling siblingTarget : PactType} {label : TypeLabel}
-    {current future : Finset BareMessage}
-    (hLocal :
-      LocalTypeOfferEnvironment outer interface localType siblingEnv current
-        future localEnv)
-    (hSibling :
-      TypeOffers siblingEnv sibling label siblingTarget current future) :
-    LocalTypeEnvironment outer interface localType siblingEnv sibling label
-      localEnv := by
-  cases hLocal with
-  | clock outer interface localType current hClock =>
-      exact LocalTypeEnvironment.clock outer interface localType sibling label
-        hClock
-  | ordinary outer siblingEnv localEnv interface localType current
-      hOuterClock hSiblingClock hLocalClock hImmediate hFuture =>
-      exact LocalTypeEnvironment.ordinary outer siblingEnv localEnv interface
-        localType sibling siblingTarget label current future hOuterClock
-        hSiblingClock hSibling hLocalClock hImmediate hFuture
 
 end
 

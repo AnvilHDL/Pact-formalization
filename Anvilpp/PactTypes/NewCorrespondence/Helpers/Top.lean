@@ -5,6 +5,5 @@ import Anvilpp.PactTypes.NewCorrespondence.Helpers.ExclusiveOffer
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.FutureClosure
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.MainHelpers
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.RecursionFoundations
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.RecursionRelations
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.Sequence
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.Variables

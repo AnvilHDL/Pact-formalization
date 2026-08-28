@@ -79,6 +79,51 @@ namespace PactTypeAlphabet
         _ = fair ∩ branch.2.FairChoiceIds ∪
             fair \ branch.2.FairChoiceIds := Finset.union_comm _ _
 
+  /-- Splitting `parent` into one branch's part and the remainder gives two
+  parallel-compatible alphabets, with the empty interface (no synchronization
+  at this internal, compiler-generated parallel node). -/
+  theorem branchPart_remove_parallelCompatible
+      (parent : PactTypeAlphabet) (hParentWF : parent.WellFormed)
+      (branch : BareMessage × PactType) :
+      ParallelCompatible parent (branchPart parent branch)
+        (remove parent (branchPart parent branch)) ∅ := by
+    have hActionsDisjoint : Disjoint (branchPart parent branch).actions
+        (remove parent (branchPart parent branch)).actions := by
+      simp only [branchPart, remove]
+      exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp)
+    have hMessageIdsDisjoint : Disjoint (branchPart parent branch).messageIds
+        (remove parent (branchPart parent branch)).messageIds := by
+      rw [Finset.disjoint_left]
+      rintro msgId hLeft hRight
+      simp only [PactTypeAlphabet.messageIds, Finset.mem_image] at hLeft hRight
+      obtain ⟨⟨lMsg, lDir⟩, hLeftAction, hLeftEq⟩ := hLeft
+      obtain ⟨⟨rMsg, rDir⟩, hRightAction, hRightEq⟩ := hRight
+      simp only at hLeftEq hRightEq
+      rw [← hLeftEq] at hRightEq
+      simp only [branchPart, remove, Finset.mem_inter, Finset.mem_sdiff]
+        at hLeftAction hRightAction
+      rw [hRightEq] at hRightAction
+      rcases lDir with _ | _ <;> rcases rDir with _ | _
+      · exact hRightAction.2 hLeftAction
+      · exact hParentWF lMsg ⟨hLeftAction.1, hRightAction.1⟩
+      · exact hParentWF lMsg ⟨hRightAction.1, hLeftAction.1⟩
+      · exact hRightAction.2 hLeftAction
+    exact
+      { parent_eq := mergeHidden_branchPart_remove_empty parent branch
+        shared_messageIds := by
+          rw [Finset.disjoint_iff_inter_eq_empty] at hMessageIdsDisjoint
+          simpa using hMessageIdsDisjoint
+        boundary_messageIds_disjoint := by
+          simpa [BoundaryMessageIdsDisjoint] using hMessageIdsDisjoint
+        actions_disjoint := hActionsDisjoint
+        complementary := by simp [ComplementaryOn]
+        progress_disjoint := by
+          simp only [branchPart, remove]
+          exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp)
+        fair_disjoint := by
+          simp only [branchPart, remove]
+          exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp) }
+
   /-- Project a new parallel boundary alphabet to one of the old children.
   Interface actions remain local to the child even though they are hidden at
   the parent boundary. -/

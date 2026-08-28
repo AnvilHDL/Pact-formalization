@@ -179,8 +179,7 @@ theorem typeOffers_future_subset_target_union_current
     {current future : Finset BareMessage}
     (hOffers : TypeOffers env source label target current future) :
     future ⊆ typeFutureOffers target ∪ current := by
-  induction hOffers using TypeOffers.rec
-    (motive_2 := fun _ _ _ _ _ _ _ _ => True) with
+  induction hOffers using TypeOffers.rec with
   | action =>
       simp
   | action_wait =>
@@ -267,10 +266,6 @@ theorem typeOffers_future_subset_target_union_current
         simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
           at hRight'
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
-  | clock =>
-      trivial
-  | ordinary =>
-      trivial
 
 /-- Proves that a transition-alphabet symbol carries an offer summary from the signature. -/
 theorem transitionAlphabet_offerSummary_mem

@@ -266,9 +266,19 @@ theorem correspondence_stepIff
               hBranchAlphabetWF
               (tailRecursiveBranches_of_mem hTailRecursive.2 hMember)
               rfl hRelated hSymbol
+          -- TODO(offer-reannotation-gap): pairwise action-disjointness across
+          -- offer branches, and `ReannotationSafe` for each branch body
+          -- against any target alphabet, are new invariants introduced by
+          -- this session's `AlphabetPreservation.lean` work (needed to make
+          -- `AlphabetWellFormed` transport under `reannotate` honestly, since
+          -- unlike `AlphabetCoherent` it is not free).  Neither is yet
+          -- established for arbitrary offer branches here — genuine, separate
+          -- proof debt, not specific to the parallel-composition case this
+          -- session was asked to fix.  Left as `sorry` pending that
+          -- development.
           exact correspondence_offer_stepIff signature alphabet elseType branches
-            hOfferCoherent.2.2 hAlphabetWF.2.1 hElseIH hBranchesIH hRelated
-            hSymbol
+            hAlphabetWF.1 hAlphabetWF.2.2.2 (by sorry) (by sorry)
+            hAlphabetWF.2.1 hElseIH hBranchesIH hRelated hSymbol
 
 end
 

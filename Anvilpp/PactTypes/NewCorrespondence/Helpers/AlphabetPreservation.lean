@@ -221,6 +221,203 @@ theorem PactType.reannotate_alphabetCoherent
             ih (sizeOf elseType) hElseSize alphabet elseType rfl hCoherent.2.1,
             hBranches _ branches hBranchesSize alphabet hCoherent.2.2⟩
 
+mutual
+  /-- Whether reannotating `processType` to `alphabet` keeps enough information
+  at every `.par` node to remain alphabet-well-formed: the target must stay
+  `ParallelCompatible` with its own projections onto the two children. -/
+  def PactType.ReannotationSafe (alphabet : PactTypeAlphabet) :
+      PactType → Prop
+    | .message _ msg dir => (msg, dir) ∈ alphabet.actions
+    | .progress _ pid => pid ∈ alphabet.progress
+    | .tock _ | .skip _ | .var _ _ => True
+    | .choice _ left right | .seq _ left right =>
+        ReannotationSafe alphabet left ∧ ReannotationSafe alphabet right
+    | .fairChoice _ bid left right =>
+        bid ∈ alphabet.fair ∧
+          ReannotationSafe alphabet left ∧ ReannotationSafe alphabet right
+    | .par _ left right interface =>
+        PactTypeAlphabet.ParallelCompatible alphabet
+          (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
+            right.alphabet interface)
+          (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
+            interface) interface ∧
+        ReannotationSafe (PactTypeAlphabet.projectParallelLeft alphabet
+          left.alphabet right.alphabet interface) left ∧
+        ReannotationSafe (PactTypeAlphabet.projectParallelChild alphabet
+          right.alphabet interface) right
+    | .recur _ _ body => ReannotationSafe alphabet body
+    | .xoffer _ elseType branches | .offer _ elseType branches =>
+        ReannotationSafe alphabet elseType ∧
+          ReannotationSafeBranches alphabet branches
+  termination_by processType => sizeOf processType
+
+  def PactType.ReannotationSafeBranches (alphabet : PactTypeAlphabet) :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (action, processType) :: rest =>
+        action ∈ alphabet.actions ∧ ReannotationSafe alphabet processType ∧
+          ReannotationSafeBranches alphabet rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/-- A `ParallelCompatible` left child inherits well-formedness from the
+parent: interface actions are complementary, and non-interface actions of
+`left` survive unhidden into the parent. -/
+theorem PactTypeAlphabet.ParallelCompatible.wellFormed_left
+    {parent left right : PactTypeAlphabet} {interface : Interface}
+    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
+    (hParentWF : parent.WellFormed) : left.WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  by_cases hI : msg ∈ interface
+  · rcases hCompatible.complementary msg hI with ⟨_, hRecvR⟩ | ⟨_, hSendR⟩
+    · exact hCompatible.actions_disjoint.forall_ne_finset hRecv hRecvR rfl
+    · exact hCompatible.actions_disjoint.forall_ne_finset hSend hSendR rfl
+  · have hSendP : (msg, MessageDir.send) ∈ parent.actions := by
+      rw [hCompatible.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
+      exact ⟨Or.inl hSend, hI⟩
+    have hRecvP : (msg, MessageDir.recv) ∈ parent.actions := by
+      rw [hCompatible.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
+      exact ⟨Or.inl hRecv, hI⟩
+    exact hParentWF msg ⟨hSendP, hRecvP⟩
+
+/-- Right-child counterpart of `wellFormed_left`. -/
+theorem PactTypeAlphabet.ParallelCompatible.wellFormed_right
+    {parent left right : PactTypeAlphabet} {interface : Interface}
+    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
+    (hParentWF : parent.WellFormed) : right.WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  by_cases hI : msg ∈ interface
+  · rcases hCompatible.complementary msg hI with ⟨hSendL, _⟩ | ⟨hRecvL, _⟩
+    · exact hCompatible.actions_disjoint.forall_ne_finset hSendL hSend rfl
+    · exact hCompatible.actions_disjoint.forall_ne_finset hRecvL hRecv rfl
+  · have hSendP : (msg, MessageDir.send) ∈ parent.actions := by
+      rw [hCompatible.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
+      exact ⟨Or.inr hSend, hI⟩
+    have hRecvP : (msg, MessageDir.recv) ∈ parent.actions := by
+      rw [hCompatible.parent_eq]
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
+      exact ⟨Or.inr hRecv, hI⟩
+    exact hParentWF msg ⟨hSendP, hRecvP⟩
+
+/-- `AlphabetWellFormed` analog of `reannotate_alphabetCoherent`.  Unlike the
+`Coherent` version this is NOT unconditional: the target `alphabet` must be
+well-formed and `ReannotationSafe` for `processType`, which in particular
+requires the projected alphabets at every `.par` node to stay
+`ParallelCompatible`.  (This side-condition is genuinely necessary, not a
+proof-engineering artifact: reannotating a `.par` node to a target whose
+interface actions are not already explained by the original children can
+break `AlphabetWellFormed`, independent of any `MessageActions`/`ProgressIds`/
+`FairChoiceIds` containment.) -/
+theorem PactType.reannotate_alphabetWellFormed
+    (alphabet : PactTypeAlphabet) :
+    ∀ processType : PactType, processType.AlphabetWellFormed →
+      alphabet.WellFormed → PactType.ReannotationSafe alphabet processType →
+      (processType.reannotate alphabet).AlphabetWellFormed := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType alphabet with
+  | _ n ih =>
+      have hBranches : ∀ sourceAlphabet (branches : List (BareMessage × PactType)),
+          sizeOf branches < n → ∀ branchAlphabet,
+          PactType.BranchesAlphabetWellFormed sourceAlphabet branches →
+          branchAlphabet.WellFormed →
+          PactType.ReannotationSafeBranches branchAlphabet branches →
+          PactType.BranchesAlphabetWellFormed branchAlphabet
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro sourceAlphabet branches hBranchesSize branchAlphabet hWF hBAWF hSafe
+        induction branches with
+        | nil =>
+            rw [PactType.reannotateBranches_nil]
+            simp [PactType.BranchesAlphabetWellFormed]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            rw [PactType.reannotateBranches_cons]
+            simp only [PactType.BranchesAlphabetWellFormed] at hWF
+            simp only [PactType.ReannotationSafeBranches] at hSafe
+            simp only [PactType.BranchesAlphabetWellFormed]
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            refine ⟨hSafe.1, PactType.reannotate_alphabet branchAlphabet branchType,
+              ih (sizeOf branchType) hBranchSize branchAlphabet branchType rfl
+                hWF.2.2.1 hBAWF hSafe.2.1,
+              restIH hRestSize hWF.2.2.2 hSafe.2.2⟩
+      intro hWF hAlphaWF hSafe
+      cases processType with
+      | message alphabet0 msg dir =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp [PactType.reannotate, PactType.AlphabetWellFormed, hAlphaWF, hSafe]
+      | progress alphabet0 pid =>
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp [PactType.reannotate, PactType.AlphabetWellFormed, hAlphaWF, hSafe]
+      | tock alphabet0 | skip alphabet0 | var alphabet0 _ =>
+          simp [PactType.reannotate, PactType.AlphabetWellFormed, hAlphaWF]
+      | choice alphabet0 left right | seq alphabet0 left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hAlphaWF, PactType.reannotate_alphabet alphabet left,
+            PactType.reannotate_alphabet alphabet right,
+            ih (sizeOf left) hLeftSize alphabet left rfl hWF.2.2.2.1 hAlphaWF hSafe.1,
+            ih (sizeOf right) hRightSize alphabet right rfl hWF.2.2.2.2 hAlphaWF hSafe.2⟩
+      | fairChoice alphabet0 bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hAlphaWF, hSafe.1, PactType.reannotate_alphabet alphabet left,
+            PactType.reannotate_alphabet alphabet right,
+            ih (sizeOf left) hLeftSize alphabet left rfl hWF.2.2.2.2.1 hAlphaWF hSafe.2.1,
+            ih (sizeOf right) hRightSize alphabet right rfl hWF.2.2.2.2.2 hAlphaWF hSafe.2.2⟩
+      | par alphabet0 left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hLeftAWF := hSafe.1.wellFormed_left hAlphaWF
+          have hRightAWF := hSafe.1.wellFormed_right hAlphaWF
+          refine ⟨hAlphaWF, ?_,
+            ih (sizeOf left) hLeftSize _ left rfl hWF.2.2.1 hLeftAWF hSafe.2.1,
+            ih (sizeOf right) hRightSize _ right rfl hWF.2.2.2 hRightAWF hSafe.2.2⟩
+          simpa [PactType.reannotate_alphabet] using hSafe.1
+      | recur alphabet0 name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hAlphaWF, PactType.reannotate_alphabet alphabet body,
+            ih (sizeOf body) hBodySize alphabet body rfl hWF.2.2 hAlphaWF hSafe⟩
+      | xoffer alphabet0 elseType branches | offer alphabet0 elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.ReannotationSafe] at hSafe
+          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hAlphaWF, PactType.reannotate_alphabet alphabet elseType,
+            ih (sizeOf elseType) hElseSize alphabet elseType rfl hWF.2.2.1 hAlphaWF hSafe.1,
+            hBranches alphabet0 branches hBranchesSize alphabet hWF.2.2.2 hAlphaWF hSafe.2⟩
+
 theorem singletonTypeXOfferAt_alphabetCoherent
     (alphabet : PactTypeAlphabet) {branch : BareMessage × PactType}
     (hBranch : branch.2.AlphabetCoherent) :
@@ -240,6 +437,84 @@ theorem selectedTypeBranchAt_alphabetCoherent
     PactType.alphabet]
   exact ⟨trivial, PactType.reannotate_alphabet alphabet branchType, trivial,
     PactType.reannotate_alphabetCoherent alphabet branchType hBranch⟩
+
+theorem singletonTypeXOfferAt_alphabetWellFormed
+    (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed)
+    {branch : BareMessage × PactType} (hAction : branch.1 ∈ alphabet.actions)
+    (hBranch : branch.2.AlphabetWellFormed)
+    (hSafe : PactType.ReannotationSafe alphabet branch.2) :
+    (singletonTypeXOfferAt alphabet branch).AlphabetWellFormed := by
+  rcases branch with ⟨action, branchType⟩
+  simp only [singletonTypeXOfferAt, PactType.AlphabetWellFormed,
+    PactType.BranchesAlphabetWellFormed, PactType.alphabet] at hAction ⊢
+  exact ⟨hAlphaWF, trivial, hAlphaWF, hAction,
+    PactType.reannotate_alphabet alphabet branchType,
+    PactType.reannotate_alphabetWellFormed alphabet branchType hBranch hAlphaWF hSafe,
+    trivial⟩
+
+theorem selectedTypeBranchAt_alphabetWellFormed
+    (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed)
+    {branch : BareMessage × PactType} (hAction : branch.1 ∈ alphabet.actions)
+    (hBranch : branch.2.AlphabetWellFormed)
+    (hSafe : PactType.ReannotationSafe alphabet branch.2) :
+    (selectedTypeBranchAt alphabet branch).AlphabetWellFormed := by
+  rcases branch with ⟨action, branchType⟩
+  simp only [selectedTypeBranchAt, PactType.AlphabetWellFormed,
+    PactType.alphabet] at hAction ⊢
+  exact ⟨hAlphaWF, trivial, PactType.reannotate_alphabet alphabet branchType,
+    ⟨hAlphaWF, hAction⟩,
+    PactType.reannotate_alphabetWellFormed alphabet branchType hBranch hAlphaWF hSafe⟩
+
+/-- `branchPart` only removes declarations, so it keeps `OnePolarity`. -/
+theorem PactTypeAlphabet.branchPart_wellFormed
+    {parent : PactTypeAlphabet} (hParentWF : parent.WellFormed)
+    (branch : BareMessage × PactType) :
+    (PactTypeAlphabet.branchPart parent branch).WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  simp only [PactTypeAlphabet.branchPart, Finset.mem_inter] at hSend hRecv
+  exact hParentWF msg ⟨hSend.1, hRecv.1⟩
+
+/-- `remove` only removes declarations, so it keeps `OnePolarity`. -/
+theorem PactTypeAlphabet.remove_wellFormed
+    {parent assigned : PactTypeAlphabet} (hParentWF : parent.WellFormed) :
+    (PactTypeAlphabet.remove parent assigned).WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  simp only [PactTypeAlphabet.remove, Finset.mem_sdiff] at hSend hRecv
+  exact hParentWF msg ⟨hSend.1, hRecv.1⟩
+
+theorem branch_action_mem_fixedAlphabet_of_mem
+    {alphabet : PactTypeAlphabet} {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hMem : (action, branchType) ∈ branches) :
+    action ∈ alphabet.actions := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        exact hBranches.1
+      · exact ih hBranches.2.2.2 hMem
+
+theorem branch_body_alphabetWellFormed_of_mem
+    {alphabet : PactTypeAlphabet} {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hMem : (action, branchType) ∈ branches) :
+    branchType.AlphabetWellFormed := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        exact hBranches.2.2.1
+      · exact ih hBranches.2.2.2 hMem
 
 theorem parallelTypeBranchesWithin_alphabet_coherent
     (alphabet : PactTypeAlphabet) :
@@ -301,6 +576,74 @@ theorem parallelTypeBranchesSelectingWithin_alphabet_coherent
             (next :: rest)
             (fun item hItem => hBranches item (by simp [hItem]))⟩
 
+/-- Branch action labels distinct from a head branch's own label and disjoint
+from its body's syntactic actions survive that head's `branchPart`/`remove`
+split unchanged.  Needed because `parallelTypeBranchesWithin` re-partitions
+the fixed alphabet branch by branch: without this, a later branch's action
+could collide with the part already carved out for an earlier one. -/
+theorem PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint
+    {alphabet : PactTypeAlphabet} {branch other : BareMessage × PactType}
+    (hMem : other.1 ∈ alphabet.actions)
+    (hDisjoint : Disjoint ({branch.1} ∪ PactType.MessageActions branch.2)
+      ({other.1} ∪ PactType.MessageActions other.2)) :
+    other.1 ∈ (PactTypeAlphabet.remove alphabet
+      (PactTypeAlphabet.branchPart alphabet branch)).actions := by
+  simp only [PactTypeAlphabet.remove, PactTypeAlphabet.branchPart, Finset.mem_sdiff,
+    Finset.mem_inter]
+  refine ⟨hMem, fun ⟨_, hOtherInBranch⟩ => ?_⟩
+  exact hDisjoint.forall_ne_finset hOtherInBranch (Finset.mem_union_left _
+    (Finset.mem_singleton_self other.1)) rfl
+
+theorem parallelTypeBranchesWithin_alphabet_wellFormed
+    (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed) :
+    ∀ branches : List (BareMessage × PactType),
+      List.Pairwise (fun b1 b2 => Disjoint ({b1.1} ∪ PactType.MessageActions b1.2)
+        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
+      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
+        branch.2.AlphabetWellFormed ∧
+        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
+      (parallelTypeBranchesWithin alphabet branches).AlphabetWellFormed
+  | [], _, _ => by simp [parallelTypeBranchesWithin, PactType.AlphabetWellFormed, hAlphaWF]
+  | [branch], _, hBranches => by
+      have hHead := hBranches branch (by simp)
+      exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF hHead.1 hHead.2.1
+        (hHead.2.2 alphabet)
+  | branch :: next :: rest, hPairwise, hBranches => by
+      have hLeftWF := PactTypeAlphabet.branchPart_wellFormed hAlphaWF branch
+      have hRightWF := PactTypeAlphabet.remove_wellFormed
+        (assigned := PactTypeAlphabet.branchPart alphabet branch) hAlphaWF
+      have hHead := hBranches branch (by simp)
+      have hHeadActionLeft :
+          branch.1 ∈ (PactTypeAlphabet.branchPart alphabet branch).actions := by
+        simp only [PactTypeAlphabet.branchPart, Finset.mem_inter]
+        exact ⟨hHead.1, Finset.mem_union_left _ (Finset.mem_singleton_self branch.1)⟩
+      rw [List.pairwise_cons] at hPairwise
+      obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
+      have hLeftAlphabet :
+          (singletonTypeXOfferAt (PactTypeAlphabet.branchPart alphabet branch) branch).alphabet =
+            PactTypeAlphabet.branchPart alphabet branch := by
+        simp [singletonTypeXOfferAt, PactType.alphabet]
+      have hRightAlphabet :
+          (parallelTypeBranchesWithin
+            (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+            (next :: rest)).alphabet =
+            PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch) := by
+        cases rest <;> simp [parallelTypeBranchesWithin, singletonTypeXOfferAt, PactType.alphabet]
+      simp only [parallelTypeBranchesWithin, PactType.AlphabetWellFormed]
+      rw [hLeftAlphabet, hRightAlphabet]
+      exact ⟨hAlphaWF,
+        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF branch,
+        singletonTypeXOfferAt_alphabetWellFormed
+          (PactTypeAlphabet.branchPart alphabet branch) hLeftWF hHeadActionLeft hHead.2.1
+          (hHead.2.2 _),
+        parallelTypeBranchesWithin_alphabet_wellFormed
+          (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+          hRightWF (next :: rest) hTailPairwise
+          (fun item hItem =>
+            have hItemBranches := hBranches item (by simp [hItem])
+            ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
+              (hHeadDisjoint item hItem), hItemBranches.2.1, hItemBranches.2.2⟩)⟩
+
 theorem branchesAlphabetCoherent_of_mem
     {alphabet : PactTypeAlphabet} {branches : List (BareMessage × PactType)}
     {branch : BareMessage × PactType}
@@ -344,6 +687,93 @@ theorem branchesAlphabetCoherent_of_mem
         simp [parallelTypeBranchesSelectingWithin, hSelected,
           PactType.alphabet]
 
+theorem parallelTypeBranchesSelectingWithin_alphabet_wellFormed
+    (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed)
+    (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      List.Pairwise (fun b1 b2 => Disjoint ({b1.1} ∪ PactType.MessageActions b1.2)
+        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
+      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
+        branch.2.AlphabetWellFormed ∧
+        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
+      PactType.AlphabetWellFormed
+        (parallelTypeBranchesSelectingWithin alphabet selected branches)
+  | [], _, _ => by
+      simp [parallelTypeBranchesSelectingWithin, PactType.AlphabetWellFormed, hAlphaWF]
+  | [branch], _, hBranches => by
+      have hHead := hBranches branch (by simp)
+      by_cases hSelected : branch = selected
+      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected]
+        exact selectedTypeBranchAt_alphabetWellFormed alphabet hAlphaWF hHead.1 hHead.2.1
+          (hHead.2.2 alphabet)
+      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected]
+        exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF hHead.1 hHead.2.1
+          (hHead.2.2 alphabet)
+  | branch :: next :: rest, hPairwise, hBranches => by
+      have hLeftWF := PactTypeAlphabet.branchPart_wellFormed hAlphaWF branch
+      have hRightWF := PactTypeAlphabet.remove_wellFormed
+        (assigned := PactTypeAlphabet.branchPart alphabet branch) hAlphaWF
+      have hHead := hBranches branch (by simp)
+      have hHeadActionLeft :
+          branch.1 ∈ (PactTypeAlphabet.branchPart alphabet branch).actions := by
+        simp only [PactTypeAlphabet.branchPart, Finset.mem_inter]
+        exact ⟨hHead.1, Finset.mem_union_left _ (Finset.mem_singleton_self branch.1)⟩
+      rw [List.pairwise_cons] at hPairwise
+      obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
+      have hRestSafe : ∀ item ∈ next :: rest,
+          item.1 ∈ (PactTypeAlphabet.remove alphabet
+            (PactTypeAlphabet.branchPart alphabet branch)).actions ∧
+          item.2.AlphabetWellFormed ∧
+          ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet item.2 :=
+        fun item hItem =>
+          have hItemBranches := hBranches item (by simp [hItem])
+          ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
+            (hHeadDisjoint item hItem), hItemBranches.2.1, hItemBranches.2.2⟩
+      have hCompatible :=
+        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF branch
+      by_cases hSelected : branch = selected
+      · have hLeftAlphabet :
+            (selectedTypeBranchAt (PactTypeAlphabet.branchPart alphabet branch) branch).alphabet =
+              PactTypeAlphabet.branchPart alphabet branch := by
+          simp [selectedTypeBranchAt, PactType.alphabet]
+        have hRightAlphabet :
+            (parallelTypeBranchesWithin
+              (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+              (next :: rest)).alphabet =
+              PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch) := by
+          cases rest <;>
+            simp [parallelTypeBranchesWithin, singletonTypeXOfferAt, PactType.alphabet]
+        simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected,
+          PactType.AlphabetWellFormed]
+        rw [hLeftAlphabet, hRightAlphabet]
+        exact ⟨hAlphaWF, hCompatible,
+          selectedTypeBranchAt_alphabetWellFormed
+            (PactTypeAlphabet.branchPart alphabet branch) hLeftWF hHeadActionLeft hHead.2.1
+            (hHead.2.2 _),
+          parallelTypeBranchesWithin_alphabet_wellFormed
+            (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+            hRightWF (next :: rest) hTailPairwise hRestSafe⟩
+      · have hLeftAlphabet :
+            (singletonTypeXOfferAt (PactTypeAlphabet.branchPart alphabet branch) branch).alphabet =
+              PactTypeAlphabet.branchPart alphabet branch := by
+          simp [singletonTypeXOfferAt, PactType.alphabet]
+        have hRightAlphabet :
+            (parallelTypeBranchesSelectingWithin
+              (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+              selected (next :: rest)).alphabet =
+              PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch) :=
+          parallelTypeBranchesSelectingWithin_alphabet _ selected (next :: rest)
+        simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected,
+          PactType.AlphabetWellFormed]
+        rw [hLeftAlphabet, hRightAlphabet]
+        exact ⟨hAlphaWF, hCompatible,
+          singletonTypeXOfferAt_alphabetWellFormed
+            (PactTypeAlphabet.branchPart alphabet branch) hLeftWF hHeadActionLeft hHead.2.1
+            (hHead.2.2 _),
+          parallelTypeBranchesSelectingWithin_alphabet_wellFormed
+            (PactTypeAlphabet.remove alphabet (PactTypeAlphabet.branchPart alphabet branch))
+            hRightWF selected (next :: rest) hTailPairwise hRestSafe⟩
+
 theorem parallelTypeBranches_alphabet_coherent
     {alphabet : PactTypeAlphabet} :
     ∀ {branches : List (BareMessage × PactType)},
@@ -382,6 +812,32 @@ theorem parallelTypeBranchesSelecting_alphabet_coherent
       · apply parallelTypeBranchesSelectingWithin_alphabet_coherent
         intro item hItem
         exact (branchesAlphabetCoherent_of_mem hBranches hItem).2
+
+theorem parallelTypeBranchesSelecting_alphabet_wellFormed
+    {alphabet : PactTypeAlphabet} (hAlphaWF : alphabet.WellFormed)
+    {selected : BareMessage × PactType} {branches : List (BareMessage × PactType)}
+    (hSelected : selected ∈ branches)
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint ({b1.1} ∪ PactType.MessageActions b1.2)
+      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
+    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
+      PactType.ReannotationSafe targetAlphabet branch.2) :
+    (parallelTypeBranchesSelecting selected branches).alphabet = alphabet ∧
+      (parallelTypeBranchesSelecting selected branches).AlphabetWellFormed := by
+  cases branches with
+  | nil => cases hSelected
+  | cons branch rest =>
+      have hFirstAlphabet : branch.2.alphabet = alphabet :=
+        PactType.branch_alphabet_eq_of_mem hBranches (by simp)
+      simp only [parallelTypeBranchesSelecting, hFirstAlphabet]
+      refine ⟨parallelTypeBranchesSelectingWithin_alphabet alphabet selected (branch :: rest), ?_⟩
+      apply parallelTypeBranchesSelectingWithin_alphabet_wellFormed alphabet hAlphaWF selected
+        (branch :: rest) hPairwise
+      intro item hItem
+      exact ⟨branch_action_mem_fixedAlphabet_of_mem hBranches
+          (branchType := item.2) (by simpa using hItem),
+        branch_body_alphabetWellFormed_of_mem hBranches (by simpa using hItem),
+        hSafe item hItem⟩
 
 /-- Every residual represented by a compiled state retains the fixed alphabet
 of the source type.  The proof follows the structural relation clauses; the
