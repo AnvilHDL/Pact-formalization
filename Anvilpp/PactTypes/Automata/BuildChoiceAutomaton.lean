@@ -20,7 +20,8 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
     AutomatonFragment :=
   let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 0 left ∪ childAccepting 1 right
-  let selections := signature.localEnvironments.biUnion fun environment =>
+  let selections := (signature.localEnvironments.filter fun environment =>
+      environment.clock = false).biUnion fun environment =>
     { { source := TypeAutomatonState.root
         environment := environment
         label := .visible selectionLeft
@@ -50,7 +51,8 @@ theorem buildChoiceAutomaton_outgoing_left
   · rintro ⟨hEdge, hSource⟩
     simp only [buildChoiceAutomaton, finishAutomatonFragment,
       childPendingEdges, Finset.mem_union, Finset.mem_image,
-      Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+      Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+      Finset.mem_singleton] at hEdge
     rcases hEdge with (hLeft | hRight) | hSelection
     · rcases hLeft with ⟨childEdge, hChildEdge, hEdge⟩
       have hChildSource := hSource
@@ -69,7 +71,8 @@ theorem buildChoiceAutomaton_outgoing_left
     constructor
     · simp only [buildChoiceAutomaton, finishAutomatonFragment,
         childPendingEdges, Finset.mem_union, Finset.mem_image,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
       exact Or.inl (Or.inl ⟨childEdge, hChildEdge, rfl⟩)
     · simp [childPendingEdge, childState, hChildSource]
 
@@ -87,7 +90,8 @@ theorem buildChoiceAutomaton_outgoing_right
   · rintro ⟨hEdge, hSource⟩
     simp only [buildChoiceAutomaton, finishAutomatonFragment,
       childPendingEdges, Finset.mem_union, Finset.mem_image,
-      Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+      Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+      Finset.mem_singleton] at hEdge
     rcases hEdge with (hLeft | hRight) | hSelection
     · rcases hLeft with ⟨childEdge, _, hEdge⟩
       rw [← hEdge] at hSource
@@ -106,7 +110,8 @@ theorem buildChoiceAutomaton_outgoing_right
     constructor
     · simp only [buildChoiceAutomaton, finishAutomatonFragment,
         childPendingEdges, Finset.mem_union, Finset.mem_image,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
       exact Or.inl (Or.inr ⟨childEdge, hChildEdge, rfl⟩)
     · simp [childPendingEdge, childState, hChildSource]
 
@@ -261,7 +266,8 @@ theorem buildChoiceAutomaton_futureTargetsInStates
   intro edge hEdge target removed hFuture
   simp only [buildChoiceAutomaton, finishAutomatonFragment,
     childPendingEdges, Finset.mem_union, Finset.mem_image,
-    Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton] at hEdge
+    Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+    Finset.mem_singleton] at hEdge
   rcases hEdge with (hLeft | hRight) | hSelection
   · rcases hLeft with ⟨childEdge, hChildEdge, rfl⟩
     cases hSpec : childEdge.future with

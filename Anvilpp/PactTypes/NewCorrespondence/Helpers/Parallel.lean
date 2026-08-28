@@ -68,13 +68,13 @@ theorem TypeOffers.toTypeTransition
   | action_wait env alphabet msg dir hConditions =>
       exact TypeTransition.action_wait env alphabet msg dir hConditions
   | choice_left env alphabet left right hEnv =>
-      exact TypeTransition.choice_left env alphabet left right hEnv
+      exact TypeTransition.choice_left env alphabet left right hEnv.1 hEnv.2
   | choice_right env alphabet left right hEnv =>
-      exact TypeTransition.choice_right env alphabet left right hEnv
+      exact TypeTransition.choice_right env alphabet left right hEnv.1 hEnv.2
   | fair_left env alphabet bid left right hEnv =>
-      exact TypeTransition.fair_left env alphabet bid left right hEnv
+      exact TypeTransition.fair_left env alphabet bid left right hEnv.1 hEnv.2
   | fair_right env alphabet bid left right hEnv =>
-      exact TypeTransition.fair_right env alphabet bid left right hEnv
+      exact TypeTransition.fair_right env alphabet bid left right hEnv.1 hEnv.2
   | cycle env alphabet hConditions =>
       exact TypeTransition.cycle env alphabet hConditions
   | cycle_wait env alphabet hConditions =>

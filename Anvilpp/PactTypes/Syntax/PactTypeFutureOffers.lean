@@ -240,24 +240,24 @@ mutual
           (typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)})
     | choice_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent left
           ∅ (typeFutureOffers left)
     | choice_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent right
           ∅ (typeFutureOffers right)
     | fair_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
           (TypeLabel.fair bid true) left ∅ (typeFutureOffers left)
     | fair_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
           (TypeLabel.fair bid false) right ∅ (typeFutureOffers right)
     | cycle (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :

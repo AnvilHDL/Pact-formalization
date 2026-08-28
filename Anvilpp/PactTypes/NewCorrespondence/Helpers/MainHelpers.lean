@@ -130,18 +130,18 @@ theorem typeSameCycleReaches_choice_iff (alphabet targetAlphabet : PactTypeAlpha
     · exact nomatch h
     · obtain ⟨env, label, hTrans, -⟩ := hStep
       cases hTrans with
-      | choice_left env hWF => exact Or.inl hRest
-      | choice_right env hWF => exact Or.inr hRest
+      | choice_left env hWF hClock => exact Or.inl hRest
+      | choice_right env hWF hClock => exact Or.inr hRest
   · have hWF : TypeEnvironment.empty.WellFormed := by
       simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
     rintro (h | h)
     · exact Relation.ReflTransGen.head
         ⟨TypeEnvironment.empty, _,
-          TypeTransition.choice_left TypeEnvironment.empty alphabet left right hWF,
+          TypeTransition.choice_left TypeEnvironment.empty alphabet left right hWF rfl,
           by simp [TypeLabel.isTock, TypeLabel.silent]⟩ h
     · exact Relation.ReflTransGen.head
         ⟨TypeEnvironment.empty, _,
-          TypeTransition.choice_right TypeEnvironment.empty alphabet left right hWF,
+          TypeTransition.choice_right TypeEnvironment.empty alphabet left right hWF rfl,
           by simp [TypeLabel.isTock, TypeLabel.silent]⟩ h
 
 /-- A fair choice's own step selects a branch outright too, same as ordinary
@@ -157,18 +157,18 @@ theorem typeSameCycleReaches_fairChoice_iff (alphabet : PactTypeAlphabet)
     · exact nomatch h
     · obtain ⟨env, label, hTrans, -⟩ := hStep
       cases hTrans with
-      | fair_left env hWF => exact Or.inl hRest
-      | fair_right env hWF => exact Or.inr hRest
+      | fair_left env hWF hClock => exact Or.inl hRest
+      | fair_right env hWF hClock => exact Or.inr hRest
   · have hWF : TypeEnvironment.empty.WellFormed := by
       simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
     rintro (h | h)
     · exact Relation.ReflTransGen.head
         ⟨TypeEnvironment.empty, _,
-          TypeTransition.fair_left TypeEnvironment.empty alphabet bid left right hWF,
+          TypeTransition.fair_left TypeEnvironment.empty alphabet bid left right hWF rfl,
           by simp [TypeLabel.isTock, TypeLabel.fair]⟩ h
     · exact Relation.ReflTransGen.head
         ⟨TypeEnvironment.empty, _,
-          TypeTransition.fair_right TypeEnvironment.empty alphabet bid left right hWF,
+          TypeTransition.fair_right TypeEnvironment.empty alphabet bid left right hWF rfl,
           by simp [TypeLabel.isTock, TypeLabel.fair]⟩ h
 
 theorem typeSameCycleCanComplete_choice_iff (alphabet : PactTypeAlphabet)
@@ -355,8 +355,8 @@ theorem automatonNonClockStep_root_binaryChoice_iff
   constructor
   · rintro ⟨edge, hEdgeMem, hSource, hTarget, -⟩
     simp only [buildChoiceAutomaton, finishAutomatonFragment, childPendingEdges,
-      Finset.mem_union, Finset.mem_image, Finset.mem_biUnion, Finset.mem_insert,
-      Finset.mem_singleton] at hEdgeMem
+      Finset.mem_union, Finset.mem_image, Finset.mem_biUnion, Finset.mem_filter,
+      Finset.mem_insert, Finset.mem_singleton] at hEdgeMem
     rcases hEdgeMem with (⟨childEdge, -, hEq⟩ | ⟨childEdge, -, hEq⟩) |
       ⟨environment, -, hEq | hEq⟩
     · exfalso; rw [← hEq] at hSource; simp [childPendingEdge, childState] at hSource
@@ -372,8 +372,10 @@ theorem automatonNonClockStep_root_binaryChoice_iff
       have hEdgeMem : edge ∈
           (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
         simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-          Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-        exact Or.inr ⟨TypeEnvironment.empty, hEnvMem, Or.inl hEdgeDef.symm⟩
+          Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+          Finset.mem_singleton]
+        exact Or.inr ⟨TypeEnvironment.empty, ⟨hEnvMem, rfl⟩,
+          Or.inl hEdgeDef.symm⟩
       exact ⟨edge, hEdgeMem, rfl, rfl,
         by simp [hEdgeDef, AutomatonConstructionLabel.semantic, hLeftNotTock]⟩
     · set edge : PendingAutomatonEdge :=
@@ -384,8 +386,10 @@ theorem automatonNonClockStep_root_binaryChoice_iff
       have hEdgeMem : edge ∈
           (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
         simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-          Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-        exact Or.inr ⟨TypeEnvironment.empty, hEnvMem, Or.inr hEdgeDef.symm⟩
+          Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+          Finset.mem_singleton]
+        exact Or.inr ⟨TypeEnvironment.empty, ⟨hEnvMem, rfl⟩,
+          Or.inr hEdgeDef.symm⟩
       exact ⟨edge, hEdgeMem, rfl, rfl,
         by simp [hEdgeDef, AutomatonConstructionLabel.semantic, hRightNotTock]⟩
 
@@ -1455,8 +1459,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.choice alphabet left right)).edges := by
               rw [hWhole]
               simp only [buildChoiceAutomaton, finishAutomatonFragment, childState,
-                Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-              exact Or.inr ⟨TypeEnvironment.empty, hEmptyLocal, Or.inl rfl⟩
+                Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
+                Finset.mem_insert, Finset.mem_singleton]
+              exact Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, Or.inl rfl⟩
             have hWitness1 : PendingAutomatonEdge.mk TypeAutomatonState.root TypeEnvironment.empty
                 (AutomatonConstructionLabel.visible TypeLabel.silent) ∅
                 (FutureSpec.at (TypeAutomatonState.child 1
@@ -1467,8 +1472,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.choice alphabet left right)).edges := by
               rw [hWhole]
               simp only [buildChoiceAutomaton, finishAutomatonFragment, childState,
-                Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-              exact Or.inr ⟨TypeEnvironment.empty, hEmptyLocal, Or.inr rfl⟩
+                Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
+                Finset.mem_insert, Finset.mem_singleton]
+              exact Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, Or.inr rfl⟩
             have hEdgeSourceCases : ∀ edge ∈ (compileTypeFuel signature
                 (typeCompilationFuel (.choice alphabet left right)) (.choice alphabet left right)).edges,
                 edge.source = TypeAutomatonState.root →
@@ -1611,8 +1617,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.fairChoice alphabet bid left right)).edges := by
               rw [hWhole]
               simp only [buildChoiceAutomaton, finishAutomatonFragment, childState,
-                Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-              exact Or.inr ⟨TypeEnvironment.empty, hEmptyLocal, Or.inl rfl⟩
+                Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
+                Finset.mem_insert, Finset.mem_singleton]
+              exact Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, Or.inl rfl⟩
             have hWitness1 : PendingAutomatonEdge.mk TypeAutomatonState.root TypeEnvironment.empty
                 (AutomatonConstructionLabel.visible (TypeLabel.fair bid false)) ∅
                 (FutureSpec.at (TypeAutomatonState.child 1
@@ -1623,8 +1630,9 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (.fairChoice alphabet bid left right)).edges := by
               rw [hWhole]
               simp only [buildChoiceAutomaton, finishAutomatonFragment, childState,
-                Finset.mem_union, Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-              exact Or.inr ⟨TypeEnvironment.empty, hEmptyLocal, Or.inr rfl⟩
+                Finset.mem_union, Finset.mem_biUnion, Finset.mem_filter,
+                Finset.mem_insert, Finset.mem_singleton]
+              exact Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, Or.inr rfl⟩
             have hEdgeSourceCases : ∀ edge ∈ (compileTypeFuel signature
                 (typeCompilationFuel (.fairChoice alphabet bid left right))
                 (.fairChoice alphabet bid left right)).edges,
@@ -3817,6 +3825,9 @@ theorem parallelTypeBranchesSelecting_fairChoiceIds
   | cons branch rest =>
       exact (parallelTypeBranchesSelectingWithin_ownershipData
         branch.2.alphabet selected (branch :: rest)).2.2.2
+
+--  theorem clockCanOnlyTakeSemanticClockStep
+--     (ty : PactType) (env : TypeEnv)
 
 end
 

@@ -246,18 +246,18 @@ theorem TypeTransition.exists_typeOffers
       exact ⟨{(msg, dir)},
         typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)},
         TypeOffers.action_wait env alphabet msg dir conditions⟩
-  | choice_left env alphabet left right hEnv =>
+  | choice_left env alphabet left right hEnv hClock =>
       exact ⟨∅, typeFutureOffers left,
-        TypeOffers.choice_left env alphabet left right hEnv⟩
-  | choice_right env alphabet left right hEnv =>
+        TypeOffers.choice_left env alphabet left right ⟨hEnv, hClock⟩⟩
+  | choice_right env alphabet left right hEnv hClock =>
       exact ⟨∅, typeFutureOffers right,
-        TypeOffers.choice_right env alphabet left right hEnv⟩
-  | fair_left env alphabet bid left right hEnv =>
+        TypeOffers.choice_right env alphabet left right ⟨hEnv, hClock⟩⟩
+  | fair_left env alphabet bid left right hEnv hClock =>
       exact ⟨∅, typeFutureOffers left,
-        TypeOffers.fair_left env alphabet bid left right hEnv⟩
-  | fair_right env alphabet bid left right hEnv =>
+        TypeOffers.fair_left env alphabet bid left right ⟨hEnv, hClock⟩⟩
+  | fair_right env alphabet bid left right hEnv hClock =>
       exact ⟨∅, typeFutureOffers right,
-        TypeOffers.fair_right env alphabet bid left right hEnv⟩
+        TypeOffers.fair_right env alphabet bid left right ⟨hEnv, hClock⟩⟩
   | cycle env alphabet conditions =>
       exact ⟨∅, ∅, TypeOffers.cycle env alphabet conditions⟩
   | cycle_wait env alphabet conditions =>
@@ -343,16 +343,16 @@ theorem TypeTransition.preserves_alphabet
       simp [PactType.alphabet]
   | action_wait env alphabet msg dir conditions =>
       simp [PactType.alphabet]
-  | choice_left env alphabet left right hEnv =>
+  | choice_left env alphabet left right hEnv hClock =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.1
-  | choice_right env alphabet left right hEnv =>
+  | choice_right env alphabet left right hEnv hClock =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.2.1
-  | fair_left env alphabet bid left right hEnv =>
+  | fair_left env alphabet bid left right hEnv hClock =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.2.1
-  | fair_right env alphabet bid left right hEnv =>
+  | fair_right env alphabet bid left right hEnv hClock =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.2.2.1
   | cycle env alphabet conditions =>

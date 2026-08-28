@@ -687,7 +687,7 @@ theorem correspondence_choice_stepIff
     have hEnvMem : env ∈ signature.localEnvironments :=
       transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
-    have hLeftPending :
+    have hLeftPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
             current := (∅ : Finset BareMessage),
@@ -700,9 +700,10 @@ theorem correspondence_choice_stepIff
             (compileTypeFuel signature (typeCompilationFuel right) right)
             TypeLabel.silent TypeLabel.silent).edges := by
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-      exact Or.inr ⟨env, hEnvMem, Or.inl rfl⟩
-    have hRightPending :
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
+      exact Or.inr ⟨env, ⟨hEnvMem, hClock⟩, Or.inl rfl⟩
+    have hRightPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
             current := (∅ : Finset BareMessage),
@@ -715,8 +716,9 @@ theorem correspondence_choice_stepIff
             (compileTypeFuel signature (typeCompilationFuel right) right)
             TypeLabel.silent TypeLabel.silent).edges := by
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-      exact Or.inr ⟨env, hEnvMem, Or.inr rfl⟩
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
+      exact Or.inr ⟨env, ⟨hEnvMem, hClock⟩, Or.inr rfl⟩
     constructor
     · intro hStep
       obtain ⟨-, hOffers⟩ := hStep
@@ -729,7 +731,7 @@ theorem correspondence_choice_stepIff
       generalize hCurrentEq : current = actualCurrent at hOffers
       generalize hFutureEq : future = actualFuture at hOffers
       cases hOffers with
-      | choice_left _ _ _ _ _ =>
+      | choice_left _ _ _ _ hChoiceEnv =>
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers left)) ∈
@@ -746,17 +748,17 @@ theorem correspondence_choice_stepIff
               (typeCompilationFuel left) left).initial) env TypeLabel.silent
             (TypeOfferSummary.mk ∅ (typeFutureOffers left)) hSignatureSymbol']
           rw [hWhole]
-          refine ⟨_, hLeftPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+          refine ⟨_, hLeftPending hChoiceEnv.2, rfl, rfl, rfl, rfl, ?_, rfl⟩
           simpa [childState] using hFutureLeftEq
         have hChoiceLeftStep : DecoratedTypeTransition env (.choice alphabet left right)
             TypeLabel.silent (TypeOfferSummary.mk ∅ (typeFutureOffers left)) left :=
-          ⟨TypeTransition.choice_left env alphabet left right hWF,
-            TypeOffers.choice_left env alphabet left right hWF⟩
+          ⟨TypeTransition.choice_left env alphabet left right hWF hChoiceEnv.2,
+            TypeOffers.choice_left env alphabet left right ⟨hWF, hChoiceEnv.2⟩⟩
         refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel left)
           left).initial, hEdgeFact, ?_⟩
         exact relationMembership_choice_left signature alphabet left right left
           (buildRelationSet_initial left (compileType signature left))
-      | choice_right _ _ _ _ _ =>
+      | choice_right _ _ _ _ hChoiceEnv =>
         have hSignatureSymbol' :
             TypeAutomatonSymbol.mk env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers right)) ∈
@@ -773,12 +775,12 @@ theorem correspondence_choice_stepIff
               (typeCompilationFuel right) right).initial) env TypeLabel.silent
             (TypeOfferSummary.mk ∅ (typeFutureOffers right)) hSignatureSymbol']
           rw [hWhole]
-          refine ⟨_, hRightPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+          refine ⟨_, hRightPending hChoiceEnv.2, rfl, rfl, rfl, rfl, ?_, rfl⟩
           simpa [childState] using hFutureRightEq
         have hChoiceRightStep : DecoratedTypeTransition env (.choice alphabet left right)
             TypeLabel.silent (TypeOfferSummary.mk ∅ (typeFutureOffers right)) right :=
-          ⟨TypeTransition.choice_right env alphabet left right hWF,
-            TypeOffers.choice_right env alphabet left right hWF⟩
+          ⟨TypeTransition.choice_right env alphabet left right hWF hChoiceEnv.2,
+            TypeOffers.choice_right env alphabet left right ⟨hWF, hChoiceEnv.2⟩⟩
         refine ⟨.child 1 (compileTypeFuel signature (typeCompilationFuel right)
           right).initial, hEdgeFact, ?_⟩
         exact relationMembership_choice_right signature alphabet left right right
@@ -792,8 +794,8 @@ theorem correspondence_choice_stepIff
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-        Finset.mem_image] at hPendingMem
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton, childPendingEdges, Finset.mem_image] at hPendingMem
       have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
       rcases hPendingMem with (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
         ⟨environment, hEnvironment, hEq | hEq⟩
@@ -822,8 +824,11 @@ theorem correspondence_choice_stepIff
             relationMembership_functional left (compileType signature left)
               hLeftRelatedAgain (buildRelationSet_initial left (compileType signature left))
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
-          exact ⟨TypeTransition.choice_left env alphabet left right hWF,
-            TypeOffers.choice_left env alphabet left right hWF⟩
+          have hClock : env.clock = false := by
+            rw [← hPEnv]
+            exact hEnvironment.2
+          exact ⟨TypeTransition.choice_left env alphabet left right hWF hClock,
+            TypeOffers.choice_left env alphabet left right ⟨hWF, hClock⟩⟩
         · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
       · subst hEq
         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
@@ -850,8 +855,11 @@ theorem correspondence_choice_stepIff
               hRightRelatedAgain
               (buildRelationSet_initial right (compileType signature right))
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
-          exact ⟨TypeTransition.choice_right env alphabet left right hWF,
-            TypeOffers.choice_right env alphabet left right hWF⟩
+          have hClock : env.clock = false := by
+            rw [← hPEnv]
+            exact hEnvironment.2
+          exact ⟨TypeTransition.choice_right env alphabet left right hWF hClock,
+            TypeOffers.choice_right env alphabet left right ⟨hWF, hClock⟩⟩
   · -- left-child case: `hLeftIH` reconstructs the step directly
     have hState' : state = .child 0 q := by simpa using hStateEq
     subst state
@@ -876,8 +884,8 @@ theorem correspondence_choice_stepIff
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
         · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-            Finset.mem_image]
+            Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+            Finset.mem_singleton, childPendingEdges, Finset.mem_image]
           exact Or.inl (Or.inl ⟨childEdge, hChildEdgeMem, rfl⟩)
         · simp [childPendingEdge, childState, hCSource]
         · simp [childPendingEdge, hCEnv]
@@ -971,8 +979,8 @@ theorem correspondence_choice_stepIff
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge 1 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
         · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-            Finset.mem_image]
+            Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+            Finset.mem_singleton, childPendingEdges, Finset.mem_image]
           exact Or.inl (Or.inr ⟨childEdge, hChildEdgeMem, rfl⟩)
         · simp [childPendingEdge, childState, hCSource]
         · simp [childPendingEdge, hCEnv]
@@ -1144,7 +1152,7 @@ theorem correspondence_fairChoice_stepIff
     have hEnvMem : env ∈ signature.localEnvironments :=
       transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
-    have hLeftPending :
+    have hLeftPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible (TypeLabel.fair bid true),
             current := (∅ : Finset BareMessage),
@@ -1157,9 +1165,10 @@ theorem correspondence_fairChoice_stepIff
             (compileTypeFuel signature (typeCompilationFuel right) right)
             (TypeLabel.fair bid true) (TypeLabel.fair bid false)).edges := by
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-      exact Or.inr ⟨env, hEnvMem, Or.inl rfl⟩
-    have hRightPending :
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
+      exact Or.inr ⟨env, ⟨hEnvMem, hClock⟩, Or.inl rfl⟩
+    have hRightPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible (TypeLabel.fair bid false),
             current := (∅ : Finset BareMessage),
@@ -1172,11 +1181,14 @@ theorem correspondence_fairChoice_stepIff
             (compileTypeFuel signature (typeCompilationFuel right) right)
             (TypeLabel.fair bid true) (TypeLabel.fair bid false)).edges := by
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton]
-      exact Or.inr ⟨env, hEnvMem, Or.inr rfl⟩
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton]
+      exact Or.inr ⟨env, ⟨hEnvMem, hClock⟩, Or.inr rfl⟩
     constructor
     · intro hStep
       obtain ⟨hTrans, hOffers⟩ := hStep
+      have hStepClock : env.clock = false := by
+        cases hTrans <;> assumption
       generalize hLabelEq : label = actualLabel at hTrans
       generalize hTargetEq : residual' = actualTarget at hTrans
       cases hTrans
@@ -1201,12 +1213,12 @@ theorem correspondence_fairChoice_stepIff
                 (typeCompilationFuel left) left).initial) env (TypeLabel.fair bid true)
               (TypeOfferSummary.mk ∅ (typeFutureOffers left)) hSignatureSymbol']
             rw [hWhole]
-            refine ⟨_, hLeftPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            refine ⟨_, hLeftPending hStepClock, rfl, rfl, rfl, rfl, ?_, rfl⟩
             simpa [childState] using hFutureLeftEq
           have hFairLeftStep : DecoratedTypeTransition env (.fairChoice alphabet bid left right)
               (TypeLabel.fair bid true) (TypeOfferSummary.mk ∅ (typeFutureOffers left)) left :=
-            ⟨TypeTransition.fair_left env alphabet bid left right hWF,
-              TypeOffers.fair_left env alphabet bid left right hWF⟩
+            ⟨TypeTransition.fair_left env alphabet bid left right hWF hStepClock,
+              TypeOffers.fair_left env alphabet bid left right ⟨hWF, hStepClock⟩⟩
           refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel left)
             left).initial, hEdgeFact, ?_⟩
           exact relationMembership_fairChoice_left signature alphabet bid left right left
@@ -1234,13 +1246,13 @@ theorem correspondence_fairChoice_stepIff
                 (typeCompilationFuel right) right).initial) env (TypeLabel.fair bid false)
               (TypeOfferSummary.mk ∅ (typeFutureOffers right)) hSignatureSymbol']
             rw [hWhole]
-            refine ⟨_, hRightPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+            refine ⟨_, hRightPending hStepClock, rfl, rfl, rfl, rfl, ?_, rfl⟩
             simpa [childState] using hFutureRightEq
           have hFairRightStep : DecoratedTypeTransition env (.fairChoice alphabet bid left right)
               (TypeLabel.fair bid false) (TypeOfferSummary.mk ∅ (typeFutureOffers right))
               right :=
-            ⟨TypeTransition.fair_right env alphabet bid left right hWF,
-              TypeOffers.fair_right env alphabet bid left right hWF⟩
+            ⟨TypeTransition.fair_right env alphabet bid left right hWF hStepClock,
+              TypeOffers.fair_right env alphabet bid left right ⟨hWF, hStepClock⟩⟩
           refine ⟨.child 1 (compileTypeFuel signature (typeCompilationFuel right)
             right).initial, hEdgeFact, ?_⟩
           exact relationMembership_fairChoice_right signature alphabet bid left right right
@@ -1255,8 +1267,8 @@ theorem correspondence_fairChoice_stepIff
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
       simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-        Finset.mem_image] at hPendingMem
+        Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+        Finset.mem_singleton, childPendingEdges, Finset.mem_image] at hPendingMem
       have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
       rcases hPendingMem with (⟨childEdge, _, hEq⟩ | ⟨childEdge, _, hEq⟩) |
         ⟨environment, hEnvironment, hEq | hEq⟩
@@ -1285,8 +1297,11 @@ theorem correspondence_fairChoice_stepIff
             relationMembership_functional left (compileType signature left)
               hLeftRelatedAgain (buildRelationSet_initial left (compileType signature left))
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
-          exact ⟨TypeTransition.fair_left env alphabet bid left right hWF,
-            TypeOffers.fair_left env alphabet bid left right hWF⟩
+          have hClock : env.clock = false := by
+            rw [← hPEnv]
+            exact hEnvironment.2
+          exact ⟨TypeTransition.fair_left env alphabet bid left right hWF hClock,
+            TypeOffers.fair_left env alphabet bid left right ⟨hWF, hClock⟩⟩
         · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) = 1) (by decide)
       · subst hEq
         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
@@ -1313,8 +1328,11 @@ theorem correspondence_fairChoice_stepIff
               hRightRelatedAgain
               (buildRelationSet_initial right (compileType signature right))
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
-          exact ⟨TypeTransition.fair_right env alphabet bid left right hWF,
-            TypeOffers.fair_right env alphabet bid left right hWF⟩
+          have hClock : env.clock = false := by
+            rw [← hPEnv]
+            exact hEnvironment.2
+          exact ⟨TypeTransition.fair_right env alphabet bid left right hWF hClock,
+            TypeOffers.fair_right env alphabet bid left right ⟨hWF, hClock⟩⟩
   · -- left-child case: `hLeftIH` reconstructs the step directly
     have hState' : state = .child 0 q := by simpa using hStateEq
     subst state
@@ -1339,8 +1357,8 @@ theorem correspondence_fairChoice_stepIff
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
         · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-            Finset.mem_image]
+            Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+            Finset.mem_singleton, childPendingEdges, Finset.mem_image]
           exact Or.inl (Or.inl ⟨childEdge, hChildEdgeMem, rfl⟩)
         · simp [childPendingEdge, childState, hCSource]
         · simp [childPendingEdge, hCEnv]
@@ -1434,8 +1452,8 @@ theorem correspondence_fairChoice_stepIff
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge 1 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
         · simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
-            Finset.mem_biUnion, Finset.mem_insert, Finset.mem_singleton, childPendingEdges,
-            Finset.mem_image]
+            Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+            Finset.mem_singleton, childPendingEdges, Finset.mem_image]
           exact Or.inl (Or.inr ⟨childEdge, hChildEdgeMem, rfl⟩)
         · simp [childPendingEdge, childState, hCSource]
         · simp [childPendingEdge, hCEnv]
