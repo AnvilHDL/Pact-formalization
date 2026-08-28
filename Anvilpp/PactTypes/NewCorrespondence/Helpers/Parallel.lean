@@ -82,9 +82,9 @@ theorem TypeOffers.toTypeTransition
   | skip env alphabet hConditions =>
       exact TypeTransition.skip env alphabet hConditions
   | progress env alphabet pid hEnv =>
-      exact TypeTransition.progress env alphabet pid hEnv
+      exact TypeTransition.progress env alphabet pid hEnv.1 hEnv.2
   | recur env alphabet name body hEnv =>
-      exact TypeTransition.recur env alphabet name body hEnv
+      exact TypeTransition.recur env alphabet name body hEnv.1 hEnv.2
   | seq env alphabet left leftTarget right label current childFuture hOffers
       hNotSkip ih =>
       exact TypeTransition.seq env alphabet left leftTarget right label ih
@@ -1967,587 +1967,592 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
             q2' ∈ (compileType signature right).accepting then
           target = TypeAutomatonState.final
         else target = .pair q1' q2') := by
-  -- Proof works till the back case commented for performance do not remove
-  sorry
-  -- classical
-  -- have hWhole : compileTypeFuel signature
-  --     (typeCompilationFuel (.par alphabet left right interface))
-  --     (.par alphabet left right interface) =
-  --     buildParallelAutomaton signature alphabet left.alphabet right.alphabet
-  --       interface
-  --       (compileTypeFuel signature (typeCompilationFuel left) left)
-  --       (compileTypeFuel signature (typeCompilationFuel right) right)
-  --       (computeFutureOf signature left)
-  --       (computeFutureOf signature right) := by
-  --   have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
-  --       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
-  --     simp only [typeCompilationFuel]; omega
-  --   rw [hFuelEq]
-  --   rw [compileTypeFuel.eq_def]
-  --   show buildParallelAutomaton signature alphabet left.alphabet right.alphabet
-  --     interface
-  --     (compileTypeFuel signature
-  --       (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-  --     (compileTypeFuel signature
-  --       (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
-  --     (compiledChildFutureFuel signature
-  --       (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-  --     (compiledChildFutureFuel signature
-  --       (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
-  --   rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
-  --     compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
-  --   rw [compiledChildFutureFuel_eq_computeFutureOf signature _ left
-  --       (le_max_left _ _),
-  --     compiledChildFutureFuel_eq_computeFutureOf signature _ right
-  --       (le_max_right _ _)]
-  --   rfl
-  -- constructor
-  -- · intro hEdge
-  --   have hSymbol := compileType_hasEdge_symbol_mem signature
-  --     (.par alphabet left right interface) hEdge
-  --   have hSymbol' : TypeAutomatonSymbol.mk env label offers ∈
-  --       signature.transitionAlphabetFor alphabet := by
-  --     simpa [PactType.alphabet] using hSymbol
-  --   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-  --     (.par alphabet left right interface) (.pair q1 q2) target env label offers
-  --     hSymbol').mp hEdge
-  --   obtain ⟨edge, hPending, hSource, hEnv, hLabel, hCurrent, hFuture, hTarget⟩ :=
-  --     hResolved
-  --   rw [hWhole] at hPending
-  --   simp only [buildParallelAutomaton, finishAutomatonFragment,
-  --     parallelRawTransitionEdges, parallelDoneEdges, Finset.mem_union,
-  --     Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image] at hPending
-  --   rcases hPending with
-  --       ⟨⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, hSync0⟩, hEq⟩, hReach⟩ |
-  --       ⟨environment, hEnvironment, hEq⟩
-  --   swap
-  --   · exfalso
-  --     rw [← hEq] at hSource
-  --     simp at hSource
-  --   rw [← hEq] at hSource hEnv hLabel hCurrent hFuture hTarget hReach
-  --   simp only at hSource hEnv hLabel hCurrent hFuture hTarget hReach
-  --   injection hSource with hQ1Eq hQ2Eq
-  --   cases hLabelForm : leftEdge.label with
-  --   | «variable» name =>
-  --       exfalso
-  --       rw [hLabelForm] at hLabel
-  --       simp [AutomatonConstructionLabel.combine] at hLabel
-  --   | visible leftVisible =>
-  --   cases hRightLabelForm : rightEdge.label with
-  --   | «variable» name =>
-  --       exfalso
-  --       rw [hLabelForm, hRightLabelForm] at hLabel
-  --       simp [AutomatonConstructionLabel.combine] at hLabel
-  --   | visible rightVisible =>
-  --   have hSyncFull : syncAutomatonEdges signature left.alphabet right.alphabet
-  --       interface leftEdge rightEdge := hSync0
-  --   simp only [syncAutomatonEdges, parallelComponentEdgeAllowed, hLabelForm,
-  --     hRightLabelForm] at hSyncFull
-  --   obtain ⟨hLeftAllowed, hRightAllowed, hAutoLocal1, hAutoLocal2, hSameCurLeft,
-  --     hSameCurRight, hSameFutLeft, hSameFutRight, hSyncCond⟩ := hSyncFull
-  --   rw [hEnv] at hAutoLocal1 hAutoLocal2
-  --   have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEdge.environment
-  --       leftVisible (TypeOfferSummary.mk leftEdge.current leftEdge.future) ∈
-  --       signature.transitionAlphabetFor left.alphabet := by
-  --     simpa [hLabelForm] using hLeftAllowed
-  --   have hRightSymbolMem : TypeAutomatonSymbol.mk rightEdge.environment
-  --       rightVisible (TypeOfferSummary.mk rightEdge.current rightEdge.future) ∈
-  --       signature.transitionAlphabetFor right.alphabet := by
-  --     simpa [hRightLabelForm] using hRightAllowed
-  --   have hLeftHasEdge : (compileType signature left).HasEdge leftEdge.source
-  --       leftEdge.environment leftVisible
-  --       (TypeOfferSummary.mk leftEdge.current leftEdge.future) leftEdge.target := by
-  --     rw [compileType_hasEdge_iff_resolvedEdge_mem signature left leftEdge.source
-  --       leftEdge.target leftEdge.environment leftVisible
-  --       (TypeOfferSummary.mk leftEdge.current leftEdge.future) hLeftSymbolMem]
-  --     have hEdgeEq :
-  --         AutomatonFragmentEdge.mk leftEdge.source leftEdge.environment
-  --           (AutomatonConstructionLabel.visible leftVisible) leftEdge.current
-  --           leftEdge.future leftEdge.target = leftEdge := by
-  --       rw [← hLabelForm]
-  --     rw [hEdgeEq]
-  --     exact hLeftMem
-  --   have hRightHasEdge : (compileType signature right).HasEdge rightEdge.source
-  --       rightEdge.environment rightVisible
-  --       (TypeOfferSummary.mk rightEdge.current rightEdge.future) rightEdge.target := by
-  --     rw [compileType_hasEdge_iff_resolvedEdge_mem signature right rightEdge.source
-  --       rightEdge.target rightEdge.environment rightVisible
-  --       (TypeOfferSummary.mk rightEdge.current rightEdge.future) hRightSymbolMem]
-  --     have hEdgeEq :
-  --         AutomatonFragmentEdge.mk rightEdge.source rightEdge.environment
-  --           (AutomatonConstructionLabel.visible rightVisible) rightEdge.current
-  --           rightEdge.future rightEdge.target = rightEdge := by
-  --       rw [← hRightLabelForm]
-  --     rw [hEdgeEq]
-  --     exact hRightMem
-  --   have hEnvWF : env.WellFormed :=
-  --     localEnvironment_wellFormed signature
-  --       (TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
-  --         signature alphabet
-  --         (transitionAlphabetFor_localEnvironment_mem signature alphabet
-  --           hSymbol'))
-  --   have hLocal1 : LocalTypeOfferEnvironment env interface left
-  --       rightEdge.environment rightEdge.current rightEdge.future
-  --       leftEdge.environment := by
-  --     rcases hAutoLocal1 with
-  --       ⟨hOuterClock, hSiblingClock, hLocalClock⟩ |
-  --       ⟨hOuterClock, hSiblingClock, hLocalClock, hImmediate, hFuture⟩
-  --     · exact hSiblingClock ▸ hLocalClock ▸
-  --         LocalTypeOfferEnvironment.clock env interface left
-  --           rightEdge.current rightEdge.future hOuterClock
-  --     · exact LocalTypeOfferEnvironment.ordinary env rightEdge.environment
-  --         leftEdge.environment interface left rightEdge.current
-  --         rightEdge.future hOuterClock hSiblingClock hLocalClock hImmediate
-  --         hFuture
-  --   have hLocal2 : LocalTypeOfferEnvironment env interface right
-  --       leftEdge.environment leftEdge.current leftEdge.future
-  --       rightEdge.environment := by
-  --     rcases hAutoLocal2 with
-  --       ⟨hOuterClock, hSiblingClock, hLocalClock⟩ |
-  --       ⟨hOuterClock, hSiblingClock, hLocalClock, hImmediate, hFuture⟩
-  --     · exact hSiblingClock ▸ hLocalClock ▸
-  --         LocalTypeOfferEnvironment.clock env interface right
-  --           leftEdge.current leftEdge.future hOuterClock
-  --     · exact LocalTypeOfferEnvironment.ordinary env leftEdge.environment
-  --         rightEdge.environment interface right leftEdge.current
-  --         leftEdge.future hOuterClock hSiblingClock hLocalClock hImmediate
-  --         hFuture
-  --   have hAcceptEqLeft : (compileTypeFuel signature (typeCompilationFuel left) left).accepting
-  --       = (compileType signature left).accepting := by
-  --     simp [compileType]
-  --   have hAcceptEqRight : (compileTypeFuel signature (typeCompilationFuel right) right).accepting
-  --       = (compileType signature right).accepting := by
-  --     simp [compileType]
-  --   -- Residual witnesses at the two child targets, needed for H15.
-  --   obtain ⟨leftTargetResidual, hLeftTargetRelated⟩ :
-  --       ∃ residual, relationMembership
-  --         (buildRelationSet left (compileType signature left)) residual
-  --         leftEdge.target := by
-  --     simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftMem
-  --     obtain ⟨rawLeft, hRawLeftMem, hRawLeftEq⟩ := hLeftMem
-  --     have hRawLeftTarget : rawLeft.target = leftEdge.target := by
-  --       rw [← hRawLeftEq]
-  --     rcases buildRelationSetCoreFuel_edge_target_mem signature
-  --         (typeCompilationFuel left) left le_rfl rawLeft hRawLeftMem with
-  --         ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
-  --     · exact ⟨residual, hRawLeftTarget ▸ hResidual⟩
-  --     · exfalso
-  --       have hRawLeftLabel : rawLeft.label = .visible leftVisible := by
-  --         rw [← hRawLeftEq] at hLabelForm; exact hLabelForm
-  --       rw [hRawLeftLabel] at hMarkerLabel
-  --       cases hMarkerLabel
-  --   obtain ⟨rightTargetResidual, hRightTargetRelated⟩ :
-  --       ∃ residual, relationMembership
-  --         (buildRelationSet right (compileType signature right)) residual
-  --         rightEdge.target := by
-  --     simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightMem
-  --     obtain ⟨rawRight, hRawRightMem, hRawRightEq⟩ := hRightMem
-  --     have hRawRightTarget : rawRight.target = rightEdge.target := by
-  --       rw [← hRawRightEq]
-  --     rcases buildRelationSetCoreFuel_edge_target_mem signature
-  --         (typeCompilationFuel right) right le_rfl rawRight hRawRightMem with
-  --         ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
-  --     · exact ⟨residual, hRawRightTarget ▸ hResidual⟩
-  --     · exfalso
-  --       have hRawRightLabel : rawRight.label = .visible rightVisible := by
-  --         rw [← hRawRightEq] at hRightLabelForm; exact hRightLabelForm
-  --       rw [hRawRightLabel] at hMarkerLabel
-  --       cases hMarkerLabel
-  --   have hLeftFutureEq : leftEdge.future =
-  --       typeFutureOffers leftTargetResidual \ leftEdge.current :=
-  --     helper_h15_edge_future_offers_agree signature hChildLeftRelated
-  --       hLeftTargetRelated (hQ1Eq ▸ hLeftHasEdge)
-  --   have hRightFutureEq : rightEdge.future =
-  --       typeFutureOffers rightTargetResidual \ rightEdge.current :=
-  --     helper_h15_edge_future_offers_agree signature hChildRightRelated
-  --       hRightTargetRelated (hQ2Eq ▸ hRightHasEdge)
-  --   have hParFutureEq : computeFutureOf signature (.par alphabet left right interface)
-  --       (if leftEdge.target ∈ (compileType signature left).accepting ∧
-  --           rightEdge.target ∈ (compileType signature right).accepting then
-  --         TypeAutomatonState.final
-  --       else leftEdge.target.pair rightEdge.target) =
-  --       hideTypeOffers interface
-  --         (typeFutureOffers leftTargetResidual ∪ typeFutureOffers rightTargetResidual) := by
-  --     split_ifs with hAccept
-  --     · have hParTargetRelated := relationMembership_par_final signature alphabet
-  --         left right interface
-  --       rw [helper_h15_future_offers_agree signature hParTargetRelated]
-  --       obtain ⟨leftAlph, hLeftMem'⟩ :=
-  --         relationMembership_of_accepting signature left hAccept.1
-  --       obtain ⟨rightAlph, hRightMem'⟩ :=
-  --         relationMembership_of_accepting signature right hAccept.2
-  --       have hLeftSkip : leftTargetResidual = .skip leftAlph :=
-  --         relationMembership_functional left (compileType signature left)
-  --           hLeftTargetRelated hLeftMem'
-  --       have hRightSkip : rightTargetResidual = .skip rightAlph :=
-  --         relationMembership_functional right (compileType signature right)
-  --           hRightTargetRelated hRightMem'
-  --       rw [hLeftSkip, hRightSkip]
-  --       simp [typeFutureOffers, typeFutureOffersFuel, hideTypeOffers, PactType.alphabet]
-  --     · have hReachTarget :
-  --           ParallelReachable signature alphabet left.alphabet right.alphabet
-  --             interface
-  --             (compileTypeFuel signature (typeCompilationFuel left) left)
-  --             (compileTypeFuel signature (typeCompilationFuel right) right)
-  --             (computeFutureOf signature left) (computeFutureOf signature right)
-  --             (.pair leftEdge.target rightEdge.target) := by
-  --         have hRaw := compiledParallel_pair_edge_target_reachable signature alphabet
-  --           left right interface hSymbol hEdge
-  --         rw [← hTarget] at hRaw
-  --         rwa [if_neg (hAcceptEqLeft ▸ hAcceptEqRight ▸ hAccept)] at hRaw
-  --       have hParTargetRelated := relationMembership_par_pair signature alphabet
-  --         left right interface hLeftTargetRelated hRightTargetRelated hReachTarget
-  --       rw [helper_h15_future_offers_agree signature hParTargetRelated,
-  --         typeFutureOffers_parallel]
-  --   have hRightCurrentSubset : rightEdge.current ⊆ right.alphabet.actions := by
-  --     rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
-  --     have := hRightSymbolMem.2.2
-  --     rw [localOfferSummariesFor_mk_mem_iff] at this
-  --     exact this.1.trans Finset.inter_subset_right
-  --   have hLeftCurrentSubset : leftEdge.current ⊆ left.alphabet.actions := by
-  --     rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
-  --     have := hLeftSymbolMem.2.2
-  --     rw [localOfferSummariesFor_mk_mem_iff] at this
-  --     exact this.1.trans Finset.inter_subset_right
-  --   have hActionsDisjoint : Disjoint left.alphabet.actions right.alphabet.actions :=
-  --     hParallelCompatible.actions_disjoint
-  --   -- An action in `left`'s future menu but not its own current offer is
-  --   -- exactly an action of the resolved edge `leftEdge.future`, which stays
-  --   -- within `left`'s own fixed alphabet; the two children's fixed
-  --   -- alphabets are disjoint (`ParallelCompatible`), so it can never sit in
-  --   -- `right`'s current offer, and symmetrically.
-  --   have hLeftFutureRightCurrentDisjoint :
-  --       ∀ action, action ∈ typeFutureOffers leftTargetResidual →
-  --         action ∉ leftEdge.current → action ∉ rightEdge.current := by
-  --     intro action hLeftFuture hNotLeftCurrent hRightCurrent
-  --     have hLeftAlph : action ∈ left.alphabet.actions := by
-  --       rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
-  --       rw [localOfferSummariesFor_mk_mem_iff] at hLeftSymbolMem
-  --       refine (hLeftSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
-  --       rw [hLeftFutureEq]
-  --       exact Finset.mem_sdiff.mpr ⟨hLeftFuture, hNotLeftCurrent⟩
-  --     exact Finset.disjoint_left.mp hActionsDisjoint hLeftAlph
-  --       (hRightCurrentSubset hRightCurrent)
-  --   have hRightFutureLeftCurrentDisjoint :
-  --       ∀ action, action ∈ typeFutureOffers rightTargetResidual →
-  --         action ∉ rightEdge.current → action ∉ leftEdge.current := by
-  --     intro action hRightFuture hNotRightCurrent hLeftCurrent
-  --     have hRightAlph : action ∈ right.alphabet.actions := by
-  --       rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
-  --       rw [localOfferSummariesFor_mk_mem_iff] at hRightSymbolMem
-  --       refine (hRightSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
-  --       rw [hRightFutureEq]
-  --       exact Finset.mem_sdiff.mpr ⟨hRightFuture, hNotRightCurrent⟩
-  --     exact Finset.disjoint_right.mp hActionsDisjoint hRightAlph
-  --       (hLeftCurrentSubset hLeftCurrent)
-  --   have hFutureEq : offers.future =
-  --       hideTypeOffers interface (leftEdge.future ∪ rightEdge.future) := by
-  --     rw [← hFuture]
-  --     rw [hAcceptEqLeft, hAcceptEqRight, hParFutureEq]
-  --     rw [hLeftFutureEq, hRightFutureEq]
-  --     apply Finset.ext
-  --     intro action
-  --     simp only [hideTypeOffers, hideOffers, Finset.mem_filter, Finset.mem_sdiff,
-  --       Finset.mem_union]
-  --     constructor
-  --     · rintro ⟨⟨(hL | hR), hInterface⟩, hNotCur⟩
-  --       · refine ⟨Or.inl ⟨hL, ?_⟩, hInterface⟩
-  --         intro hLCur
-  --         exact hNotCur ⟨Or.inl hLCur, hInterface⟩
-  --       · refine ⟨Or.inr ⟨hR, ?_⟩, hInterface⟩
-  --         intro hRCur
-  --         exact hNotCur ⟨Or.inr hRCur, hInterface⟩
-  --     · rintro ⟨(⟨hL, hLNotCur⟩ | ⟨hR, hRNotCur⟩), hInterface⟩
-  --       · refine ⟨⟨Or.inl hL, hInterface⟩, ?_⟩
-  --         rintro ⟨hCur | hCur, -⟩
-  --         · exact hLNotCur hCur
-  --         · exact hLeftFutureRightCurrentDisjoint action hL hLNotCur hCur
-  --       · refine ⟨⟨Or.inr hR, hInterface⟩, ?_⟩
-  --         rintro ⟨hCur | hCur, -⟩
-  --         · exact hRightFutureLeftCurrentDisjoint action hR hRNotCur hCur
-  --         · exact hRNotCur hCur
-  --   refine ⟨leftEdge.environment, rightEdge.environment, leftVisible, rightVisible,
-  --     TypeOfferSummary.mk leftEdge.current leftEdge.future,
-  --     TypeOfferSummary.mk rightEdge.current rightEdge.future,
-  --     leftEdge.target, rightEdge.target, hQ1Eq ▸ hLeftHasEdge, hQ2Eq ▸ hRightHasEdge,
-  --     hQ1Eq ▸ hQ2Eq ▸ hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, ?_, ?_, ?_, ?_⟩
-  --   · rw [hLabelForm, hRightLabelForm, AutomatonConstructionLabel.combine] at hLabel
-  --     injection hLabel with hLabelEq
-  --     exact hLabelEq.symm
-  --   · exact hCurrent.symm
-  --   · exact hFutureEq
-  --   · rw [← hAcceptEqLeft, ← hAcceptEqRight]
-  --     split_ifs with hAccept
-  --     · rw [← hTarget, if_pos hAccept]
-  --     · rw [← hTarget, if_neg hAccept]
-  -- -- Backward direction: given two edges and a reachable pair of targets, we
-  -- -- can reconstruct a parallel edge.
-  -- · rintro ⟨leftEnv, rightEnv, leftLabel, rightLabel, leftOffers, rightOffers, q1', q2',
-  --     hLeftEdge, hRightEdge, hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, hLabelEq,
-  --     hCurrentEq, hFutureEq, hRedirect⟩
-  --   have hLeftSymbol := compileType_hasEdge_symbol_mem signature left hLeftEdge
-  --   have hRightSymbol := compileType_hasEdge_symbol_mem signature right hRightEdge
-  --   have hLeftResolvedMem :=
-  --     (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q1' leftEnv leftLabel
-  --       leftOffers hLeftSymbol).mp hLeftEdge
-  --   have hRightResolvedMem :=
-  --     (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q2' rightEnv rightLabel
-  --       rightOffers hRightSymbol).mp hRightEdge
-  --   -- Reconstruct the parent environment from the two consistent local
-  --   -- views: `env` is well-formed over the merged, interface-hidden
-  --   -- alphabet, so it can only mention actions coming from `left`/`right`,
-  --   -- and `LocalTypeOfferEnvironment`'s own projection equations recover
-  --   -- exactly that combination.
-  --   have hAlphabetEq : alphabet = PactTypeAlphabet.mergeHidden left.alphabet
-  --       right.alphabet interface := hParallelCompatible.parent_eq
-  --   have hEnvMem : env ∈ signature.localEnvironmentsFor alphabet :=
-  --     transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol
-  --   -- A single non-interface action ends up in `env`'s menu (immediate or
-  --   -- future) iff the matching sibling-projected offer, drawn from `left`
-  --   -- or `right`, put it there; this is the common core of both halves of
-  --   -- the reconstruction below.
-  --   have hMemChar : ∀ (envSet leftEnvSet rightEnvSet leftSibling rightSibling
-  --       : Finset BareMessage) (action : BareMessage),
-  --       envSet ⊆ signature.localEnvironmentActionsFor alphabet →
-  --       leftEnvSet = projectTypeEnvironmentOffers left.alphabet envSet ∪
-  --         restrictTypeOffers interface rightSibling →
-  --       rightEnvSet = projectTypeEnvironmentOffers right.alphabet envSet ∪
-  --         restrictTypeOffers interface leftSibling →
-  --       (action ∈ envSet ∧ action.1 ∉ interface ↔
-  --         (action ∈ leftEnvSet ∨ action ∈ rightEnvSet) ∧ action.1 ∉ interface) := by
-  --     intro envSet leftEnvSet rightEnvSet leftSibling rightSibling action hEnvSetMem
-  --       hLeftEnvSet hRightEnvSet
-  --     constructor
-  --     · rintro ⟨hAction, hNotInterface⟩
-  --       refine ⟨?_, hNotInterface⟩
-  --       have hActionMem := hEnvSetMem hAction
-  --       simp only [TypeAlphabet.localEnvironmentActionsFor,
-  --         TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
-  --         at hActionMem
-  --       obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hActionMem
-  --       rw [hAlphabetEq] at hLocalActionAlph
-  --       simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
-  --         Finset.mem_union] at hLocalActionAlph
-  --       rcases hLocalActionAlph.1 with hL | hR
-  --       · left; rw [hLeftEnvSet]
-  --         exact Finset.mem_union.mpr (Or.inl
-  --           (Finset.mem_filter.mpr ⟨hAction,
-  --             Finset.mem_image.mpr ⟨localAction, hL, hNeedEq⟩⟩))
-  --       · right; rw [hRightEnvSet]
-  --         exact Finset.mem_union.mpr (Or.inl
-  --           (Finset.mem_filter.mpr ⟨hAction,
-  --             Finset.mem_image.mpr ⟨localAction, hR, hNeedEq⟩⟩))
-  --     · rintro ⟨hLR, hNotInterface⟩
-  --       refine ⟨?_, hNotInterface⟩
-  --       rcases hLR with hL | hR
-  --       · rw [hLeftEnvSet] at hL
-  --         simp only [Finset.mem_union, projectTypeEnvironmentOffers,
-  --           Finset.mem_filter, restrictTypeOffers] at hL
-  --         rcases hL with ⟨hAction, _⟩ | ⟨_, hInterfaceMem⟩
-  --         · exact hAction
-  --         · exact absurd hInterfaceMem hNotInterface
-  --       · rw [hRightEnvSet] at hR
-  --         simp only [Finset.mem_union, projectTypeEnvironmentOffers,
-  --           Finset.mem_filter, restrictTypeOffers] at hR
-  --         rcases hR with ⟨hAction, _⟩ | ⟨_, hInterfaceMem⟩
-  --         · exact hAction
-  --         · exact absurd hInterfaceMem hNotInterface
-  --   have hEnvMemSet : env.immediate ⊆ signature.localEnvironmentActionsFor alphabet ∧
-  --       env.future ⊆ signature.localEnvironmentActionsFor alphabet := by
-  --     simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
-  --       Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
-  --       Finset.mem_image] at hEnvMem
-  --     rcases hEnvMem with hTock | ⟨imm, hImm, fut, hFut, hEq⟩
-  --     · rw [hTock]; simp [TypeEnvironment.tock]
-  --     · rw [← hEq]
-  --       exact ⟨hImm, hFut.trans (Finset.sdiff_subset)⟩
-  --   -- Every action `env` itself carries already avoids the interface,
-  --   -- since `alphabet = mergeHidden ...` filters it out at the root.
-  --   have hEnvNotInterface : ∀ action ∈ signature.localEnvironmentActionsFor
-  --       alphabet, action.1 ∉ interface := by
-  --     intro action hAction
-  --     simp only [TypeAlphabet.localEnvironmentActionsFor,
-  --       TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
-  --       at hAction
-  --     obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
-  --     rw [hAlphabetEq] at hLocalActionAlph
-  --     simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
-  --     have hMsgEq : localAction.1 = action.1 := by
-  --       rw [← hNeedEq]; simp [typeNeed]
-  --     rw [← hMsgEq]
-  --     exact hLocalActionAlph.2
-  --   have hEnvEq : env = combineAutomatonEnvironment interface leftEnv rightEnv := by
-  --     cases hLocal1 with
-  --     | clock _ =>
-  --       rename_i hOuterClockA
-  --       cases hLocal2 with
-  --       | clock _ =>
-  --         rename_i hOuterClockC
-  --         show env = combineAutomatonEnvironment interface TypeEnvironment.tock
-  --           TypeEnvironment.tock
-  --         rw [combineAutomatonEnvironment]
-  --         simp only [TypeEnvironment.tock, if_pos rfl]
-  --         have hOuterClock1' : env.clock = true := hOuterClockA
-  --         have hEnvWF' := hEnvWF.1 hOuterClock1'
-  --         obtain ⟨immediate, future, clock⟩ := env
-  --         simp only [TypeEnvironment.clock] at hOuterClock1'
-  --         simp only [hOuterClock1', if_pos rfl]
-  --         simp only [TypeEnvironment.immediate] at hEnvWF'
-  --         rw [hEnvWF'.1, hEnvWF'.2]
-  --         simp
-  --       | ordinary _ _ _ _ _ =>
-  --         rename_i hOuterClockD _ _ _ _
-  --         rw [hOuterClockA] at hOuterClockD
-  --         exact absurd hOuterClockD (by simp)
-  --     | ordinary _ _ _ _ _ =>
-  --       rename_i hOuterClockB hSiblingClock1 hLocalClock1 hImmediate1 hFuture1
-  --       cases hLocal2 with
-  --       | clock _ =>
-  --         rename_i hOuterClockE
-  --         rw [hOuterClockE] at hOuterClockB
-  --         exact absurd hOuterClockB (by simp)
-  --       | ordinary _ _ _ _ _ =>
-  --         rename_i hOuterClockF hSiblingClock2 hLocalClock2 hImmediate2 hFuture2
-  --         simp only [combineAutomatonEnvironment, hSiblingClock2, hSiblingClock1,
-  --           Bool.and_self, Bool.false_eq_true, if_neg, Bool.and_false]
-  --         have hOuterClock1' : env.clock = false := hOuterClockB
-  --         -- Every action `env` itself carries already avoids the interface,
-  --         -- since `alphabet = mergeHidden ...` filters it out at the root.
-  --         have hEnvNotInterface : ∀ action ∈ signature.localEnvironmentActionsFor
-  --             alphabet, action.1 ∉ interface := by
-  --           intro action hAction
-  --           simp only [TypeAlphabet.localEnvironmentActionsFor,
-  --             TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
-  --             at hAction
-  --           obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
-  --           rw [hAlphabetEq] at hLocalActionAlph
-  --           simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
-  --           have hMsgEq : localAction.1 = action.1 := by
-  --             rw [← hNeedEq]; simp [typeNeed]
-  --           rw [← hMsgEq]
-  --           exact hLocalActionAlph.2
-  --         have hImmEq : env.immediate = hideOffers interface (leftEnv.immediate ∪
-  --             rightEnv.immediate) := by
-  --           apply Finset.ext
-  --           intro action
-  --           have hChar := hMemChar env.immediate leftEnv.immediate rightEnv.immediate
-  --             leftOffers.current rightOffers.current action hEnvMemSet.1 hImmediate1
-  --             hImmediate2
-  --           simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hChar ⊢
-  --           rw [show (action ∈ env.immediate ↔
-  --               (action ∈ env.immediate ∧ action.1 ∉ interface))
-  --             from ⟨fun h => ⟨h, hEnvNotInterface action (hEnvMemSet.1 h)⟩, fun h => h.1⟩]
-  --           exact hChar
-  --         have hFutEq : env.future = hideOffers interface (leftEnv.future ∪
-  --             rightEnv.future) := by
-  --           -- `env`'s own immediate/future menus are disjoint (well-formedness),
-  --           -- so the `\ localEnv.immediate` subtraction each side's future
-  --           -- equation never removes a non-interface action relevant here:
-  --           -- such an action, if it were in `leftEnv.immediate`/
-  --           -- `rightEnv.immediate`, would (via `hImmEq`, restricted away from
-  --           -- the interface) already sit in `env.immediate`, contradicting
-  --           -- `env.future`'s disjointness from `env.immediate`.
-  --           have hNotImmediate : ∀ action, action ∈ env.future → action.1 ∉ interface →
-  --               action ∉ leftEnv.immediate ∧ action ∉ rightEnv.immediate := by
-  --             intro action hActionFuture hActionInterface
-  --             have hDisjoint : env.immediate ∩ env.future = ∅ := hEnvWF.2 hOuterClock1'
-  --             have hNotEnvImmediate : action ∉ env.immediate := by
-  --               intro hMem
-  --               have hMemInter : action ∈ env.immediate ∩ env.future :=
-  --                 Finset.mem_inter.mpr ⟨hMem, hActionFuture⟩
-  --               rw [hDisjoint] at hMemInter
-  --               simp at hMemInter
-  --             rw [hImmEq] at hNotEnvImmediate
-  --             simp only [hideOffers, Finset.mem_filter, not_and] at hNotEnvImmediate
-  --             have hNotUnion : action ∉ leftEnv.immediate ∪ rightEnv.immediate :=
-  --               fun hMem => absurd hActionInterface (hNotEnvImmediate hMem)
-  --             simp only [Finset.mem_union, not_or] at hNotUnion
-  --             exact hNotUnion
-  --           apply Finset.ext
-  --           intro action
-  --           have hEnvFutureIff : action ∈ env.future ↔
-  --               (action ∈ leftEnv.future ∨ action ∈ rightEnv.future) ∧
-  --                 action.1 ∉ interface := by
-  --             have hChar := hMemChar env.future
-  --               (projectTypeEnvironmentOffers left.alphabet env.future ∪
-  --                 restrictTypeOffers interface rightOffers.future)
-  --               (projectTypeEnvironmentOffers right.alphabet env.future ∪
-  --                 restrictTypeOffers interface leftOffers.future)
-  --               leftOffers.future rightOffers.future action hEnvMemSet.2 rfl rfl
-  --             simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hChar
-  --             constructor
-  --             · intro hActionFuture
-  --               have hActionInterface := hEnvNotInterface action (hEnvMemSet.2 hActionFuture)
-  --               have hOr := (hChar.mp ⟨hActionFuture, hActionInterface⟩).1
-  --               refine ⟨?_, hActionInterface⟩
-  --               rcases hOr with hL | hR
-  --               · left; rw [hFuture1]
-  --                 exact Finset.mem_sdiff.mpr ⟨Finset.mem_union.mpr hL,
-  --                   (hNotImmediate action hActionFuture hActionInterface).1⟩
-  --               · right; rw [hFuture2]
-  --                 exact Finset.mem_sdiff.mpr ⟨Finset.mem_union.mpr hR,
-  --                   (hNotImmediate action hActionFuture hActionInterface).2⟩
-  --             · rintro ⟨hOr, hNI⟩
-  --               have hEnvChar := hChar.mpr (by
-  --                 refine ⟨?_, hNI⟩
-  --                 rcases hOr with hL | hR
-  --                 · left; rw [hFuture1] at hL
-  --                   exact Finset.mem_union.mp (Finset.mem_sdiff.mp hL).1
-  --                 · right; rw [hFuture2] at hR
-  --                   exact Finset.mem_union.mp (Finset.mem_sdiff.mp hR).1)
-  --               exact hEnvChar.1
-  --           simp only [hideOffers, Finset.mem_filter, Finset.mem_union]
-  --           exact hEnvFutureIff
-  --         obtain ⟨immediate, future, clock⟩ := env
-  --         simp only [TypeEnvironment.clock] at hOuterClock1'
-  --         subst hOuterClock1'
-  --         simp only at hImmEq hFutEq
-  --         congr 1
-  --   have hAutoLocal1 : AutomatonLocalEnvironment
-  --       (combineAutomatonEnvironment interface leftEnv rightEnv) interface left.alphabet
-  --       ({ source := q2, environment := rightEnv, label := .visible rightLabel,
-  --           current := rightOffers.current, future := rightOffers.future,
-  --           target := q2' } : AutomatonFragmentEdge)
-  --       ({ source := q1, environment := leftEnv, label := .visible leftLabel,
-  --           current := leftOffers.current, future := leftOffers.future,
-  --           target := q1' } : AutomatonFragmentEdge) := by
-  --     rw [← hEnvEq]
-  --     cases hLocal1 with
-  --     | clock _ =>
-  --       rename_i hOuterClock
-  --       exact AutomatonLocalEnvironment.clock hOuterClock rfl rfl
-  --     | ordinary _ _ _ _ _ =>
-  --       rename_i hOuterClock hSiblingClock hLocalClock hImmediate hFuture
-  --       exact AutomatonLocalEnvironment.ordinary hOuterClock hSiblingClock hLocalClock
-  --         hImmediate hFuture
-  --   have hAutoLocal2 : AutomatonLocalEnvironment
-  --       (combineAutomatonEnvironment interface leftEnv rightEnv) interface right.alphabet
-  --       ({ source := q1, environment := leftEnv, label := .visible leftLabel,
-  --           current := leftOffers.current, future := leftOffers.future,
-  --           target := q1' } : AutomatonFragmentEdge)
-  --       ({ source := q2, environment := rightEnv, label := .visible rightLabel,
-  --           current := rightOffers.current, future := rightOffers.future,
-  --           target := q2' } : AutomatonFragmentEdge) := by
-  --     rw [← hEnvEq]
-  --     cases hLocal2 with
-  --     | clock _ =>
-  --       rename_i hOuterClock
-  --       exact AutomatonLocalEnvironment.clock hOuterClock rfl rfl
-  --     | ordinary _ _ _ _ _ =>
-  --       rename_i hOuterClock hSiblingClock hLocalClock hImmediate hFuture
-  --       exact AutomatonLocalEnvironment.ordinary hOuterClock hSiblingClock hLocalClock
-  --         hImmediate hFuture
-  --   -- TODO(parallel-clock-gap): the `sameOnInterface` obligations below need
-  --   -- "clocked ⟹ offers empty", which is FALSE in general as stated (a real
-  --   -- counterexample: `TypeOffers.offer_else`/`.xoffer_else`/`.progress`
-  --   -- and their automaton builders are missing an `env.clock = false`
-  --   -- premise, so a clock-environment step can carry nonempty current
-  --   -- offers). That is a genuine pre-existing soundness gap in those rules,
-  --   -- not something to route around here — needs the missing premise added
-  --   -- to the semantic rules and automaton builders (and their call sites
-  --   -- repaired) before this proof can be finished honestly. Left as `sorry`
-  --   -- pending that fix.
-  --   sorry
+  classical
+  have hWhole : compileTypeFuel signature
+      (typeCompilationFuel (.par alphabet left right interface))
+      (.par alphabet left right interface) =
+      buildParallelAutomaton signature alphabet left.alphabet right.alphabet
+        interface
+        (compileTypeFuel signature (typeCompilationFuel left) left)
+        (compileTypeFuel signature (typeCompilationFuel right) right)
+        (computeFutureOf signature left)
+        (computeFutureOf signature right) := by
+    have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
+        max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+      simp only [typeCompilationFuel]; omega
+    rw [hFuelEq]
+    rw [compileTypeFuel.eq_def]
+    show buildParallelAutomaton signature alphabet left.alphabet right.alphabet
+      interface
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compileTypeFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+      (compiledChildFutureFuel signature
+        (max (typeCompilationFuel left) (typeCompilationFuel right)) right) = _
+    rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+      compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+    rw [compiledChildFutureFuel_eq_computeFutureOf signature _ left
+        (le_max_left _ _),
+      compiledChildFutureFuel_eq_computeFutureOf signature _ right
+        (le_max_right _ _)]
+    rfl
+  constructor
+  · intro hEdge
+    have hSymbol := compileType_hasEdge_symbol_mem signature
+      (.par alphabet left right interface) hEdge
+    have hSymbol' : TypeAutomatonSymbol.mk env label offers ∈
+        signature.transitionAlphabetFor alphabet := by
+      simpa [PactType.alphabet] using hSymbol
+    have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
+      (.par alphabet left right interface) (.pair q1 q2) target env label offers
+      hSymbol').mp hEdge
+    obtain ⟨edge, hPending, hSource, hEnv, hLabel, hCurrent, hFuture, hTarget⟩ :=
+      hResolved
+    rw [hWhole] at hPending
+    simp only [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelDoneEdges, Finset.mem_union,
+      Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image] at hPending
+    rcases hPending with
+        ⟨⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, hSync0⟩, hEq⟩, hReach⟩ |
+        ⟨environment, hEnvironment, hEq⟩
+    swap
+    · exfalso
+      rw [← hEq] at hSource
+      simp at hSource
+    rw [← hEq] at hSource hEnv hLabel hCurrent hFuture hTarget hReach
+    simp only at hSource hEnv hLabel hCurrent hFuture hTarget hReach
+    injection hSource with hQ1Eq hQ2Eq
+    cases hLabelForm : leftEdge.label with
+    | «variable» name =>
+        exfalso
+        rw [hLabelForm] at hLabel
+        simp [AutomatonConstructionLabel.combine] at hLabel
+    | visible leftVisible =>
+    cases hRightLabelForm : rightEdge.label with
+    | «variable» name =>
+        exfalso
+        rw [hLabelForm, hRightLabelForm] at hLabel
+        simp [AutomatonConstructionLabel.combine] at hLabel
+    | visible rightVisible =>
+    have hSyncFull : syncAutomatonEdges signature left.alphabet right.alphabet
+        interface leftEdge rightEdge := hSync0
+    simp only [syncAutomatonEdges, parallelComponentEdgeAllowed, hLabelForm,
+      hRightLabelForm] at hSyncFull
+    obtain ⟨hLeftAllowed, hRightAllowed, hAutoLocal1, hAutoLocal2, hSameCurLeft,
+      hSameCurRight, hSameFutLeft, hSameFutRight, hSyncCond⟩ := hSyncFull
+    rw [hEnv] at hAutoLocal1 hAutoLocal2
+    have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEdge.environment
+        leftVisible (TypeOfferSummary.mk leftEdge.current leftEdge.future) ∈
+        signature.transitionAlphabetFor left.alphabet := by
+      simpa [hLabelForm] using hLeftAllowed
+    have hRightSymbolMem : TypeAutomatonSymbol.mk rightEdge.environment
+        rightVisible (TypeOfferSummary.mk rightEdge.current rightEdge.future) ∈
+        signature.transitionAlphabetFor right.alphabet := by
+      simpa [hRightLabelForm] using hRightAllowed
+    have hLeftHasEdge : (compileType signature left).HasEdge leftEdge.source
+        leftEdge.environment leftVisible
+        (TypeOfferSummary.mk leftEdge.current leftEdge.future) leftEdge.target := by
+      rw [compileType_hasEdge_iff_resolvedEdge_mem signature left leftEdge.source
+        leftEdge.target leftEdge.environment leftVisible
+        (TypeOfferSummary.mk leftEdge.current leftEdge.future) hLeftSymbolMem]
+      have hEdgeEq :
+          AutomatonFragmentEdge.mk leftEdge.source leftEdge.environment
+            (AutomatonConstructionLabel.visible leftVisible) leftEdge.current
+            leftEdge.future leftEdge.target = leftEdge := by
+        rw [← hLabelForm]
+      rw [hEdgeEq]
+      exact hLeftMem
+    have hRightHasEdge : (compileType signature right).HasEdge rightEdge.source
+        rightEdge.environment rightVisible
+        (TypeOfferSummary.mk rightEdge.current rightEdge.future) rightEdge.target := by
+      rw [compileType_hasEdge_iff_resolvedEdge_mem signature right rightEdge.source
+        rightEdge.target rightEdge.environment rightVisible
+        (TypeOfferSummary.mk rightEdge.current rightEdge.future) hRightSymbolMem]
+      have hEdgeEq :
+          AutomatonFragmentEdge.mk rightEdge.source rightEdge.environment
+            (AutomatonConstructionLabel.visible rightVisible) rightEdge.current
+            rightEdge.future rightEdge.target = rightEdge := by
+        rw [← hRightLabelForm]
+      rw [hEdgeEq]
+      exact hRightMem
+    have hEnvWF : env.WellFormed :=
+      localEnvironment_wellFormed signature
+        (TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
+          signature alphabet
+          (transitionAlphabetFor_localEnvironment_mem signature alphabet
+            hSymbol'))
+    have hLocal1 : LocalTypeOfferEnvironment env interface left
+        rightEdge.environment rightEdge.current rightEdge.future
+        leftEdge.environment := by
+      rcases hAutoLocal1 with
+        ⟨hOuterClock, hSiblingClock, hLocalClock⟩ |
+        ⟨hOuterClock, hSiblingClock, hLocalClock, hImmediate, hFuture⟩
+      · exact hSiblingClock ▸ hLocalClock ▸
+          LocalTypeOfferEnvironment.clock env interface left
+            rightEdge.current rightEdge.future hOuterClock
+      · exact LocalTypeOfferEnvironment.ordinary env rightEdge.environment
+          leftEdge.environment interface left rightEdge.current
+          rightEdge.future hOuterClock hSiblingClock hLocalClock hImmediate
+          hFuture
+    have hLocal2 : LocalTypeOfferEnvironment env interface right
+        leftEdge.environment leftEdge.current leftEdge.future
+        rightEdge.environment := by
+      rcases hAutoLocal2 with
+        ⟨hOuterClock, hSiblingClock, hLocalClock⟩ |
+        ⟨hOuterClock, hSiblingClock, hLocalClock, hImmediate, hFuture⟩
+      · exact hSiblingClock ▸ hLocalClock ▸
+          LocalTypeOfferEnvironment.clock env interface right
+            leftEdge.current leftEdge.future hOuterClock
+      · exact LocalTypeOfferEnvironment.ordinary env leftEdge.environment
+          rightEdge.environment interface right leftEdge.current
+          leftEdge.future hOuterClock hSiblingClock hLocalClock hImmediate
+          hFuture
+    have hAcceptEqLeft : (compileTypeFuel signature (typeCompilationFuel left) left).accepting
+        = (compileType signature left).accepting := by
+      simp [compileType]
+    have hAcceptEqRight : (compileTypeFuel signature (typeCompilationFuel right) right).accepting
+        = (compileType signature right).accepting := by
+      simp [compileType]
+    -- Residual witnesses at the two child targets, needed for H15.
+    obtain ⟨leftTargetResidual, hLeftTargetRelated⟩ :
+        ∃ residual, relationMembership
+          (buildRelationSet left (compileType signature left)) residual
+          leftEdge.target := by
+      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftMem
+      obtain ⟨rawLeft, hRawLeftMem, hRawLeftEq⟩ := hLeftMem
+      have hRawLeftTarget : rawLeft.target = leftEdge.target := by
+        rw [← hRawLeftEq]
+      rcases buildRelationSetCoreFuel_edge_target_mem signature
+          (typeCompilationFuel left) left le_rfl rawLeft hRawLeftMem with
+          ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
+      · exact ⟨residual, hRawLeftTarget ▸ hResidual⟩
+      · exfalso
+        have hRawLeftLabel : rawLeft.label = .visible leftVisible := by
+          rw [← hRawLeftEq] at hLabelForm; exact hLabelForm
+        rw [hRawLeftLabel] at hMarkerLabel
+        cases hMarkerLabel
+    obtain ⟨rightTargetResidual, hRightTargetRelated⟩ :
+        ∃ residual, relationMembership
+          (buildRelationSet right (compileType signature right)) residual
+          rightEdge.target := by
+      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightMem
+      obtain ⟨rawRight, hRawRightMem, hRawRightEq⟩ := hRightMem
+      have hRawRightTarget : rawRight.target = rightEdge.target := by
+        rw [← hRawRightEq]
+      rcases buildRelationSetCoreFuel_edge_target_mem signature
+          (typeCompilationFuel right) right le_rfl rawRight hRawRightMem with
+          ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
+      · exact ⟨residual, hRawRightTarget ▸ hResidual⟩
+      · exfalso
+        have hRawRightLabel : rawRight.label = .visible rightVisible := by
+          rw [← hRawRightEq] at hRightLabelForm; exact hRightLabelForm
+        rw [hRawRightLabel] at hMarkerLabel
+        cases hMarkerLabel
+    have hLeftFutureEq : leftEdge.future =
+        typeFutureOffers leftTargetResidual \ leftEdge.current :=
+      helper_h15_edge_future_offers_agree signature hChildLeftRelated
+        hLeftTargetRelated (hQ1Eq ▸ hLeftHasEdge)
+    have hRightFutureEq : rightEdge.future =
+        typeFutureOffers rightTargetResidual \ rightEdge.current :=
+      helper_h15_edge_future_offers_agree signature hChildRightRelated
+        hRightTargetRelated (hQ2Eq ▸ hRightHasEdge)
+    have hParFutureEq : computeFutureOf signature (.par alphabet left right interface)
+        (if leftEdge.target ∈ (compileType signature left).accepting ∧
+            rightEdge.target ∈ (compileType signature right).accepting then
+          TypeAutomatonState.final
+        else leftEdge.target.pair rightEdge.target) =
+        hideTypeOffers interface
+          (typeFutureOffers leftTargetResidual ∪ typeFutureOffers rightTargetResidual) := by
+      split_ifs with hAccept
+      · have hParTargetRelated := relationMembership_par_final signature alphabet
+          left right interface
+        rw [helper_h15_future_offers_agree signature hParTargetRelated]
+        obtain ⟨leftAlph, hLeftMem'⟩ :=
+          relationMembership_of_accepting signature left hAccept.1
+        obtain ⟨rightAlph, hRightMem'⟩ :=
+          relationMembership_of_accepting signature right hAccept.2
+        have hLeftSkip : leftTargetResidual = .skip leftAlph :=
+          relationMembership_functional left (compileType signature left)
+            hLeftTargetRelated hLeftMem'
+        have hRightSkip : rightTargetResidual = .skip rightAlph :=
+          relationMembership_functional right (compileType signature right)
+            hRightTargetRelated hRightMem'
+        rw [hLeftSkip, hRightSkip]
+        simp [typeFutureOffers, typeFutureOffersFuel, hideTypeOffers, PactType.alphabet]
+      · have hReachTarget :
+            ParallelReachable signature alphabet left.alphabet right.alphabet
+              interface
+              (compileTypeFuel signature (typeCompilationFuel left) left)
+              (compileTypeFuel signature (typeCompilationFuel right) right)
+              (computeFutureOf signature left) (computeFutureOf signature right)
+              (.pair leftEdge.target rightEdge.target) := by
+          have hRaw := compiledParallel_pair_edge_target_reachable signature alphabet
+            left right interface hSymbol hEdge
+          rw [← hTarget] at hRaw
+          rwa [if_neg (hAcceptEqLeft ▸ hAcceptEqRight ▸ hAccept)] at hRaw
+        have hParTargetRelated := relationMembership_par_pair signature alphabet
+          left right interface hLeftTargetRelated hRightTargetRelated hReachTarget
+        rw [helper_h15_future_offers_agree signature hParTargetRelated,
+          typeFutureOffers_parallel]
+    have hRightCurrentSubset : rightEdge.current ⊆ right.alphabet.actions := by
+      rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
+      have := hRightSymbolMem.2.2
+      rw [localOfferSummariesFor_mk_mem_iff] at this
+      exact this.1.trans Finset.inter_subset_right
+    have hLeftCurrentSubset : leftEdge.current ⊆ left.alphabet.actions := by
+      rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
+      have := hLeftSymbolMem.2.2
+      rw [localOfferSummariesFor_mk_mem_iff] at this
+      exact this.1.trans Finset.inter_subset_right
+    have hActionsDisjoint : Disjoint left.alphabet.actions right.alphabet.actions :=
+      hParallelCompatible.actions_disjoint
+    -- An action in `left`'s future menu but not its own current offer is
+    -- exactly an action of the resolved edge `leftEdge.future`, which stays
+    -- within `left`'s own fixed alphabet; the two children's fixed
+    -- alphabets are disjoint (`ParallelCompatible`), so it can never sit in
+    -- `right`'s current offer, and symmetrically.
+    have hLeftFutureRightCurrentDisjoint :
+        ∀ action, action ∈ typeFutureOffers leftTargetResidual →
+          action ∉ leftEdge.current → action ∉ rightEdge.current := by
+      intro action hLeftFuture hNotLeftCurrent hRightCurrent
+      have hLeftAlph : action ∈ left.alphabet.actions := by
+        rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
+        rw [localOfferSummariesFor_mk_mem_iff] at hLeftSymbolMem
+        refine (hLeftSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
+        rw [hLeftFutureEq]
+        exact Finset.mem_sdiff.mpr ⟨hLeftFuture, hNotLeftCurrent⟩
+      exact Finset.disjoint_left.mp hActionsDisjoint hLeftAlph
+        (hRightCurrentSubset hRightCurrent)
+    have hRightFutureLeftCurrentDisjoint :
+        ∀ action, action ∈ typeFutureOffers rightTargetResidual →
+          action ∉ rightEdge.current → action ∉ leftEdge.current := by
+      intro action hRightFuture hNotRightCurrent hLeftCurrent
+      have hRightAlph : action ∈ right.alphabet.actions := by
+        rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
+        rw [localOfferSummariesFor_mk_mem_iff] at hRightSymbolMem
+        refine (hRightSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
+        rw [hRightFutureEq]
+        exact Finset.mem_sdiff.mpr ⟨hRightFuture, hNotRightCurrent⟩
+      exact Finset.disjoint_right.mp hActionsDisjoint hRightAlph
+        (hLeftCurrentSubset hLeftCurrent)
+    have hFutureEq : offers.future =
+        hideTypeOffers interface (leftEdge.future ∪ rightEdge.future) := by
+      rw [← hFuture]
+      rw [hAcceptEqLeft, hAcceptEqRight, hParFutureEq]
+      rw [hLeftFutureEq, hRightFutureEq]
+      apply Finset.ext
+      intro action
+      simp only [hideTypeOffers, hideOffers, Finset.mem_filter, Finset.mem_sdiff,
+        Finset.mem_union]
+      constructor
+      · rintro ⟨⟨(hL | hR), hInterface⟩, hNotCur⟩
+        · refine ⟨Or.inl ⟨hL, ?_⟩, hInterface⟩
+          intro hLCur
+          exact hNotCur ⟨Or.inl hLCur, hInterface⟩
+        · refine ⟨Or.inr ⟨hR, ?_⟩, hInterface⟩
+          intro hRCur
+          exact hNotCur ⟨Or.inr hRCur, hInterface⟩
+      · rintro ⟨(⟨hL, hLNotCur⟩ | ⟨hR, hRNotCur⟩), hInterface⟩
+        · refine ⟨⟨Or.inl hL, hInterface⟩, ?_⟩
+          rintro ⟨hCur | hCur, -⟩
+          · exact hLNotCur hCur
+          · exact hLeftFutureRightCurrentDisjoint action hL hLNotCur hCur
+        · refine ⟨⟨Or.inr hR, hInterface⟩, ?_⟩
+          rintro ⟨hCur | hCur, -⟩
+          · exact hRightFutureLeftCurrentDisjoint action hR hRNotCur hCur
+          · exact hRNotCur hCur
+    refine ⟨leftEdge.environment, rightEdge.environment, leftVisible, rightVisible,
+      TypeOfferSummary.mk leftEdge.current leftEdge.future,
+      TypeOfferSummary.mk rightEdge.current rightEdge.future,
+      leftEdge.target, rightEdge.target, hQ1Eq ▸ hLeftHasEdge, hQ2Eq ▸ hRightHasEdge,
+      hQ1Eq ▸ hQ2Eq ▸ hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, ?_, ?_, ?_, ?_⟩
+    · rw [hLabelForm, hRightLabelForm, AutomatonConstructionLabel.combine] at hLabel
+      injection hLabel with hLabelEq
+      exact hLabelEq.symm
+    · exact hCurrent.symm
+    · exact hFutureEq
+    · rw [← hAcceptEqLeft, ← hAcceptEqRight]
+      split_ifs with hAccept
+      · rw [← hTarget, if_pos hAccept]
+      · rw [← hTarget, if_neg hAccept]
+  -- Backward direction: given two edges and a reachable pair of targets, we
+  -- can reconstruct a parallel edge.
+  · rintro ⟨leftEnv, rightEnv, leftLabel, rightLabel, leftOffers, rightOffers, q1', q2',
+      hLeftEdge, hRightEdge, hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, hLabelEq,
+      hCurrentEq, hFutureEq, hRedirect⟩
+    have hLeftSymbol := compileType_hasEdge_symbol_mem signature left hLeftEdge
+    have hRightSymbol := compileType_hasEdge_symbol_mem signature right hRightEdge
+    have hLeftResolvedMem :=
+      (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q1' leftEnv leftLabel
+        leftOffers hLeftSymbol).mp hLeftEdge
+    have hRightResolvedMem :=
+      (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q2' rightEnv rightLabel
+        rightOffers hRightSymbol).mp hRightEdge
+    -- Reconstruct the parent environment from the two consistent local
+    -- views: `env` is well-formed over the merged, interface-hidden
+    -- alphabet, so it can only mention actions coming from `left`/`right`,
+    -- and `LocalTypeOfferEnvironment`'s own projection equations recover
+    -- exactly that combination.
+    have hAlphabetEq : alphabet = PactTypeAlphabet.mergeHidden left.alphabet
+        right.alphabet interface := hParallelCompatible.parent_eq
+    have hEnvMem : env ∈ signature.localEnvironmentsFor alphabet :=
+      transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol
+    -- A single non-interface action ends up in `env`'s menu (immediate or
+    -- future) iff the matching sibling-projected offer, drawn from `left`
+    -- or `right`, put it there; this is the common core of both halves of
+    -- the reconstruction below.
+    have hMemChar : ∀ (envSet leftEnvSet rightEnvSet leftSibling rightSibling
+        : Finset BareMessage) (action : BareMessage),
+        envSet ⊆ signature.localEnvironmentActionsFor alphabet →
+        leftEnvSet = projectTypeEnvironmentOffers left.alphabet envSet ∪
+          restrictTypeOffers interface rightSibling →
+        rightEnvSet = projectTypeEnvironmentOffers right.alphabet envSet ∪
+          restrictTypeOffers interface leftSibling →
+        (action ∈ envSet ∧ action.1 ∉ interface ↔
+          (action ∈ leftEnvSet ∨ action ∈ rightEnvSet) ∧ action.1 ∉ interface) := by
+      intro envSet leftEnvSet rightEnvSet leftSibling rightSibling action hEnvSetMem
+        hLeftEnvSet hRightEnvSet
+      constructor
+      · rintro ⟨hAction, hNotInterface⟩
+        refine ⟨?_, hNotInterface⟩
+        have hActionMem := hEnvSetMem hAction
+        simp only [TypeAlphabet.localEnvironmentActionsFor,
+          TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+          at hActionMem
+        obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hActionMem
+        rw [hAlphabetEq] at hLocalActionAlph
+        simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+          Finset.mem_union] at hLocalActionAlph
+        rcases hLocalActionAlph.1 with hL | hR
+        · left; rw [hLeftEnvSet]
+          exact Finset.mem_union.mpr (Or.inl
+            (Finset.mem_filter.mpr ⟨hAction,
+              Finset.mem_image.mpr ⟨localAction, hL, hNeedEq⟩⟩))
+        · right; rw [hRightEnvSet]
+          exact Finset.mem_union.mpr (Or.inl
+            (Finset.mem_filter.mpr ⟨hAction,
+              Finset.mem_image.mpr ⟨localAction, hR, hNeedEq⟩⟩))
+      · rintro ⟨hLR, hNotInterface⟩
+        refine ⟨?_, hNotInterface⟩
+        rcases hLR with hL | hR
+        · rw [hLeftEnvSet] at hL
+          simp only [Finset.mem_union, projectTypeEnvironmentOffers,
+            Finset.mem_filter, restrictTypeOffers] at hL
+          rcases hL with ⟨hAction, _⟩ | ⟨_, hInterfaceMem⟩
+          · exact hAction
+          · exact absurd hInterfaceMem hNotInterface
+        · rw [hRightEnvSet] at hR
+          simp only [Finset.mem_union, projectTypeEnvironmentOffers,
+            Finset.mem_filter, restrictTypeOffers] at hR
+          rcases hR with ⟨hAction, _⟩ | ⟨_, hInterfaceMem⟩
+          · exact hAction
+          · exact absurd hInterfaceMem hNotInterface
+    have hEnvMemSet : env.immediate ⊆ signature.localEnvironmentActionsFor alphabet ∧
+        env.future ⊆ signature.localEnvironmentActionsFor alphabet := by
+      simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+        Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+        Finset.mem_image] at hEnvMem
+      rcases hEnvMem with hTock | ⟨imm, hImm, fut, hFut, hEq⟩
+      · rw [hTock]; simp [TypeEnvironment.tock]
+      · rw [← hEq]
+        exact ⟨hImm, hFut.trans (Finset.sdiff_subset)⟩
+    -- Every action `env` itself carries already avoids the interface,
+    -- since `alphabet = mergeHidden ...` filters it out at the root.
+    have hEnvNotInterface : ∀ action ∈ signature.localEnvironmentActionsFor
+        alphabet, action.1 ∉ interface := by
+      intro action hAction
+      simp only [TypeAlphabet.localEnvironmentActionsFor,
+        TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+        at hAction
+      obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
+      rw [hAlphabetEq] at hLocalActionAlph
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
+      have hMsgEq : localAction.1 = action.1 := by
+        rw [← hNeedEq]; simp [typeNeed]
+      rw [← hMsgEq]
+      exact hLocalActionAlph.2
+    have hEnvEq : env = combineAutomatonEnvironment interface leftEnv rightEnv := by
+      cases hLocal1 with
+      | clock _ =>
+        rename_i hOuterClockA
+        cases hLocal2 with
+        | clock _ =>
+          rename_i hOuterClockC
+          show env = combineAutomatonEnvironment interface TypeEnvironment.tock
+            TypeEnvironment.tock
+          rw [combineAutomatonEnvironment]
+          simp only [TypeEnvironment.tock, if_pos rfl]
+          have hOuterClock1' : env.clock = true := hOuterClockA
+          have hEnvWF' := hEnvWF.1 hOuterClock1'
+          obtain ⟨immediate, future, clock⟩ := env
+          simp only [TypeEnvironment.clock] at hOuterClock1'
+          simp only [hOuterClock1', if_pos rfl]
+          simp only [TypeEnvironment.immediate] at hEnvWF'
+          rw [hEnvWF'.1, hEnvWF'.2]
+          simp
+        | ordinary _ _ _ _ _ =>
+          rename_i hOuterClockD _ _ _ _
+          rw [hOuterClockA] at hOuterClockD
+          exact absurd hOuterClockD (by simp)
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClockB hSiblingClock1 hLocalClock1 hImmediate1 hFuture1
+        cases hLocal2 with
+        | clock _ =>
+          rename_i hOuterClockE
+          rw [hOuterClockE] at hOuterClockB
+          exact absurd hOuterClockB (by simp)
+        | ordinary _ _ _ _ _ =>
+          rename_i hOuterClockF hSiblingClock2 hLocalClock2 hImmediate2 hFuture2
+          simp only [combineAutomatonEnvironment, hSiblingClock2, hSiblingClock1,
+            Bool.and_self, Bool.false_eq_true, if_neg, Bool.and_false]
+          have hOuterClock1' : env.clock = false := hOuterClockB
+          -- Every action `env` itself carries already avoids the interface,
+          -- since `alphabet = mergeHidden ...` filters it out at the root.
+          have hEnvNotInterface : ∀ action ∈ signature.localEnvironmentActionsFor
+              alphabet, action.1 ∉ interface := by
+            intro action hAction
+            simp only [TypeAlphabet.localEnvironmentActionsFor,
+              TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+              at hAction
+            obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
+            rw [hAlphabetEq] at hLocalActionAlph
+            simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
+            have hMsgEq : localAction.1 = action.1 := by
+              rw [← hNeedEq]; simp [typeNeed]
+            rw [← hMsgEq]
+            exact hLocalActionAlph.2
+          have hImmEq : env.immediate = hideOffers interface (leftEnv.immediate ∪
+              rightEnv.immediate) := by
+            apply Finset.ext
+            intro action
+            have hChar := hMemChar env.immediate leftEnv.immediate rightEnv.immediate
+              leftOffers.current rightOffers.current action hEnvMemSet.1 hImmediate1
+              hImmediate2
+            simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hChar ⊢
+            rw [show (action ∈ env.immediate ↔
+                (action ∈ env.immediate ∧ action.1 ∉ interface))
+              from ⟨fun h => ⟨h, hEnvNotInterface action (hEnvMemSet.1 h)⟩, fun h => h.1⟩]
+            exact hChar
+          have hFutEq : env.future = hideOffers interface (leftEnv.future ∪
+              rightEnv.future) := by
+            -- `env`'s own immediate/future menus are disjoint (well-formedness),
+            -- so the `\ localEnv.immediate` subtraction each side's future
+            -- equation never removes a non-interface action relevant here:
+            -- such an action, if it were in `leftEnv.immediate`/
+            -- `rightEnv.immediate`, would (via `hImmEq`, restricted away from
+            -- the interface) already sit in `env.immediate`, contradicting
+            -- `env.future`'s disjointness from `env.immediate`.
+            have hNotImmediate : ∀ action, action ∈ env.future → action.1 ∉ interface →
+                action ∉ leftEnv.immediate ∧ action ∉ rightEnv.immediate := by
+              intro action hActionFuture hActionInterface
+              have hDisjoint : env.immediate ∩ env.future = ∅ := hEnvWF.2 hOuterClock1'
+              have hNotEnvImmediate : action ∉ env.immediate := by
+                intro hMem
+                have hMemInter : action ∈ env.immediate ∩ env.future :=
+                  Finset.mem_inter.mpr ⟨hMem, hActionFuture⟩
+                rw [hDisjoint] at hMemInter
+                simp at hMemInter
+              rw [hImmEq] at hNotEnvImmediate
+              simp only [hideOffers, Finset.mem_filter, not_and] at hNotEnvImmediate
+              have hNotUnion : action ∉ leftEnv.immediate ∪ rightEnv.immediate :=
+                fun hMem => absurd hActionInterface (hNotEnvImmediate hMem)
+              simp only [Finset.mem_union, not_or] at hNotUnion
+              exact hNotUnion
+            apply Finset.ext
+            intro action
+            have hEnvFutureIff : action ∈ env.future ↔
+                (action ∈ leftEnv.future ∨ action ∈ rightEnv.future) ∧
+                  action.1 ∉ interface := by
+              have hChar := hMemChar env.future
+                (projectTypeEnvironmentOffers left.alphabet env.future ∪
+                  restrictTypeOffers interface rightOffers.future)
+                (projectTypeEnvironmentOffers right.alphabet env.future ∪
+                  restrictTypeOffers interface leftOffers.future)
+                leftOffers.future rightOffers.future action hEnvMemSet.2 rfl rfl
+              simp only [hideOffers, Finset.mem_filter, Finset.mem_union] at hChar
+              constructor
+              · intro hActionFuture
+                have hActionInterface := hEnvNotInterface action (hEnvMemSet.2 hActionFuture)
+                have hOr := (hChar.mp ⟨hActionFuture, hActionInterface⟩).1
+                refine ⟨?_, hActionInterface⟩
+                rcases hOr with hL | hR
+                · left; rw [hFuture1]
+                  exact Finset.mem_sdiff.mpr ⟨Finset.mem_union.mpr hL,
+                    (hNotImmediate action hActionFuture hActionInterface).1⟩
+                · right; rw [hFuture2]
+                  exact Finset.mem_sdiff.mpr ⟨Finset.mem_union.mpr hR,
+                    (hNotImmediate action hActionFuture hActionInterface).2⟩
+              · rintro ⟨hOr, hNI⟩
+                have hEnvChar := hChar.mpr (by
+                  refine ⟨?_, hNI⟩
+                  rcases hOr with hL | hR
+                  · left; rw [hFuture1] at hL
+                    exact Finset.mem_union.mp (Finset.mem_sdiff.mp hL).1
+                  · right; rw [hFuture2] at hR
+                    exact Finset.mem_union.mp (Finset.mem_sdiff.mp hR).1)
+                exact hEnvChar.1
+            simp only [hideOffers, Finset.mem_filter, Finset.mem_union]
+            exact hEnvFutureIff
+          obtain ⟨immediate, future, clock⟩ := env
+          simp only [TypeEnvironment.clock] at hOuterClock1'
+          subst hOuterClock1'
+          simp only at hImmEq hFutEq
+          congr 1
+    have hAutoLocal1 : AutomatonLocalEnvironment
+        (combineAutomatonEnvironment interface leftEnv rightEnv) interface left.alphabet
+        ({ source := q2, environment := rightEnv, label := .visible rightLabel,
+            current := rightOffers.current, future := rightOffers.future,
+            target := q2' } : AutomatonFragmentEdge)
+        ({ source := q1, environment := leftEnv, label := .visible leftLabel,
+            current := leftOffers.current, future := leftOffers.future,
+            target := q1' } : AutomatonFragmentEdge) := by
+      rw [← hEnvEq]
+      cases hLocal1 with
+      | clock _ =>
+        rename_i hOuterClock
+        exact AutomatonLocalEnvironment.clock hOuterClock rfl rfl
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock hSiblingClock hLocalClock hImmediate hFuture
+        exact AutomatonLocalEnvironment.ordinary hOuterClock hSiblingClock hLocalClock
+          hImmediate hFuture
+    have hAutoLocal2 : AutomatonLocalEnvironment
+        (combineAutomatonEnvironment interface leftEnv rightEnv) interface right.alphabet
+        ({ source := q1, environment := leftEnv, label := .visible leftLabel,
+            current := leftOffers.current, future := leftOffers.future,
+            target := q1' } : AutomatonFragmentEdge)
+        ({ source := q2, environment := rightEnv, label := .visible rightLabel,
+            current := rightOffers.current, future := rightOffers.future,
+            target := q2' } : AutomatonFragmentEdge) := by
+      rw [← hEnvEq]
+      cases hLocal2 with
+      | clock _ =>
+        rename_i hOuterClock
+        exact AutomatonLocalEnvironment.clock hOuterClock rfl rfl
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock hSiblingClock hLocalClock hImmediate hFuture
+        exact AutomatonLocalEnvironment.ordinary hOuterClock hSiblingClock hLocalClock
+          hImmediate hFuture
+    -- TODO(parallel-interface-gap): the remaining obligations are the four
+    -- `sameOnInterface` premises required by `syncAutomatonEdges`.
+    --
+    -- The old clock-only blocker has been repaired for progress, recursion,
+    -- and the resolved/waiting offer families by adding the missing
+    -- `env.clock = false` guards.  What remains is more precise: the semantic
+    -- hypotheses here provide `LocalTypeOfferEnvironment`, while the automaton
+    -- constructor additionally records the paper's `O_C eq_I E_C` and
+    -- `O_F eq_I E_F` checks as explicit `sameOnInterface` fields.
+    --
+    -- These equalities are immediate for ordinary current offers after
+    -- projecting through the fixed child alphabets.  Future offers also need
+    -- the standard "current and same-cycle future do not overlap on the
+    -- interface" invariant for component edges.  Clock-local cases need the
+    -- analogous fact that an edge under `tock` exposes no interface future.
+    -- Those facts belong either as semantic offer invariants or as explicit
+    -- premises of this bridge, not as an ad-hoc proof here.
+    sorry
 
 private theorem union_subset_union_union
     {alpha : Type} [DecidableEq alpha]

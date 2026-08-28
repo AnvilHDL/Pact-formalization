@@ -33,6 +33,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | choice_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (left right : PactType) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.choice alphabet left right)
       TypeLabel.silent
@@ -40,6 +41,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | choice_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (left right : PactType) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.choice alphabet left right)
       TypeLabel.silent
@@ -47,6 +49,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | fair_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (bid : BranchId) (left right : PactType) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.fairChoice alphabet bid left right)
       (TypeLabel.fair bid true)
@@ -54,6 +57,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | fair_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (bid : BranchId) (left right : PactType) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.fairChoice alphabet bid left right)
       (TypeLabel.fair bid false)
@@ -89,6 +93,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | progress (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (pid : ProcId) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.progress alphabet pid)
       (TypeLabel.progress pid)
@@ -96,6 +101,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | recur (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (var : String) (body : PactType) :
       env.WellFormed →
+      env.clock = false →
       --
       TypeTransition env (.recur alphabet var body)
       TypeLabel.silent
@@ -124,6 +130,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (elseType : PactType)
       (branches : List (BareMessage × PactType)) :
       env.WellFormed ∧
+      env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
       --
@@ -155,6 +162,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (elseType : PactType)
       (branches : List (BareMessage × PactType)) :
       env.WellFormed ∧
+      env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
       --
@@ -165,9 +173,9 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (elseType : PactType)
       (branches : List (BareMessage × PactType)) :
       env.WellFormed ∧
+      env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
-      ¬ TypeResolved env branches ∧
-      env.clock = false →
+      ¬ TypeResolved env branches →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -261,12 +269,12 @@ theorem TypeTransition.exists_typeOffers
       exact ⟨current, typeFutureOffers right \ current,
         TypeOffers.seq_fuse env alphabet skipAlphabet left right label current
           childFuture hOffers⟩
-  | progress env alphabet pid hEnv =>
-      exact ⟨∅, ∅, TypeOffers.progress env alphabet pid hEnv⟩
-  | recur env alphabet name body hEnv =>
+  | progress env alphabet pid hEnv hClock =>
+      exact ⟨∅, ∅, TypeOffers.progress env alphabet pid ⟨hEnv, hClock⟩⟩
+  | recur env alphabet name body hEnv hClock =>
       exact ⟨∅,
         typeFutureOffers (body.replaceVar name (.recur alphabet name body)),
-        TypeOffers.recur env alphabet name body hEnv⟩
+        TypeOffers.recur env alphabet name body ⟨hEnv, hClock⟩⟩
   | seq env alphabet left left' right label _ hNotSkip ihLeft =>
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
       exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
@@ -356,9 +364,9 @@ theorem TypeTransition.preserves_alphabet
   | seq_fuse env alphabet skipAlphabet left right label childTransition ihLeft =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.2.1
-  | progress env alphabet pid hEnv =>
+  | progress env alphabet pid hEnv hClock =>
       simp [PactType.alphabet]
-  | recur env alphabet name body hEnv =>
+  | recur env alphabet name body hEnv hClock =>
       simp only [PactType.AlphabetWellFormed] at hSource
       have hBody : body.alphabet = alphabet := hSource.2.1
       have hReplacement :

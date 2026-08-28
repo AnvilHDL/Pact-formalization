@@ -125,7 +125,7 @@ theorem correspondence_recur_stepIff
     subst hResidualEq; subst hStateEq
     have hEnvMem : env ∈ signature.localEnvironments :=
       transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
-    have hHeaderPending :
+    have hHeaderPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
             current := (∅ : Finset BareMessage),
@@ -137,13 +137,9 @@ theorem correspondence_recur_stepIff
           (buildRecursionAutomaton signature name
             (compileTypeFuel signature (typeCompilationFuel body) body)).edges := by
       simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_image]
-      exact Or.inl ⟨env, hEnvMem, rfl⟩
+        Finset.mem_image, Finset.mem_filter]
+      exact Or.inl ⟨env, ⟨hEnvMem, hClock⟩, rfl⟩
     have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
-    have hRecurStep : DecoratedTypeTransition env (.recur alphabet name body) TypeLabel.silent
-        (TypeOfferSummary.mk ∅ (typeFutureOffers (body.replaceVar name (.recur alphabet name body))))
-        (body.replaceVar name (.recur alphabet name body)) :=
-      ⟨TypeTransition.recur env alphabet name body hWF, TypeOffers.recur env alphabet name body hWF⟩
     constructor
     · intro hStep
       obtain ⟨hTrans, hOffers⟩ := hStep
@@ -175,7 +171,8 @@ theorem correspondence_recur_stepIff
             (typeFutureOffers (body.replaceVar name (.recur alphabet name body))))
           hSignatureSymbol']
         rw [hWhole]
-        refine ⟨_, hHeaderPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
+        refine ⟨_, hHeaderPending ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
+        · assumption
         simp only [childState, Finset.sdiff_empty]
         exact helper_h15_recursion_future_offers_agree signature alphabet name body
           (buildRelationSet_initial body (compileType signature body))
@@ -193,7 +190,7 @@ theorem correspondence_recur_stepIff
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
       simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
-        Finset.mem_image] at hPendingMem
+        Finset.mem_image, Finset.mem_filter] at hPendingMem
       rcases hPendingMem with ⟨environment, hEnvironment, hEq⟩ | ⟨bodyEdge, _, hEq⟩
       · subst hEq
         simp only [childState] at hPLabel hPTarget
@@ -229,10 +226,12 @@ theorem correspondence_recur_stepIff
           have hEnvironmentEq : environment = env := hPEnv
           rw [hResidualEqAgain, hLabelEq]
           refine ⟨TypeTransition.recur env alphabet name body
-            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment)), ?_⟩
+            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment.1))
+            (by simpa [hEnvironmentEq] using hEnvironment.2), ?_⟩
           rw [hCurrentEq, hFutureEq]
           exact TypeOffers.recur env alphabet name body
-            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment))
+            ⟨localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment.1),
+              by simpa [hEnvironmentEq] using hEnvironment.2⟩
       · exfalso
         have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource
         rw [← hEq] at hRootSource

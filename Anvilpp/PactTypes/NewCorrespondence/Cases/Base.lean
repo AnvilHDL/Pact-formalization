@@ -498,7 +498,7 @@ theorem correspondence_progress_stepIff
       subst state
       rcases hStep with ⟨hTransition, hOffers⟩
       cases hTransition with
-      | progress _ _ _ _ =>
+      | progress _ _ _ _ hClock =>
           have hFields : current = ∅ ∧ future = ∅ := by
             generalize hLabelEq :
               TypeLabel.progress pid = actualLabel at hOffers
@@ -509,11 +509,11 @@ theorem correspondence_progress_stepIff
               DecoratedTypeTransition env (.progress alphabet pid)
                 (TypeLabel.progress pid) (TypeOfferSummary.mk ∅ ∅)
                 (.skip alphabet) :=
-            ⟨TypeTransition.progress env alphabet pid hWellFormed,
-              TypeOffers.progress env alphabet pid hWellFormed⟩
+            ⟨TypeTransition.progress env alphabet pid hWellFormed hClock,
+              TypeOffers.progress env alphabet pid ⟨hWellFormed, hClock⟩⟩
           have hEdge := NewCorrespondence.compileType_progress_action_edge
             signature (alphabet := alphabet) pid
-            hLocal hSignatureSymbol
+            hLocal hClock hSignatureSymbol
           refine ⟨.final, hEdge, ?_⟩
           unfold relationMembership buildRelationSet buildRelationSetCore
           simp [typeCompilationFuel, buildRelationSetCoreFuel]
@@ -540,7 +540,7 @@ theorem correspondence_progress_stepIff
         signature (alphabet := alphabet) pid hEdge
       rcases hCases with hProgress | hIdle
       · rcases hProgress with ⟨_hSource, hTarget, hLabel, hCurrent,
-          hFuture⟩
+          hFuture, hClock⟩
         subst label
         subst current
         subst future
@@ -556,8 +556,8 @@ theorem correspondence_progress_stepIff
           · simp at hRoot
           · exact hFinal.1
         subst residual'
-        exact ⟨TypeTransition.progress env alphabet pid hWellFormed,
-          TypeOffers.progress env alphabet pid hWellFormed⟩
+        exact ⟨TypeTransition.progress env alphabet pid hWellFormed hClock,
+          TypeOffers.progress env alphabet pid ⟨hWellFormed, hClock⟩⟩
       · rcases hIdle with ⟨hSource, _⟩
         simp at hSource
     · rcases hFinal with ⟨hResidual, hState⟩

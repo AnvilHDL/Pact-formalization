@@ -20,7 +20,8 @@ def buildRecursionAutomaton (signature : TypeAlphabet) (name : String)
   let states := {TypeAutomatonState.root} ∪ childStates 0 body
   let accepting := childAccepting 0 body
   let headerEdges : Finset PendingAutomatonEdge :=
-    signature.localEnvironments.image fun environment =>
+    (signature.localEnvironments.filter fun environment =>
+      environment.clock = false).image fun environment =>
       { source := TypeAutomatonState.root
         environment := environment
         label := .visible TypeLabel.silent
@@ -527,13 +528,18 @@ theorem buildRecursionAutomaton_referencedStates_root
         exact absurd hSource (by simp [childState])
   · intro hTarget
     refine ⟨{ source := TypeAutomatonState.root
-              environment := TypeEnvironment.tock
+              environment := TypeEnvironment.empty
               label := .visible TypeLabel.silent
               current := ∅
               future := .at (childState 0 body.initial) ∅
               target := childState 0 body.initial }, ⟨?_, rfl⟩, ?_⟩
-    · exact Or.inl ⟨TypeEnvironment.tock, by simp [TypeAlphabet.localEnvironments],
-        rfl⟩
+    · refine Or.inl ⟨TypeEnvironment.empty, ?_, rfl⟩
+      constructor
+      · simp only [TypeAlphabet.localEnvironments, Finset.mem_union,
+          Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+          Finset.mem_image]
+        exact Or.inr ⟨∅, by simp, ∅, by simp [TypeEnvironment.empty], rfl⟩
+      · rfl
     · simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent] using hTarget
 
 /-- Marker reachability for a *different* still-open binder inside an installed

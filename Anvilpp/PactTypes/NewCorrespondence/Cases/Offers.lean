@@ -660,7 +660,7 @@ theorem correspondence_offer_stepIff
               (parallelTypeBranchesSelecting enabled branches)
               (compileType signature (parallelTypeBranchesSelecting enabled branches)))
       | offer_else _ _ _ _ hPremise =>
-          obtain ⟨hWF', hNoImmediate, hResolvedNeeds⟩ := hPremise
+          obtain ⟨hWF', hClock, hNoImmediate, hResolvedNeeds⟩ := hPremise
           have hSignatureSymbol' :
               TypeAutomatonSymbol.mk env TypeLabel.silent
                 (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType)) ∈
@@ -683,7 +683,7 @@ theorem correspondence_offer_stepIff
                     (parallelTypeBranchesSelecting selected' branches)))).edges := by
             simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
               Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-            exact Or.inr ⟨env, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
+            exact Or.inr ⟨env, ⟨hEnvMem, hClock, hNoImmediate, hResolvedNeeds⟩, rfl⟩
           have hEdgeFact : (compileType signature (.offer alphabet elseType branches)).HasEdge
               TypeAutomatonState.root env TypeLabel.silent
               (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType))
@@ -701,15 +701,15 @@ theorem correspondence_offer_stepIff
               TypeLabel.silent (TypeOfferSummary.mk (typeBranchActions branches)
                 (typeFutureOffers elseType)) elseType :=
             ⟨TypeTransition.offer_else env alphabet elseType branches
-              ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
+              ⟨hWF, hClock, hNoImmediate, hResolvedNeeds⟩,
               TypeOffers.offer_else env alphabet elseType branches
-                ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩
+                ⟨hWF, hClock, hNoImmediate, hResolvedNeeds⟩⟩
           refine ⟨.child 0 (compileTypeFuel signature (typeCompilationFuel elseType)
             elseType).initial, hEdgeFact, ?_⟩
           exact relationMembership_offer_else signature alphabet elseType branches
             (buildRelationSet_initial elseType (compileType signature elseType))
       | offer_wait _ _ _ _ hPremise =>
-          obtain ⟨hWF', hNoImmediate, hUnresolved, hClock⟩ := hPremise
+          obtain ⟨hWF', hClock, hNoImmediate, hUnresolved⟩ := hPremise
           have hSignatureSymbol' :
               TypeAutomatonSymbol.mk env TypeLabel.silent
                 (TypeOfferSummary.mk (typeWaitingOffers env branches)
@@ -755,9 +755,9 @@ theorem correspondence_offer_stepIff
                 (typeFutureOffers (.offer alphabet elseType branches) \
                   typeWaitingOffers env branches)) (.offer alphabet elseType branches) :=
             ⟨TypeTransition.offer_wait env alphabet elseType branches
-              ⟨hWF, hNoImmediate, hUnresolved, hClock⟩,
+              ⟨hWF, hClock, hNoImmediate, hUnresolved⟩,
               TypeOffers.offer_wait env alphabet elseType branches
-                ⟨hWF, hNoImmediate, hUnresolved, hClock⟩⟩
+                ⟨hWF, hClock, hNoImmediate, hUnresolved⟩⟩
           refine ⟨TypeAutomatonState.root, hEdgeFact, ?_⟩
           exact relationMembership_offer_root signature alphabet elseType branches
     · rintro ⟨state', hEdge, hTargetRelated⟩
@@ -904,9 +904,9 @@ theorem correspondence_offer_stepIff
           have hResidualEq : residual' = .offer alphabet elseType branches := hRootAgain.1
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
           exact ⟨TypeTransition.offer_wait env alphabet elseType branches
-            ⟨hWF, hNoImmediate, hUnresolved, hClock⟩,
+            ⟨hWF, hClock, hNoImmediate, hUnresolved⟩,
             TypeOffers.offer_wait env alphabet elseType branches
-              ⟨hWF, hNoImmediate, hUnresolved, hClock⟩⟩
+              ⟨hWF, hClock, hNoImmediate, hUnresolved⟩⟩
         · exact absurd (by simpa [childState] using hStateEqAgain :
             (TypeAutomatonState.root : TypeAutomatonState) = .child 0 qAgain) (by simp)
         · exact absurd (by simpa [childState] using hStateEqAgain :
@@ -914,7 +914,7 @@ theorem correspondence_offer_stepIff
             (by simp)
       · -- else family: reconstructs `offer_else`
         simp only [Finset.mem_image, Finset.mem_filter] at hResolved2
-        rcases hResolved2 with ⟨environment, ⟨hEnvMem, hNoImmediate, hResolvedNeeds⟩, rfl⟩
+        rcases hResolved2 with ⟨environment, ⟨hEnvMem, hClock, hNoImmediate, hResolvedNeeds⟩, rfl⟩
         have hEnvEq : environment = env := hPEnv
         subst environment
         have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
@@ -944,9 +944,9 @@ theorem correspondence_offer_stepIff
                 (compileType signature elseType))
           rw [hLabelEq, hResidualEq, hCurrentEq, hFutureEq]
           exact ⟨TypeTransition.offer_else env alphabet elseType branches
-            ⟨hWF, hNoImmediate, hResolvedNeeds⟩,
+            ⟨hWF, hClock, hNoImmediate, hResolvedNeeds⟩,
             TypeOffers.offer_else env alphabet elseType branches
-              ⟨hWF, hNoImmediate, hResolvedNeeds⟩⟩
+              ⟨hWF, hClock, hNoImmediate, hResolvedNeeds⟩⟩
         · exact absurd (by simpa [childState] using hStateEqAgain : (0 : Nat) =
             iAgain + 1) (by omega)
   · -- else-child case: `hElseIH` reconstructs the step directly

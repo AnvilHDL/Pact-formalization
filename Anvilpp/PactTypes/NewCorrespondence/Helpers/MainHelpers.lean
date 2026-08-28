@@ -2572,7 +2572,7 @@ theorem helper_h14_same_cycle_completion
             have hEnv : TypeEnvironment.empty.WellFormed := by
               simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
             exact ⟨alphabet, Relation.ReflTransGen.single ⟨TypeEnvironment.empty, _,
-              TypeTransition.progress TypeEnvironment.empty alphabet pid hEnv,
+              TypeTransition.progress TypeEnvironment.empty alphabet pid hEnv rfl,
               by simp [TypeLabel.isTock, TypeLabel.progress]⟩⟩
           · intro _
             have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
@@ -2588,8 +2588,8 @@ theorem helper_h14_same_cycle_completion
                 (compileTypeFuel signature (typeCompilationFuel (.progress alphabet pid))
                   (.progress alphabet pid)).edges := by
               simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-                Finset.mem_union, Finset.mem_image]
-              exact Or.inl ⟨TypeEnvironment.empty, hEmptyLocal, hEdgeDef.symm⟩
+                Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+              exact Or.inl ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, hEdgeDef.symm⟩
             refine ⟨TypeAutomatonState.final,
               Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
             · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,

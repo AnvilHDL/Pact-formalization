@@ -624,6 +624,7 @@ lemma compileType_progress_action_edge
     (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
     (pid : ProcId) {env : TypeEnvironment}
     (hLocal : env ∈ signature.localEnvironments)
+    (hClock : env.clock = false)
     (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.progress pid)
       (TypeOfferSummary.mk ∅ ∅) ∈
         signature.transitionAlphabetFor alphabet) :
@@ -642,7 +643,7 @@ lemma compileType_progress_action_edge
       future := .at .final ∅
       target := .final }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocal]
+      hLocal, hClock]
   · simp [computeFutureOf_progress_final]
 
 /-- Proves that compiled progress has the final-state non-clock idle edge. -/
@@ -680,7 +681,7 @@ lemma compileType_progress_edge_cases
       source env label
       (TypeOfferSummary.mk current future) target) :
     (source = .root ∧ target = .final ∧ label = TypeLabel.progress pid ∧
-        current = ∅ ∧ future = ∅) ∨
+        current = ∅ ∧ future = ∅ ∧ env.clock = false) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
   classical
@@ -695,14 +696,14 @@ lemma compileType_progress_edge_cases
   simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hPending
   rcases hPending with hAction | hFinal
-  · rcases hAction with ⟨edgeEnv, _hLocal, hEdgeEq⟩
+  · rcases hAction with ⟨edgeEnv, ⟨_hLocal, hClock⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
     simp only [computeFutureOf_progress_final] at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
     injection hLabel with hLabelVisible
     subst label; subst current; subst target
-    exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm⟩
+    exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩
   · rcases hFinal with ⟨edgeEnv, ⟨_hLocal, hClock⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
     simp only at hSource hEnv hLabel hCurrent hFuture hTarget

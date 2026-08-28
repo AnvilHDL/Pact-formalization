@@ -143,6 +143,7 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
     let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+      environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future = ∅
     resolvedEnvironments.image fun environment =>
@@ -251,6 +252,7 @@ def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
     let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+      environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future = ∅
     resolvedEnvironments.image fun environment =>
@@ -347,6 +349,7 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
     let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+      environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future = ∅
     resolvedEnvironments.image fun environment =>

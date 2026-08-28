@@ -126,57 +126,55 @@ lemma relationMembership_xoffer_cases
         residual state) :
     xofferRelationShape signature alphabet elseType branches
       (residual, state) := by
-  -- the theorem is proven but sorried for performance of compilation. dont remove the proof
-  sorry
-  -- have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
-  --     max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
-  --   simp only [typeCompilationFuel]; omega
-  -- have hMem : (residual, state) ∈
-  --     buildRelationSetCoreFuel signature
-  --       (typeCompilationFuel (.xoffer alphabet elseType branches))
-  --       (.xoffer alphabet elseType branches) := hRelated
-  -- rw [hFuelEq] at hMem
-  -- simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
-  --   mem_foldl_union_iff, Finset.notMem_empty, false_or,
-  --   Finset.mem_image, Prod.mk.injEq] at hMem
-  -- rcases hMem with ⟨hResidual, hState⟩ |
-  --     ⟨entry, hEntry, hResidual, hState⟩ |
-  --     ⟨item, hItem, entry, hEntry, hResidual, hState⟩
-  -- · exact Or.inl (Prod.ext hResidual hState)
-  -- · subst hResidual
-  --   subst hState
-  --   have hElseRelated : relationMembership
-  --       (buildRelationSet elseType (compileType signature elseType))
-  --       entry.1 entry.2 := by
-  --     show (entry.1, entry.2) ∈
-  --       buildRelationSetCoreFuel signature (typeCompilationFuel elseType)
-  --         elseType
-  --     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
-  --       (le_max_left _ _) le_rfl]
-  --     exact hEntry
-  --   exact Or.inr (Or.inl ⟨entry.2, rfl, hElseRelated⟩)
-  -- · subst hResidual
-  --   subst hState
-  --   have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
-  --   have hBranchMem : item.1 ∈ branches := List.mem_of_getElem? hGet
-  --   have hBranchFuel : typeCompilationFuel item.1.2 ≤
-  --       max (typeCompilationFuel elseType)
-  --         (typeBranchCompilationFuel branches) :=
-  --     le_trans
-  --       (typeCompilationFuel_le_typeBranchCompilationFuel
-  --         branches item.1 hBranchMem)
-  --       (le_max_right _ _)
-  --   have hBranchRelated : relationMembership
-  --       (buildRelationSet item.1.2 (compileType signature item.1.2))
-  --       entry.1 entry.2 := by
-  --     show (entry.1, entry.2) ∈
-  --       buildRelationSetCoreFuel signature (typeCompilationFuel item.1.2)
-  --         item.1.2
-  --     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature item.1.2
-  --       hBranchFuel le_rfl]
-  --     exact hEntry
-  --   exact Or.inr (Or.inr ⟨item.2, item.1.1, item.1.2, entry.2,
-  --     hGet, rfl, hBranchRelated⟩)
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.xoffer alphabet elseType branches))
+        (.xoffer alphabet elseType branches) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
+    mem_foldl_union_iff, Finset.notMem_empty, false_or,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidual, hState⟩ |
+      ⟨entry, hEntry, hResidual, hState⟩ |
+      ⟨item, hItem, entry, hEntry, hResidual, hState⟩
+  · exact Or.inl (Prod.ext hResidual hState)
+  · subst hResidual
+    subst hState
+    have hElseRelated : relationMembership
+        (buildRelationSet elseType (compileType signature elseType))
+        entry.1 entry.2 := by
+      show (entry.1, entry.2) ∈
+        buildRelationSetCoreFuel signature (typeCompilationFuel elseType)
+          elseType
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+        (le_max_left _ _) le_rfl]
+      exact hEntry
+    exact Or.inr (Or.inl ⟨entry.2, rfl, hElseRelated⟩)
+  · subst hResidual
+    subst hState
+    have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
+    have hBranchMem : item.1 ∈ branches := List.mem_of_getElem? hGet
+    have hBranchFuel : typeCompilationFuel item.1.2 ≤
+        max (typeCompilationFuel elseType)
+          (typeBranchCompilationFuel branches) :=
+      le_trans
+        (typeCompilationFuel_le_typeBranchCompilationFuel
+          branches item.1 hBranchMem)
+        (le_max_right _ _)
+    have hBranchRelated : relationMembership
+        (buildRelationSet item.1.2 (compileType signature item.1.2))
+        entry.1 entry.2 := by
+      show (entry.1, entry.2) ∈
+        buildRelationSetCoreFuel signature (typeCompilationFuel item.1.2)
+          item.1.2
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature item.1.2
+        hBranchFuel le_rfl]
+      exact hEntry
+    exact Or.inr (Or.inr ⟨item.2, item.1.1, item.1.2, entry.2,
+      hGet, rfl, hBranchRelated⟩)
 
 /-- Characterizes a public conjunctive-offer edge leaving a tagged else-child state as a copy of the else automaton's own outgoing edge. -/
 theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
@@ -573,61 +571,59 @@ lemma relationMembership_offer_cases
         residual state) :
     offerRelationShape signature alphabet elseType branches
       (residual, state) := by
-  -- The theorem is proven but sorried for performance of compilation. Don't remove the proof.
-  sorry
-  -- have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
-  --     max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
-  --   simp only [typeCompilationFuel]; omega
-  -- have hMem : (residual, state) ∈
-  --     buildRelationSetCoreFuel signature
-  --       (typeCompilationFuel (.offer alphabet elseType branches))
-  --       (.offer alphabet elseType branches) := hRelated
-  -- rw [hFuelEq] at hMem
-  -- simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
-  --   mem_foldl_union_iff, Finset.notMem_empty, false_or,
-  --   Finset.mem_image, Prod.mk.injEq] at hMem
-  -- rcases hMem with ⟨hResidual, hState⟩ |
-  --     ⟨entry, hEntry, hResidual, hState⟩ |
-  --     ⟨item, hItem, entry, hEntry, hResidual, hState⟩
-  -- · exact Or.inl (Prod.ext hResidual hState)
-  -- · subst hResidual
-  --   subst hState
-  --   have hElseRelated : relationMembership
-  --       (buildRelationSet elseType (compileType signature elseType))
-  --       entry.1 entry.2 := by
-  --     show (entry.1, entry.2) ∈
-  --       buildRelationSetCoreFuel signature (typeCompilationFuel elseType)
-  --         elseType
-  --     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
-  --       (le_max_left _ _) le_rfl]
-  --     exact hEntry
-  --   exact Or.inr (Or.inl ⟨entry.2, rfl, hElseRelated⟩)
-  -- · subst hResidual
-  --   subst hState
-  --   have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
-  --   have hSelectedFuel :
-  --       typeCompilationFuel
-  --           (parallelTypeBranchesSelecting item.1 branches) ≤
-  --         max (typeCompilationFuel elseType)
-  --           (conjunctiveCompilationFuel branches) := by
-  --     rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-  --     exact le_max_right _ _
-  --   have hSelectedRelated : relationMembership
-  --       (buildRelationSet (parallelTypeBranchesSelecting item.1 branches)
-  --         (compileType signature
-  --           (parallelTypeBranchesSelecting item.1 branches)))
-  --       entry.1 entry.2 := by
-  --     show (entry.1, entry.2) ∈
-  --       buildRelationSetCoreFuel signature
-  --         (typeCompilationFuel
-  --           (parallelTypeBranchesSelecting item.1 branches))
-  --         (parallelTypeBranchesSelecting item.1 branches)
-  --     rw [← buildRelationSetCoreFuel_eq_of_sufficient signature
-  --       (parallelTypeBranchesSelecting item.1 branches)
-  --       hSelectedFuel le_rfl]
-  --     exact hEntry
-  --   exact Or.inr (Or.inr ⟨item.2, item.1, entry.2,
-  --     hGet, rfl, hSelectedRelated⟩)
+  have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
+      max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.offer alphabet elseType branches))
+        (.offer alphabet elseType branches) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
+    mem_foldl_union_iff, Finset.notMem_empty, false_or,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidual, hState⟩ |
+      ⟨entry, hEntry, hResidual, hState⟩ |
+      ⟨item, hItem, entry, hEntry, hResidual, hState⟩
+  · exact Or.inl (Prod.ext hResidual hState)
+  · subst hResidual
+    subst hState
+    have hElseRelated : relationMembership
+        (buildRelationSet elseType (compileType signature elseType))
+        entry.1 entry.2 := by
+      show (entry.1, entry.2) ∈
+        buildRelationSetCoreFuel signature (typeCompilationFuel elseType)
+          elseType
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+        (le_max_left _ _) le_rfl]
+      exact hEntry
+    exact Or.inr (Or.inl ⟨entry.2, rfl, hElseRelated⟩)
+  · subst hResidual
+    subst hState
+    have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
+    have hSelectedFuel :
+        typeCompilationFuel
+            (parallelTypeBranchesSelecting item.1 branches) ≤
+          max (typeCompilationFuel elseType)
+            (conjunctiveCompilationFuel branches) := by
+      rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+      exact le_max_right _ _
+    have hSelectedRelated : relationMembership
+        (buildRelationSet (parallelTypeBranchesSelecting item.1 branches)
+          (compileType signature
+            (parallelTypeBranchesSelecting item.1 branches)))
+        entry.1 entry.2 := by
+      show (entry.1, entry.2) ∈
+        buildRelationSetCoreFuel signature
+          (typeCompilationFuel
+            (parallelTypeBranchesSelecting item.1 branches))
+          (parallelTypeBranchesSelecting item.1 branches)
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient signature
+        (parallelTypeBranchesSelecting item.1 branches)
+        hSelectedFuel le_rfl]
+      exact hEntry
+    exact Or.inr (Or.inr ⟨item.2, item.1, entry.2,
+      hGet, rfl, hSelectedRelated⟩)
 
 
 end

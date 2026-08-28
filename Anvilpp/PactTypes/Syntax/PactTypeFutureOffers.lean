@@ -271,12 +271,12 @@ mutual
         TypeOffers env (.skip alphabet) TypeLabel.silent (.skip alphabet) ∅ ∅
     | progress (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (pid : ProcId) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.progress alphabet pid) (TypeLabel.progress pid)
           (.skip alphabet) ∅ ∅
     | recur (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (name : String) (body : PactType) :
-        env.WellFormed →
+        env.WellFormed ∧ env.clock = false →
         TypeOffers env (.recur alphabet name body) TypeLabel.silent
           (body.replaceVar name (.recur alphabet name body)) ∅
           (typeFutureOffers (body.replaceVar name (.recur alphabet name body)))
@@ -308,7 +308,7 @@ mutual
     | xoffer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧
+        env.WellFormed ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           elseType ∅ (typeFutureOffers elseType)
@@ -331,15 +331,15 @@ mutual
     | offer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧
+        env.WellFormed ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           elseType (typeBranchActions branches) (typeFutureOffers elseType)
     | offer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧ TypeNoImmediateBranch env branches ∧
-          ¬ TypeResolved env branches ∧ env.clock = false →
+        env.WellFormed ∧ env.clock = false ∧
+          TypeNoImmediateBranch env branches ∧ ¬ TypeResolved env branches →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           (.offer alphabet elseType branches) (typeWaitingOffers env branches)
           (typeFutureOffers (.offer alphabet elseType branches) \

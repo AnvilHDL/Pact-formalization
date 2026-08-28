@@ -472,7 +472,8 @@ def compileTypeFuel (signature : TypeAlphabet) :
       -- progress: emit the marker and enter final; final then idles silently.
       | .progress _ pid =>
           let actionEdges : Finset PendingAutomatonEdge :=
-            signature.localEnvironments.image fun environment =>
+            (signature.localEnvironments.filter fun environment =>
+              environment.clock = false).image fun environment =>
               { source := TypeAutomatonState.root
                 environment := environment
                 label := .visible (TypeLabel.progress pid)
