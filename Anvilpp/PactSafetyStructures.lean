@@ -10,8 +10,8 @@ open Classical
 the concrete counterpart of `selectedTypeBranch`: the chosen branch performs
 its head action instead of remaining behind a synthetic singleton `xoffer`. -/
 def selectedProcessBranch : ChoiceBranch → Proc
-  | .send msg expr process => .send msg expr process
-  | .recv msg var process => .recv msg var process
+  | .send alphabet msg expr process => .send alphabet msg expr process
+  | .recv alphabet msg var process => .recv alphabet msg var process
 
 /-- Rewrite a conjunctive process offer after the selected branch has been
 committed.  Branch selection is indexed by the erased branch because this is
@@ -19,15 +19,21 @@ the transformation whose abstraction is compared with
 `parallelTypeBranchesSelecting`. -/
 def parallelProcessBranchesSelecting
     (selected : BareMessage × PactType) : List ChoiceBranch → Proc
-  | [] => .skip
+  | [] => .skip PactTypeAlphabet.empty
   | [branch] =>
       if inferBranch branch = selected then selectedProcessBranch branch
       else ChoiceBranch.toXOffer branch
   | branch :: rest =>
       if inferBranch branch = selected then
-        .par (selectedProcessBranch branch) (parallelBranches rest) ∅
+        .par
+          (PactTypeAlphabet.mergeHidden (selectedProcessBranch branch).alphabet
+            (parallelBranches rest).alphabet ∅)
+          (selectedProcessBranch branch) (parallelBranches rest) ∅
       else
-        .par (ChoiceBranch.toXOffer branch)
+        .par
+          (PactTypeAlphabet.mergeHidden (ChoiceBranch.toXOffer branch).alphabet
+            (parallelProcessBranchesSelecting selected rest).alphabet ∅)
+          (ChoiceBranch.toXOffer branch)
           (parallelProcessBranchesSelecting selected rest) ∅
 
 

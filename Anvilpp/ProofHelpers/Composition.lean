@@ -23,7 +23,11 @@ def composeProcesses : List Proc → List Interface → Option Proc
   | [process], [] => some process
   | process :: next :: rest, interface :: interfaces =>
       match composeProcesses (next :: rest) interfaces with
-      | some suffix => some (.par process suffix interface)
+      | some suffix =>
+          some (.par
+            (PactTypeAlphabet.mergeHidden process.alphabet suffix.alphabet
+              interface)
+            process suffix interface)
       | none => none
   | _, _ => none
 

@@ -30,15 +30,21 @@ def TypeBranchEnabled (env : TypeEnvironment)
     (branch : BareMessage × PactType) : Prop :=
   typeNeed branch.1 ∈ env.immediate
 
+end
+end Pact
+
+-- Declared outside `namespace Pact` so these land on the global
+-- `PactTypeAlphabet` (`Proc.lean`), not a separate `Pact.PactTypeAlphabet`.
+noncomputable section
 namespace PactTypeAlphabet
 
   /-- The part of `parent` used by one conjunctive-offer branch. -/
   def branchPart (parent : PactTypeAlphabet)
-      (branch : BareMessage × PactType) : PactTypeAlphabet :=
+      (branch : Pact.BareMessage × Pact.PactType) : PactTypeAlphabet :=
     { actions := parent.actions ∩
-        ({branch.1} ∪ PactType.MessageActions branch.2)
-      progress := parent.progress ∩ PactType.ProgressIds branch.2
-      fair := parent.fair ∩ PactType.FairChoiceIds branch.2 }
+        ({branch.1} ∪ Pact.PactType.MessageActions branch.2)
+      progress := parent.progress ∩ Pact.PactType.ProgressIds branch.2
+      fair := parent.fair ∩ Pact.PactType.FairChoiceIds branch.2 }
 
   /-- The declarations left after assigning one component of an internal
   parallel product. -/
@@ -51,7 +57,7 @@ namespace PactTypeAlphabet
   the enclosing alphabet.  The generated product has an empty interface, so
   no action is hidden at this internal parallel node. -/
   theorem mergeHidden_branchPart_remove_empty
-      (parent : PactTypeAlphabet) (branch : BareMessage × PactType) :
+      (parent : PactTypeAlphabet) (branch : Pact.BareMessage × Pact.PactType) :
       parent = mergeHidden (branchPart parent branch)
         (remove parent (branchPart parent branch)) ∅ := by
     rcases parent with ⟨actions, progress, fair⟩
@@ -84,7 +90,7 @@ namespace PactTypeAlphabet
   at this internal, compiler-generated parallel node). -/
   theorem branchPart_remove_parallelCompatible
       (parent : PactTypeAlphabet) (hParentWF : parent.WellFormed)
-      (branch : BareMessage × PactType) :
+      (branch : Pact.BareMessage × Pact.PactType) :
       ParallelCompatible parent (branchPart parent branch)
         (remove parent (branchPart parent branch)) ∅ := by
     have hActionsDisjoint : Disjoint (branchPart parent branch).actions
@@ -128,7 +134,7 @@ namespace PactTypeAlphabet
   Interface actions remain local to the child even though they are hidden at
   the parent boundary. -/
   def projectParallelChild (parent child : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
+      (interface : Pact.Interface) : PactTypeAlphabet :=
     { actions := child.actions.filter fun action =>
         action.1 ∈ interface ∨ action ∈ parent.actions
       progress := child.progress ∩ parent.progress
@@ -138,7 +144,7 @@ namespace PactTypeAlphabet
   are new to the reannotated parallel node are assigned to the left child, so
   the two projected children still reconstruct the whole parent alphabet. -/
   def projectParallelLeft (parent left right : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
+      (interface : Pact.Interface) : PactTypeAlphabet :=
     let rightPart := projectParallelChild parent right interface
     { actions :=
         (left.actions.filter fun action => action.1 ∈ interface) ∪
@@ -147,6 +153,10 @@ namespace PactTypeAlphabet
       fair := parent.fair \ rightPart.fair }
 
 end PactTypeAlphabet
+end
+
+namespace Pact
+noncomputable section
 
 namespace PactType
 

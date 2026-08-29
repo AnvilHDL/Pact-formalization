@@ -25,13 +25,15 @@ lemma helper_h1_erasure_preserves_offers
 lemma helper_h1_erasure_preserves_local_environment
     {outer siblingEnv localEnv : Environment} {interface : Interface}
     {localProc sibling : Proc} {label : Label}
-    {current : Finset Offer} {future : Finset BareMessage}
     (hLocal :
-      LocalEnvironment outer interface siblingEnv sibling label localEnv) :
-    LocalTypeOfferEnvironment (eraseEnvironment outer) interface
-      (inferProcess localProc)
-      (eraseEnvironment siblingEnv) (current.image Offer.bare) future
-      (eraseEnvironment localEnv) := by
+      LocalEnvironment outer interface localProc siblingEnv sibling label
+        localEnv) :
+    ∃ siblingTarget current future,
+      Offers siblingEnv sibling label siblingTarget current future ∧
+      LocalTypeOfferEnvironment (eraseEnvironment outer) interface
+        (inferProcess localProc)
+        (eraseEnvironment siblingEnv) (current.image Offer.bare) future
+        (eraseEnvironment localEnv) := by
   sorry -- TODO(section7): combine local-env inversion with offer erasure.
 
 /-- The paper's `γ(e)`: put back a payload only where erasure removed one.
@@ -507,7 +509,8 @@ lemma helper_h6_abstraction_process_substitution
 
 /-- Helper Lemma H6: abstraction reflects literal `skip`. -/
 lemma helper_h6_abstraction_skip_iff (process : Proc) :
-    inferProcess process = .skip (processAlphabet process) ↔ process = .skip := by
+    inferProcess process = .skip process.alphabet ↔
+      ∃ alphabet, process = .skip alphabet := by
   sorry -- TODO(section7): inspect the abstraction clauses.
 
 

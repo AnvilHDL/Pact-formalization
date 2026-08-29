@@ -93,23 +93,23 @@ def SyncCompatible {initial : Proc} (strategy : ProcessStrategy initial) : Prop 
 mutual
   /-- Fair-choice identifiers occurring in a process, `cal(Eta)(P)`. -/
   def processFairIds : Proc → Finset BranchId
-    | .send _ _ p => processFairIds p
-    | .recv _ _ p => processFairIds p
-    | .var _ => ∅
-    | .skip => ∅
-    | .endp _ => ∅
-    | .cycle => ∅
-    | .par left right _ => processFairIds left ∪ processFairIds right
-    | .seq left right => processFairIds left ∪ processFairIds right
-    | .letp _ _ p => processFairIds p
-    | .ifunfair _ left right => processFairIds left ∪ processFairIds right
-    | .iffair bid _ left right =>
+    | .send _ _ _ p => processFairIds p
+    | .recv _ _ _ p => processFairIds p
+    | .var _ _ => ∅
+    | .skip _ => ∅
+    | .endp _ _ => ∅
+    | .cycle _ => ∅
+    | .par _ left right _ => processFairIds left ∪ processFairIds right
+    | .seq _ left right => processFairIds left ∪ processFairIds right
+    | .letp _ _ _ p => processFairIds p
+    | .ifunfair _ _ left right => processFairIds left ∪ processFairIds right
+    | .iffair _ bid _ left right =>
         {bid} ∪ processFairIds left ∪ processFairIds right
-    | .xoffer elseProcess branches =>
+    | .xoffer _ elseProcess branches =>
         processFairIds elseProcess ∪ processBranchFairIds branches
-    | .offer elseProcess branches =>
+    | .offer _ elseProcess branches =>
         processFairIds elseProcess ∪ processBranchFairIds branches
-    | .recur _ body => processFairIds body
+    | .recur _ _ body => processFairIds body
   termination_by process => sizeOf process
 
   /-- Fair-choice identifiers occurring in a branch list. -/
@@ -129,24 +129,24 @@ end
 mutual
   /-- Progress identifiers occurring in a process, `cal(T)(P)`. -/
   def processProgressIds : Proc → Finset ProcId
-    | .send _ _ p => processProgressIds p
-    | .recv _ _ p => processProgressIds p
-    | .var _ => ∅
-    | .skip => ∅
-    | .endp pid => {pid}
-    | .cycle => ∅
-    | .par left right _ => processProgressIds left ∪ processProgressIds right
-    | .seq left right => processProgressIds left ∪ processProgressIds right
-    | .letp _ _ p => processProgressIds p
-    | .ifunfair _ left right =>
+    | .send _ _ _ p => processProgressIds p
+    | .recv _ _ _ p => processProgressIds p
+    | .var _ _ => ∅
+    | .skip _ => ∅
+    | .endp _ pid => {pid}
+    | .cycle _ => ∅
+    | .par _ left right _ => processProgressIds left ∪ processProgressIds right
+    | .seq _ left right => processProgressIds left ∪ processProgressIds right
+    | .letp _ _ _ p => processProgressIds p
+    | .ifunfair _ _ left right =>
         processProgressIds left ∪ processProgressIds right
-    | .iffair _ _ left right =>
+    | .iffair _ _ _ left right =>
         processProgressIds left ∪ processProgressIds right
-    | .xoffer elseProcess branches =>
+    | .xoffer _ elseProcess branches =>
         processProgressIds elseProcess ∪ processBranchProgressIds branches
-    | .offer elseProcess branches =>
+    | .offer _ elseProcess branches =>
         processProgressIds elseProcess ∪ processBranchProgressIds branches
-    | .recur _ body => processProgressIds body
+    | .recur _ _ body => processProgressIds body
   termination_by process => sizeOf process
 
   /-- Progress identifiers occurring in a branch list. -/
