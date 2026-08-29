@@ -1580,7 +1580,7 @@ theorem correspondence_seq_stepIff
             first second hRelated hLeftRelated hChildTargetRelated hNonFinal
             hChildStep hSignatureSymbol hChildEdge⟩
       | fuse transitionSkipAlphabet offerSkipAlphabet childFuture hTarget
-          hChildTransition hChildOffers hFuture =>
+          hChildTransition hChildOffers hNotTock hFuture =>
           subst residual'
           subst future
           have hChildSymbol :
@@ -1603,7 +1603,25 @@ theorem correspondence_seq_stepIff
           exact ⟨.child 1 (compileType signature second).initial,
             compileType_seq_lift_left_fuse signature alphabet
               offerSkipAlphabet first second hRelated hLeftRelated
-              hChildTargetRelated hChildStep hSignatureSymbol hChildEdge⟩
+              hChildTargetRelated hChildStep hNotTock hSignatureSymbol
+              hChildEdge⟩
+      | fuse_tock transitionSkipAlphabet offerSkipAlphabet childFuture
+          hTarget hLabel hChildTransition hChildOffers hFuture =>
+          -- GAP (not mechanical): the semantic side now gives `future = ∅`
+          -- here (`TypeOffers.seq_fuse_tock`), but `compileType_seq_lift_left_fuse`
+          -- only proves the redirect edge with future = `typeFutureOffers second \
+          -- current` — `sequenceRedirectEdge`/`buildSequenceAutomaton` build that
+          -- future unconditionally from the syntactic `computeFutureOf`, with no
+          -- special case for a tock-labelled edge. So when
+          -- `typeFutureOffers second \ current ≠ ∅` there is no compiled edge with
+          -- future `∅` to exhibit here: the automaton *construction* needs the same
+          -- tock/non-tock split already applied to `TypeOffers.seq_fuse`, which is
+          -- new work, not present anywhere in this development (the identical gap
+          -- is already flagged unprovable at `Parallel.lean`'s `hSameOnInterface`
+          -- clock/clock case, "needs a separate, automaton-native invariant not yet
+          -- proved anywhere in this development"). Left as `sorry` pending that
+          -- automaton-level fix; do not attempt to discharge this mechanically.
+          sorry
     · rcases hRight with ⟨q, hState, hRightRelated⟩
       change relationMembership (buildRelationSet second
         (compileType signature second)) residual q at hRightRelated
@@ -1655,11 +1673,22 @@ theorem correspondence_seq_stepIff
         have hChildStep :=
           (hFirstIH hLeftRelated hChildSymbol).mpr
             ⟨q', hChildEdge, hLeftTargetRelated⟩
-        exact ⟨TypeTransition.seq_fuse env alphabet skipAlphabet leftResidual
-            second label
-            hChildStep.1,
-          TypeOffers.seq_fuse env alphabet skipAlphabet leftResidual second label
-            current childFuture hChildStep.2⟩
+        by_cases hNotTock : label = TypeLabel.tock
+        · -- GAP (not mechanical): mirror image of the `fuse_tock` gap above.
+          -- `SeqCompiledEdgeCase.leftFuse`'s `future = typeFutureOffers second \
+          -- current` is forced by the automaton-structural H15 correspondence
+          -- (`helper_h15_edge_future_offers_agree`), independent of `label` — the
+          -- compiled edge's future doesn't know it's carrying a tock. To supply
+          -- `TypeOffers.seq_fuse_tock` here we would need `future = ∅`, which only
+          -- holds when `typeFutureOffers second \ current = ∅`; nothing in scope
+          -- forces that in general. Same missing automaton-level tock invariant as
+          -- `Parallel.lean`'s `hSameOnInterface` clock/clock case. Left as `sorry`.
+          sorry
+        · exact ⟨TypeTransition.seq_fuse env alphabet skipAlphabet leftResidual
+              second label
+              hChildStep.1,
+            TypeOffers.seq_fuse env alphabet skipAlphabet leftResidual second label
+              current childFuture hChildStep.2 hNotTock⟩
     | entryFuse skipAlphabet hResidual hResidual' hState hState' hLabel hCurrent hFuture
         hWellFormed hClock =>
         subst residual
@@ -1675,7 +1704,8 @@ theorem correspondence_seq_stepIff
           by
             simpa using TypeOffers.seq_fuse env alphabet skipAlphabet
               (.skip skipAlphabet) second TypeLabel.silent ∅ ∅
-              (TypeOffers.skip env skipAlphabet ⟨hWellFormed, hClock⟩)⟩
+              (TypeOffers.skip env skipAlphabet ⟨hWellFormed, hClock⟩)
+              (by decide)⟩
     | rightStep q q' hState hState' hRightRelated hRightTargetRelated
         hChildEdge =>
         subst state

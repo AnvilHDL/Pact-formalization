@@ -266,9 +266,14 @@ theorem TypeTransition.exists_typeOffers
       exact ⟨∅, ∅, TypeOffers.skip env alphabet conditions⟩
   | seq_fuse env alphabet skipAlphabet left right label _ ihLeft =>
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
-      exact ⟨current, typeFutureOffers right \ current,
-        TypeOffers.seq_fuse env alphabet skipAlphabet left right label current
-          childFuture hOffers⟩
+      by_cases hTock : label = TypeLabel.tock
+      · subst hTock
+        exact ⟨current, ∅,
+          TypeOffers.seq_fuse_tock env alphabet skipAlphabet left right current
+            childFuture hOffers⟩
+      · exact ⟨current, typeFutureOffers right \ current,
+          TypeOffers.seq_fuse env alphabet skipAlphabet left right label current
+            childFuture hOffers hTock⟩
   | progress env alphabet pid hEnv hClock =>
       exact ⟨∅, ∅, TypeOffers.progress env alphabet pid ⟨hEnv, hClock⟩⟩
   | recur env alphabet name body hEnv hClock =>

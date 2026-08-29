@@ -434,7 +434,16 @@ inductive SeqDecoratedStepCase
       target = right →
       TypeTransition env source label (.skip transitionSkipAlphabet) →
       TypeOffers env source label (.skip offerSkipAlphabet) current childFuture →
+      label ≠ TypeLabel.tock →
       future = typeFutureOffers right \ current →
+      SeqDecoratedStepCase alphabet right source target env label current future
+  | fuse_tock (transitionSkipAlphabet offerSkipAlphabet : PactTypeAlphabet)
+      (childFuture : Finset BareMessage) :
+      target = right →
+      label = TypeLabel.tock →
+      TypeTransition env source label (.skip transitionSkipAlphabet) →
+      TypeOffers env source label (.skip offerSkipAlphabet) current childFuture →
+      future = ∅ →
       SeqDecoratedStepCase alphabet right source target env label current future
 
 /-- Proves that every decorated sequence step is either retained on the left or fused into the right operand. -/
@@ -450,18 +459,17 @@ theorem decoratedTypeTransition_seq_cases
   cases hTransition with
   | seq_fuse env alphabet transitionSkipAlphabet left right label
       hChildTransition =>
-      have hOfferCase : ∃ offerSkipAlphabet childFuture,
-          TypeOffers env left label (.skip offerSkipAlphabet) current
-              childFuture ∧
-            future = typeFutureOffers right \ current := by
-        change TypeOffers env (.seq alphabet left right) label right current
-          future at hOffers
-        cases hOffers
-        exact ⟨_, _, by assumption, rfl⟩
-      obtain ⟨offerSkipAlphabet, childFuture, hChildOffers, hFuture⟩ :=
-        hOfferCase
-      exact SeqDecoratedStepCase.fuse transitionSkipAlphabet offerSkipAlphabet
-        childFuture rfl hChildTransition hChildOffers hFuture
+      change TypeOffers env (.seq alphabet left right) label right current
+        future at hOffers
+      cases hOffers with
+      | seq_fuse _ _ offerSkipAlphabet _ _ _ _ childFuture hChildOffers hNotTock =>
+          exact SeqDecoratedStepCase.fuse transitionSkipAlphabet
+            offerSkipAlphabet childFuture rfl hChildTransition hChildOffers
+            hNotTock rfl
+      | seq_fuse_tock _ _ offerSkipAlphabet _ _ _ childFuture hChildOffers =>
+          exact SeqDecoratedStepCase.fuse_tock transitionSkipAlphabet
+            offerSkipAlphabet childFuture rfl rfl hChildTransition
+            hChildOffers rfl
   | seq env alphabet left leftTarget right label hChildTransition hNonFinal =>
       have hChildOffers :
           ∃ childFuture,
@@ -904,6 +912,7 @@ theorem compileType_seq_lift_left_fuse
     (hChildStep :
       DecoratedTypeTransition env leftResidual label
         (TypeOfferSummary.mk current childFuture) (.skip skipAlphabet))
+    (hNotTock : label ≠ TypeLabel.tock)
     (hParentSymbol :
       TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current (typeFutureOffers right \ current)) ∈
@@ -971,7 +980,7 @@ theorem compileType_seq_lift_left_fuse
     ⟨TypeTransition.seq_fuse env alphabet skipAlphabet leftResidual right label
         hChildStep.1,
       TypeOffers.seq_fuse env alphabet skipAlphabet leftResidual right label
-        current childFuture hChildStep.2⟩
+        current childFuture hChildStep.2 hNotTock⟩
   refine ⟨hParentEdge, ?_⟩
   exact relationMembership_seq_right signature alphabet left right right
     (buildRelationSet_initial right (compileType signature right))

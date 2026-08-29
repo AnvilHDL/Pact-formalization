@@ -90,8 +90,12 @@ theorem TypeOffers.toTypeTransition
       exact TypeTransition.seq env alphabet left leftTarget right label ih
         hNotSkip
   | seq_fuse env alphabet skipAlphabet left right label current childFuture
-      hOffers ih =>
+      hOffers hNotTock ih =>
       exact TypeTransition.seq_fuse env alphabet skipAlphabet left right label ih
+  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
+      hOffers ih =>
+      exact TypeTransition.seq_fuse env alphabet skipAlphabet left right
+        TypeLabel.tock ih
   | xoffer_branch env alphabet elseType branches action processType hConditions =>
       exact TypeTransition.xoffer_branch env alphabet elseType branches action
         processType hConditions
@@ -723,6 +727,72 @@ private theorem typeWaitingOffers_subset_fixedAlphabet
   simp only [typeWaitingOffers, Finset.mem_inter] at hAction
   exact typeBranchActions_subset_fixedAlphabet branches hWF hAction.2
 
+/-- Under a clock environment, a step's current offer is always empty: every
+rule with a nonempty current offer either needs an immediate need `tock`
+cannot supply (`action`, `xoffer_branch`) or now carries an explicit
+`env.clock = false` premise. -/
+private theorem typeOffers_current_empty_of_clock
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hClock : env.clock = true)
+    (hOffers : TypeOffers env source label target current future) :
+    current = ∅ := by
+  induction hOffers using TypeOffers.rec with
+  | action env alphabet msg dir hConditions =>
+      exfalso
+      have hImmEmpty : env.immediate = ∅ := (hConditions.1.1 hClock).1
+      have hHasNeed := hConditions.2
+      simp only [TypeEnvironment.hasNeed, hImmEmpty] at hHasNeed
+      exact absurd hHasNeed (by simp)
+  | action_wait env alphabet msg dir hConditions =>
+      exact absurd hConditions.2.2 (by simp [hClock])
+  | choice_left env alphabet left right hConditions => simp
+  | choice_right env alphabet left right hConditions => simp
+  | fair_left env alphabet bid left right hConditions => simp
+  | fair_right env alphabet bid left right hConditions => simp
+  | cycle | cycle_wait | skip | progress | recur | offer_some => simp
+  | seq env alphabet left leftTarget right label current childFuture
+      hChild hNotSkip ih => exact ih hClock
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ih => exact ih hClock
+  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
+      hChild ih => exact ih hClock
+  | xoffer_branch env alphabet elseType branches action processType hConditions =>
+      exfalso
+      have hImmEmpty : env.immediate = ∅ := (hConditions.1.1 hClock).1
+      have hEnabled := hConditions.2.2.1
+      simp only [TypeBranchEnabled, hImmEmpty] at hEnabled
+      exact absurd hEnabled (by simp)
+  | xoffer_else env alphabet elseType branches hConditions => simp
+  | xoffer_wait env alphabet elseType branches hConditions =>
+      exact absurd hConditions.2.2 (by simp [hClock])
+  | offer_else env alphabet elseType branches hConditions =>
+      exact absurd hConditions.2.1 (by simp [hClock])
+  | offer_wait env alphabet elseType branches hConditions =>
+      exact absurd hConditions.2.1 (by simp [hClock])
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      cases hLocal1 with
+      | clock _ =>
+          rw [ihLeft (by simp [TypeEnvironment.tock]),
+            ihRight (by simp [TypeEnvironment.tock])]
+          simp [hideTypeOffers]
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock _ _ _ _
+        exact absurd hClock (by simp [hOuterClock])
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
+      hLocal2 hSide ihLeft ihRight =>
+      cases hLocal1 with
+      | clock _ =>
+          rw [ihLeft (by simp [TypeEnvironment.tock]),
+            ihRight (by simp [TypeEnvironment.tock])]
+          simp [hideTypeOffers]
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock _ _ _ _
+        exact absurd hClock (by simp [hOuterClock])
+
 private theorem typeOffers_current_subset_fixedAlphabet
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
     {current future : Finset BareMessage}
@@ -748,6 +818,12 @@ private theorem typeOffers_current_subset_fixedAlphabet
         change left.alphabet.actions ⊆ alphabet.actions
         rw [hSource.2.1])
   | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ih =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      exact (ih hSource.2.2.2.1).trans (by
+        change left.alphabet.actions ⊆ alphabet.actions
+        rw [hSource.2.1])
+  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
       hChild ih =>
       simp only [PactType.AlphabetWellFormed] at hSource
       exact (ih hSource.2.2.2.1).trans (by
@@ -819,6 +895,295 @@ private theorem typeOffers_future_subset_fixedAlphabet
   · have hSubset := typeFutureOffers_subset_fixedAlphabet target hTargetWF
     simpa [hTargetAlphabet] using hSubset hFuture
   · exact typeOffers_current_subset_fixedAlphabet hSource hOffers hCurrent
+
+private theorem typeFutureOffers_branchFold_subset_branchPrefixMessageIds
+    (branches : List (BareMessage × PactType))
+    (ihBranches : ∀ branch ∈ branches, ∀ action : BareMessage,
+      action ∈ typeFutureOffers branch.2 → action.1 ∈ PactType.PrefixMessageIds branch.2) :
+    ∀ (rest : List (BareMessage × PactType)) initial action,
+      (∀ branch ∈ rest, branch ∈ branches) →
+      action ∈ rest.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffers branch.2) initial →
+      action ∈ initial ∨
+        action.1 ∈ PactType.BranchPrefixMessageIds rest := by
+  intro rest
+  induction rest with
+  | nil =>
+      intro initial action _ hMem
+      exact Or.inl (by simpa using hMem)
+  | cons branch tail tailIH =>
+      rcases branch with ⟨bAction, bType⟩
+      intro initial action hSubset hMem
+      have hTail := tailIH (initial ∪ {bAction} ∪ typeFutureOffers bType) action
+        (fun other hOther => hSubset other (by simp [hOther])) hMem
+      rcases hTail with hInitialOrHead | hRest
+      · simp only [Finset.mem_union, Finset.mem_singleton] at hInitialOrHead
+        rcases hInitialOrHead with (hInitial | hHead) | hFuture
+        · exact Or.inl hInitial
+        · refine Or.inr ?_
+          simp only [PactType.BranchPrefixMessageIds]
+          rw [Finset.mem_union, Finset.mem_union, Finset.mem_singleton]
+          exact Or.inl (Or.inl (congrArg Prod.fst hHead))
+        · refine Or.inr ?_
+          simp only [PactType.BranchPrefixMessageIds]
+          rw [Finset.mem_union, Finset.mem_union]
+          exact Or.inl (Or.inr (ihBranches (bAction, bType)
+            (hSubset (bAction, bType) (by simp)) action hFuture))
+      · refine Or.inr ?_
+        simp only [PactType.BranchPrefixMessageIds]
+        rw [Finset.mem_union, Finset.mem_union]
+        exact Or.inr hRest
+
+/-- Every syntactic future offer's bare message id was already reachable
+before the next clock, per `PrefixMessageIds`. -/
+theorem typeFutureOffers_subset_prefixMessageIds :
+    ∀ processType : PactType, ∀ action : BareMessage,
+      action ∈ typeFutureOffers processType →
+      action.1 ∈ PactType.PrefixMessageIds processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      subst hSize
+      cases processType with
+      | message alphabet msg dir =>
+          intro action hAction
+          simp only [typeFutureOffers, typeFutureOffersFuel, Finset.mem_singleton] at hAction
+          simp [PactType.PrefixMessageIds, hAction]
+      | progress alphabet pid =>
+          intro action hAction
+          simp [typeFutureOffers, typeFutureOffersFuel] at hAction
+      | tock alphabet =>
+          intro action hAction
+          simp [typeFutureOffers, typeFutureOffersFuel] at hAction
+      | skip alphabet =>
+          intro action hAction
+          simp [typeFutureOffers, typeFutureOffersFuel] at hAction
+      | var alphabet name =>
+          intro action hAction
+          simp [typeFutureOffers, typeFutureOffersFuel] at hAction
+      | recur alphabet name body =>
+          intro action hAction
+          rw [typeFutureOffers_recur] at hAction
+          have hBodySize : sizeOf body < sizeOf (PactType.recur alphabet name body) := by
+            simp_wf; omega
+          simpa [PactType.PrefixMessageIds] using
+            ih (sizeOf body) hBodySize body rfl action hAction
+      | choice alphabet left right =>
+          intro action hAction
+          rw [typeFutureOffers_choice, Finset.mem_union] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hLeftSize : sizeOf left < sizeOf (PactType.choice alphabet left right) := by
+            simp_wf; omega
+          have hRightSize : sizeOf right < sizeOf (PactType.choice alphabet left right) := by
+            simp_wf; omega
+          rcases hAction with hLeft | hRight
+          · exact Or.inl (ih (sizeOf left) hLeftSize left rfl action hLeft)
+          · exact Or.inr (ih (sizeOf right) hRightSize right rfl action hRight)
+      | fairChoice alphabet bid left right =>
+          intro action hAction
+          rw [typeFutureOffers_fairChoice, Finset.mem_union] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hLeftSize : sizeOf left <
+              sizeOf (PactType.fairChoice alphabet bid left right) := by
+            simp_wf; omega
+          have hRightSize : sizeOf right <
+              sizeOf (PactType.fairChoice alphabet bid left right) := by
+            simp_wf; omega
+          rcases hAction with hLeft | hRight
+          · exact Or.inl (ih (sizeOf left) hLeftSize left rfl action hLeft)
+          · exact Or.inr (ih (sizeOf right) hRightSize right rfl action hRight)
+      | seq alphabet left right =>
+          intro action hAction
+          rw [typeFutureOffers_sequence] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hLeftSize : sizeOf left < sizeOf (PactType.seq alphabet left right) := by
+            simp_wf; omega
+          have hRightSize : sizeOf right < sizeOf (PactType.seq alphabet left right) := by
+            simp_wf; omega
+          by_cases hComplete : left.CanCompleteBeforeTock
+          · rw [if_pos hComplete] at hAction
+            rw [if_pos hComplete]
+            rcases Finset.mem_union.mp hAction with hLeft | hRight
+            · exact Or.inl (ih (sizeOf left) hLeftSize left rfl action hLeft)
+            · exact Or.inr (ih (sizeOf right) hRightSize right rfl action hRight)
+          · rw [if_neg hComplete] at hAction
+            exact Or.inl (ih (sizeOf left) hLeftSize left rfl action hAction)
+      | par alphabet left right interface =>
+          intro action hAction
+          rw [typeFutureOffers_parallel] at hAction
+          simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hLeftSize : sizeOf left <
+              sizeOf (PactType.par alphabet left right interface) := by
+            simp_wf; omega
+          have hRightSize : sizeOf right <
+              sizeOf (PactType.par alphabet left right interface) := by
+            simp_wf; omega
+          rcases hAction.1 with hLeft | hRight
+          · exact Or.inl (ih (sizeOf left) hLeftSize left rfl action hLeft)
+          · exact Or.inr (ih (sizeOf right) hRightSize right rfl action hRight)
+      | xoffer alphabet elseType branches =>
+          intro action hAction
+          rw [typeFutureOffers_xoffer] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hElseSize : sizeOf elseType <
+              sizeOf (PactType.xoffer alphabet elseType branches) := by
+            simp_wf; omega
+          have hBranchSize : ∀ branch ∈ branches,
+              sizeOf branch.2 < sizeOf (PactType.xoffer alphabet elseType branches) := by
+            intro branch hBranch
+            have hPairSize := List.sizeOf_lt_of_mem hBranch
+            have hComponentSize : sizeOf branch.2 < sizeOf branch := by
+              rcases branch; simp_wf; omega
+            have hListSize : sizeOf branches <
+                sizeOf (PactType.xoffer alphabet elseType branches) := by
+              simp_wf; omega
+            omega
+          have hResult := typeFutureOffers_branchFold_subset_branchPrefixMessageIds
+            branches
+            (fun branch hBranch action' hAction' =>
+              ih (sizeOf branch.2) (hBranchSize branch hBranch) branch.2 rfl action' hAction')
+            branches (typeFutureOffers elseType) action (fun _ h => h) hAction
+          rcases hResult with hElse | hBranches
+          · exact Or.inl (ih (sizeOf elseType) hElseSize elseType rfl action hElse)
+          · exact Or.inr hBranches
+      | offer alphabet elseType branches =>
+          intro action hAction
+          rw [typeFutureOffers_offer] at hAction
+          simp only [PactType.PrefixMessageIds, Finset.mem_union]
+          have hElseSize : sizeOf elseType <
+              sizeOf (PactType.offer alphabet elseType branches) := by
+            simp_wf; omega
+          have hBranchSize : ∀ branch ∈ branches,
+              sizeOf branch.2 < sizeOf (PactType.offer alphabet elseType branches) := by
+            intro branch hBranch
+            have hPairSize := List.sizeOf_lt_of_mem hBranch
+            have hComponentSize : sizeOf branch.2 < sizeOf branch := by
+              rcases branch; simp_wf; omega
+            have hListSize : sizeOf branches <
+                sizeOf (PactType.offer alphabet elseType branches) := by
+              simp_wf; omega
+            omega
+          have hResult := typeFutureOffers_branchFold_subset_branchPrefixMessageIds
+            branches
+            (fun branch hBranch action' hAction' =>
+              ih (sizeOf branch.2) (hBranchSize branch hBranch) branch.2 rfl action' hAction')
+            branches (typeFutureOffers elseType) action (fun _ h => h) hAction
+          rcases hResult with hElse | hBranches
+          · exact Or.inl (ih (sizeOf elseType) hElseSize elseType rfl action hElse)
+          · exact Or.inr hBranches
+
+/-- A branch's own head action never recurs among its own continuation's
+same-cycle future offers, for a regular (`SameCycleMessageLinear`) offer
+list. -/
+private theorem sameCycleMessageLinearBranches_head_notMem_of_mem
+    {branches : List (BareMessage × PactType)}
+    (hBranches : PactType.SameCycleMessageLinearBranches branches)
+    {action : BareMessage} {processType : PactType}
+    (hMem : (action, processType) ∈ branches) :
+    action.1 ∉ PactType.PrefixMessageIds processType := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.SameCycleMessageLinearBranches] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMem
+      · cases hEq
+        exact hBranches.2.1
+      · exact ih hBranches.2.2 hMem
+
+/-- Under `SameCycleMessageLinear`, no conjunctive/exclusive-offer branch head
+recurs among the else type's own same-cycle future offers. -/
+private theorem sameCycleMessageLinear_branchHead_notMem_elseFuture
+    {elseType : PactType} {branches : List (BareMessage × PactType)}
+    (hSafe : ∀ branch ∈ branches, branch.1.1 ∉ PactType.PrefixMessageIds elseType)
+    {action : BareMessage} {processType : PactType}
+    (hMem : (action, processType) ∈ branches)
+    {future : BareMessage} (hFuture : future ∈ typeFutureOffers elseType) :
+    future ≠ action := by
+  intro heq
+  exact hSafe (action, processType) hMem
+    (heq ▸ typeFutureOffers_subset_prefixMessageIds elseType future hFuture)
+
+/-- A step's current offer and future offer never share an action: every
+`TypeOffers` rule either has an empty current offer, subtracts the current
+offer from the future offer syntactically, or (`xoffer_branch`, `offer_else`)
+is ruled out by the source's `SameCycleMessageLinear` regularity — "a message
+is exchanged at most once per cycle," the paper's own admissibility
+condition. -/
+private theorem typeOffers_current_future_disjoint
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hRegular : source.SameCycleMessageLinear)
+    (hAlphaWF : source.AlphabetWellFormed)
+    (hOffers : TypeOffers env source label target current future) :
+    Disjoint current future := by
+  induction hOffers using TypeOffers.rec with
+  | action env alphabet msg dir hConditions =>
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | action_wait env alphabet msg dir hConditions =>
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
+  | choice_left | choice_right | fair_left | fair_right |
+      cycle | cycle_wait | skip | progress | recur | offer_some => simp
+  | seq env alphabet left leftTarget right label current childFuture
+      hChild hNotSkip ih =>
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ih =>
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
+  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
+      hChild ih => simp
+  | xoffer_branch env alphabet elseType branches action processType hConditions =>
+      simp only [PactType.SameCycleMessageLinear] at hRegular
+      rw [Finset.disjoint_left]
+      intro action' hActionCurrent hActionFuture
+      simp only [Finset.mem_singleton] at hActionCurrent
+      subst hActionCurrent
+      exact sameCycleMessageLinearBranches_head_notMem_of_mem hRegular.2.1
+        hConditions.2.1
+        (typeFutureOffers_subset_prefixMessageIds processType _ hActionFuture)
+  | xoffer_else env alphabet elseType branches hConditions => simp
+  | xoffer_wait env alphabet elseType branches hConditions =>
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
+  | offer_else env alphabet elseType branches hConditions =>
+      simp only [PactType.SameCycleMessageLinear] at hRegular
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      simp only [typeBranchActions, List.mem_toFinset, List.mem_map] at hActionCurrent
+      obtain ⟨branch, hBranchMem, hBranchEq⟩ := hActionCurrent
+      exact sameCycleMessageLinear_branchHead_notMem_elseFuture hRegular.2.2
+        hBranchMem hActionFuture hBranchEq.symm
+  | offer_wait env alphabet elseType branches hConditions =>
+      rw [Finset.disjoint_left]
+      intro action hActionCurrent hActionFuture
+      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
+  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      -- TODO(parallel-alphabet-gap): the cross-side case (a left current
+      -- action landing in the right future menu, or symmetrically) needs
+      -- `leftTarget.AlphabetWellFormed`/`rightTarget.AlphabetWellFormed` for
+      -- `typeOffers_future_subset_fixedAlphabet`, which is not derivable here
+      -- without "the fixed alphabet's well-formedness survives as a type
+      -- steps" — the same genuine, separate gap already `sorry`'d at
+      -- `Cases/Parallel.lean`'s `step`/`fuse` cases. Left as `sorry` pending
+      -- that development; the same-side cases (`ihLeft`/`ihRight`) are real.
+      sorry
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
+      hLocal2 hSide ihLeft ihRight =>
+      -- TODO(parallel-alphabet-gap): same gap as the `par` case above.
+      sorry
 
 private theorem alphabet_wellFormed_of_type
     {processType : PactType} (hWF : processType.AlphabetWellFormed) :
@@ -2535,24 +2900,347 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         rename_i hOuterClock hSiblingClock hLocalClock hImmediate hFuture
         exact AutomatonLocalEnvironment.ordinary hOuterClock hSiblingClock hLocalClock
           hImmediate hFuture
-    -- TODO(parallel-interface-gap): the remaining obligations are the four
-    -- `sameOnInterface` premises required by `syncAutomatonEdges`.
-    --
-    -- The old clock-only blocker has been repaired for progress, recursion,
-    -- and the resolved/waiting offer families by adding the missing
-    -- `env.clock = false` guards.  What remains is more precise: the semantic
-    -- hypotheses here provide `LocalTypeOfferEnvironment`, while the automaton
-    -- constructor additionally records the paper's `O_C eq_I E_C` and
-    -- `O_F eq_I E_F` checks as explicit `sameOnInterface` fields.
-    --
-    -- These equalities are immediate for ordinary current offers after
-    -- projecting through the fixed child alphabets.  Future offers also need
-    -- the standard "current and same-cycle future do not overlap on the
-    -- interface" invariant for component edges.  Clock-local cases need the
-    -- analogous fact that an edge under `tock` exposes no interface future.
-    -- Those facts belong either as semantic offer invariants or as explicit
-    -- premises of this bridge, not as an ad-hoc proof here.
-    sorry
+    -- A non-interface action of `env`'s own menu can never itself sit on the
+    -- interface once projected into a child alphabet, so restricting the
+    -- projected summand to the interface always drops it.
+    have hProjectDrop : ∀ (childAlphabet : PactTypeAlphabet) (envSet : Finset BareMessage),
+        envSet ⊆ signature.localEnvironmentActionsFor alphabet →
+        restrictTypeOffers interface
+          (projectTypeEnvironmentOffers childAlphabet envSet) = ∅ := by
+      intro childAlphabet envSet hEnvSet
+      unfold restrictTypeOffers
+      rw [Finset.filter_eq_empty_iff]
+      intro action hAction hInterface
+      simp only [projectTypeEnvironmentOffers, Finset.mem_filter] at hAction
+      exact hEnvNotInterface action (hEnvSet hAction.1) hInterface
+    have hRestrictIdem : ∀ s : Finset BareMessage,
+        restrictTypeOffers interface (restrictTypeOffers interface s) =
+          restrictTypeOffers interface s := by
+      intro s
+      apply Finset.ext
+      intro action
+      simp only [restrictTypeOffers, Finset.mem_filter]
+      tauto
+    have hRestrictSdiff : ∀ s t : Finset BareMessage,
+        restrictTypeOffers interface (s \ t) =
+          restrictTypeOffers interface s \ restrictTypeOffers interface t := by
+      intro s t
+      apply Finset.ext
+      intro action
+      simp only [restrictTypeOffers, Finset.mem_filter, Finset.mem_sdiff]
+      tauto
+    have hRestrictUnion : ∀ s t : Finset BareMessage,
+        restrictTypeOffers interface (s ∪ t) =
+          restrictTypeOffers interface s ∪ restrictTypeOffers interface t := by
+      intro s t
+      apply Finset.ext
+      intro action
+      simp only [restrictTypeOffers, Finset.mem_filter, Finset.mem_union]
+      tauto
+    obtain ⟨leftTargetResidual, hLeftTargetRelated⟩ :
+        ∃ residual, relationMembership
+          (buildRelationSet left (compileType signature left)) residual q1' := by
+      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftResolvedMem
+      obtain ⟨rawLeft, hRawLeftMem, hRawLeftEq⟩ := hLeftResolvedMem
+      have hRawLeftTarget : rawLeft.target = q1' := congrArg AutomatonFragmentEdge.target
+        hRawLeftEq
+      rcases buildRelationSetCoreFuel_edge_target_mem signature
+          (typeCompilationFuel left) left le_rfl rawLeft hRawLeftMem with
+          ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
+      · exact ⟨residual, hRawLeftTarget ▸ hResidual⟩
+      · exfalso
+        have hRawLeftLabel : rawLeft.label = .visible leftLabel :=
+          congrArg AutomatonFragmentEdge.label hRawLeftEq
+        rw [hRawLeftLabel] at hMarkerLabel
+        cases hMarkerLabel
+    obtain ⟨rightTargetResidual, hRightTargetRelated⟩ :
+        ∃ residual, relationMembership
+          (buildRelationSet right (compileType signature right)) residual q2' := by
+      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightResolvedMem
+      obtain ⟨rawRight, hRawRightMem, hRawRightEq⟩ := hRightResolvedMem
+      have hRawRightTarget : rawRight.target = q2' := congrArg AutomatonFragmentEdge.target
+        hRawRightEq
+      rcases buildRelationSetCoreFuel_edge_target_mem signature
+          (typeCompilationFuel right) right le_rfl rawRight hRawRightMem with
+          ⟨residual, hResidual⟩ | ⟨markerName, hMarkerLabel⟩
+      · exact ⟨residual, hRawRightTarget ▸ hResidual⟩
+      · exfalso
+        have hRawRightLabel : rawRight.label = .visible rightLabel :=
+          congrArg AutomatonFragmentEdge.label hRawRightEq
+        rw [hRawRightLabel] at hMarkerLabel
+        cases hMarkerLabel
+    have hLeftFutureEq : leftOffers.future =
+        typeFutureOffers leftTargetResidual \ leftOffers.current :=
+      helper_h15_edge_future_offers_agree signature hChildLeftRelated
+        hLeftTargetRelated hLeftEdge
+    have hRightFutureEq : rightOffers.future =
+        typeFutureOffers rightTargetResidual \ rightOffers.current :=
+      helper_h15_edge_future_offers_agree signature hChildRightRelated
+        hRightTargetRelated hRightEdge
+    have hRightCurrentSubset : rightOffers.current ⊆ right.alphabet.actions := by
+      rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbol
+      have := hRightSymbol.2.2
+      rw [localOfferSummariesFor_mk_mem_iff] at this
+      exact this.1.trans Finset.inter_subset_right
+    have hLeftCurrentSubset : leftOffers.current ⊆ left.alphabet.actions := by
+      rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbol
+      have := hLeftSymbol.2.2
+      rw [localOfferSummariesFor_mk_mem_iff] at this
+      exact this.1.trans Finset.inter_subset_right
+    have hActionsDisjoint : Disjoint left.alphabet.actions right.alphabet.actions :=
+      hParallelCompatible.actions_disjoint
+    -- Mirrors the forward direction's identically named facts: a future
+    -- action outside a child's own current offer stays in that child's fixed
+    -- alphabet, disjoint from the sibling's, so it can't be the sibling's
+    -- current offer either.
+    have hLeftFutureRightCurrentDisjoint :
+        ∀ action, action ∈ typeFutureOffers leftTargetResidual →
+          action ∉ leftOffers.current → action ∉ rightOffers.current := by
+      intro action hLeftFuture hNotLeftCurrent hRightCurrent
+      have hLeftAlph : action ∈ left.alphabet.actions := by
+        rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbol
+        rw [localOfferSummariesFor_mk_mem_iff] at hLeftSymbol
+        refine (hLeftSymbol.2.2.2.trans Finset.inter_subset_right) ?_
+        rw [hLeftFutureEq]
+        exact Finset.mem_sdiff.mpr ⟨hLeftFuture, hNotLeftCurrent⟩
+      exact Finset.disjoint_left.mp hActionsDisjoint hLeftAlph
+        (hRightCurrentSubset hRightCurrent)
+    have hRightFutureLeftCurrentDisjoint :
+        ∀ action, action ∈ typeFutureOffers rightTargetResidual →
+          action ∉ rightOffers.current → action ∉ leftOffers.current := by
+      intro action hRightFuture hNotRightCurrent hLeftCurrent
+      have hRightAlph : action ∈ right.alphabet.actions := by
+        rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbol
+        rw [localOfferSummariesFor_mk_mem_iff] at hRightSymbol
+        refine (hRightSymbol.2.2.2.trans Finset.inter_subset_right) ?_
+        rw [hRightFutureEq]
+        exact Finset.mem_sdiff.mpr ⟨hRightFuture, hNotRightCurrent⟩
+      exact Finset.disjoint_right.mp hActionsDisjoint hRightAlph
+        (hLeftCurrentSubset hLeftCurrent)
+    have hSameOnInterface :
+        sameOnInterface interface leftOffers.current rightEnv.immediate ∧
+        sameOnInterface interface rightOffers.current leftEnv.immediate ∧
+        sameOnInterface interface leftOffers.future rightEnv.future ∧
+        sameOnInterface interface rightOffers.future leftEnv.future := by
+      cases hLocal1 with
+      | clock _ =>
+        rename_i hOuterClock1
+        cases hLocal2 with
+        | clock _ =>
+          -- The future obligations need "clock-environment automaton edges
+          -- carry empty offers." Not provable from `TypeOffers`-level clock
+          -- reasoning alone: `typeFutureOffers` of a clock-reached residual
+          -- is genuinely nonempty in general (e.g. `seq_fuse`'s untouched
+          -- sibling), so this needs a separate, automaton-native invariant
+          -- not yet proved anywhere in this development. A new, narrow gap
+          -- distinct from the two pre-accepted `parallel-alphabet-gap` cases.
+          sorry
+        | ordinary _ _ _ _ _ =>
+          rename_i hOuterClock2 _ _ _ _
+          rw [hOuterClock1] at hOuterClock2
+          exact absurd hOuterClock2 (by simp)
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock1 hSiblingClock1 hLocalClock1 hImmediate1 hFuture1
+        cases hLocal2 with
+        | clock _ =>
+          rename_i hOuterClock2
+          rw [hOuterClock2] at hOuterClock1
+          exact absurd hOuterClock1 (by simp)
+        | ordinary _ _ _ _ _ =>
+          rename_i hOuterClock2 hSiblingClock2 hLocalClock2 hImmediate2 hFuture2
+          have hCur1 : sameOnInterface interface leftOffers.current rightEnv.immediate := by
+            show restrictTypeOffers interface leftOffers.current =
+              restrictTypeOffers interface rightEnv.immediate
+            rw [hImmediate2, hRestrictUnion,
+              hProjectDrop right.alphabet env.immediate hEnvMemSet.1, Finset.empty_union,
+              hRestrictIdem]
+          have hCur2 : sameOnInterface interface rightOffers.current leftEnv.immediate := by
+            show restrictTypeOffers interface rightOffers.current =
+              restrictTypeOffers interface leftEnv.immediate
+            rw [hImmediate1, hRestrictUnion,
+              hProjectDrop left.alphabet env.immediate hEnvMemSet.1, Finset.empty_union,
+              hRestrictIdem]
+          have hCur1' : restrictTypeOffers interface leftOffers.current =
+              restrictTypeOffers interface rightEnv.immediate := hCur1
+          have hCur2' : restrictTypeOffers interface rightOffers.current =
+              restrictTypeOffers interface leftEnv.immediate := hCur2
+          refine ⟨hCur1, hCur2, ?_, ?_⟩
+          · show restrictTypeOffers interface leftOffers.future =
+              restrictTypeOffers interface rightEnv.future
+            have hDisjoint : Disjoint (restrictTypeOffers interface leftOffers.future)
+                (restrictTypeOffers interface leftOffers.current) := by
+              have hFull : Disjoint leftOffers.future leftOffers.current := by
+                rw [hLeftFutureEq]; exact Finset.sdiff_disjoint
+              exact (hFull.mono_left (Finset.filter_subset _ _)).mono_right
+                (Finset.filter_subset _ _)
+            rw [hFuture2, hRestrictSdiff, hRestrictUnion,
+              hProjectDrop right.alphabet env.future hEnvMemSet.2, Finset.empty_union,
+              hRestrictIdem, ← hCur1', Finset.sdiff_eq_self_of_disjoint hDisjoint]
+          · show restrictTypeOffers interface rightOffers.future =
+              restrictTypeOffers interface leftEnv.future
+            have hDisjoint : Disjoint (restrictTypeOffers interface rightOffers.future)
+                (restrictTypeOffers interface rightOffers.current) := by
+              have hFull : Disjoint rightOffers.future rightOffers.current := by
+                rw [hRightFutureEq]; exact Finset.sdiff_disjoint
+              exact (hFull.mono_left (Finset.filter_subset _ _)).mono_right
+                (Finset.filter_subset _ _)
+            rw [hFuture1, hRestrictSdiff, hRestrictUnion,
+              hProjectDrop left.alphabet env.future hEnvMemSet.2, Finset.empty_union,
+              hRestrictIdem, ← hCur2', Finset.sdiff_eq_self_of_disjoint hDisjoint]
+    obtain ⟨hSame1, hSame2, hSame3, hSame4⟩ := hSameOnInterface
+    have hSyncEdges : syncAutomatonEdges signature left.alphabet right.alphabet interface
+        ({ source := q1, environment := leftEnv, label := .visible leftLabel,
+            current := leftOffers.current, future := leftOffers.future,
+            target := q1' } : AutomatonFragmentEdge)
+        ({ source := q2, environment := rightEnv, label := .visible rightLabel,
+            current := rightOffers.current, future := rightOffers.future,
+            target := q2' } : AutomatonFragmentEdge) := by
+      exact ⟨hLeftSymbol, hRightSymbol, hEnvEq ▸ hAutoLocal1, hEnvEq ▸ hAutoLocal2,
+        hSame1, hSame2, hSame3, hSame4, hSyncCond⟩
+    set leftEdge' : AutomatonFragmentEdge :=
+      { source := q1, environment := leftEnv,
+        label := AutomatonConstructionLabel.visible leftLabel, current := leftOffers.current,
+        future := leftOffers.future, target := q1' } with hLeftEdgeDef
+    set rightEdge' : AutomatonFragmentEdge :=
+      { source := q2, environment := rightEnv,
+        label := AutomatonConstructionLabel.visible rightLabel, current := rightOffers.current,
+        future := rightOffers.future, target := q2' } with hRightEdgeDef
+    have hLeftEdgeMem : leftEdge' ∈
+        resolveAutomatonEdgesWith (compileTypeFuel signature (typeCompilationFuel left) left)
+          (computeFutureOf signature left) := hLeftResolvedMem
+    have hRightEdgeMem : rightEdge' ∈
+        resolveAutomatonEdgesWith (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature right) := hRightResolvedMem
+    have hBothAccept :
+        q1' ∈ (compileType signature left).accepting ∧
+          q2' ∈ (compileType signature right).accepting ↔
+        target = TypeAutomatonState.final := by
+      by_cases hAccept : q1' ∈ (compileType signature left).accepting ∧
+          q2' ∈ (compileType signature right).accepting
+      · rw [if_pos hAccept] at hRedirect
+        simp [hAccept, hRedirect]
+      · rw [if_neg hAccept] at hRedirect
+        simp only [hAccept, false_iff]
+        rw [hRedirect]
+        intro hEq
+        cases hEq
+    set rawEdge : PendingAutomatonEdge :=
+      { source := TypeAutomatonState.pair q1 q2
+        environment := combineAutomatonEnvironment interface leftEnv rightEnv
+        label := AutomatonConstructionLabel.combine interface (.visible leftLabel)
+          (.visible rightLabel)
+        current := hideOffers interface (leftOffers.current ∪ rightOffers.current)
+        future := FutureSpec.at target
+          (hideOffers interface (leftOffers.current ∪ rightOffers.current))
+        target := target } with hRawEdgeDef
+    have hRawMem : rawEdge ∈
+        parallelRawTransitionEdges signature left.alphabet right.alphabet interface
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature left) (computeFutureOf signature right) := by
+      rw [hRawEdgeDef]
+      simp only [parallelRawTransitionEdges, Finset.mem_biUnion, Finset.mem_image,
+        Finset.mem_filter]
+      have hAcceptEqLeft : (compileTypeFuel signature (typeCompilationFuel left) left).accepting
+          = (compileType signature left).accepting := by simp [compileType]
+      have hAcceptEqRight :
+          (compileTypeFuel signature (typeCompilationFuel right) right).accepting
+            = (compileType signature right).accepting := by simp [compileType]
+      refine ⟨_, hLeftEdgeMem, _, ⟨hRightEdgeMem, hSyncEdges⟩, ?_⟩
+      by_cases hAccept : q1' ∈ (compileType signature left).accepting ∧
+          q2' ∈ (compileType signature right).accepting
+      · rw [← (hBothAccept.mp hAccept)]
+        simp [hAccept, hLeftEdgeDef, hRightEdgeDef, hAcceptEqLeft, hAcceptEqRight]
+      · have hTargetEq : target = TypeAutomatonState.pair q1' q2' := by
+          rw [if_neg hAccept] at hRedirect; exact hRedirect
+        rw [← hTargetEq]
+        simp [hLeftEdgeDef, hRightEdgeDef, hAcceptEqLeft, hAcceptEqRight, hAccept]
+    have hTransitionMem : rawEdge ∈
+        (buildParallelAutomaton signature alphabet left.alphabet right.alphabet interface
+          (compileTypeFuel signature (typeCompilationFuel left) left)
+          (compileTypeFuel signature (typeCompilationFuel right) right)
+          (computeFutureOf signature left) (computeFutureOf signature right)).edges := by
+      simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
+      left
+      exact Finset.mem_filter.mpr ⟨hRawMem, hReach⟩
+    rw [compileType_hasEdge_iff_resolvedEdge_mem signature (.par alphabet left right interface)
+      (.pair q1 q2) target env label offers hSymbol]
+    rw [hWhole]
+    simp only [resolveAutomatonEdgesWith, Finset.mem_image]
+    refine ⟨_, hTransitionMem, ?_⟩
+    have hEnvCombine : env = combineAutomatonEnvironment interface leftEnv rightEnv := hEnvEq
+    have hLabelCombine : label = TypeLabel.combine interface leftLabel rightLabel := hLabelEq
+    have hCurrentCombine : offers.current =
+        hideOffers interface (leftOffers.current ∪ rightOffers.current) := by
+      rw [hCurrentEq]; rfl
+    have hFutureResolved :
+        computeFutureOf signature (.par alphabet left right interface) target \
+          hideOffers interface (leftOffers.current ∪ rightOffers.current) = offers.future := by
+      rw [hFutureEq]
+      have hParFutureEq :
+          computeFutureOf signature (.par alphabet left right interface) target =
+          hideTypeOffers interface
+            (typeFutureOffers leftTargetResidual ∪ typeFutureOffers rightTargetResidual) := by
+        by_cases hAccept : q1' ∈ (compileType signature left).accepting ∧
+            q2' ∈ (compileType signature right).accepting
+        · have hParTargetRelated := relationMembership_par_final signature alphabet
+            left right interface
+          rw [hBothAccept.mp hAccept]
+          rw [helper_h15_future_offers_agree signature hParTargetRelated]
+          obtain ⟨leftAlph, hLeftMem'⟩ :=
+            relationMembership_of_accepting signature left hAccept.1
+          obtain ⟨rightAlph, hRightMem'⟩ :=
+            relationMembership_of_accepting signature right hAccept.2
+          have hLeftSkip : leftTargetResidual = .skip leftAlph :=
+            relationMembership_functional left (compileType signature left)
+              hLeftTargetRelated hLeftMem'
+          have hRightSkip : rightTargetResidual = .skip rightAlph :=
+            relationMembership_functional right (compileType signature right)
+              hRightTargetRelated hRightMem'
+          rw [hLeftSkip, hRightSkip]
+          simp [typeFutureOffers, typeFutureOffersFuel, hideTypeOffers, PactType.alphabet]
+        · have hTargetEq : target = TypeAutomatonState.pair q1' q2' := by
+            rw [if_neg hAccept] at hRedirect; exact hRedirect
+          have hReachTarget :
+              ParallelReachable signature alphabet left.alphabet right.alphabet interface
+                (compileTypeFuel signature (typeCompilationFuel left) left)
+                (compileTypeFuel signature (typeCompilationFuel right) right)
+                (computeFutureOf signature left) (computeFutureOf signature right)
+                (.pair q1' q2') := by
+            rw [← hTargetEq]
+            exact hReach.target_of_rawTransition hRawMem
+          have hParTargetRelated := relationMembership_par_pair signature alphabet
+            left right interface hLeftTargetRelated hRightTargetRelated hReachTarget
+          rw [hTargetEq,
+            helper_h15_future_offers_agree signature hParTargetRelated,
+            typeFutureOffers_parallel]
+      rw [hParFutureEq]
+      apply Finset.ext
+      intro action
+      simp only [hideTypeOffers, hideOffers, Finset.mem_filter, Finset.mem_sdiff,
+        Finset.mem_union]
+      rw [hLeftFutureEq, hRightFutureEq]
+      simp only [Finset.mem_sdiff, Finset.mem_union]
+      constructor
+      · rintro ⟨⟨(hL | hR), hInterface⟩, hNotCur⟩
+        · refine ⟨Or.inl ⟨hL, ?_⟩, hInterface⟩
+          intro hLCur
+          exact hNotCur ⟨Or.inl hLCur, hInterface⟩
+        · refine ⟨Or.inr ⟨hR, ?_⟩, hInterface⟩
+          intro hRCur
+          exact hNotCur ⟨Or.inr hRCur, hInterface⟩
+      · rintro ⟨(⟨hL, hLNotCur⟩ | ⟨hR, hRNotCur⟩), hInterface⟩
+        · refine ⟨⟨Or.inl hL, hInterface⟩, ?_⟩
+          rintro ⟨hCur | hCur, -⟩
+          · exact hLNotCur hCur
+          · exact hLeftFutureRightCurrentDisjoint action hL hLNotCur hCur
+        · refine ⟨⟨Or.inr hR, hInterface⟩, ?_⟩
+          rintro ⟨hCur | hCur, -⟩
+          · exact hRightFutureLeftCurrentDisjoint action hR hRNotCur hCur
+          · exact hRNotCur hCur
+    rw [hRawEdgeDef]
+    simp only [hEnvCombine, hLabelCombine, hCurrentCombine]
+    congr 1
 
 private theorem union_subset_union_union
     {alpha : Type} [DecidableEq alpha]
@@ -3083,6 +3771,11 @@ private theorem typeOffers_current_subset_messageActions
         ih.trans (Finset.subset_union_left :
           left.MessageActions ⊆ left.MessageActions ∪ right.MessageActions)
   | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ih =>
+      simpa [PactType.MessageActions] using
+        ih.trans (Finset.subset_union_left :
+          left.MessageActions ⊆ left.MessageActions ∪ right.MessageActions)
+  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
       hChild ih =>
       simpa [PactType.MessageActions] using
         ih.trans (Finset.subset_union_left :

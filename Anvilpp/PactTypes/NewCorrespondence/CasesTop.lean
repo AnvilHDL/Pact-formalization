@@ -483,7 +483,7 @@ private theorem correspondence_stepIff_aux
               clockGuardedBranches_of_mem hRegular.2.2.1.2 hMember
             have hBranchSameCycle :
                 PactType.SameCycleMessageLinear branchType :=
-              sameCycleMessageLinearBranches_of_mem hRegular.2.2.2.2.1.2 hMember
+              sameCycleMessageLinearBranches_of_mem hRegular.2.2.2.2.1.2.1 hMember
             have hBranchMsgOwnership :
                 PactType.ParallelMessageOwnership branchType :=
               parallelMessageOwnershipBranches_of_mem
@@ -563,7 +563,7 @@ private theorem correspondence_stepIff_aux
               clockGuardedBranches_of_mem hRegular.2.2.1.2 hMember
             have hBranchSameCycle :
                 PactType.SameCycleMessageLinear branchType :=
-              sameCycleMessageLinearBranches_of_mem hRegular.2.2.2.2.1.2 hMember
+              sameCycleMessageLinearBranches_of_mem hRegular.2.2.2.2.1.2.1 hMember
             have hBranchMsgOwnership :
                 PactType.ParallelMessageOwnership branchType :=
               parallelMessageOwnershipBranches_of_mem

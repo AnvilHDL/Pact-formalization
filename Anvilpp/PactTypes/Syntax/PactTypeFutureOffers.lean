@@ -292,8 +292,14 @@ mutual
         (left right : PactType)
         (label : TypeLabel) (current childFuture : Finset BareMessage) :
         TypeOffers env left label (.skip skipAlphabet) current childFuture →
+        label ≠ TypeLabel.tock →
         TypeOffers env (.seq alphabet left right) label right current
           (typeFutureOffers right \ current)
+    | seq_fuse_tock (env : TypeEnvironment) (alphabet skipAlphabet : PactTypeAlphabet)
+        (left right : PactType)
+        (current childFuture : Finset BareMessage) :
+        TypeOffers env left TypeLabel.tock (.skip skipAlphabet) current childFuture →
+        TypeOffers env (.seq alphabet left right) TypeLabel.tock right current ∅
     | xoffer_branch (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType))

@@ -504,7 +504,8 @@ namespace PactType
           SameCycleMessageLinear left ∧ SameCycleMessageLinear right
       | .xoffer _ elseType branches | .offer _ elseType branches =>
           SameCycleMessageLinear elseType ∧
-            SameCycleMessageLinearBranches branches
+            SameCycleMessageLinearBranches branches ∧
+            ∀ branch ∈ branches, branch.1.1 ∉ PrefixMessageIds elseType
       | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
     termination_by processType => sizeOf processType
 

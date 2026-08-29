@@ -212,6 +212,8 @@ theorem typeOffers_future_subset_target_union_current
       intro action hAction
       simp at hAction ⊢
       exact Or.inl hAction.1
+  | seq_fuse_tock =>
+      simp
   | xoffer_branch =>
       simp
   | xoffer_else =>
