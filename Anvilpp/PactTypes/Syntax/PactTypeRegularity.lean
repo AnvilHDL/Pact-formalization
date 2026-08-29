@@ -84,6 +84,86 @@ namespace PactType
       omega
   end
 
+  /-- `GuardedOccurrences` is monotone in its guard parameter: a weaker guard
+  hypothesis yields a weaker conclusion at every clause. -/
+  theorem guardedOccurrences_mono (name : String) {guarded₁ guarded₂ : Prop}
+      (hImp : guarded₁ → guarded₂) :
+      ∀ processType : PactType,
+        GuardedOccurrences name guarded₁ processType →
+          GuardedOccurrences name guarded₂ processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType guarded₁ guarded₂ with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            GuardedBranchOccurrences name guarded₁ branches →
+            GuardedBranchOccurrences name guarded₂ branches := by
+          intro branches hBranchesSize hGuarded
+          induction branches with
+          | nil => simp [GuardedBranchOccurrences]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              have hFields : GuardedOccurrences name guarded₁ branchType ∧
+                  GuardedBranchOccurrences name guarded₁ rest := by
+                simpa only [GuardedBranchOccurrences] using hGuarded
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType <
+                    sizeOf (action, branchType) := by simp_wf; omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              simpa only [GuardedBranchOccurrences] using
+                And.intro (ih (sizeOf branchType) hBranchSize hImp branchType rfl
+                    hFields.1)
+                  (restIH hRestSize hFields.2)
+        intro hGuarded
+        cases processType with
+        | message _ _ _ | progress _ _ | tock _ | skip _ =>
+            simp [GuardedOccurrences]
+        | var _ other =>
+            simp only [GuardedOccurrences] at hGuarded ⊢
+            exact fun hEq => hImp (hGuarded hEq)
+        | recur _ binder body =>
+            by_cases hBinder : binder = name
+            · simp [GuardedOccurrences, hBinder]
+            · have hBodySize : sizeOf body < n := by
+                rw [← hSize]; simp_wf; omega
+              simpa only [GuardedOccurrences, if_neg hBinder] using
+                ih (sizeOf body) hBodySize hImp body rfl
+                  (by simpa only [GuardedOccurrences, if_neg hBinder]
+                    using hGuarded)
+        | choice _ left right | fairChoice _ _ left right | par _ left right _ =>
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            have hFields := hGuarded
+            simp only [GuardedOccurrences] at hFields ⊢
+            exact ⟨ih (sizeOf left) hLeftSize hImp left rfl hFields.1,
+              ih (sizeOf right) hRightSize hImp right rfl hFields.2⟩
+        | seq _ left right =>
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            have hFields := hGuarded
+            simp only [GuardedOccurrences] at hFields ⊢
+            refine ⟨ih (sizeOf left) hLeftSize hImp left rfl hFields.1, ?_⟩
+            refine ih (sizeOf right) hRightSize ?_ right rfl hFields.2
+            rintro (hLeft | hTock)
+            · exact Or.inl (hImp hLeft)
+            · exact Or.inr hTock
+        | xoffer _ elseType branches | offer _ elseType branches =>
+            have hElseSize : sizeOf elseType < n := by
+              rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields := hGuarded
+            simp only [GuardedOccurrences] at hFields ⊢
+            exact ⟨ih (sizeOf elseType) hElseSize hImp elseType rfl hFields.1,
+              hBranches branches hBranchesSize hFields.2⟩
+
   /-- `TailOccurrences` is monotone in its tail parameter: every clause either
   passes `tail` through unchanged or replaces it by a constant. -/
   theorem tailOccurrences_mono (name : String) {tail₁ tail₂ : Prop}

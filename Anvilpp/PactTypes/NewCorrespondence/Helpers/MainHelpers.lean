@@ -207,6 +207,342 @@ theorem typeSameCycleCanComplete_fairChoice_iff (alphabet : PactTypeAlphabet)
         (typeSameCycleReaches_fairChoice_iff alphabet targetAlphabet bid left right).mpr
           (Or.inr rightReach)⟩
 
+/-- `T-Seq-Fuse` hands the sequence's own alphabet to the `skip` it produces,
+so a sequence only ever completes at that alphabet. -/
+theorem typeSameCycleReaches_seq_skip_alphabet (alphabet targetAlphabet : PactTypeAlphabet)
+    (left right : PactType)
+    (reach : TypeSameCycleReaches (.seq alphabet left right) (.skip targetAlphabet)) :
+    TypeSameCycleReaches (.seq targetAlphabet left right) (.skip targetAlphabet) := by
+  have hAux : ∀ current,
+      Relation.ReflTransGen TypeNonClockStep (.seq alphabet left right) current →
+      (∃ ρ', current = .seq alphabet ρ' right ∧ TypeSameCycleReaches left ρ') ∨
+      ((∃ skipAlphabet, TypeSameCycleReaches left (.skip skipAlphabet)) ∧
+        TypeSameCycleReaches right current) := by
+    intro current hReach
+    induction hReach with
+    | refl => exact Or.inl ⟨left, rfl, Relation.ReflTransGen.refl⟩
+    | tail _ hStep ih =>
+        rcases ih with ⟨ρ', hEq, hρReach⟩ | ⟨hLeftDone, hRightReach⟩
+        · subst hEq
+          obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
+          cases hTrans with
+          | seq_fuse _ _ skipAlphabet _ _ _ hLeftStep =>
+              exact Or.inr ⟨⟨skipAlphabet,
+                  hρReach.tail ⟨env, label, hLeftStep, hNotTock⟩⟩,
+                Relation.ReflTransGen.refl⟩
+          | seq _ _ _ next _ _ hLeftStep _ =>
+              exact Or.inl ⟨next, rfl, hρReach.tail ⟨env, label, hLeftStep, hNotTock⟩⟩
+        · exact Or.inr ⟨hLeftDone, hRightReach.tail hStep⟩
+  rcases hAux _ reach with ⟨ρ', hEq, -⟩ | ⟨hLeftDone, hRightReach⟩
+  · exact nomatch hEq
+  · exact (typeSameCycleReaches_seq_iff targetAlphabet left right).mpr
+      ⟨hLeftDone, hRightReach⟩
+
+/-- A sequence completes in the current cycle exactly when its left child can
+and its right child can then follow. -/
+theorem typeSameCycleCanComplete_seq_iff (alphabet : PactTypeAlphabet)
+    (left right : PactType) :
+    TypeSameCycleCanComplete (.seq alphabet left right) ↔
+      TypeSameCycleCanComplete left ∧ TypeSameCycleCanComplete right := by
+  constructor
+  · rintro ⟨targetAlphabet, reach⟩
+    obtain ⟨hLeft, hRight⟩ :=
+      (typeSameCycleReaches_seq_iff targetAlphabet left right).mp
+        (typeSameCycleReaches_seq_skip_alphabet alphabet targetAlphabet left right
+          reach)
+    exact ⟨hLeft, ⟨targetAlphabet, hRight⟩⟩
+  · rintro ⟨⟨leftAlphabet, hLeft⟩, ⟨rightAlphabet, hRight⟩⟩
+    exact ⟨rightAlphabet,
+      (typeSameCycleReaches_seq_fuse alphabet leftAlphabet right left
+        hLeft).trans hRight⟩
+
+/-- A recursion's own step unfolds it outright, so its same-cycle completion
+is exactly its unfolded body's. -/
+theorem typeSameCycleReaches_recur_iff (alphabet targetAlphabet : PactTypeAlphabet)
+    (name : String) (body : PactType) :
+    TypeSameCycleReaches (.recur alphabet name body) (.skip targetAlphabet) ↔
+      TypeSameCycleReaches (body.replaceVar name (.recur alphabet name body))
+        (.skip targetAlphabet) := by
+  constructor
+  · intro hPath
+    rcases Relation.ReflTransGen.cases_head hPath with h | ⟨mid, hStep, hRest⟩
+    · exact nomatch h
+    · obtain ⟨env, label, hTrans, -⟩ := hStep
+      cases hTrans with
+      | recur env alphabet name body hWF hClock => exact hRest
+  · intro h
+    have hWF : TypeEnvironment.empty.WellFormed := by
+      simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+    exact Relation.ReflTransGen.head
+      ⟨TypeEnvironment.empty, _,
+        TypeTransition.recur TypeEnvironment.empty alphabet name body hWF rfl,
+        by simp [TypeLabel.isTock, TypeLabel.silent]⟩ h
+
+theorem typeSameCycleCanComplete_recur_iff (alphabet : PactTypeAlphabet)
+    (name : String) (body : PactType) :
+    TypeSameCycleCanComplete (.recur alphabet name body) ↔
+      TypeSameCycleCanComplete (body.replaceVar name (.recur alphabet name body)) := by
+  constructor
+  · rintro ⟨targetAlphabet, reach⟩
+    exact ⟨targetAlphabet,
+      (typeSameCycleReaches_recur_iff alphabet targetAlphabet name body).mp reach⟩
+  · rintro ⟨targetAlphabet, reach⟩
+    exact ⟨targetAlphabet,
+      (typeSameCycleReaches_recur_iff alphabet targetAlphabet name body).mpr reach⟩
+
+/-- An exclusive offer may idle at its root, so its same-cycle completion is
+its else-branch's or some branch body's. -/
+theorem typeSameCycleReaches_xoffer_iff (alphabet targetAlphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    TypeSameCycleReaches (.xoffer alphabet elseType branches) (.skip targetAlphabet) ↔
+      TypeSameCycleReaches elseType (.skip targetAlphabet) ∨
+      ∃ entry ∈ branches, TypeSameCycleReaches entry.2 (.skip targetAlphabet) := by
+  constructor
+  · intro hPath
+    have hAux : ∀ current,
+        Relation.ReflTransGen TypeNonClockStep (.xoffer alphabet elseType branches) current →
+        current = .xoffer alphabet elseType branches ∨
+        TypeSameCycleReaches elseType current ∨
+        ∃ entry ∈ branches, TypeSameCycleReaches entry.2 current := by
+      intro current hReach
+      induction hReach with
+      | refl => exact Or.inl rfl
+      | tail _ hStep ih =>
+          rcases ih with hRoot | hElse | ⟨entry, hMem, hEntry⟩
+          · rw [hRoot] at hStep
+            obtain ⟨env, label, hTrans, -⟩ := hStep
+            cases hTrans with
+            | xoffer_branch _ _ _ _ action _ hCond =>
+                exact Or.inr (Or.inr ⟨(action, _), hCond.2.1,
+                  Relation.ReflTransGen.refl⟩)
+            | xoffer_else _ _ _ _ hCond => exact Or.inr (Or.inl Relation.ReflTransGen.refl)
+            | xoffer_wait _ _ _ _ hCond => exact Or.inl rfl
+          · exact Or.inr (Or.inl (hElse.tail hStep))
+          · exact Or.inr (Or.inr ⟨entry, hMem, hEntry.tail hStep⟩)
+    rcases hAux _ hPath with hRoot | hElse | hBranch
+    · exact nomatch hRoot
+    · exact Or.inl hElse
+    · exact Or.inr hBranch
+  · have hWF : TypeEnvironment.empty.WellFormed := by
+      simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+    rintro (hElse | ⟨entry, hMem, hEntry⟩)
+    · refine Relation.ReflTransGen.head ⟨TypeEnvironment.empty, _,
+        TypeTransition.xoffer_else TypeEnvironment.empty alphabet elseType branches
+          ⟨hWF, rfl, ?_, ?_⟩, by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
+      · simp [TypeNoImmediateBranch, TypeEnvironment.empty]
+      · simp [TypeResolved, TypeEnvironment.empty]
+    · rcases entry with ⟨action, branchType⟩
+      set env : TypeEnvironment :=
+        { immediate := {typeNeed action}, future := ∅, clock := false } with hEnvDef
+      have hWFenv : env.WellFormed := by
+        simp [TypeEnvironment.WellFormed, hEnvDef]
+      refine Relation.ReflTransGen.head ⟨env, _,
+        TypeTransition.xoffer_branch env alphabet elseType branches action branchType
+          ⟨hWFenv, hMem, ?_, ?_⟩, ?_⟩ hEntry
+      · simp [TypeBranchEnabled, hEnvDef]
+      · simp [TypeResolved, hEnvDef]
+      · simp [TypeLabel.isTock, TypeLabel.message]
+
+theorem typeSameCycleCanComplete_xoffer_iff (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    TypeSameCycleCanComplete (.xoffer alphabet elseType branches) ↔
+      TypeSameCycleCanComplete elseType ∨
+      ∃ entry ∈ branches, TypeSameCycleCanComplete entry.2 := by
+  constructor
+  · rintro ⟨targetAlphabet, reach⟩
+    rcases (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet elseType
+        branches).mp reach with hElse | ⟨entry, hMem, hEntry⟩
+    · exact Or.inl ⟨targetAlphabet, hElse⟩
+    · exact Or.inr ⟨entry, hMem, targetAlphabet, hEntry⟩
+  · rintro (⟨targetAlphabet, hElse⟩ | ⟨entry, hMem, targetAlphabet, hEntry⟩)
+    · exact ⟨targetAlphabet, (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet
+        elseType branches).mpr (Or.inl hElse)⟩
+    · exact ⟨targetAlphabet, (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet
+        elseType branches).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
+
+/-- A conjunctive offer may idle at its root, so its same-cycle completion is
+its else-branch's or some selected branch product's. -/
+theorem typeSameCycleReaches_offer_iff (alphabet targetAlphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    TypeSameCycleReaches (.offer alphabet elseType branches) (.skip targetAlphabet) ↔
+      TypeSameCycleReaches elseType (.skip targetAlphabet) ∨
+      ∃ entry ∈ branches, TypeSameCycleReaches
+        (parallelTypeBranchesSelecting entry branches) (.skip targetAlphabet) := by
+  constructor
+  · intro hPath
+    have hAux : ∀ current,
+        Relation.ReflTransGen TypeNonClockStep (.offer alphabet elseType branches) current →
+        current = .offer alphabet elseType branches ∨
+        TypeSameCycleReaches elseType current ∨
+        ∃ entry ∈ branches, TypeSameCycleReaches
+          (parallelTypeBranchesSelecting entry branches) current := by
+      intro current hReach
+      induction hReach with
+      | refl => exact Or.inl rfl
+      | tail _ hStep ih =>
+          rcases ih with hRoot | hElse | ⟨entry, hMem, hEntry⟩
+          · rw [hRoot] at hStep
+            obtain ⟨env, label, hTrans, -⟩ := hStep
+            cases hTrans with
+            | offer_some _ _ _ _ enabled hCond =>
+                exact Or.inr (Or.inr ⟨enabled, hCond.2.1, Relation.ReflTransGen.refl⟩)
+            | offer_else _ _ _ _ hCond => exact Or.inr (Or.inl Relation.ReflTransGen.refl)
+            | offer_wait _ _ _ _ hCond => exact Or.inl rfl
+          · exact Or.inr (Or.inl (hElse.tail hStep))
+          · exact Or.inr (Or.inr ⟨entry, hMem, hEntry.tail hStep⟩)
+    rcases hAux _ hPath with hRoot | hElse | hBranch
+    · exact nomatch hRoot
+    · exact Or.inl hElse
+    · exact Or.inr hBranch
+  · have hWF : TypeEnvironment.empty.WellFormed := by
+      simp [TypeEnvironment.WellFormed, TypeEnvironment.empty]
+    rintro (hElse | ⟨entry, hMem, hEntry⟩)
+    · refine Relation.ReflTransGen.head ⟨TypeEnvironment.empty, _,
+        TypeTransition.offer_else TypeEnvironment.empty alphabet elseType branches
+          ⟨hWF, rfl, ?_, ?_⟩, by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
+      · simp [TypeNoImmediateBranch, TypeEnvironment.empty]
+      · simp [TypeResolved, TypeEnvironment.empty]
+    · set env : TypeEnvironment :=
+        { immediate := {typeNeed entry.1}, future := ∅, clock := false } with hEnvDef
+      have hWFenv : env.WellFormed := by
+        simp [TypeEnvironment.WellFormed, hEnvDef]
+      refine Relation.ReflTransGen.head ⟨env, _,
+        TypeTransition.offer_some env alphabet elseType branches entry
+          ⟨hWFenv, hMem, ?_⟩, ?_⟩ hEntry
+      · simp [TypeBranchEnabled, hEnvDef]
+      · simp [TypeLabel.isTock, TypeLabel.silent]
+
+theorem typeSameCycleCanComplete_offer_iff (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    TypeSameCycleCanComplete (.offer alphabet elseType branches) ↔
+      TypeSameCycleCanComplete elseType ∨
+      ∃ entry ∈ branches,
+        TypeSameCycleCanComplete (parallelTypeBranchesSelecting entry branches) := by
+  constructor
+  · rintro ⟨targetAlphabet, reach⟩
+    rcases (typeSameCycleReaches_offer_iff alphabet targetAlphabet elseType
+        branches).mp reach with hElse | ⟨entry, hMem, hEntry⟩
+    · exact Or.inl ⟨targetAlphabet, hElse⟩
+    · exact Or.inr ⟨entry, hMem, targetAlphabet, hEntry⟩
+  · rintro (⟨targetAlphabet, hElse⟩ | ⟨entry, hMem, targetAlphabet, hEntry⟩)
+    · exact ⟨targetAlphabet, (typeSameCycleReaches_offer_iff alphabet targetAlphabet
+        elseType branches).mpr (Or.inl hElse)⟩
+    · exact ⟨targetAlphabet, (typeSameCycleReaches_offer_iff alphabet targetAlphabet
+        elseType branches).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
+
+/-- A mandatory clock survives substitution: neither operand of any clause
+depends on which term replaces a variable. -/
+theorem mustTock_replaceVar (name : String) (replacement : PactType) :
+    ∀ body : PactType, body.MustTockBeforeCompletion →
+      (body.replaceVar name replacement).MustTockBeforeCompletion := by
+  intro body
+  induction hSize : sizeOf body using Nat.strong_induction_on generalizing body with
+  | _ n ih =>
+    have hBranches : ∀ (branches : List (BareMessage × PactType)),
+        sizeOf branches < n →
+        PactType.BranchesMustTockBeforeCompletion branches →
+        PactType.BranchesMustTockBeforeCompletion
+          (PactType.replaceBranches branches name replacement) := by
+      intro branches hSz hAll
+      induction branches with
+      | nil =>
+          rw [PactType.replaceBranches, PactType.BranchesMustTockBeforeCompletion]
+          exact trivial
+      | cons b rest restIH =>
+          rcases b with ⟨act, bt⟩
+          have hFields : bt.MustTockBeforeCompletion ∧
+              PactType.BranchesMustTockBeforeCompletion rest := by
+            simpa only [PactType.BranchesMustTockBeforeCompletion] using hAll
+          simp only [PactType.replaceBranches, PactType.BranchesMustTockBeforeCompletion]
+          refine ⟨ih (sizeOf bt) (by
+            have h1 : sizeOf bt < sizeOf (act, bt) := by simp_wf; omega
+            have h2 : sizeOf (act, bt) < sizeOf ((act, bt) :: rest) := by simp_wf; omega
+            omega) bt rfl hFields.1, restIH (by
+            have : sizeOf rest < sizeOf ((act, bt) :: rest) := by simp_wf; omega
+            omega) hFields.2⟩
+    intro hTock
+    cases body with
+    | message _ _ _ | progress _ _ | skip _ =>
+        simp [PactType.MustTockBeforeCompletion] at hTock
+    | var _ other =>
+        simp [PactType.MustTockBeforeCompletion] at hTock
+    | tock alphabet => simp [PactType.replaceVar, PactType.MustTockBeforeCompletion]
+    | recur alphabet other b =>
+        by_cases hEq : name = other
+        · rw [PactType.replaceVar, if_pos hEq]
+          simpa only [PactType.MustTockBeforeCompletion] using hTock
+        · simp only [PactType.replaceVar, if_neg hEq, PactType.MustTockBeforeCompletion]
+          exact ih (sizeOf b) (by rw [← hSize]; simp_wf; omega) b rfl
+            (by simpa only [PactType.MustTockBeforeCompletion] using hTock)
+    | choice alphabet l r | fairChoice alphabet _ l r | par alphabet l r _ =>
+        have hF : l.MustTockBeforeCompletion ∧ r.MustTockBeforeCompletion := by
+          simpa only [PactType.MustTockBeforeCompletion] using hTock
+        simp only [PactType.replaceVar, PactType.MustTockBeforeCompletion]
+        exact ⟨ih (sizeOf l) (by rw [← hSize]; simp_wf; omega) l rfl hF.1,
+          ih (sizeOf r) (by rw [← hSize]; simp_wf; omega) r rfl hF.2⟩
+    | seq alphabet l r =>
+        have hF : l.MustTockBeforeCompletion ∨ r.MustTockBeforeCompletion := by
+          simpa only [PactType.MustTockBeforeCompletion] using hTock
+        simp only [PactType.replaceVar, PactType.MustTockBeforeCompletion]
+        rcases hF with h | h
+        · exact Or.inl (ih (sizeOf l) (by rw [← hSize]; simp_wf; omega) l rfl h)
+        · exact Or.inr (ih (sizeOf r) (by rw [← hSize]; simp_wf; omega) r rfl h)
+    | xoffer alphabet e branches | offer alphabet e branches =>
+        have hF : e.MustTockBeforeCompletion ∧
+            PactType.BranchesMustTockBeforeCompletion branches := by
+          simpa only [PactType.MustTockBeforeCompletion] using hTock
+        simp only [PactType.replaceVar, PactType.MustTockBeforeCompletion]
+        exact ⟨ih (sizeOf e) (by rw [← hSize]; simp_wf; omega) e rfl hF.1,
+          hBranches branches (by rw [← hSize]; simp_wf; omega) hF.2⟩
+
+/-- Synchronized labels are tock together, so a non-clock product step has
+non-clock component steps. -/
+theorem typeLabel_sync_not_isTock (interface : Interface) (left right : TypeLabel)
+    (hSync : TypeLabel.Sync interface left right)
+    (hNotTock : ¬ (TypeLabel.combine interface left right).isTock) :
+    ¬ left.isTock ∧ ¬ right.isTock := by
+  cases left with
+  | tock =>
+      cases right with
+      | tock => exact absurd (by simp [TypeLabel.combine, TypeLabel.isTock]) hNotTock
+      | actions ra => exact absurd (hSync.2.2.mp trivial) (by simp [TypeLabel.isTock])
+  | actions la =>
+      cases right with
+      | tock => exact absurd (hSync.2.2.mpr trivial) (by simp [TypeLabel.isTock])
+      | actions ra => exact ⟨by simp [TypeLabel.isTock], by simp [TypeLabel.isTock]⟩
+
+/-- A parallel residual only completes in the current cycle by fusing, which
+needs its left component to reach `skip` first. -/
+theorem typeSameCycleCanComplete_par_left (alphabet : PactTypeAlphabet)
+    (left right : PactType) (interface : Interface)
+    (hComplete : TypeSameCycleCanComplete (.par alphabet left right interface)) :
+    TypeSameCycleCanComplete left := by
+  obtain ⟨targetAlphabet, hPath⟩ := hComplete
+  have hAux : ∀ current,
+      Relation.ReflTransGen TypeNonClockStep (.par alphabet left right interface) current →
+      (∃ l r, current = .par alphabet l r interface ∧ TypeSameCycleReaches left l) ∨
+      TypeSameCycleCanComplete left := by
+    intro current hReach
+    induction hReach with
+    | refl => exact Or.inl ⟨left, right, rfl, Relation.ReflTransGen.refl⟩
+    | tail _ hStep ih =>
+        rcases ih with ⟨l, r, hEq, hLeftReach⟩ | hDone
+        · subst hEq
+          obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
+          cases hTrans with
+          | par _ lEnv rEnv _ la la' ra ra' lLbl rLbl lC lF rC rF
+              hLTrans hLOff hRTrans hROff hNotBoth hConds =>
+              exact Or.inl ⟨la', ra', rfl, hLeftReach.tail ⟨lEnv, lLbl, hLTrans,
+                (typeLabel_sync_not_isTock _ lLbl rLbl hConds.2.2.2 hNotTock).1⟩⟩
+          | par_fuse _ lEnv rEnv _ la ra lLbl rLbl lC lF rC rF
+              hLTrans hLOff hRTrans hROff hConds =>
+              exact Or.inr ⟨_, hLeftReach.tail ⟨lEnv, lLbl, hLTrans,
+                (typeLabel_sync_not_isTock _ lLbl rLbl hConds.2.2.2 hNotTock).1⟩⟩
+        · exact Or.inr hDone
+  rcases hAux _ hPath with ⟨l, r, hEq, -⟩ | hDone
+  · exact nomatch hEq
+  · exact hDone
+
 /-- A non-clock raw automaton edge — matching `ofStage`'s own edge filter
 (`compileTypeFuel`'s pending edges, before the external-alphabet filter
 `compileType` applies), not the public, alphabet-filtered `TypeAutomaton`.
@@ -223,6 +559,13 @@ def AutomatonSameCycleReachesAccepting
   ∃ finalState,
     Relation.ReflTransGen (AutomatonNonClockStep fragment) state finalState ∧
     finalState ∈ fragment.accepting
+
+/-- No same-cycle path out of `state` reaches a state that sources a marker
+edge for `name`. -/
+def MarkerUnreachableThisCycle (fragment : AutomatonFragment) (name : String)
+    (state : TypeAutomatonState) : Prop :=
+  ∀ reached, Relation.ReflTransGen (AutomatonNonClockStep fragment) state reached →
+    ¬ MarkerSource fragment name reached
 
 /-- Reachability transports along a `.child index`-tagged embedding whenever
 every non-clock step from a tagged state stays tagged and matches the child
@@ -455,10 +798,9 @@ shallower (no further recursion into the target). Every non-clock rule
 contributes exactly one entry, since some well-formed environment always
 realizes it (e.g. the empty environment realizes a message's wait, and the
 environment needing it realizes its fire); a `.seq` step wraps or fuses a
-left step exactly as `T-Seq`/`T-Seq-Fuse` do. `.par`'s synchronized product
-is deferred (placeholder `∅`): it needs the same `Sync_I`/`LocalEnv`
-combinatorics `buildParallelAutomaton`/`SyncEdges` already encode, not a
-one-line enumeration. -/
+left step exactly as `T-Seq`/`T-Seq-Fuse` do, and a `.par` step pairs one
+step of each component, hiding the interface and fusing to `skip` when both
+components complete, exactly as `T-Par`/`T-Par-Fuse` do. -/
 def typeSameCycleSteps : PactType → Finset (Finset BareMessage × PactType)
   | .skip alphabet => {(∅, .skip alphabet)}
   | .message alphabet msg dir =>
@@ -474,7 +816,14 @@ def typeSameCycleSteps : PactType → Finset (Finset BareMessage × PactType)
       (typeSameCycleSteps left).image fun step =>
         if step.2 = .skip step.2.alphabet then (step.1, right)
         else (step.1, .seq alphabet step.2 right)
-  | .par _ _ _ _ => ∅
+  | .par alphabet left right interface =>
+      (typeSameCycleSteps left).biUnion fun leftStep =>
+        (typeSameCycleSteps right).image fun rightStep =>
+          (hideTypeOffers interface (leftStep.1 ∪ rightStep.1),
+            if leftStep.2 = .skip leftStep.2.alphabet ∧
+                rightStep.2 = .skip rightStep.2.alphabet then
+              .skip alphabet
+            else .par alphabet leftStep.2 rightStep.2 interface)
   | .xoffer alphabet elseType branches =>
       insert (∅, .xoffer alphabet elseType branches)
         (insert (∅, elseType)
@@ -688,6 +1037,227 @@ theorem buildSequenceAutomaton_child1_accepting_iff
     childState 1 q ∈ (buildSequenceAutomaton signature left right).accepting ↔
       q ∈ right.accepting := by
   simp [buildSequenceAutomaton, finishAutomatonFragment, childAccepting, childState]
+
+/-- Every edge leaving a left-child state is a left edge of `left`, kept or
+redirected — for any label, not just a visible one. -/
+theorem buildSequenceAutomaton_outgoing_left_any
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge)
+    (hOutgoing :
+      edge ∈ (buildSequenceAutomaton signature left right).edges ∧
+        edge.source = .child 0 state) :
+    ∃ childEdge ∈ left.edges,
+      childEdge.source = state ∧ edge = sequenceLeftEdge left right childEdge := by
+  classical
+  rcases hOutgoing with ⟨hEdge, hSource⟩
+  simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
+    sequenceRightEdges, sequenceRedirectEdges, childPendingEdges,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with (hLeft | hRight) | hRedirect
+  · rcases hLeft with ⟨childEdge, ⟨hChildMem, hNotAccepting⟩, hEdgeEq⟩
+    have hChildSource := hSource
+    rw [← hEdgeEq] at hChildSource
+    simp [sequenceKeptLeftEdge, childState] at hChildSource
+    exact ⟨childEdge, hChildMem, hChildSource,
+      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting]⟩
+  · rcases hRight with ⟨childEdge, _, hEdgeEq⟩
+    rw [← hEdgeEq] at hSource
+    simp [childPendingEdge, childState] at hSource
+  · rcases hRedirect with ⟨childEdge, ⟨hChildMem, hAccepting⟩, hEdgeEq⟩
+    have hChildSource := hSource
+    rw [← hEdgeEq] at hChildSource
+    simp [sequenceRedirectEdge, childState] at hChildSource
+    exact ⟨childEdge, hChildMem, hChildSource,
+      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting]⟩
+
+/-- A non-clock step out of a left-child state mirrors one of `left`'s own
+steps, landing either at the retagged target or, when that target accepts, at
+the right entry. -/
+theorem automatonNonClockStep_sequence_child0
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (q target : TypeAutomatonState) :
+    AutomatonNonClockStep (buildSequenceAutomaton signature left right)
+        (childState 0 q) target ↔
+      ∃ q', AutomatonNonClockStep left q q' ∧
+        target = sequenceRedirect left right q' := by
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
+    obtain ⟨childEdge, hChildMem, hChildSource, hEdgeEq⟩ :=
+      buildSequenceAutomaton_outgoing_left_any signature left right q edge
+        ⟨hEdgeMem, hSource⟩
+    refine ⟨childEdge.target, ⟨childEdge, hChildMem, hChildSource, rfl, ?_⟩, ?_⟩
+    · rw [hEdgeEq] at hNotTock; simpa using hNotTock
+    · rw [hEdgeEq] at hTarget; simpa using hTarget.symm
+  · rintro ⟨q', ⟨childEdge, hChildMem, hChildSource, hChildTarget, hNotTock⟩,
+      hTargetEq⟩
+    refine ⟨sequenceLeftEdge left right childEdge, ?_, ?_, ?_, ?_⟩
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment,
+        sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
+        Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+      by_cases hAccepting : childEdge.target ∈ left.accepting
+      · exact Or.inr ⟨childEdge, ⟨hChildMem, hAccepting⟩,
+          by rw [sequenceLeftEdge, if_pos hAccepting]⟩
+      · exact Or.inl (Or.inl ⟨childEdge, ⟨hChildMem, hAccepting⟩,
+          by rw [sequenceLeftEdge, if_neg hAccepting]⟩)
+    · simp [hChildSource]
+    · rw [sequenceLeftEdge_target, hChildTarget]; exact hTargetEq.symm
+    · simpa using hNotTock
+
+/-- Every indexed branch accepting state is tagged, so the fresh root of an
+offer is never among them. -/
+theorem root_not_mem_indexedFragmentAccepting
+    (automata : List (BareMessage × AutomatonFragment)) :
+    TypeAutomatonState.root ∉ indexedFragmentAccepting automata := by
+  have hAux : ∀ (items : List ((BareMessage × AutomatonFragment) × Nat))
+      (seed : Finset TypeAutomatonState),
+      TypeAutomatonState.root ∉ seed →
+      TypeAutomatonState.root ∉
+        items.foldl (fun states indexed =>
+          states ∪ childAccepting (indexed.2 + 1) indexed.1.2) seed := by
+    intro items
+    induction items with
+    | nil => intro seed hSeed; exact hSeed
+    | cons item rest ih =>
+        intro seed hSeed
+        refine ih _ ?_
+        simp only [Finset.mem_union, not_or]
+        refine ⟨hSeed, ?_⟩
+        simp [childAccepting, childState]
+  exact hAux _ ∅ (Finset.notMem_empty _)
+
+/-- `skip` is the only fragment accepting at its own initial state, and its
+idle self-loop is a non-clock step, so an accepting initial state always has
+one. -/
+theorem compileTypeFuel_nonClockStep_of_initial_accepting
+    (signature : TypeAlphabet) (fuel : Nat) (processType : PactType)
+    (hAccepting : (compileTypeFuel signature fuel processType).initial ∈
+      (compileTypeFuel signature fuel processType).accepting) :
+    ∃ target, AutomatonNonClockStep (compileTypeFuel signature fuel processType)
+      (compileTypeFuel signature fuel processType).initial target ∧
+      target ∈ (compileTypeFuel signature fuel processType).accepting := by
+  classical
+  have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
+    simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+      Finset.mem_powerset, Finset.mem_image]
+    exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+  cases fuel with
+  | zero => simp [compileTypeFuel] at hAccepting
+  | succ fuel =>
+      cases processType with
+      | skip alphabet =>
+          refine ⟨TypeAutomatonState.root, ?_, ?_⟩
+          · refine ⟨PendingAutomatonEdge.mk TypeAutomatonState.root
+              TypeEnvironment.empty (AutomatonConstructionLabel.visible TypeLabel.silent)
+              ∅ (FutureSpec.explicit ∅) TypeAutomatonState.root, ?_, ?_, rfl, ?_⟩
+            · simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image,
+                Finset.mem_filter]
+              exact ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, rfl⟩
+            · simp [compileTypeFuel, finishAutomatonFragment]
+            · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock,
+                TypeLabel.silent]
+          · simp [compileTypeFuel, finishAutomatonFragment]
+      | message alphabet msg dir =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, finishAutomatonFragment])
+      | tock alphabet =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, finishAutomatonFragment])
+      | progress alphabet pid =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, finishAutomatonFragment])
+      | var alphabet name =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, finishAutomatonFragment])
+      | choice alphabet left right =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, buildChoiceAutomaton, finishAutomatonFragment,
+              childAccepting, childState])
+      | fairChoice alphabet bid left right =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, buildChoiceAutomaton, finishAutomatonFragment,
+              childAccepting, childState])
+      | recur alphabet name body =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, buildRecursionAutomaton, finishAutomatonFragment,
+              childAccepting, childState])
+      | seq alphabet left right =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, buildSequenceAutomaton, finishAutomatonFragment,
+              childAccepting, childState])
+      | par alphabet left right interface =>
+          exact absurd hAccepting (by
+            simp [compileTypeFuel, buildParallelAutomaton, finishAutomatonFragment])
+      | xoffer alphabet elseType branches =>
+          refine absurd hAccepting ?_
+          simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childAccepting,
+            Finset.mem_image, not_or]
+          refine ⟨?_, root_not_mem_indexedFragmentAccepting _⟩
+          simp [childState]
+      | offer alphabet elseType branches =>
+          refine absurd hAccepting ?_
+          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            finishAutomatonFragment, Finset.mem_union, childAccepting,
+            Finset.mem_image, not_or]
+          refine ⟨?_, root_not_mem_indexedFragmentAccepting _⟩
+          simp [childState]
+
+/-- A left path whose last state accepts lifts into the sequence: either it
+crosses the redirect into the right entry, or it was empty at an accepting
+start. -/
+theorem automatonSameCycleReaches_sequence_lift_left
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (q q' : TypeAutomatonState)
+    (hReach : Relation.ReflTransGen (AutomatonNonClockStep left) q q')
+    (hAccepting : q' ∈ left.accepting) :
+    Relation.ReflTransGen
+      (AutomatonNonClockStep (buildSequenceAutomaton signature left right))
+      (childState 0 q) (childState 1 right.initial) ∨ q = q' := by
+  induction hReach using Relation.ReflTransGen.head_induction_on with
+  | refl => exact Or.inr rfl
+  | @head a b hStep hRest ih =>
+      refine Or.inl ?_
+      by_cases hAcceptingB : b ∈ left.accepting
+      · refine Relation.ReflTransGen.single ?_
+        refine (automatonNonClockStep_sequence_child0 signature left right a _).mpr
+          ⟨b, hStep, ?_⟩
+        rw [sequenceRedirect, if_pos hAcceptingB]
+      · refine Relation.ReflTransGen.head (b := childState 0 b) ?_ ?_
+        · exact (automatonNonClockStep_sequence_child0 signature left right a
+            (childState 0 b)).mpr ⟨b, hStep,
+            by rw [sequenceRedirect, if_neg hAcceptingB]⟩
+        · rcases ih with hPath | hEq
+          · exact hPath
+          · exact absurd (hEq ▸ hAccepting) hAcceptingB
+
+/-- A same-cycle path out of a left-child state either stays in the left copy
+or has already crossed the redirect into the right entry. -/
+theorem automatonSameCycleReaches_sequence_child0_cases
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (q target : TypeAutomatonState)
+    (hReach : Relation.ReflTransGen
+      (AutomatonNonClockStep (buildSequenceAutomaton signature left right))
+      (childState 0 q) target) :
+    (∃ q', target = childState 0 q' ∧
+      Relation.ReflTransGen (AutomatonNonClockStep left) q q') ∨
+    (∃ q', Relation.ReflTransGen (AutomatonNonClockStep left) q q' ∧
+      q' ∈ left.accepting ∧
+      Relation.ReflTransGen
+        (AutomatonNonClockStep (buildSequenceAutomaton signature left right))
+        (childState 1 right.initial) target) := by
+  induction hReach with
+  | refl => exact Or.inl ⟨q, rfl, Relation.ReflTransGen.refl⟩
+  | tail _ hStep ih =>
+      rcases ih with ⟨q', hEq, hLeftReach⟩ | ⟨q', hLeftReach, hAccepting, hRest⟩
+      · subst hEq
+        obtain ⟨q'', hLeftStep, hTargetEq⟩ :=
+          (automatonNonClockStep_sequence_child0 signature left right _ _).mp hStep
+        by_cases hAccepting : q'' ∈ left.accepting
+        · refine Or.inr ⟨q'', hLeftReach.tail hLeftStep, hAccepting, ?_⟩
+          rw [hTargetEq, sequenceRedirect, if_pos hAccepting]
+        · refine Or.inl ⟨q'', ?_, hLeftReach.tail hLeftStep⟩
+          rw [hTargetEq, sequenceRedirect, if_neg hAccepting]
+      · exact Or.inr ⟨q', hLeftReach, hAccepting, hRest.tail hStep⟩
 
 lemma helper_h12_compiled_state_shape
     (signature : TypeAlphabet) {processType residual : PactType}
@@ -1113,7 +1683,9 @@ theorem ofStage_binaryChoice_child1
         · simp only [childPendingEdge, childState]
           rwa [ih childEdge.target]
 
-theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : PactType) :
+theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : PactType)
+    (hClockGuarded : processType.ClockGuarded)
+    (hTailRecursive : processType.TailRecursive) :
     ∀ n, ∀ {residual : PactType} {state : TypeAutomatonState},
       relationMembership (buildRelationSet processType (compileType signature processType))
         residual state →
@@ -1392,6 +1964,10 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
       | choice alphabet left right =>
           have hLeftSize : sizeOf left < k := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < k := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.ClockGuarded] at hClockGuarded
+          simp only [PactType.TailRecursive] at hTailRecursive
+          obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
+          obtain ⟨hTRLeft, hTRRight⟩ := hTailRecursive
           have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
               max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
             simp only [typeCompilationFuel]; omega
@@ -1507,7 +2083,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel left) left).initial] at hx
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
-                rw [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated] at hx
+                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated] at hx
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -1515,7 +2091,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hRightInitRelated := buildRelationSet_initial right
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
-                rw [ih (sizeOf right) hRightSize right rfl n hRightInitRelated] at hx
+                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated] at hx
                 exact Or.inr hx
             · intro hx
               simp only [Finset.mem_union] at hx
@@ -1528,7 +2104,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hLeftInitRelated := buildRelationSet_initial left
                     (compileType signature left)
                   simp only [compileType] at hLeftInitRelated
-                  rwa [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated]
+                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated]
               · refine ⟨_, ⟨hWitness1, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
                 · right
@@ -1537,16 +2113,20 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hRightInitRelated := buildRelationSet_initial right
                     (compileType signature right)
                   simp only [compileType] at hRightInitRelated
-                  rwa [ih (sizeOf right) hRightSize right rfl n hRightInitRelated]
+                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated]
           · subst hStateEq
             rw [hTag0 (n + 1) q]
-            exact ih (sizeOf left) hLeftSize left rfl (n + 1) hLeftRelated
+            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl (n + 1) hLeftRelated
           · subst hStateEq
             rw [hTag1 (n + 1) q]
-            exact ih (sizeOf right) hRightSize right rfl (n + 1) hRightRelated
+            exact ih (sizeOf right) hRightSize right hCGRight hTRRight rfl (n + 1) hRightRelated
       | fairChoice alphabet bid left right =>
           have hLeftSize : sizeOf left < k := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < k := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.ClockGuarded] at hClockGuarded
+          simp only [PactType.TailRecursive] at hTailRecursive
+          obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
+          obtain ⟨hTRLeft, hTRRight⟩ := hTailRecursive
           have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
               max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
             simp only [typeCompilationFuel]; omega
@@ -1666,7 +2246,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel left) left).initial] at hx
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
-                rw [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated] at hx
+                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated] at hx
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -1674,7 +2254,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hRightInitRelated := buildRelationSet_initial right
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
-                rw [ih (sizeOf right) hRightSize right rfl n hRightInitRelated] at hx
+                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated] at hx
                 exact Or.inr hx
             · intro hx
               simp only [Finset.mem_union] at hx
@@ -1687,7 +2267,7 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hLeftInitRelated := buildRelationSet_initial left
                     (compileType signature left)
                   simp only [compileType] at hLeftInitRelated
-                  rwa [ih (sizeOf left) hLeftSize left rfl n hLeftInitRelated]
+                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated]
               · refine ⟨_, ⟨hWitness1, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.fair]
                 · right
@@ -1696,13 +2276,13 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hRightInitRelated := buildRelationSet_initial right
                     (compileType signature right)
                   simp only [compileType] at hRightInitRelated
-                  rwa [ih (sizeOf right) hRightSize right rfl n hRightInitRelated]
+                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated]
           · subst hStateEq
             rw [hTag0 (n + 1) q]
-            exact ih (sizeOf left) hLeftSize left rfl (n + 1) hLeftRelated
+            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl (n + 1) hLeftRelated
           · subst hStateEq
             rw [hTag1 (n + 1) q]
-            exact ih (sizeOf right) hRightSize right rfl (n + 1) hRightRelated
+            exact ih (sizeOf right) hRightSize right hCGRight hTRRight rfl (n + 1) hRightRelated
       | _ => sorry
 
 /-- Substitution cannot create or remove a `skip` when the replacement is not
@@ -2452,6 +3032,8 @@ theorem helper_h14_same_cycle_completion
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
     (hSupports : signature.Supports processType)
+    (hClockGuarded : processType.ClockGuarded)
+    (hTailRecursive : processType.TailRecursive)
     (hRelated :
       relationMembership
         (buildRelationSet processType (compileType signature processType))
@@ -2611,6 +3193,10 @@ theorem helper_h14_same_cycle_completion
     | choice alphabet left right =>
         have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
         have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.ClockGuarded] at hClockGuarded
+        simp only [PactType.TailRecursive] at hTailRecursive
+        obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
+        obtain ⟨hTRLeft, hTRRight⟩ := hTailRecursive
         have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -2663,21 +3249,25 @@ theorem helper_h14_same_cycle_completion
             automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.silent])
               (by simp [TypeLabel.isTock, TypeLabel.silent])]
-          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft
             (buildRelationSet_initial left (compileType signature left)) rfl
-          have hIHRight := ih (sizeOf right) hRightSize hSupports.2
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2 hCGRight hTRRight
             (buildRelationSet_initial right (compileType signature right)) rfl
           simp only [compileType] at hIHLeft hIHRight
           rw [← hLeftAutoDef] at hIHLeft
           rw [← hRightAutoDef] at hIHRight
           rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
         · subst hStateEq
-          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.1 hLeftRelated rfl)
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft hLeftRelated rfl)
         · subst hStateEq
-          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2 hRightRelated rfl)
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2 hCGRight hTRRight hRightRelated rfl)
     | fairChoice alphabet bid left right =>
         have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
         have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.ClockGuarded] at hClockGuarded
+        simp only [PactType.TailRecursive] at hTailRecursive
+        obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
+        obtain ⟨hTRLeft, hTRRight⟩ := hTailRecursive
         have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
@@ -2733,19 +3323,103 @@ theorem helper_h14_same_cycle_completion
             automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.fair])
               (by simp [TypeLabel.isTock, TypeLabel.fair])]
-          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1 hCGLeft hTRLeft
             (buildRelationSet_initial left (compileType signature left)) rfl
-          have hIHRight := ih (sizeOf right) hRightSize hSupports.2.2
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2.2 hCGRight hTRRight
             (buildRelationSet_initial right (compileType signature right)) rfl
           simp only [compileType] at hIHLeft hIHRight
           rw [← hLeftAutoDef] at hIHLeft
           rw [← hRightAutoDef] at hIHRight
           rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
         · subst hStateEq
-          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.2.1 hLeftRelated rfl)
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.2.1 hCGLeft hTRLeft hLeftRelated rfl)
         · subst hStateEq
-          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2.2 hRightRelated rfl)
-    | seq alphabet left right => sorry
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2.2 hCGRight hTRRight hRightRelated rfl)
+    | seq alphabet left right =>
+        have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+        have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.ClockGuarded] at hClockGuarded
+        simp only [PactType.TailRecursive] at hTailRecursive
+        obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
+        obtain ⟨hTRLeft, hTRRight⟩ := hTailRecursive
+        simp only [TypeAlphabet.Supports] at hSupports
+        have hFuelEq : typeCompilationFuel (.seq alphabet left right) =
+            max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+          simp only [typeCompilationFuel]; omega
+        set leftAuto := compileTypeFuel signature (typeCompilationFuel left) left
+          with hLeftAutoDef
+        set rightAuto := compileTypeFuel signature (typeCompilationFuel right) right
+          with hRightAutoDef
+        have hWhole :
+            compileTypeFuel signature (typeCompilationFuel (.seq alphabet left right))
+              (.seq alphabet left right) =
+              buildSequenceAutomaton signature leftAuto rightAuto := by
+          rw [hFuelEq, compileTypeFuel.eq_def]
+          show buildSequenceAutomaton signature
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
+              (compileTypeFuel signature
+                (max (typeCompilationFuel left) (typeCompilationFuel right)) right) =
+            buildSequenceAutomaton signature leftAuto rightAuto
+          rw [hLeftAutoDef, hRightAutoDef,
+            compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
+            compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
+        have hTag1 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildSequenceAutomaton signature leftAuto rightAuto) rightAuto 1
+          (automatonNonClockStep_sequence_child1 signature leftAuto rightAuto)
+          (buildSequenceAutomaton_child1_accepting_iff signature leftAuto rightAuto)
+        rw [hWhole]
+        rcases helper_h12_seq_shape signature alphabet left right hRelated with
+          ⟨ρ, q1, hResidualEq, hStateEq, hLeftRelated, hSurvives⟩ |
+          ⟨q2, hStateEq, hRightRelated⟩
+        · subst hResidualEq; subst hStateEq
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft
+            hLeftRelated rfl
+          have hIHRightInit := ih (sizeOf right) hRightSize hSupports.2 hCGRight
+            hTRRight (buildRelationSet_initial right (compileType signature right)) rfl
+          simp only [compileType] at hIHRightInit
+          rw [← hRightAutoDef] at hIHRightInit
+          rw [typeSameCycleCanComplete_seq_iff]
+          constructor
+          · rintro ⟨finalState, hReach, hFinal⟩
+            rcases automatonSameCycleReaches_sequence_child0_cases signature
+                leftAuto rightAuto q1 finalState hReach with
+              ⟨q', hEq, -⟩ | ⟨q', hLeftReach, hAccepting, hRest⟩
+            · exfalso
+              rw [hEq] at hFinal
+              simp [buildSequenceAutomaton, finishAutomatonFragment,
+                childAccepting, childState] at hFinal
+            · exact ⟨hIHLeft.mp ⟨q', hLeftReach, hAccepting⟩,
+                hIHRightInit.mp
+                  ((hTag1 rightAuto.initial).mp ⟨finalState, hRest, hFinal⟩)⟩
+          · rintro ⟨hLeftDone, hRightDone⟩
+            obtain ⟨q', hLeftReach, hAccepting⟩ := hIHLeft.mpr hLeftDone
+            obtain ⟨q2', hRightReach, hRightFinal⟩ :=
+              (hTag1 rightAuto.initial).mpr (hIHRightInit.mpr hRightDone)
+            refine ⟨q2', Relation.ReflTransGen.trans ?_ hRightReach, hRightFinal⟩
+            rcases automatonSameCycleReaches_sequence_lift_left signature
+                leftAuto rightAuto q1 q' hLeftReach hAccepting with
+              hPath | hEq
+            · exact hPath
+            · -- `q1` already accepts, so it is `left`'s entry and its own idle
+              -- step redirects into the right entry.
+              subst hEq
+              have hEntry : q1 = leftAuto.initial := by
+                rcases hSurvives with hNot | hInit
+                · exact absurd hAccepting (by
+                    simpa only [compileType, ← hLeftAutoDef] using hNot)
+                · simpa only [compileType, ← hLeftAutoDef] using hInit
+              rw [hEntry] at hAccepting ⊢
+              obtain ⟨target, hStep, hTargetAccepting⟩ :=
+                compileTypeFuel_nonClockStep_of_initial_accepting signature
+                  (typeCompilationFuel left) left hAccepting
+              refine Relation.ReflTransGen.single ?_
+              refine (automatonNonClockStep_sequence_child0 signature leftAuto
+                rightAuto leftAuto.initial _).mpr ⟨target, hStep, ?_⟩
+              rw [sequenceRedirect, if_pos hTargetAccepting]
+        · subst hStateEq
+          exact (hTag1 q2).trans (ih (sizeOf right) hRightSize hSupports.2 hCGRight
+            hTRRight hRightRelated rfl)
     | par alphabet left right interface => sorry
     | recur alphabet name body => sorry
     | xoffer alphabet elseType branches => sorry
