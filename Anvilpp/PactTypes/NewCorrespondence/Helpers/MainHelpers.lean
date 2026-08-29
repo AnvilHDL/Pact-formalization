@@ -2752,7 +2752,10 @@ theorem helper_h14_same_cycle_completion
     | offer alphabet elseType branches => sorry
 
 /-- Helper Lemma H15, resolved-edge form: a resolved constructor edge carries
-the target menu after removing its current offer. -/
+the target menu after removing its current offer — except a tock-labelled
+edge, whose future is always empty (the compiler's `sequenceRedirectFutureSpec`/
+`parallelFutureSpec` special-case this; the general non-tock case still needs
+the constructor future-shape argument). -/
 lemma helper_h15_resolved_edge_future_offers_agree
     (signature : TypeAlphabet) {processType residual residual' : PactType}
     {source target : TypeAutomatonState}
@@ -2770,10 +2773,61 @@ lemma helper_h15_resolved_edge_future_offers_agree
       AutomatonFragment.HasResolvedEdge signature processType
         (compileTypeFuel signature (typeCompilationFuel processType) processType)
         source env label (TypeOfferSummary.mk current future) target) :
-    future = typeFutureOffers residual' \ current := by
-  sorry -- TODO(section7): prove with global H15 and constructor future-shape.
+    future = if label = TypeLabel.tock then ∅
+      else typeFutureOffers residual' \ current := by
+  sorry -- TODO(section7): prove with global H15 and constructor future-shape
+        -- (non-tock case); the tock case is the compiler's own
+        -- `sequenceRedirectFutureSpec`/`parallelFutureSpec` construction.
 
-/-- Helper Lemma H15, edge form: a public edge carries the target menu after removing its current offer. -/
+/-- Non-tock specialization of `helper_h15_resolved_edge_future_offers_agree`. -/
+lemma helper_h15_resolved_edge_future_offers_agree_of_not_tock
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      AutomatonFragment.HasResolvedEdge signature processType
+        (compileTypeFuel signature (typeCompilationFuel processType) processType)
+        source env label (TypeOfferSummary.mk current future) target)
+    (hNotTock : label ≠ TypeLabel.tock) :
+    future = typeFutureOffers residual' \ current := by
+  rw [helper_h15_resolved_edge_future_offers_agree signature hSource hTarget
+    hEdge, if_neg hNotTock]
+
+/-- Tock specialization of `helper_h15_resolved_edge_future_offers_agree`. -/
+lemma helper_h15_resolved_edge_future_offers_agree_of_tock
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      AutomatonFragment.HasResolvedEdge signature processType
+        (compileTypeFuel signature (typeCompilationFuel processType) processType)
+        source env label (TypeOfferSummary.mk current future) target)
+    (hTock : label = TypeLabel.tock) :
+    future = ∅ := by
+  rw [helper_h15_resolved_edge_future_offers_agree signature hSource hTarget
+    hEdge, if_pos hTock]
+
+/-- Helper Lemma H15, edge form: a public edge carries the target menu after
+removing its current offer — except a tock-labelled edge, whose future is
+always empty. -/
 lemma helper_h15_edge_future_offers_agree
     (signature : TypeAlphabet) {processType residual residual' : PactType}
     {source target : TypeAutomatonState}
@@ -2790,7 +2844,8 @@ lemma helper_h15_edge_future_offers_agree
     (hEdge :
       (compileType signature processType).HasEdge source env label
         (TypeOfferSummary.mk current future) target) :
-    future = typeFutureOffers residual' \ current := by
+    future = if label = TypeLabel.tock then ∅
+      else typeFutureOffers residual' \ current := by
   have hSymbol := NewCorrespondence.compileType_hasEdge_symbol_mem signature
     processType hEdge
   have hResolved :=
@@ -2798,6 +2853,50 @@ lemma helper_h15_edge_future_offers_agree
       target env label (TypeOfferSummary.mk current future) hSymbol).mp hEdge
   exact helper_h15_resolved_edge_future_offers_agree signature hSource hTarget
     hResolved
+
+/-- Non-tock specialization of `helper_h15_edge_future_offers_agree`. -/
+lemma helper_h15_edge_future_offers_agree_of_not_tock
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      (compileType signature processType).HasEdge source env label
+        (TypeOfferSummary.mk current future) target)
+    (hNotTock : label ≠ TypeLabel.tock) :
+    future = typeFutureOffers residual' \ current := by
+  rw [helper_h15_edge_future_offers_agree signature hSource hTarget hEdge,
+    if_neg hNotTock]
+
+/-- Tock specialization of `helper_h15_edge_future_offers_agree`. -/
+lemma helper_h15_edge_future_offers_agree_of_tock
+    (signature : TypeAlphabet) {processType residual residual' : PactType}
+    {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hSource :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual source)
+    (hTarget :
+      relationMembership
+        (buildRelationSet processType (compileType signature processType))
+        residual' target)
+    (hEdge :
+      (compileType signature processType).HasEdge source env label
+        (TypeOfferSummary.mk current future) target)
+    (hTock : label = TypeLabel.tock) :
+    future = ∅ := by
+  rw [helper_h15_edge_future_offers_agree signature hSource hTarget hEdge,
+    if_pos hTock]
 
 /-! ## Type-label ownership and synchronized recovery -/
 

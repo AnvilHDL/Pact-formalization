@@ -43,11 +43,12 @@ def sequenceRedirect (left right : AutomatonFragment)
   if state ∈ left.accepting then childState 1 right.initial
   else childState 0 state
 
-/-- Future spec used by sequence redirect edges.
+/-- Future spec used by sequence edges, kept and redirected alike.
 
-A clock edge ends the current cycle, so it must not expose the right entry's
-same-cycle future menu.  Non-clock redirects keep the usual symbolic reference
-to the target state's `OF` equation. -/
+A clock edge ends the current cycle, so it must not expose any same-cycle
+future menu — neither the right entry's (on a redirect) nor the retagged
+left target's (on a kept edge).  Non-clock edges keep the usual symbolic
+reference to the target state's `OF` equation. -/
 def sequenceRedirectFutureSpec (label : AutomatonConstructionLabel)
     (target : TypeAutomatonState) (removed : Finset BareMessage) :
     FutureSpec :=
@@ -65,14 +66,16 @@ choice of `removed`: it is exactly what a same-cycle self-loop needs
 (`OF` of the loop's own state would otherwise double-count the offer this
 edge already reports as current), and a no-op everywhere else, since
 `edge.current` then generally is not present in the target's own menu
-anyway. -/
+anyway.  A clock edge is the exception: it ends the cycle, so it exposes no
+future menu at all, exactly as on the redirect clause. -/
 def sequenceKeptLeftEdge (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) : PendingAutomatonEdge :=
   { source := childState 0 edge.source
     environment := edge.environment
     label := edge.label
     current := edge.current
-    future := .at (sequenceRedirect left right edge.target) edge.current
+    future := sequenceRedirectFutureSpec edge.label
+      (sequenceRedirect left right edge.target) edge.current
     target := childState 0 edge.target }
 
 /-- The image of a left edge whose target is final.
@@ -245,6 +248,27 @@ theorem sequenceRedirect_mem_states (signature : TypeAlphabet)
       not_mem_sequenceDeleted_of_not_accepting hAccepting
     exact Or.inl ⟨state, Finset.mem_sdiff.mpr ⟨hState, hKept⟩, rfl⟩
 
+/-- All three sequence clauses copy the child edge's environment, label, and
+current offers verbatim; only the target and future field are rebuilt. -/
+theorem buildSequenceAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (hLeftClock : left.ClockEdgesAreTock)
+    (hRightClock : right.ClockEdgesAreTock) :
+    (buildSequenceAutomaton signature left right).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildSequenceAutomaton, finishAutomatonFragment,
+    sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
+    childPendingEdges, Finset.mem_union, Finset.mem_image,
+    Finset.mem_filter] at hEdge
+  rcases hEdge with (hLeft | hRight) | hRedirect
+  · rcases hLeft with ⟨leftEdge, ⟨hLeftEdge, _⟩, rfl⟩
+    exact hLeftClock leftEdge hLeftEdge hClock
+  · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
+    exact hRightClock rightEdge hRightEdge hClock
+  · rcases hRedirect with ⟨leftEdge, ⟨hLeftEdge, _⟩, rfl⟩
+    exact hLeftClock leftEdge hLeftEdge hClock
+
 theorem buildSequenceAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (hRightTargets : right.FutureTargetsInStates)
@@ -259,11 +283,14 @@ theorem buildSequenceAutomaton_futureTargetsInStates
     Finset.mem_filter] at hEdge
   rcases hEdge with (hLeft | hRight) | hRedirect
   · rcases hLeft with ⟨leftEdge, hLeftEdge, rfl⟩
-    simp only [sequenceKeptLeftEdge] at hFuture
-    injection hFuture with hTargetEq _
-    subst hTargetEq
-    apply sequenceRedirect_mem_states signature left right hRightInitial
-    exact hLeftEdgeTargets leftEdge hLeftEdge.1
+    simp only [sequenceKeptLeftEdge, sequenceRedirectFutureSpec] at hFuture
+    by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
+    · simp [hClock] at hFuture
+    · rw [if_neg hClock] at hFuture
+      injection hFuture with hTargetEq _
+      subst hTargetEq
+      apply sequenceRedirect_mem_states signature left right hRightInitial
+      exact hLeftEdgeTargets leftEdge hLeftEdge.1
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with
     | explicit offers =>

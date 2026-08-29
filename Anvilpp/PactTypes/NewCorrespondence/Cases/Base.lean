@@ -1559,7 +1559,7 @@ theorem correspondence_seq_stepIff
     · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _hSurvives⟩
       cases hEntry
       cases decoratedTypeTransition_seq_cases hStep with
-      | step leftTarget childFuture hTarget hNonFinal hChildStep hFuture =>
+      | step leftTarget childFuture hTarget hNonFinal hChildStep hNotTock hFuture =>
           subst residual'
           subst future
           have hChildSymbol :
@@ -1577,6 +1577,27 @@ theorem correspondence_seq_stepIff
           rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
             ⟨q', hChildEdge, hChildTargetRelated⟩
           exact ⟨.child 0 q', compileType_seq_lift_left_step signature alphabet
+            first second hRelated hLeftRelated hChildTargetRelated hNonFinal
+            hChildStep hNotTock hSignatureSymbol hChildEdge⟩
+      | stepTock leftTarget childFuture hTarget hNonFinal hLabel hChildStep
+          hFuture =>
+          subst residual'
+          subst future
+          subst label
+          have hChildFuture : childFuture = ∅ :=
+            TypeOffers.future_eq_empty_of_label_tock hChildStep.2 rfl
+          subst childFuture
+          have hChildSymbol :
+              TypeAutomatonSymbol.mk env TypeLabel.tock
+                  (TypeOfferSummary.mk current ∅) ∈
+                (compileType signature first).alphabet := by
+            change TypeAutomatonSymbol.mk env TypeLabel.tock
+                (TypeOfferSummary.mk current ∅) ∈
+              signature.transitionAlphabetFor first.alphabet
+            simpa [hFirstAlphabet] using hSignatureSymbol
+          rcases (hFirstIH hLeftRelated hChildSymbol).mp hChildStep with
+            ⟨q', hChildEdge, hChildTargetRelated⟩
+          exact ⟨.child 0 q', compileType_seq_lift_left_step_tock signature alphabet
             first second hRelated hLeftRelated hChildTargetRelated hNonFinal
             hChildStep hSignatureSymbol hChildEdge⟩
       | fuse transitionSkipAlphabet offerSkipAlphabet childFuture hTarget
@@ -1654,7 +1675,7 @@ theorem correspondence_seq_stepIff
         hFirstAlphabet hSecondAlphabet hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
-        hFuture =>
+        hNotTock hFuture =>
         subst residual
         subst residual'
         subst state
@@ -1669,7 +1690,26 @@ theorem correspondence_seq_stepIff
         exact ⟨TypeTransition.seq env alphabet leftResidual leftTarget second label
             hChildStep.1 hNonFinal,
           TypeOffers.seq env alphabet leftResidual leftTarget second label current
-            childFuture hChildStep.2 hNonFinal⟩
+            childFuture hChildStep.2 hNonFinal hNotTock⟩
+    | leftStepTock leftResidual leftTarget q q' childFuture hResidual hResidual'
+        hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
+        hLabel hFuture =>
+        subst residual
+        subst residual'
+        subst state
+        subst state'
+        subst label
+        subst future
+        have hChildSymbol :=
+          NewCorrespondence.compileType_hasEdge_symbol_mem signature first
+            hChildEdge
+        have hChildStep :=
+          (hFirstIH hLeftRelated hChildSymbol).mpr
+            ⟨q', hChildEdge, hLeftTargetRelated⟩
+        exact ⟨TypeTransition.seq env alphabet leftResidual leftTarget second
+            TypeLabel.tock hChildStep.1 hNonFinal,
+          TypeOffers.seq_tock env alphabet leftResidual leftTarget second
+            current childFuture hChildStep.2 hNonFinal⟩
     | leftFuse leftResidual skipAlphabet q q' childFuture hResidual hResidual' hState
         hLeftRelated hLeftTargetRelated hChildEdge hNotTock hFuture =>
         subst residual

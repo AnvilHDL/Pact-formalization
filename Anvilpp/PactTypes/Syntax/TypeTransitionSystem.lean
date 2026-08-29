@@ -282,9 +282,14 @@ theorem TypeTransition.exists_typeOffers
         TypeOffers.recur env alphabet name body ⟨hEnv, hClock⟩⟩
   | seq env alphabet left left' right label _ hNotSkip ihLeft =>
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
-      exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
-        TypeOffers.seq env alphabet left left' right label current childFuture
-          hOffers hNotSkip⟩
+      by_cases hTock : label = TypeLabel.tock
+      · subst hTock
+        exact ⟨current, ∅,
+          TypeOffers.seq_tock env alphabet left left' right current childFuture
+            hOffers hNotSkip⟩
+      · exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
+          TypeOffers.seq env alphabet left left' right label current childFuture
+            hOffers hNotSkip hTock⟩
   | xoffer_branch env alphabet elseType branches action processType conditions =>
       exact ⟨{action}, typeFutureOffers processType,
         TypeOffers.xoffer_branch env alphabet elseType branches action

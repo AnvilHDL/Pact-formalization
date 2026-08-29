@@ -285,9 +285,17 @@ mutual
         (label : TypeLabel) (current childFuture : Finset BareMessage) :
         TypeOffers env left label left' current childFuture →
         left' ≠ .skip left'.alphabet →
+        label ≠ TypeLabel.tock →
         TypeOffers env (.seq alphabet left right) label
           (.seq alphabet left' right) current
           (typeFutureOffers (.seq alphabet left' right) \ current)
+    | seq_tock (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
+        (left left' right : PactType)
+        (current childFuture : Finset BareMessage) :
+        TypeOffers env left TypeLabel.tock left' current childFuture →
+        left' ≠ .skip left'.alphabet →
+        TypeOffers env (.seq alphabet left right) TypeLabel.tock
+          (.seq alphabet left' right) current ∅
     | seq_fuse (env : TypeEnvironment) (alphabet skipAlphabet : PactTypeAlphabet)
         (left right : PactType)
         (label : TypeLabel) (current childFuture : Finset BareMessage) :
@@ -452,8 +460,11 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       rw [hTarget]
       simp [typeFutureOffers, typeFutureOffersFuel]
   | seq env alphabet left left' right label current childFuture hChild
-      ihChild =>
+      hNotSkip hNotTock ihChild =>
       cases hTarget
+  | seq_tock env alphabet left left' right current childFuture hChild
+      hNotSkip ihChild =>
+      simp
   | seq_fuse env alphabet skipAlphabet left right label current childFuture
       hChild hNotTock ihChild =>
       rw [hTarget]
@@ -487,6 +498,58 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       simp [hideTypeOffers]
   | par_fuse_tock =>
       simp
+
+/-- Combining to a clock forces both component labels to be clocks. -/
+theorem TypeLabel.combine_eq_tock_iff (interface : Interface)
+    (left right : TypeLabel) :
+    TypeLabel.combine interface left right = TypeLabel.tock ↔
+      left = TypeLabel.tock ∧ right = TypeLabel.tock := by
+  cases left <;> cases right <;>
+    simp [TypeLabel.combine, TypeLabel.silent]
+
+/-- A clock offer step exposes no future menu.
+
+The clock ends the current cycle, so nothing later in it can still be
+advertised.  This is the semantic counterpart of the `seq_tock` /
+`seq_fuse_tock` / `par_fuse_tock` split. -/
+theorem TypeOffers.future_eq_empty_of_label_tock
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future)
+    (hLabel : label = TypeLabel.tock) :
+    future = ∅ := by
+  induction hOffers using TypeOffers.rec with
+  | action => cases hLabel
+  | action_wait => cases hLabel
+  | choice_left => cases hLabel
+  | choice_right => cases hLabel
+  | fair_left => cases hLabel
+  | fair_right => cases hLabel
+  | cycle => simp
+  | cycle_wait => cases hLabel
+  | skip => cases hLabel
+  | progress => cases hLabel
+  | recur => cases hLabel
+  | seq _ _ _ _ _ _ _ _ _ _ hNotTock _ => exact absurd hLabel hNotTock
+  | seq_tock => simp
+  | seq_fuse _ _ _ _ _ _ _ _ _ hNotTock _ => exact absurd hLabel hNotTock
+  | seq_fuse_tock => simp
+  | xoffer_branch => cases hLabel
+  | xoffer_else => cases hLabel
+  | xoffer_wait => cases hLabel
+  | offer_some => cases hLabel
+  | offer_else => cases hLabel
+  | offer_wait => cases hLabel
+  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
+      hNotBothSkip hLocal1 hLocal2 hConditions ihLeft ihRight =>
+      obtain ⟨hLeftTock, hRightTock⟩ :=
+        (TypeLabel.combine_eq_tock_iff interface leftLabel rightLabel).mp hLabel
+      rw [ihLeft hLeftTock, ihRight hRightTock]
+      simp [hideTypeOffers]
+  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
+      exact absurd hLabel hNotTock
+  | par_fuse_tock => simp
 
 end
 

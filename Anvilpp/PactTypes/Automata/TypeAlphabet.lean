@@ -80,6 +80,29 @@ namespace TypeAlphabet
         (alphabet.localEnvironmentActions \ immediate).powerset.image fun future =>
           { immediate := immediate, future := future, clock := false }
 
+  /-- `TypeEnvironment.tock` is the only clocked local environment: every
+  other member is built with `clock := false`. -/
+  theorem eq_tock_of_mem_localEnvironments_of_clock {alphabet : TypeAlphabet}
+      {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.localEnvironments)
+      (hClock : environment.clock = true) :
+      environment = TypeEnvironment.tock := by
+    simp only [localEnvironments, Finset.mem_union, Finset.mem_singleton,
+      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+      at hEnvironment
+    rcases hEnvironment with hTock | ⟨immediate, _, future, _, rfl⟩
+    · exact hTock
+    · exact absurd hClock (by simp)
+
+  /-- A clocked local environment offers nothing immediately. -/
+  theorem immediate_eq_empty_of_mem_localEnvironments_of_clock
+      {alphabet : TypeAlphabet} {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.localEnvironments)
+      (hClock : environment.clock = true) :
+      environment.immediate = ∅ := by
+    rw [eq_tock_of_mem_localEnvironments_of_clock hEnvironment hClock]
+    rfl
+
   theorem environments_subset_localEnvironments (alphabet : TypeAlphabet) :
       alphabet.environments ⊆ alphabet.localEnvironments := by
     intro environment hEnvironment

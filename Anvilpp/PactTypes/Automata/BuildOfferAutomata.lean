@@ -61,6 +61,36 @@ def indexedFragmentEdges
   automata.zipIdx.foldl (fun edges indexed =>
     edges ∪ childPendingEdges (indexed.2 + 1) indexed.1.2) ∅
 
+private theorem childPendingEdges_clockEdgesAreTock
+    (index : Nat) (fragment : AutomatonFragment)
+    (hClockEdges : fragment.ClockEdgesAreTock) :
+    ∀ edge ∈ childPendingEdges index fragment,
+      edge.environment.clock = true →
+        edge.label.semantic = TypeLabel.tock ∧ edge.current = ∅ := by
+  classical
+  intro edge hEdge hClock
+  simp only [childPendingEdges, Finset.mem_image] at hEdge
+  rcases hEdge with ⟨childEdge, hChildEdge, rfl⟩
+  exact hClockEdges childEdge hChildEdge hClock
+
+private theorem indexedFragment_clockEdgesAreTock
+    (automata : List (BareMessage × AutomatonFragment))
+    (hClockEdges : ∀ entry ∈ automata, entry.2.ClockEdgesAreTock) :
+    ∀ edge ∈ indexedFragmentEdges automata,
+      edge.environment.clock = true →
+        edge.label.semantic = TypeLabel.tock ∧ edge.current = ∅ := by
+  classical
+  intro edge hEdge hClock
+  rw [indexedFragmentEdges, mem_foldl_union_iff] at hEdge
+  rcases hEdge with hEmpty | ⟨indexed, hIndexed, hChildEdge⟩
+  · simp at hEmpty
+  · have hEntry : indexed.1 ∈ automata := by
+      have hMapped : indexed.1 ∈ automata.zipIdx.map Prod.fst :=
+        List.mem_map_of_mem (f := Prod.fst) hIndexed
+      simpa using hMapped
+    exact childPendingEdges_clockEdgesAreTock (indexed.2 + 1) indexed.1.2
+      (hClockEdges indexed.1 hEntry) edge hChildEdge hClock
+
 private theorem indexedFragment_futureTargetsInStates
     (automata : List (BareMessage × AutomatonFragment))
     (hTargets : ∀ entry ∈ automata, entry.2.FutureTargetsInStates) :
@@ -156,6 +186,50 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
   exact finishAutomatonFragment states .root accepting
     (childPendingEdges 0 elseAutomaton ∪ indexedFragmentEdges branchAutomata ∪
       branchEdges ∪ waitEdges ∪ elseEdges)
+
+/-- Wait and else edges carry explicit `clock = false` guards; branch edges
+require an immediate need, which a clocked environment (empty `immediate`)
+cannot supply. -/
+theorem buildExclusiveOfferAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hElseClock : elseAutomaton.ClockEdgesAreTock)
+    (hBranchClock : ∀ entry ∈ branchAutomata, entry.2.ClockEdgesAreTock) :
+    (buildExclusiveOfferAutomaton signature branches elseAutomaton
+      branchAutomata).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+  · exact childPendingEdges_clockEdgesAreTock 0 elseAutomaton hElseClock
+      edge hElse hClock
+  · exact indexedFragment_clockEdgesAreTock branchAutomata hBranchClock
+      edge hIndexed hClock
+  · exfalso
+    rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, _, hNewEdge⟩
+    · simp at hEmpty
+    · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      obtain ⟨environment, ⟨hEnvMem, hEnabled, _⟩, rfl⟩ := hNewEdge
+      simp only at hClock
+      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+        hEnvMem hClock] at hEnabled
+      exact absurd hEnabled (by simp)
+  · exfalso
+    simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    obtain ⟨environment, ⟨_, hNotClock, _⟩, rfl⟩ := hWait
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
+  · exfalso
+    simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    obtain ⟨environment, ⟨_, hNotClock, _⟩, rfl⟩ := hResolved
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
 
 theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     (signature : TypeAlphabet)
@@ -363,6 +437,50 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
     (childPendingEdges 0 elseAutomaton ∪
       indexedFragmentEdges selectedConjunctions ∪ enabledEdges ∪
         waitEdges ∪ elseEdges)
+
+/-- Wait and else edges carry explicit `clock = false` guards; enabled edges
+require an immediate need, which a clocked environment cannot supply. -/
+theorem buildSelectedConjunctiveOfferAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (hElseClock : elseAutomaton.ClockEdgesAreTock)
+    (hConjunctionClock : ∀ entry ∈ selectedConjunctions,
+      entry.2.ClockEdgesAreTock) :
+    (buildSelectedConjunctiveOfferAutomaton signature branches elseAutomaton
+      selectedConjunctions).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with ((((hElse | hConjunction) | hEnabled) | hWait) | hResolved)
+  · exact childPendingEdges_clockEdgesAreTock 0 elseAutomaton hElseClock
+      edge hElse hClock
+  · exact indexedFragment_clockEdgesAreTock selectedConjunctions
+      hConjunctionClock edge hConjunction hClock
+  · exfalso
+    rw [mem_foldl_union_iff] at hEnabled
+    rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
+    · simp at hEmpty
+    · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
+      obtain ⟨environment, ⟨hEnvMem, hEnabledNeed⟩, rfl⟩ := hNewEdge
+      simp only at hClock
+      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+        hEnvMem hClock] at hEnabledNeed
+      exact absurd hEnabledNeed (by simp)
+  · exfalso
+    simp only [Finset.mem_image, Finset.mem_filter] at hWait
+    obtain ⟨environment, ⟨_, hNotClock, _⟩, rfl⟩ := hWait
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
+  · exfalso
+    simp only [Finset.mem_image, Finset.mem_filter] at hResolved
+    obtain ⟨environment, ⟨_, hNotClock, _⟩, rfl⟩ := hResolved
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
 
 theorem buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
     (signature : TypeAlphabet)

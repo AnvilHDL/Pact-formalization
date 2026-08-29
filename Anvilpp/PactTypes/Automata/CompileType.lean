@@ -494,9 +494,14 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
+      -- The enclosing binder rewrites this marker into a silent back-edge,
+      -- and the semantic `recur` rule fires only under a non-clock
+      -- environment, so a clocked marker would become a back-edge with no
+      -- semantic counterpart.  Guard it exactly like every other family.
       | .var _ name =>
           exact finishAutomatonFragment {.root, .final} .root ∅  <|
-            signature.localEnvironments.image fun environment =>
+            (signature.localEnvironments.filter fun environment =>
+              environment.clock = false).image fun environment =>
               { source := .root
                 environment := environment
                 label := .variable name

@@ -419,6 +419,198 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
               (parallelTypeBranchesSelecting original branches)
               (hSelected original hOriginal)
 
+/-- In a clock environment only the clock itself can fire, with no offers.
+
+The automaton-side mirror of `typeOffers_label_eq_tock_of_clock` and
+`typeOffers_current_empty_of_clock`.  Every edge family either carries an
+explicit `clock = false` guard, or fires an action needing a non-empty
+immediate need that a clocked environment cannot supply; only `.tock`'s own
+fire edge is tock-labelled, and it has empty offers. -/
+theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
+    ∀ fuel processType,
+      TypeCompilationFuelSufficient processType fuel →
+      (compileTypeFuel signature fuel processType).ClockEdgesAreTock := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro processType hFuel
+      exact (Nat.not_lt_zero _
+        (TypeCompilationFuelSufficient.positive hFuel)).elim
+  | succ fuel ih =>
+      intro processType hFuel
+      cases processType with
+      | message _ msg dir =>
+          intro edge hEdge hClock
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with
+            (⟨environment, ⟨hEnvMem, hNeed⟩, rfl⟩ |
+              ⟨environment, ⟨_, hNotClock, _⟩, rfl⟩) |
+              ⟨environment, ⟨_, hNotClock⟩, rfl⟩
+          · -- Firing needs an immediate need; a clocked environment has none.
+            exfalso
+            simp only at hClock
+            rw [TypeEnvironment.hasNeed,
+              TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+                hEnvMem hClock] at hNeed
+            exact absurd hNeed (by simp)
+          · exfalso
+            simp only at hClock
+            rw [hNotClock] at hClock
+            exact absurd hClock (by simp)
+          · exfalso
+            simp only at hClock
+            rw [hNotClock] at hClock
+            exact absurd hClock (by simp)
+      | progress _ pid =>
+          intro edge hEdge hClock
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with ⟨environment, ⟨_, hNotClock⟩, rfl⟩ |
+            ⟨environment, ⟨_, hNotClock⟩, rfl⟩ <;>
+            · exfalso
+              simp only at hClock
+              rw [hNotClock] at hClock
+              exact absurd hClock (by simp)
+      | tock _ =>
+          intro edge hEdge hClock
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+          rcases hEdge with ⟨environment, _, rfl⟩ |
+            ⟨environment, ⟨_, hNotClock⟩, rfl⟩
+          · -- The clock's own fire edge: tock-labelled with empty offers.
+            by_cases hEnvClock : environment.clock
+            · rw [if_pos hEnvClock]
+              exact ⟨rfl, rfl⟩
+            · exfalso
+              rw [if_neg hEnvClock] at hClock
+              simp only at hClock
+              simp only [Bool.not_eq_true] at hEnvClock
+              rw [hEnvClock] at hClock
+              exact absurd hClock (by simp)
+          · exfalso
+            simp only at hClock
+            rw [hNotClock] at hClock
+            exact absurd hClock (by simp)
+      | skip _ =>
+          intro edge hEdge hClock
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          obtain ⟨environment, ⟨_, hNotClock⟩, rfl⟩ := hEdge
+          exfalso
+          simp only at hClock
+          rw [hNotClock] at hClock
+          exact absurd hClock (by simp)
+      | var _ name =>
+          -- Marker edges are now guarded on `clock = false`, so a clocked
+          -- marker (whose semantic label is `silent`, not `tock`) cannot
+          -- arise.  This guard is what makes the `recur` case below work.
+          intro edge hEdge hClock
+          simp only [compileTypeFuel, finishAutomatonFragment,
+            Finset.mem_image, Finset.mem_filter] at hEdge
+          obtain ⟨environment, ⟨_, hNotClock⟩, rfl⟩ := hEdge
+          exfalso
+          simp only at hClock
+          rw [hNotClock] at hClock
+          exact absurd hClock (by simp)
+      | recur _ name body =>
+          have hBody : TypeCompilationFuelSufficient body fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          rw [compileTypeFuel.eq_def]
+          exact buildRecursionAutomaton_clockEdgesAreTock signature name
+            (compileTypeFuel signature fuel body) (ih body hBody)
+      | choice _ left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          rw [compileTypeFuel.eq_def]
+          exact buildChoiceAutomaton_clockEdgesAreTock signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) .silent .silent
+            (ih left hLeft) (ih right hRight)
+      | fairChoice _ bid left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          rw [compileTypeFuel.eq_def]
+          exact buildChoiceAutomaton_clockEdgesAreTock signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) (.fair bid true)
+            (.fair bid false) (ih left hLeft) (ih right hRight)
+      | seq _ left right =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          rw [compileTypeFuel.eq_def]
+          exact buildSequenceAutomaton_clockEdgesAreTock signature
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right) (ih left hLeft)
+            (ih right hRight)
+      | par alphabet left right interface =>
+          have hLeft : TypeCompilationFuelSufficient left fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hRight : TypeCompilationFuelSufficient right fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          rw [compileTypeFuel.eq_def]
+          exact buildParallelAutomaton_clockEdgesAreTock signature alphabet
+            left.alphabet right.alphabet interface
+            (compileTypeFuel signature fuel left)
+            (compileTypeFuel signature fuel right)
+            (compiledChildFutureFuel signature fuel left)
+            (compiledChildFutureFuel signature fuel right)
+            (ih left hLeft) (ih right hRight)
+      | xoffer _ elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hBranches : ∀ entry ∈ branches,
+              TypeCompilationFuelSufficient entry.2 fuel := by
+            intro entry hEntry
+            have hBound := typeCompilationFuel_le_typeBranchCompilationFuel
+              branches entry hEntry
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            simp only [TypeCompilationFuelSufficient]
+            omega
+          rw [compileTypeFuel.eq_def]
+          apply buildExclusiveOfferAutomaton_clockEdgesAreTock
+          · exact ih elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact ih original.2 (hBranches original hOriginal)
+      | offer _ elseType branches =>
+          have hElse : TypeCompilationFuelSufficient elseType fuel := by
+            simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
+            omega
+          have hSelected : ∀ selected ∈ branches,
+              TypeCompilationFuelSufficient
+                (parallelTypeBranchesSelecting selected branches) fuel := by
+            intro selected hSelected
+            simp only [TypeCompilationFuelSufficient,
+              typeCompilationFuel_parallelTypeBranchesSelecting]
+            simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
+            omega
+          rw [compileTypeFuel.eq_def]
+          apply buildSelectedConjunctiveOfferAutomaton_clockEdgesAreTock
+          · exact ih elseType hElse
+          · intro entry hEntry
+            simp only [List.mem_map] at hEntry
+            obtain ⟨original, hOriginal, rfl⟩ := hEntry
+            exact ih (parallelTypeBranchesSelecting original branches)
+              (hSelected original hOriginal)
+
 theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →

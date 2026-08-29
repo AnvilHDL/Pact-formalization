@@ -659,6 +659,43 @@ theorem buildRecursionAutomaton_markerReachable_root
     exact Or.inr ⟨childState 0 body.initial, Finset.mem_singleton_self _,
       hInner⟩
 
+/-- Header edges carry an explicit `clock = false` guard, and copied body
+edges keep the body's environment and label.
+
+The marker branch is the delicate one: it rewrites the label to a *visible*
+`silent`, discarding the body edge's own label.  It is sound only because a
+marker edge can never be clocked in the first place — a clocked body edge is
+tock-labelled by the body's own invariant, whereas a marker's semantic label
+is `silent`.  This is precisely what the `clock = false` guard on the
+compiler's `.var` marker edges buys. -/
+theorem buildRecursionAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (hBodyClock : body.ClockEdgesAreTock) :
+    (buildRecursionAutomaton signature name body).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildRecursionAutomaton, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with hHeader | hBody
+  · rcases hHeader with ⟨environment, ⟨_, hNotClock⟩, rfl⟩
+    exfalso
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
+  · rcases hBody with ⟨bodyEdge, hBodyEdge, rfl⟩
+    by_cases hVariable : bodyEdge.label = .variable name
+    · -- A marker edge cannot be clocked: the body invariant would force its
+      -- semantic label to be `tock`, but a `.variable` marker is `silent`.
+      exfalso
+      rw [if_pos hVariable] at hClock
+      simp only at hClock
+      have hTock := (hBodyClock bodyEdge hBodyEdge hClock).1
+      rw [hVariable] at hTock
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hTock
+    · rw [if_neg hVariable] at hClock ⊢
+      simp only at hClock ⊢
+      exact hBodyClock bodyEdge hBodyEdge hClock
+
 theorem buildRecursionAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
     (hBodyTargets : body.FutureTargetsInStates)

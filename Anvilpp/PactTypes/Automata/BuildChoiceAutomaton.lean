@@ -253,6 +253,31 @@ theorem buildChoiceAutomaton_markerReachable_right
     state hState
   simpa [childState] using hResult
 
+/-- Selection edges carry an explicit `clock = false` guard, and both tagged
+child copies preserve their child's environment and label. -/
+theorem buildChoiceAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hLeftClock : left.ClockEdgesAreTock)
+    (hRightClock : right.ClockEdgesAreTock) :
+    (buildChoiceAutomaton signature left right
+      selectionLeft selectionRight).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildChoiceAutomaton, finishAutomatonFragment,
+    childPendingEdges, Finset.mem_union, Finset.mem_image,
+    Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
+    Finset.mem_singleton] at hEdge
+  rcases hEdge with (hLeft | hRight) | hSelection
+  · rcases hLeft with ⟨childEdge, hChildEdge, rfl⟩
+    exact hLeftClock childEdge hChildEdge hClock
+  · rcases hRight with ⟨childEdge, hChildEdge, rfl⟩
+    exact hRightClock childEdge hChildEdge hClock
+  · rcases hSelection with ⟨environment, ⟨_, hNotClock⟩, rfl | rfl⟩ <;>
+      · exfalso
+        rw [hNotClock] at hClock
+        exact absurd hClock (by simp)
+
 theorem buildChoiceAutomaton_futureTargetsInStates
     (signature : TypeAlphabet) (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)

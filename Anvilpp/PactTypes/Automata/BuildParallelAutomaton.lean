@@ -9,16 +9,16 @@ namespace Pact
 
 noncomputable section
 
-/-- Future spec used by redirected parallel product edges.
+/-- Future spec used by parallel product edges.
 
-A synchronized clock edge that redirects to the completed state ends the
-current cycle, so its public future offers are empty.  All other product edges
-keep the usual symbolic reference to the target product state's global `OF`
-equation. -/
+A synchronized clock edge ends the current cycle, so its public future offers
+are empty — whether or not it redirects to the completed state.  All other
+product edges keep the usual symbolic reference to the target product state's
+global `OF` equation. -/
 def parallelFutureSpec (label : AutomatonConstructionLabel)
     (target : TypeAutomatonState) (removed : Finset BareMessage) :
     FutureSpec :=
-  if target = .final ∧ label.semantic = TypeLabel.tock then .explicit ∅
+  if label.semantic = TypeLabel.tock then .explicit ∅
   else .at target removed
 
 /-- The unfiltered synchronized edges of a parallel product. Completing
@@ -173,6 +173,92 @@ def buildParallelAutomaton (signature : TypeAlphabet)
       (transitionEdges ∪ parallelDoneEdges signature parentAlphabet)
   exact product
 
+/-- A product edge is clocked exactly when both components are, by
+`combineAutomatonEnvironment`'s `left.clock && right.clock` gate.  Both
+components are then tock-labelled with empty offers, so `combine` produces
+`tock` and `hideOffers` filters the empty union to `∅`. -/
+theorem buildParallelAutomaton_clockEdgesAreTock
+    (signature : TypeAlphabet)
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface) (left right : AutomatonFragment)
+    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
+    (hLeftClock : left.ClockEdgesAreTock)
+    (hRightClock : right.ClockEdgesAreTock) :
+    (buildParallelAutomaton signature parentAlphabet leftAlphabet rightAlphabet
+      interface left right
+      leftFuture rightFuture).ClockEdgesAreTock := by
+  classical
+  intro edge hEdge hClock
+  simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
+    parallelRawTransitionEdges, parallelDoneEdges, Finset.mem_biUnion,
+    Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with
+      ⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩, _⟩ |
+      ⟨environment, ⟨_, hNotClock⟩, rfl⟩
+  · -- The combined environment is clocked only on the `tock` branch, which
+    -- requires both component environments to be clocked.
+    simp only at hClock
+    have hBoth : leftEdge.environment.clock = true ∧
+        rightEdge.environment.clock = true := by
+      by_cases hAnd : leftEdge.environment.clock && rightEdge.environment.clock
+      · simpa using hAnd
+      · exfalso
+        rw [combineAutomatonEnvironment, if_neg (by simpa using hAnd)] at hClock
+        exact absurd hClock (by simp)
+    -- Pull each component back to its own pending edge: resolving future
+    -- fields preserves environment, label, and current offers.
+    simp only [resolveAutomatonEdgesWith, Finset.mem_image]
+      at hLeftEdge hRightEdge
+    obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+    obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+    have hLeftEnv : leftRaw.environment = leftEdge.environment :=
+      congrArg AutomatonFragmentEdge.environment hLeftEq
+    have hRightEnv : rightRaw.environment = rightEdge.environment :=
+      congrArg AutomatonFragmentEdge.environment hRightEq
+    have hLeftLabel : leftRaw.label = leftEdge.label :=
+      congrArg AutomatonFragmentEdge.label hLeftEq
+    have hRightLabel : rightRaw.label = rightEdge.label :=
+      congrArg AutomatonFragmentEdge.label hRightEq
+    have hLeftCurrent : leftRaw.current = leftEdge.current :=
+      congrArg AutomatonFragmentEdge.current hLeftEq
+    have hRightCurrent : rightRaw.current = rightEdge.current :=
+      congrArg AutomatonFragmentEdge.current hRightEq
+    obtain ⟨hLeftTock, hLeftEmpty⟩ :=
+      hLeftClock leftRaw hLeftRaw (by rw [hLeftEnv]; exact hBoth.1)
+    obtain ⟨hRightTock, hRightEmpty⟩ :=
+      hRightClock rightRaw hRightRaw (by rw [hRightEnv]; exact hBoth.2)
+    rw [hLeftLabel] at hLeftTock
+    rw [hRightLabel] at hRightTock
+    rw [hLeftCurrent] at hLeftEmpty
+    rw [hRightCurrent] at hRightEmpty
+    -- `combine` yields `tock` only from two `.visible tock` components.
+    cases hLeftForm : leftEdge.label with
+    | «variable» _ =>
+        exfalso
+        rw [hLeftForm] at hLeftTock
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hLeftTock
+    | visible leftVisible =>
+        cases hRightForm : rightEdge.label with
+        | «variable» _ =>
+            exfalso
+            rw [hRightForm] at hRightTock
+            simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+              at hRightTock
+        | visible rightVisible =>
+            rw [hLeftForm] at hLeftTock
+            rw [hRightForm] at hRightTock
+            simp only [AutomatonConstructionLabel.semantic] at hLeftTock hRightTock
+            refine ⟨?_, ?_⟩
+            · simp only [AutomatonConstructionLabel.combine,
+                AutomatonConstructionLabel.semantic]
+              exact (TypeLabel.combine_eq_tock_iff interface leftVisible
+                rightVisible).mpr ⟨hLeftTock, hRightTock⟩
+            · simp [hLeftEmpty, hRightEmpty, hideOffers]
+  · exfalso
+    simp only at hClock
+    rw [hNotClock] at hClock
+    exact absurd hClock (by simp)
+
 theorem buildParallelAutomaton_futureTargetsInStates
     (signature : TypeAlphabet)
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
@@ -191,34 +277,27 @@ theorem buildParallelAutomaton_futureTargetsInStates
   rcases hEdge with
       ⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩, _⟩ |
       ⟨environment, _, rfl⟩
-  · by_cases hAccept :
-      leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
-    · simp [hAccept] at hFuture
-      by_cases hClock :
-          (AutomatonConstructionLabel.combine interface leftEdge.label
-            rightEdge.label).semantic = TypeLabel.tock
-      · simp [parallelFutureSpec, hClock] at hFuture
-      · simp [parallelFutureSpec, hClock] at hFuture
+  · by_cases hClock :
+        (AutomatonConstructionLabel.combine interface leftEdge.label
+          rightEdge.label).semantic = TypeLabel.tock
+    · simp [parallelFutureSpec, hClock] at hFuture
+    · by_cases hAccept :
+        leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
+      · simp [hAccept, parallelFutureSpec, hClock] at hFuture
         obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
         rw [← hTargetEq]
         simp [buildParallelAutomaton, finishAutomatonFragment]
-    · simp [hAccept] at hFuture
-      have hPairNotFinal :
-          ¬ TypeAutomatonState.pair leftEdge.target rightEdge.target =
-            TypeAutomatonState.final := by
-        intro hEq
-        cases hEq
-      simp [parallelFutureSpec, hPairNotFinal] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp only [resolveAutomatonEdgesWith, Finset.mem_image]
-        at hLeftEdge hRightEdge
-      obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
-      obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
-      rw [← hLeftEq, ← hRightEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment,
-        hLeftEdgeTargets leftRaw hLeftRaw,
-        hRightEdgeTargets rightRaw hRightRaw]
+      · simp [hAccept, parallelFutureSpec, hClock] at hFuture
+        obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
+        rw [← hTargetEq]
+        simp only [resolveAutomatonEdgesWith, Finset.mem_image]
+          at hLeftEdge hRightEdge
+        obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+        obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+        rw [← hLeftEq, ← hRightEq]
+        simp [buildParallelAutomaton, finishAutomatonFragment,
+          hLeftEdgeTargets leftRaw hLeftRaw,
+          hRightEdgeTargets rightRaw hRightRaw]
   · simp at hFuture
 
 end

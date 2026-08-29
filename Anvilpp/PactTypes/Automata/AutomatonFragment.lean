@@ -82,6 +82,7 @@ def AutomatonFragment.EdgeTargetsInStates
     (fragment : AutomatonFragment) : Prop :=
   ∀ edge ∈ fragment.edges, edge.target ∈ fragment.states
 
+
 /-- A constructor edge after its future-offer field has been computed. -/
 structure AutomatonFragmentEdge : Type where
   source : TypeAutomatonState
@@ -114,6 +115,19 @@ namespace AutomatonConstructionLabel
         .visible (TypeLabel.combine interface leftLabel rightLabel)
 
 end AutomatonConstructionLabel
+
+/-- In a clock environment only the clock itself can fire, with no offers.
+
+This is the automaton-side mirror of the semantic `TypeOffers` facts
+`typeOffers_label_eq_tock_of_clock` and `typeOffers_current_empty_of_clock`:
+a compiled edge guarded by a clocked environment is tock-labelled and
+exposes no current offers.  Every rule with a non-tock label either needs an
+immediate need a clocked environment cannot supply, or carries an explicit
+`clock = false` guard. -/
+def AutomatonFragment.ClockEdgesAreTock
+    (fragment : AutomatonFragment) : Prop :=
+  ∀ edge ∈ fragment.edges, edge.environment.clock = true →
+    edge.label.semantic = TypeLabel.tock ∧ edge.current = ∅
 
 end
 

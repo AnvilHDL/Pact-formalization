@@ -208,6 +208,8 @@ theorem typeOffers_future_subset_target_union_current
       intro action hAction
       simp at hAction ⊢
       exact Or.inl hAction.1
+  | seq_tock =>
+      simp
   | seq_fuse =>
       intro action hAction
       simp at hAction ⊢
