@@ -362,6 +362,382 @@ theorem parallelTypeBranchesSelecting_alphabet_eq_of_mem
           parallelTypeBranchesSelectingWithin, PactType.alphabet, hSelected]
           using hBranches.2.1
 
+/-- Reannotation rewrites only alphabets, so it leaves every tail-occurrence
+judgement of the underlying term unchanged. -/
+theorem PactType.reannotate_tailOccurrences (name : String) :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet) (tail : Prop),
+      processType.TailOccurrences name tail →
+        (processType.reannotate alphabet).TailOccurrences name tail := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro alphabet tail hTail
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (branchTail : Prop),
+          sizeOf branches < n →
+          PactType.TailBranchOccurrences name branchTail branches →
+          PactType.TailBranchOccurrences name branchTail
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro branches branchAlphabet branchTail hBranchesSize hBranchesTail
+        induction branches with
+        | nil =>
+            rw [PactType.reannotateBranches_nil]
+            simp [PactType.TailBranchOccurrences]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.TailOccurrences name branchTail ∧
+                PactType.TailBranchOccurrences name branchTail rest := by
+              simpa only [PactType.TailBranchOccurrences] using hBranchesTail
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simpa only [PactType.reannotateBranches,
+              PactType.TailBranchOccurrences] using
+              And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
+                  branchAlphabet branchTail hFields.1)
+                (restIH hRestSize hFields.2)
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ =>
+          simp [PactType.reannotate, PactType.TailOccurrences]
+      | var _ other =>
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using hTail
+      | recur _ binder body =>
+          by_cases hBinder : binder = name
+          · simp [PactType.reannotate, PactType.TailOccurrences, hBinder]
+          · have hBodySize : sizeOf body < n := by
+              rw [← hSize]; simp_wf; omega
+            simpa only [PactType.reannotate, PactType.TailOccurrences,
+              if_neg hBinder] using
+              ih (sizeOf body) hBodySize body rfl alphabet tail
+                (by simpa only [PactType.TailOccurrences, if_neg hBinder]
+                  using hTail)
+      | choice _ left right | fairChoice _ _ left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hFields : left.TailOccurrences name tail ∧
+              right.TailOccurrences name tail := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl alphabet tail
+                hFields.1)
+              (ih (sizeOf right) hRightSize right rfl alphabet tail hFields.2)
+      | seq _ left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name tail := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl alphabet False
+                hFields.1)
+              (ih (sizeOf right) hRightSize right rfl alphabet tail hFields.2)
+      | par _ left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hFields : left.TailOccurrences name False ∧
+              right.TailOccurrences name False := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl _ False hFields.1)
+              (ih (sizeOf right) hRightSize right rfl _ False hFields.2)
+      | xoffer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.TailOccurrences name tail ∧
+              PactType.TailBranchOccurrences name tail branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet tail
+                hFields.1)
+              (hBranches branches alphabet tail hBranchesSize hFields.2)
+      | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.TailOccurrences name tail ∧
+              PactType.TailBranchOccurrences name False branches := by
+            simpa only [PactType.TailOccurrences] using hTail
+          simpa only [PactType.reannotate, PactType.TailOccurrences] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet tail
+                hFields.1)
+              (hBranches branches alphabet False hBranchesSize hFields.2)
+
+/-- Reannotation preserves tail recursion for the same structural reason. -/
+theorem PactType.reannotate_tailRecursive :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
+      processType.TailRecursive →
+        (processType.reannotate alphabet).TailRecursive := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro alphabet hRec
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet),
+          sizeOf branches < n →
+          PactType.TailRecursiveBranches branches →
+          PactType.TailRecursiveBranches
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro branches branchAlphabet hBranchesSize hBranchesRec
+        induction branches with
+        | nil =>
+            simp [PactType.reannotateBranches, PactType.TailRecursiveBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.TailRecursive ∧
+                PactType.TailRecursiveBranches rest := by
+              simpa only [PactType.TailRecursiveBranches] using hBranchesRec
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simpa only [PactType.reannotateBranches,
+              PactType.TailRecursiveBranches] using
+              And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
+                  branchAlphabet hFields.1)
+                (restIH hRestSize hFields.2)
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.TailRecursive]
+      | recur _ binder body =>
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          have hFields : body.TailOccurrences binder True ∧ body.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hRec
+          simpa only [PactType.reannotate, PactType.TailRecursive] using
+            And.intro (PactType.reannotate_tailOccurrences binder body alphabet
+                True hFields.1)
+              (ih (sizeOf body) hBodySize body rfl alphabet hFields.2)
+      | choice _ left right | fairChoice _ _ left right | seq _ left right =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hRec
+          simpa only [PactType.reannotate, PactType.TailRecursive] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl alphabet hFields.1)
+              (ih (sizeOf right) hRightSize right rfl alphabet hFields.2)
+      | par _ left right interface =>
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          have hFields : left.TailRecursive ∧ right.TailRecursive := by
+            simpa only [PactType.TailRecursive] using hRec
+          simpa only [PactType.reannotate, PactType.TailRecursive] using
+            And.intro (ih (sizeOf left) hLeftSize left rfl _ hFields.1)
+              (ih (sizeOf right) hRightSize right rfl _ hFields.2)
+      | xoffer _ elseType branches | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hRec
+          simpa only [PactType.reannotate, PactType.TailRecursive] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
+                hFields.1)
+              (hBranches branches alphabet hBranchesSize hFields.2)
+
+/-- A generated singleton offer inherits its branch body's tail properties. -/
+theorem singletonTypeXOfferAt_tailOccurrences (name : String)
+    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (tail : Prop) (hBranch : branch.2.TailOccurrences name False) :
+    (singletonTypeXOfferAt alphabet branch).TailOccurrences name tail := by
+  simp only [singletonTypeXOfferAt, PactType.TailOccurrences,
+    PactType.TailBranchOccurrences]
+  refine ⟨trivial, ?_, trivial⟩
+  exact PactType.reannotate_tailOccurrences name branch.2 alphabet tail
+    (PactType.tailOccurrences_mono name False.elim branch.2 hBranch)
+
+theorem singletonTypeXOfferAt_tailRecursive
+    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (hBranch : branch.2.TailRecursive) :
+    (singletonTypeXOfferAt alphabet branch).TailRecursive := by
+  simp only [singletonTypeXOfferAt, PactType.TailRecursive,
+    PactType.TailRecursiveBranches]
+  exact ⟨trivial, PactType.reannotate_tailRecursive branch.2 alphabet hBranch,
+    trivial⟩
+
+/-- The selected branch's commit form inherits its body's tail properties. -/
+theorem selectedTypeBranchAt_tailOccurrences (name : String)
+    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (tail : Prop) (hBranch : branch.2.TailOccurrences name False) :
+    (selectedTypeBranchAt alphabet branch).TailOccurrences name tail := by
+  simp only [selectedTypeBranchAt, PactType.TailOccurrences]
+  exact ⟨trivial, PactType.reannotate_tailOccurrences name branch.2 alphabet
+    tail (PactType.tailOccurrences_mono name False.elim branch.2 hBranch)⟩
+
+theorem selectedTypeBranchAt_tailRecursive
+    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (hBranch : branch.2.TailRecursive) :
+    (selectedTypeBranchAt alphabet branch).TailRecursive := by
+  simp only [selectedTypeBranchAt, PactType.TailRecursive]
+  exact ⟨trivial, PactType.reannotate_tailRecursive branch.2 alphabet hBranch⟩
+
+/-- The generated parallel product of an offer's branches has no free tail
+occurrence of any name absent from every branch body. -/
+theorem parallelTypeBranchesWithin_tailOccurrences (name : String) :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet) (tail : Prop),
+      (∀ branch ∈ branches, branch.2.TailOccurrences name False) →
+        (parallelTypeBranchesWithin alphabet branches).TailOccurrences
+          name tail := by
+  intro branches
+  induction branches with
+  | nil => intro _ _ _; simp [parallelTypeBranchesWithin, PactType.TailOccurrences]
+  | cons branch rest ih =>
+      intro alphabet tail hBranches
+      cases rest with
+      | nil =>
+          exact singletonTypeXOfferAt_tailOccurrences name alphabet branch tail
+            (hBranches branch (by simp))
+      | cons next tail' =>
+          simp only [parallelTypeBranchesWithin, PactType.TailOccurrences]
+          exact ⟨singletonTypeXOfferAt_tailOccurrences name _ branch False
+              (hBranches branch (by simp)),
+            ih _ False (fun item hItem =>
+              hBranches item (List.mem_cons_of_mem branch hItem))⟩
+
+theorem parallelTypeBranchesWithin_tailRecursive :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet),
+      (∀ branch ∈ branches, branch.2.TailRecursive) →
+        (parallelTypeBranchesWithin alphabet branches).TailRecursive := by
+  intro branches
+  induction branches with
+  | nil => intro _ _; simp [parallelTypeBranchesWithin, PactType.TailRecursive]
+  | cons branch rest ih =>
+      intro alphabet hBranches
+      cases rest with
+      | nil =>
+          exact singletonTypeXOfferAt_tailRecursive alphabet branch
+            (hBranches branch (by simp))
+      | cons next tail' =>
+          simp only [parallelTypeBranchesWithin, PactType.TailRecursive]
+          exact ⟨singletonTypeXOfferAt_tailRecursive _ branch
+              (hBranches branch (by simp)),
+            ih _ (fun item hItem =>
+              hBranches item (List.mem_cons_of_mem branch hItem))⟩
+
+theorem parallelTypeBranchesSelectingWithin_tailOccurrences (name : String)
+    (selected : BareMessage × PactType) :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet) (tail : Prop),
+      (∀ branch ∈ branches, branch.2.TailOccurrences name False) →
+      selected.2.TailOccurrences name False →
+        (parallelTypeBranchesSelectingWithin alphabet selected
+          branches).TailOccurrences name tail := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _ _ _
+      simp [parallelTypeBranchesSelectingWithin, PactType.TailOccurrences]
+  | cons branch rest ih =>
+      intro alphabet tail hBranches hSelected
+      cases rest with
+      | nil =>
+          by_cases hEq : branch = selected
+          · simpa only [parallelTypeBranchesSelectingWithin, if_pos hEq] using
+              selectedTypeBranchAt_tailOccurrences name alphabet branch tail
+                (hBranches branch (by simp))
+          · simpa only [parallelTypeBranchesSelectingWithin, if_neg hEq] using
+              singletonTypeXOfferAt_tailOccurrences name alphabet branch tail
+                (hBranches branch (by simp))
+      | cons next tail' =>
+          by_cases hEq : branch = selected
+          · simp only [parallelTypeBranchesSelectingWithin, if_pos hEq,
+              PactType.TailOccurrences]
+            exact ⟨selectedTypeBranchAt_tailOccurrences name _ branch False
+                (hBranches branch (by simp)),
+              parallelTypeBranchesWithin_tailOccurrences name _ _ False
+                (fun item hItem =>
+                  hBranches item (List.mem_cons_of_mem branch hItem))⟩
+          · simp only [parallelTypeBranchesSelectingWithin, if_neg hEq,
+              PactType.TailOccurrences]
+            exact ⟨singletonTypeXOfferAt_tailOccurrences name _ branch False
+                (hBranches branch (by simp)),
+              ih _ False (fun item hItem =>
+                hBranches item (List.mem_cons_of_mem branch hItem)) hSelected⟩
+
+theorem parallelTypeBranchesSelectingWithin_tailRecursive
+    (selected : BareMessage × PactType) :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet),
+      (∀ branch ∈ branches, branch.2.TailRecursive) →
+      selected.2.TailRecursive →
+        (parallelTypeBranchesSelectingWithin alphabet selected
+          branches).TailRecursive := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _ _
+      simp [parallelTypeBranchesSelectingWithin, PactType.TailRecursive]
+  | cons branch rest ih =>
+      intro alphabet hBranches hSelected
+      cases rest with
+      | nil =>
+          by_cases hEq : branch = selected
+          · simpa only [parallelTypeBranchesSelectingWithin, if_pos hEq] using
+              selectedTypeBranchAt_tailRecursive alphabet branch
+                (hBranches branch (by simp))
+          · simpa only [parallelTypeBranchesSelectingWithin, if_neg hEq] using
+              singletonTypeXOfferAt_tailRecursive alphabet branch
+                (hBranches branch (by simp))
+      | cons next tail' =>
+          by_cases hEq : branch = selected
+          · simp only [parallelTypeBranchesSelectingWithin, if_pos hEq,
+              PactType.TailRecursive]
+            exact ⟨selectedTypeBranchAt_tailRecursive _ branch
+                (hBranches branch (by simp)),
+              parallelTypeBranchesWithin_tailRecursive _ _
+                (fun item hItem =>
+                  hBranches item (List.mem_cons_of_mem branch hItem))⟩
+          · simp only [parallelTypeBranchesSelectingWithin, if_neg hEq,
+              PactType.TailRecursive]
+            exact ⟨singletonTypeXOfferAt_tailRecursive _ branch
+                (hBranches branch (by simp)),
+              ih _ (fun item hItem =>
+                hBranches item (List.mem_cons_of_mem branch hItem)) hSelected⟩
+
+/-- Committing a conjunctive offer produces a term with no free occurrence of
+any name that the offer's branch bodies do not mention. -/
+theorem parallelTypeBranchesSelecting_tailOccurrences (name : String)
+    (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType)) (tail : Prop)
+    (hBranches : ∀ branch ∈ branches, branch.2.TailOccurrences name False)
+    (hSelected : selected.2.TailOccurrences name False) :
+    (parallelTypeBranchesSelecting selected branches).TailOccurrences
+      name tail := by
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.TailOccurrences]
+  | cons branch rest =>
+      exact parallelTypeBranchesSelectingWithin_tailOccurrences name selected
+        (branch :: rest) branch.2.alphabet tail hBranches hSelected
+
+theorem parallelTypeBranchesSelecting_tailRecursive
+    (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hBranches : ∀ branch ∈ branches, branch.2.TailRecursive)
+    (hSelected : selected.2.TailRecursive) :
+    (parallelTypeBranchesSelecting selected branches).TailRecursive := by
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.TailRecursive]
+  | cons branch rest =>
+      exact parallelTypeBranchesSelectingWithin_tailRecursive selected
+        (branch :: rest) branch.2.alphabet hBranches hSelected
+
 /-- Actions appearing at the heads of an offer's branches. -/
 def typeBranchActions
     (branches : List (BareMessage × PactType)) : Finset BareMessage :=

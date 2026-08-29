@@ -16,8 +16,8 @@ theorem correspondence_par_stepIff
       PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
     (hParallelCompatible : PactTypeAlphabet.ParallelCompatible alphabet
       left.alphabet right.alphabet interface)
-    (hLeftWellFormed : left.AlphabetWellFormed)
-    (hRightWellFormed : right.AlphabetWellFormed)
+    (hLeftResidual : left.ResidualInvariant)
+    (hRightResidual : right.ResidualInvariant)
     (hAlphabetCoherent :
       (.par alphabet left right interface : PactType).AlphabetCoherent)
     (hLeftIH : StepIffStatement signature left)
@@ -48,39 +48,49 @@ theorem correspondence_par_stepIff
         residualLeft.alphabet residualRight.alphabet interface := by
       rw [hResidualLeftAlphabet, hResidualRightAlphabet]
       exact hParentAlphabet
+    -- A residual keeps the fixed alphabet of the component it came from, so
+    -- it still satisfies the residual invariant and its offers stay inside it.
+    have hResidualLeftInvariant : residualLeft.ResidualInvariant :=
+      relationMembership_residualInvariant signature left residualLeft q1
+        hLeftResidual hLeftRelated
+    have hResidualRightInvariant : residualRight.ResidualInvariant :=
+      relationMembership_residualInvariant signature right residualRight q2
+        hRightResidual hRightRelated
+    have hResidualLeftWellFormed : residualLeft.AlphabetWellFormed :=
+      hResidualLeftInvariant.1
+    have hResidualRightWellFormed : residualRight.AlphabetWellFormed :=
+      hResidualRightInvariant.1
+    -- The future offers of a step lie in the alphabet of its target, and a
+    -- step keeps both the target's alphabet and its well-formedness.
+    have hFutureBound : ∀ {env : TypeEnvironment} {source target : PactType}
+        {label : TypeLabel} {current future : Finset BareMessage},
+        source.ResidualInvariant →
+        DecoratedTypeTransition env source label
+          (TypeOfferSummary.mk current future) target →
+        future ⊆ source.alphabet.actions := by
+      intro env source target label current future hSource hStep
+      exact typeOffers_future_subset_fixedAlphabet hSource.1
+        (TypeTransition.preserves_alphabet hSource.1 hStep.1)
+        (TypeTransition.preserves_alphabetWellFormed hStep.1 hSource.1
+          hSource.2.1 hSource.2.2.2)
+        hStep.2
     constructor
     · intro hStep
       cases decoratedTypeTransition_par_cases hStep with
       | step leftEnv rightEnv leftLabel rightLabel leftTarget rightTarget
           leftCurrent leftFuture rightCurrent rightFuture hTargetEq hNonFinal
           hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq hCurrentEq hFutureEq =>
-          -- TODO(parallel-alphabet-gap): the offers a residual type exposes
-          -- on one step must lie within that type's own fixed alphabet — a
-          -- basic well-typedness fact the paper takes for granted.  Here the
-          -- residual is `τ1`/`τ2` *after* the steps that got us to `q1`/`q2`,
-          -- not literally the original `τ1`/`τ2` from the `‖_I` term, so this
-          -- needs "well-formedness of the fixed alphabet is preserved as a
-          -- type steps/unfolds," which is not yet proved anywhere. For plain
-          -- recursive unfolding it should be routine, but the offer/choice
-          -- construct `τ&{...}`'s selected-branch compilation reassigns
-          -- alphabets in a way that needs its own side-proof first (the same
-          -- gap that blocks the `AlphabetCoherent`-style argument used
-          -- elsewhere from being strengthened to full well-formedness).
-          -- Genuine, separate proof debt in the offer-branch machinery, not
-          -- specific to parallel composition.  Left as `sorry` pending that
-          -- development.
-          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hRightFutureAlphabet : rightFuture ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hResidualLeftWellFormed : residualLeft.AlphabetWellFormed := by
-            sorry
-          have hResidualRightWellFormed : residualRight.AlphabetWellFormed := by
-            sorry
+          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualLeftWellFormed
+              hLeftStep.2
+          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualRightWellFormed
+              hRightStep.2
+          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions :=
+            hFutureBound hResidualLeftInvariant hLeftStep
+          have hRightFutureAlphabet :
+              rightFuture ⊆ residualRight.alphabet.actions :=
+            hFutureBound hResidualRightInvariant hRightStep
           have hResidualParallelCompatible :
               PactTypeAlphabet.ParallelCompatible alphabet residualLeft.alphabet
                 residualRight.alphabet interface :=
@@ -147,20 +157,17 @@ theorem correspondence_par_stepIff
       | fuse_tock leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture
           rightCurrent rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1
           hLocal2 hSync hTock hLabelEq hCurrentEq hFutureEq =>
-          -- TODO(parallel-alphabet-gap): see the matching comment in the
-          -- `step` case above.
-          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hRightFutureAlphabet : rightFuture ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hResidualLeftWellFormed : residualLeft.AlphabetWellFormed := by
-            sorry
-          have hResidualRightWellFormed : residualRight.AlphabetWellFormed := by
-            sorry
+          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualLeftWellFormed
+              hLeftStep.2
+          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualRightWellFormed
+              hRightStep.2
+          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions :=
+            hFutureBound hResidualLeftInvariant hLeftStep
+          have hRightFutureAlphabet :
+              rightFuture ⊆ residualRight.alphabet.actions :=
+            hFutureBound hResidualRightInvariant hRightStep
           have hResidualParallelCompatible :
               PactTypeAlphabet.ParallelCompatible alphabet residualLeft.alphabet
                 residualRight.alphabet interface :=
@@ -238,20 +245,17 @@ theorem correspondence_par_stepIff
       | fuse leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture rightCurrent
           rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync
           hNotTock hLabelEq hCurrentEq hFutureEq =>
-          -- TODO(parallel-alphabet-gap): see the matching comment in the
-          -- `step` case above.
-          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions := by
-            sorry
-          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hRightFutureAlphabet : rightFuture ⊆ residualRight.alphabet.actions := by
-            sorry
-          have hResidualLeftWellFormed : residualLeft.AlphabetWellFormed := by
-            sorry
-          have hResidualRightWellFormed : residualRight.AlphabetWellFormed := by
-            sorry
+          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualLeftWellFormed
+              hLeftStep.2
+          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions :=
+            typeOffers_current_subset_fixedAlphabet hResidualRightWellFormed
+              hRightStep.2
+          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions :=
+            hFutureBound hResidualLeftInvariant hLeftStep
+          have hRightFutureAlphabet :
+              rightFuture ⊆ residualRight.alphabet.actions :=
+            hFutureBound hResidualRightInvariant hRightStep
           have hResidualParallelCompatible :
               PactTypeAlphabet.ParallelCompatible alphabet residualLeft.alphabet
                 residualRight.alphabet interface :=

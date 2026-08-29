@@ -937,7 +937,7 @@ private theorem typeOffers_label_eq_tock_of_clock
       hLocal1 hLocal2 hSide hTock ihLeft ihRight =>
       exact hTock
 
-private theorem typeOffers_current_subset_fixedAlphabet
+theorem typeOffers_current_subset_fixedAlphabet
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
     {current future : Finset BareMessage}
     (hSource : source.AlphabetWellFormed)
@@ -1044,7 +1044,7 @@ private theorem typeOffers_current_subset_fixedAlphabet
       · exact Or.inl (ihLeft hSource.2.2.1 hLeftAction)
       · exact Or.inr (ihRight hSource.2.2.2 hRightAction)
 
-private theorem typeOffers_future_subset_fixedAlphabet
+theorem typeOffers_future_subset_fixedAlphabet
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
     {current future : Finset BareMessage}
     (hSource : source.AlphabetWellFormed)
@@ -1271,90 +1271,6 @@ private theorem sameCycleMessageLinear_branchHead_notMem_elseFuture
   intro heq
   exact hSafe (action, processType) hMem
     (heq ▸ typeFutureOffers_subset_prefixMessageIds elseType future hFuture)
-
-/-- A step's current offer and future offer never share an action: every
-`TypeOffers` rule either has an empty current offer, subtracts the current
-offer from the future offer syntactically, or (`xoffer_branch`, `offer_else`)
-is ruled out by the source's `SameCycleMessageLinear` regularity — "a message
-is exchanged at most once per cycle," the paper's own admissibility
-condition. -/
-private theorem typeOffers_current_future_disjoint
-    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
-    {current future : Finset BareMessage}
-    (hRegular : source.SameCycleMessageLinear)
-    (hAlphaWF : source.AlphabetWellFormed)
-    (hOffers : TypeOffers env source label target current future) :
-    Disjoint current future := by
-  induction hOffers using TypeOffers.rec with
-  | action env alphabet msg dir hConditions =>
-      simp [typeFutureOffers, typeFutureOffersFuel]
-  | action_wait env alphabet msg dir hConditions =>
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
-  | choice_left | choice_right | fair_left | fair_right |
-      cycle | cycle_wait | skip | progress | recur | offer_some => simp
-  | seq env alphabet left leftTarget right label current childFuture
-      hChild hNotSkip hNotTock ih =>
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
-  | seq_tock env alphabet left leftTarget right current childFuture
-      hChild hNotSkip ih => simp
-  | seq_fuse env alphabet skipAlphabet left right label current childFuture
-      hChild hNotTock ih =>
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
-  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
-      hChild ih => simp
-  | xoffer_branch env alphabet elseType branches action processType hConditions =>
-      simp only [PactType.SameCycleMessageLinear] at hRegular
-      rw [Finset.disjoint_left]
-      intro action' hActionCurrent hActionFuture
-      simp only [Finset.mem_singleton] at hActionCurrent
-      subst hActionCurrent
-      exact sameCycleMessageLinearBranches_head_notMem_of_mem hRegular.2.1
-        hConditions.2.1
-        (typeFutureOffers_subset_prefixMessageIds processType _ hActionFuture)
-  | xoffer_else env alphabet elseType branches hConditions => simp
-  | xoffer_wait env alphabet elseType branches hConditions =>
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
-  | offer_else env alphabet elseType branches hConditions =>
-      simp only [PactType.SameCycleMessageLinear] at hRegular
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      simp only [typeBranchActions, List.mem_toFinset, List.mem_map] at hActionCurrent
-      obtain ⟨branch, hBranchMem, hBranchEq⟩ := hActionCurrent
-      exact sameCycleMessageLinear_branchHead_notMem_elseFuture hRegular.2.2
-        hBranchMem hActionFuture hBranchEq.symm
-  | offer_wait env alphabet elseType branches hConditions =>
-      rw [Finset.disjoint_left]
-      intro action hActionCurrent hActionFuture
-      exact (Finset.mem_sdiff.mp hActionFuture).2 hActionCurrent
-  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
-      -- TODO(parallel-alphabet-gap): the cross-side case (a left current
-      -- action landing in the right future menu, or symmetrically) needs
-      -- `leftTarget.AlphabetWellFormed`/`rightTarget.AlphabetWellFormed` for
-      -- `typeOffers_future_subset_fixedAlphabet`, which is not derivable here
-      -- without "the fixed alphabet's well-formedness survives as a type
-      -- steps" — the same genuine, separate gap already `sorry`'d at
-      -- `Cases/Parallel.lean`'s `step`/`fuse` cases. Left as `sorry` pending
-      -- that development; the same-side cases (`ihLeft`/`ihRight`) are real.
-      sorry
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
-      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
-      hLocal2 hSide hNotTock ihLeft ihRight =>
-      -- TODO(parallel-alphabet-gap): same gap as the `par` case above.
-      sorry
-  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
-      hLocal1 hLocal2 hSide hTock ihLeft ihRight =>
-      simp
 
 private theorem alphabet_wellFormed_of_type
     {processType : PactType} (hWF : processType.AlphabetWellFormed) :

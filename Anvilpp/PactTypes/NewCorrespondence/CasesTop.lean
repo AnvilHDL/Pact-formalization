@@ -224,12 +224,13 @@ private theorem correspondence_stepIff_aux
     (hSignatureWF : signature.WellFormed)
     (hSupports : signature.Supports processType)
     (hAlphabetWF : processType.AlphabetWellFormed)
-    (hRegular : ClosedGuardedRegularWith bound processType) :
+    (hRegular : ClosedGuardedRegularWith bound processType)
+    (hTailClosed : processType.TailClosed) :
     StepIffStatement signature processType := by
   have hTailRecursive : processType.TailRecursive := hRegular.2.2.2.1
   induction hSize : sizeOf processType using Nat.strong_induction_on
       generalizing processType bound hSupports hAlphabetWF hTailRecursive
-      hRegular with
+      hTailClosed hRegular with
   | _ n ih =>
       cases processType with
       | message alphabet msg dir =>
@@ -251,6 +252,13 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              left.TailOccurrences other True ∧
+                right.TailOccurrences other True := fun other => by
+            simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedFields : left.TailClosed ∧ right.TailClosed :=
+            ⟨fun other => (hClosedSplit other).1,
+              fun other => (hClosedSplit other).2⟩
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -266,7 +274,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
@@ -276,7 +284,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.2, hRegular.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
-              hTailRecursive.2 rfl hRelated hSymbol
+              hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
           exact correspondence_choice_stepIff signature alphabet left right
             hAlphabetWF.2.1 hAlphabetWF.2.2.1 hLeftIH hRightIH hRelated
             hSymbol
@@ -285,6 +293,14 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              first.TailOccurrences other False ∧
+                second.TailOccurrences other True := fun other => by
+            simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedFields : first.TailClosed ∧ second.TailClosed :=
+            ⟨fun other => PactType.tailOccurrences_mono other False.elim first
+                (hClosedSplit other).1,
+              fun other => (hClosedSplit other).2⟩
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -300,7 +316,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
           have hSecondIH : StepIffStatement signature second := by
             have hSecondSize : sizeOf second < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
@@ -310,7 +326,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.2.1, hRegular.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
-              hTailRecursive.2 rfl hRelated hSymbol
+              hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
           exact correspondence_seq_stepIff signature alphabet first second
             hAlphabetWF.2.1 hAlphabetWF.2.2.1 hFirstIH hSecondIH hRelated
             hSymbol
@@ -322,6 +338,15 @@ private theorem correspondence_stepIff_aux
             PactType.alphabetCoherent_of_wellFormed _ hAlphabetWF
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              left.TailOccurrences other False ∧
+                right.TailOccurrences other False := fun other => by
+            simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedFields : left.TailClosed ∧ right.TailClosed :=
+            ⟨fun other => PactType.tailOccurrences_mono other False.elim left
+                (hClosedSplit other).1,
+              fun other => PactType.tailOccurrences_mono other False.elim right
+                (hClosedSplit other).2⟩
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -337,7 +362,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.2.2.1,
                 hRegular.2.2.2.2.2.2.1.2.1, hRegular.2.2.2.2.2.2.2.1.2.1,
                 hRegular.2.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
@@ -347,10 +372,16 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.2, hRegular.2.2.2.2.2.1.2.2.2,
                 hRegular.2.2.2.2.2.2.1.2.2, hRegular.2.2.2.2.2.2.2.1.2.2,
                 hRegular.2.2.2.2.2.2.2.2.2.2⟩
-              hTailRecursive.2 rfl hRelated hSymbol
+              hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
           exact correspondence_par_stepIff signature alphabet left right interface
             hSupports.1 hAlphabetWF.2.1.parent_eq hAlphabetWF.2.1
-            hAlphabetWF.2.2.1 hAlphabetWF.2.2.2 hParentCoherent hLeftIH
+            ⟨hAlphabetWF.2.2.1, hTailRecursive.1, hClosedFields.1,
+              offerBranchesDisjoint_of_ownership left hRegular.2.2.2.2.2.1.2.2.1
+                hRegular.2.2.2.2.2.2.1.2.1 hRegular.2.2.2.2.2.2.2.1.2.1⟩
+            ⟨hAlphabetWF.2.2.2, hTailRecursive.2, hClosedFields.2,
+              offerBranchesDisjoint_of_ownership right hRegular.2.2.2.2.2.1.2.2.2
+                hRegular.2.2.2.2.2.2.1.2.2 hRegular.2.2.2.2.2.2.2.1.2.2⟩
+            hParentCoherent hLeftIH
             hRightIH hRelated hSymbol
       | var alphabet id =>
           intro residual residual' state env label offers hRelated hSymbol
@@ -375,6 +406,12 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hBodyClosed : body.TailClosed := by
+            intro other
+            by_cases hName : id = other
+            · exact hName ▸ hTailRecursive.1
+            · simpa only [PactType.TailOccurrences, if_neg hName] using
+                hTailClosed other
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -390,7 +427,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1,
                 hRegular.2.2.2.2.2.2.1, hRegular.2.2.2.2.2.2.2.1,
                 hRegular.2.2.2.2.2.2.2.2⟩
-              hTailRecursive.2 rfl hRelated hSymbol
+              hBodyClosed hTailRecursive.2 rfl hRelated hSymbol
           have hBodyForward :
               RecursionBodyForwardObligation signature alphabet id body :=
             recursion_body_forward_obligation signature alphabet id body
@@ -408,6 +445,13 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              left.TailOccurrences other True ∧
+                right.TailOccurrences other True := fun other => by
+            simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedFields : left.TailClosed ∧ right.TailClosed :=
+            ⟨fun other => (hClosedSplit other).1,
+              fun other => (hClosedSplit other).2⟩
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -423,7 +467,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
           have hRightIH : StepIffStatement signature right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
@@ -433,7 +477,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.2, hRegular.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
-              hTailRecursive.2 rfl hRelated hSymbol
+              hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
           exact correspondence_fairChoice_stepIff signature alphabet id left right
             hAlphabetWF.2.2.1 hAlphabetWF.2.2.2.1 hLeftIH hRightIH hRelated
             hSymbol
@@ -442,6 +486,15 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              elseType.TailOccurrences other True ∧
+                PactType.TailBranchOccurrences other True branches :=
+            fun other => by
+              simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedElse : elseType.TailClosed :=
+            fun other => (hClosedSplit other).1
+          have hClosedBranches : PactType.TailClosedBranches branches :=
+            fun other => (hClosedSplit other).2
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -457,7 +510,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedElse hTailRecursive.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
                 StepIffStatement signature branchType := by
@@ -500,6 +553,9 @@ private theorem correspondence_stepIff_aux
               interfaceScopedBranches_of_mem hRegular.2.2.2.2.2.2.2.2.2 hMember
             have hBranchTailRecursive : branchType.TailRecursive :=
               tailRecursiveBranches_of_mem hTailRecursive.2 hMember
+            have hBranchTailClosed : branchType.TailClosed := fun other =>
+              PactType.tailOccurrences_of_mem_branches other True
+                (hClosedBranches other) hMember
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf branchType) hBranchSize bound branchType
               hBranchSupports hBranchAlphabetWF
@@ -507,7 +563,7 @@ private theorem correspondence_stepIff_aux
                 hBranchTailRecursive,
                 hBranchSameCycle, hBranchMsgOwnership, hBranchProgressOwnership,
                 hBranchFairChoiceOwnership, hBranchInterfaceScoped⟩
-              hBranchTailRecursive rfl hRelated hSymbol
+              hBranchTailClosed hBranchTailRecursive rfl hRelated hSymbol
           exact correspondence_xoffer_stepIff signature alphabet elseType branches
             hAlphabetWF.2.1
             (fun action branchType hMember =>
@@ -522,6 +578,19 @@ private theorem correspondence_stepIff_aux
           simp only [TypeAlphabet.Supports] at hSupports
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
           simp only [PactType.TailRecursive] at hTailRecursive
+          have hClosedSplit : ∀ other : String,
+              elseType.TailOccurrences other True ∧
+                PactType.TailBranchOccurrences other False branches :=
+            fun other => by
+              simpa only [PactType.TailOccurrences] using hTailClosed other
+          have hClosedElse : elseType.TailClosed :=
+            fun other => (hClosedSplit other).1
+          have hClosedBranchesFalse : ∀ other : String,
+              PactType.TailBranchOccurrences other False branches :=
+            fun other => (hClosedSplit other).2
+          have hClosedBranches : PactType.TailClosedBranches branches :=
+            fun other => PactType.tailBranchOccurrences_mono other False.elim
+              branches (hClosedBranchesFalse other)
           simp only [ClosedGuardedRegularWith, PactType.AllVariablesBound,
             PactType.BinderHygienic, PactType.ClockGuarded,
             PactType.SameCycleMessageLinear, PactType.ParallelMessageOwnership,
@@ -537,7 +606,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.1.1, hRegular.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
-              hTailRecursive.1 rfl hRelated hSymbol
+              hClosedElse hTailRecursive.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
                 StepIffStatement signature branchType := by
@@ -580,6 +649,9 @@ private theorem correspondence_stepIff_aux
               interfaceScopedBranches_of_mem hRegular.2.2.2.2.2.2.2.2.2 hMember
             have hBranchTailRecursive : branchType.TailRecursive :=
               tailRecursiveBranches_of_mem hTailRecursive.2 hMember
+            have hBranchTailClosed : branchType.TailClosed := fun other =>
+              PactType.tailOccurrences_of_mem_branches other True
+                (hClosedBranches other) hMember
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf branchType) hBranchSize bound branchType
               hBranchSupports hBranchAlphabetWF
@@ -587,21 +659,33 @@ private theorem correspondence_stepIff_aux
                 hBranchTailRecursive,
                 hBranchSameCycle, hBranchMsgOwnership, hBranchProgressOwnership,
                 hBranchFairChoiceOwnership, hBranchInterfaceScoped⟩
-              hBranchTailRecursive rfl hRelated hSymbol
-          -- TODO(offer-reannotation-gap): pairwise action-disjointness across
-          -- offer branches, and `ReannotationSafe` for each branch body
-          -- against any target alphabet, are new invariants introduced by
-          -- this session's `AlphabetPreservation.lean` work (needed to make
-          -- `AlphabetWellFormed` transport under `reannotate` honestly, since
-          -- unlike `AlphabetCoherent` it is not free).  Neither is yet
-          -- established for arbitrary offer branches here — genuine, separate
-          -- proof debt, not specific to the parallel-composition case this
-          -- session was asked to fix.  Left as `sorry` pending that
-          -- development.  `hBranchesIH` is likewise only the plain
-          -- `StepIffStatement`; the reannotated form the callee wants is the
-          -- same gap.
+              hBranchTailClosed hBranchTailRecursive rfl hRelated hSymbol
+          -- The branches own disjoint declarations, so the generated product
+          -- can hand each of them its own part of the offer alphabet.
+          have hPairwise : List.Pairwise BranchDeclarationsDisjoint branches :=
+            branchDeclarationsDisjoint_pairwise branches
+              hRegular.2.2.2.2.2.1.2 hRegular.2.2.2.2.2.2.1.2
+              hRegular.2.2.2.2.2.2.2.1.2
+          -- TODO(offer-reannotation-gap): the callee asks for the branch
+          -- induction hypothesis at every reannotated alphabet, which needs
+          -- the admissibility bundle to transport under `reannotate`.
+          have hBranchRegular : ∀ branch ∈ branches,
+              branch.2.TailRecursive ∧
+                (∀ other : String, branch.2.TailOccurrences other False) ∧
+                branch.2.OfferBranchesDisjoint := by
+            intro branch hMember
+            exact ⟨tailRecursiveBranches_of_mem hTailRecursive.2 hMember,
+              (fun other => PactType.tailOccurrences_of_mem_branches other False
+                (hClosedBranchesFalse other) hMember),
+              offerBranchesDisjoint_of_ownership branch.2
+                (parallelMessageOwnershipBranches_of_mem
+                  hRegular.2.2.2.2.2.1.2 hMember)
+                (parallelProgressOwnershipBranches_of_mem
+                  hRegular.2.2.2.2.2.2.1.2 hMember)
+                (parallelFairChoiceOwnershipBranches_of_mem
+                  hRegular.2.2.2.2.2.2.2.1.2 hMember)⟩
           exact correspondence_offer_stepIff signature alphabet elseType branches
-            hAlphabetWF.1 hAlphabetWF.2.2.2 (by sorry) (by sorry)
+            hAlphabetWF.1 hAlphabetWF.2.2.2 hPairwise hBranchRegular
             hAlphabetWF.2.1 hElseIH (fun action branchType hMember _ => by sorry)
             hRelated hSymbol
 
@@ -614,6 +698,7 @@ theorem correspondence_stepIff
   exact correspondence_stepIff_aux signature [] processType hSignatureWF
     hSupports hAlphabetWF
     (closedGuardedRegularWith_of_closedGuardedRegular hRegular)
+    (PactType.tailClosed_of_allVariablesBound_nil hRegular.1)
 
 end
 

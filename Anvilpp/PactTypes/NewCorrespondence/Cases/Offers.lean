@@ -14,12 +14,11 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
     ∀ (alphabet : PactTypeAlphabet)
       (branches : List (BareMessage × PactType)),
       alphabet.WellFormed →
-      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
-        branch.2.AlphabetWellFormed ∧
-        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
-      List.Pairwise (fun b1 b2 => Disjoint
-        ({b1.1} ∪ PactType.MessageActions b1.2)
-        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
+      (∀ branch ∈ branches, BranchAlphabetCarried alphabet branch ∧
+        branch.2.TailRecursive ∧
+        (∀ other : String, branch.2.TailOccurrences other False) ∧
+        branch.2.OfferBranchesDisjoint) →
+      List.Pairwise BranchDeclarationsDisjoint branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         ∀ branchAlphabet,
           StepIffStatement signature
@@ -67,7 +66,7 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
             PactTypeAlphabet.remove_wellFormed hAlphaWF
           have hHeadAction : action ∈ leftAlphabet.actions := by
             simp only [leftAlphabet, PactTypeAlphabet.branchPart, Finset.mem_inter]
-            exact ⟨hHeadWF.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
+            exact ⟨hHeadWF.1.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
           have hLeftBranchIH : StepIffStatement signature
               (processType.reannotate leftAlphabet) :=
             hBranchesIH action processType (by simp) leftAlphabet
@@ -92,14 +91,14 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
                 exact hLeftBranchIH hRelated hSymbol)
           rw [List.pairwise_cons] at hPairwise
           obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
-          have hRestWF : ∀ item ∈ next :: tail, item.1 ∈ rightAlphabet.actions ∧
-              item.2.AlphabetWellFormed ∧
-              ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet item.2 :=
+          have hRestWF : ∀ item ∈ next :: tail,
+              BranchAlphabetCarried rightAlphabet item ∧
+              item.2.TailRecursive ∧
+              (∀ other : String, item.2.TailOccurrences other False) ∧
+              item.2.OfferBranchesDisjoint :=
             fun item hItem =>
-              have hItemBranches := hBranchesWF item (List.mem_cons_of_mem _ hItem)
-              ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
-                  (hHeadDisjoint item hItem),
-                hItemBranches.2.1, hItemBranches.2.2⟩
+              have hItem' := hBranchesWF item (List.mem_cons_of_mem _ hItem)
+              ⟨hItem'.1.remove_branchPart (hHeadDisjoint item hItem), hItem'.2⟩
           have hRightIH : StepIffStatement signature
               (parallelTypeBranchesWithin rightAlphabet (next :: tail)) :=
             ih rightAlphabet hRightAlphaWF hRestWF hTailPairwise
@@ -108,11 +107,11 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
           have hLeftWF : (singletonTypeXOfferAt leftAlphabet
               (action, processType)).AlphabetWellFormed :=
             singletonTypeXOfferAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
-              hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+              hHeadAction hHeadWF.1.2.1 (hHeadWF.1.reannotationSafe_branchPart hAlphaWF)
           have hRightWF : (parallelTypeBranchesWithin rightAlphabet
               (next :: tail)).AlphabetWellFormed :=
             parallelTypeBranchesWithin_alphabet_wellFormed rightAlphabet hRightAlphaWF
-              (next :: tail) hTailPairwise hRestWF
+              (next :: tail) hTailPairwise (fun item hItem => (hRestWF item hItem).1)
           have hCompatible :=
             PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
               (action, processType)
@@ -129,7 +128,22 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
                   using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
                     alphabet (action, processType))
               (by simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt] using hCompatible)
-              hLeftWF hRightWF
+              ⟨hLeftWF,
+                singletonTypeXOfferAt_tailRecursive leftAlphabet
+                  (action, processType) hHeadWF.2.1,
+                (fun other => singletonTypeXOfferAt_tailOccurrences other
+                  leftAlphabet (action, processType) True
+                  (hHeadWF.2.2.1 other)),
+                singletonTypeXOfferAt_offerBranchesDisjoint leftAlphabet
+                  (action, processType) hHeadWF.2.2.2⟩
+              ⟨hRightWF,
+                parallelTypeBranchesWithin_tailRecursive (next :: tail)
+                  rightAlphabet (fun item hItem => (hRestWF item hItem).2.1),
+                (fun other => parallelTypeBranchesWithin_tailOccurrences other
+                  (next :: tail) rightAlphabet True
+                  (fun item hItem => (hRestWF item hItem).2.2.1 other)),
+                parallelTypeBranchesWithin_offerBranchesDisjoint rightAlphabet
+                  (next :: tail) (fun item hItem => (hRestWF item hItem).2.2.2)⟩
               (PactType.alphabetCoherent_of_wellFormed _
                 (by
                   simp only [PactType.AlphabetWellFormed]
@@ -148,11 +162,11 @@ theorem correspondence_parallelTypeBranches_stepIff
     (branches : List (BareMessage × PactType))
     (hAlphaWF : alphabet.WellFormed)
     (hAlphabetBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
-    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
-      ({b1.1} ∪ PactType.MessageActions b1.2)
-      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
-    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
-      PactType.ReannotationSafe targetAlphabet branch.2)
+    (hPairwise : List.Pairwise BranchDeclarationsDisjoint branches)
+    (hBranchRegular : ∀ branch ∈ branches,
+      branch.2.TailRecursive ∧
+        (∀ other : String, branch.2.TailOccurrences other False) ∧
+        branch.2.OfferBranchesDisjoint)
     (hBranchesIH : ∀ action branchType,
       (action, branchType) ∈ branches → ∀ branchAlphabet,
         StepIffStatement signature (branchType.reannotate branchAlphabet)) :
@@ -171,10 +185,8 @@ theorem correspondence_parallelTypeBranches_stepIff
       rw [hBranchAlphaEq]
       exact correspondence_parallelTypeBranchesWithin_stepIff signature
         alphabet ((action, branchType) :: rest) hAlphaWF
-        (fun branch hMem =>
-          ⟨branch_action_mem_fixedAlphabet_of_mem hAlphabetBranches hMem,
-            branch_body_alphabetWellFormed_of_mem hAlphabetBranches hMem,
-            hSafe branch hMem⟩)
+        (fun branch hMem => ⟨branchAlphabetCarried_of_mem hAlphabetBranches hMem,
+          hBranchRegular branch hMem⟩)
         hPairwise hBranchesIH
 
 /-- Step correspondence for the generated branch product after one branch is
@@ -185,12 +197,11 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
       (branches : List (BareMessage × PactType)),
       selected ∈ branches →
       alphabet.WellFormed →
-      (∀ branch ∈ branches, branch.1 ∈ alphabet.actions ∧
-        branch.2.AlphabetWellFormed ∧
-        ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet branch.2) →
-      List.Pairwise (fun b1 b2 => Disjoint
-        ({b1.1} ∪ PactType.MessageActions b1.2)
-        ({b2.1} ∪ PactType.MessageActions b2.2)) branches →
+      (∀ branch ∈ branches, BranchAlphabetCarried alphabet branch ∧
+        branch.2.TailRecursive ∧
+        (∀ other : String, branch.2.TailOccurrences other False) ∧
+        branch.2.OfferBranchesDisjoint) →
+      List.Pairwise BranchDeclarationsDisjoint branches →
       (∀ action branchType, (action, branchType) ∈ branches →
         ∀ branchAlphabet,
           StepIffStatement signature
@@ -239,20 +250,20 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
             PactTypeAlphabet.remove_wellFormed hAlphaWF
           have hHeadAction : action ∈ leftAlphabet.actions := by
             simp only [leftAlphabet, PactTypeAlphabet.branchPart, Finset.mem_inter]
-            exact ⟨hHeadWF.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
+            exact ⟨hHeadWF.1.1, Finset.mem_union_left _ (Finset.mem_singleton_self action)⟩
           rw [List.pairwise_cons] at hPairwise
           obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
           have hCompatible :=
             PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
               (action, processType)
-          have hRestWF : ∀ item ∈ next :: tail, item.1 ∈ rightAlphabet.actions ∧
-              item.2.AlphabetWellFormed ∧
-              ∀ targetAlphabet, PactType.ReannotationSafe targetAlphabet item.2 :=
+          have hRestWF : ∀ item ∈ next :: tail,
+              BranchAlphabetCarried rightAlphabet item ∧
+              item.2.TailRecursive ∧
+              (∀ other : String, item.2.TailOccurrences other False) ∧
+              item.2.OfferBranchesDisjoint :=
             fun item hItem =>
-              have hItemBranches := hBranchesWF item (List.mem_cons_of_mem _ hItem)
-              ⟨PactTypeAlphabet.mem_remove_branchPart_actions_of_disjoint hItemBranches.1
-                  (hHeadDisjoint item hItem),
-                hItemBranches.2.1, hItemBranches.2.2⟩
+              have hItem' := hBranchesWF item (List.mem_cons_of_mem _ hItem)
+              ⟨hItem'.1.remove_branchPart (hHeadDisjoint item hItem), hItem'.2⟩
           simp only [parallelTypeBranchesSelectingWithin]
           split
           next hHead =>
@@ -278,11 +289,11 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
             have hLeftWF : (selectedTypeBranchAt leftAlphabet
                 (action, processType)).AlphabetWellFormed :=
               selectedTypeBranchAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
-                hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+                hHeadAction hHeadWF.1.2.1 (hHeadWF.1.reannotationSafe_branchPart hAlphaWF)
             have hRightWF : (parallelTypeBranchesWithin rightAlphabet
                 (next :: tail)).AlphabetWellFormed :=
               parallelTypeBranchesWithin_alphabet_wellFormed rightAlphabet hRightAlphaWF
-                (next :: tail) hTailPairwise hRestWF
+                (next :: tail) hTailPairwise (fun item hItem => (hRestWF item hItem).1)
             have hParIH : StepIffStatement signature
                 (.par alphabet
                   (selectedTypeBranchAt leftAlphabet (action, processType))
@@ -298,7 +309,23 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                 (by
                   simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
                     using hCompatible)
-                hLeftWF hRightWF
+                ⟨hLeftWF,
+                  selectedTypeBranchAt_tailRecursive leftAlphabet
+                    (action, processType) hHeadWF.2.1,
+                  (fun other => selectedTypeBranchAt_tailOccurrences other
+                    leftAlphabet (action, processType) True
+                    (hHeadWF.2.2.1 other)),
+                  selectedTypeBranchAt_offerBranchesDisjoint leftAlphabet
+                    (action, processType) hHeadWF.2.2.2⟩
+                ⟨hRightWF,
+                  parallelTypeBranchesWithin_tailRecursive (next :: tail)
+                    rightAlphabet (fun item hItem => (hRestWF item hItem).2.1),
+                  (fun other => parallelTypeBranchesWithin_tailOccurrences other
+                    (next :: tail) rightAlphabet True
+                    (fun item hItem => (hRestWF item hItem).2.2.1 other)),
+                  parallelTypeBranchesWithin_offerBranchesDisjoint rightAlphabet
+                    (next :: tail)
+                    (fun item hItem => (hRestWF item hItem).2.2.2)⟩
                 (PactType.alphabetCoherent_of_wellFormed _
                   (by
                     simp only [PactType.AlphabetWellFormed]
@@ -348,11 +375,12 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
             have hLeftWF : (singletonTypeXOfferAt leftAlphabet
                 (action, processType)).AlphabetWellFormed :=
               singletonTypeXOfferAt_alphabetWellFormed leftAlphabet hLeftAlphaWF
-                hHeadAction hHeadWF.2.1 (hHeadWF.2.2 leftAlphabet)
+                hHeadAction hHeadWF.1.2.1 (hHeadWF.1.reannotationSafe_branchPart hAlphaWF)
             have hRightWF : (parallelTypeBranchesSelectingWithin rightAlphabet selected
                 (next :: tail)).AlphabetWellFormed :=
               parallelTypeBranchesSelectingWithin_alphabet_wellFormed rightAlphabet
-                hRightAlphaWF selected (next :: tail) hTailPairwise hRestWF
+                hRightAlphaWF selected (next :: tail) hTailPairwise
+                  (fun item hItem => (hRestWF item hItem).1)
             have hParIH : StepIffStatement signature
                 (.par alphabet
                   (singletonTypeXOfferAt leftAlphabet (action, processType))
@@ -369,7 +397,27 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                 (by
                   simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
                     using hCompatible)
-                hLeftWF hRightWF
+                ⟨hLeftWF,
+                  singletonTypeXOfferAt_tailRecursive leftAlphabet
+                    (action, processType) hHeadWF.2.1,
+                  (fun other => singletonTypeXOfferAt_tailOccurrences other
+                    leftAlphabet (action, processType) True
+                    (hHeadWF.2.2.1 other)),
+                  singletonTypeXOfferAt_offerBranchesDisjoint leftAlphabet
+                    (action, processType) hHeadWF.2.2.2⟩
+                ⟨hRightWF,
+                  parallelTypeBranchesSelectingWithin_tailRecursive selected
+                    (next :: tail) rightAlphabet
+                    (fun item hItem => (hRestWF item hItem).2.1)
+                    (hRestWF selected hTailMem).2.1,
+                  (fun other =>
+                    parallelTypeBranchesSelectingWithin_tailOccurrences other
+                      selected (next :: tail) rightAlphabet True
+                      (fun item hItem => (hRestWF item hItem).2.2.1 other)
+                      ((hRestWF selected hTailMem).2.2.1 other)),
+                  parallelTypeBranchesSelectingWithin_offerBranchesDisjoint
+                    rightAlphabet selected (next :: tail)
+                    (fun item hItem => (hRestWF item hItem).2.2.2)⟩
                 (PactType.alphabetCoherent_of_wellFormed _
                   (by
                     simp only [PactType.AlphabetWellFormed]
@@ -390,11 +438,11 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
     (branches : List (BareMessage × PactType))
     (hAlphaWF : alphabet.WellFormed)
     (hAlphabetBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
-    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
-      ({b1.1} ∪ PactType.MessageActions b1.2)
-      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
-    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
-      PactType.ReannotationSafe targetAlphabet branch.2)
+    (hPairwise : List.Pairwise BranchDeclarationsDisjoint branches)
+    (hBranchRegular : ∀ branch ∈ branches,
+      branch.2.TailRecursive ∧
+        (∀ other : String, branch.2.TailOccurrences other False) ∧
+        branch.2.OfferBranchesDisjoint)
     (hBranchesIH : ∀ action branchType,
       (action, branchType) ∈ branches → ∀ branchAlphabet,
         StepIffStatement signature (branchType.reannotate branchAlphabet))
@@ -414,10 +462,8 @@ theorem correspondence_parallelTypeBranchesSelecting_stepIff
       rw [hBranchAlphaEq]
       exact correspondence_parallelTypeBranchesSelectingWithin_stepIff signature
         alphabet selected ((action, branchType) :: rest) hSelected hAlphaWF
-        (fun branch hMem =>
-          ⟨branch_action_mem_fixedAlphabet_of_mem hAlphabetBranches hMem,
-            branch_body_alphabetWellFormed_of_mem hAlphabetBranches hMem,
-            hSafe branch hMem⟩)
+        (fun branch hMem => ⟨branchAlphabetCarried_of_mem hAlphabetBranches hMem,
+          hBranchRegular branch hMem⟩)
         hPairwise hBranchesIH
 
 set_option maxHeartbeats 4000000 in
@@ -429,11 +475,11 @@ theorem correspondence_offer_stepIff
     (hAlphaWF : alphabet.WellFormed)
     (hAlphabetBranches :
       PactType.BranchesAlphabetWellFormed alphabet branches)
-    (hPairwise : List.Pairwise (fun b1 b2 => Disjoint
-      ({b1.1} ∪ PactType.MessageActions b1.2)
-      ({b2.1} ∪ PactType.MessageActions b2.2)) branches)
-    (hSafe : ∀ branch ∈ branches, ∀ targetAlphabet,
-      PactType.ReannotationSafe targetAlphabet branch.2)
+    (hPairwise : List.Pairwise BranchDeclarationsDisjoint branches)
+    (hBranchRegular : ∀ branch ∈ branches,
+      branch.2.TailRecursive ∧
+        (∀ other : String, branch.2.TailOccurrences other False) ∧
+        branch.2.OfferBranchesDisjoint)
     (hElseAlphabet : elseType.alphabet = alphabet)
     (hElseIH : StepIffStatement signature elseType)
     (hBranchesIH :
@@ -1052,8 +1098,8 @@ theorem correspondence_offer_stepIff
     have hBranchIH : StepIffStatement signature
         (parallelTypeBranchesSelecting selected branches) :=
       correspondence_parallelTypeBranchesSelecting_stepIff signature alphabet
-        branches hAlphaWF hAlphabetBranches hPairwise hSafe hBranchesIH selected
-        hSelectedMem
+        branches hAlphaWF hAlphabetBranches hPairwise hBranchRegular hBranchesIH
+        selected hSelectedMem
     have hBranchSymbol : TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current future) ∈
         (compileType signature (parallelTypeBranchesSelecting selected branches)).alphabet := by
@@ -1063,7 +1109,7 @@ theorem correspondence_offer_stepIff
       have hGeneratedAlphabet :
           (parallelTypeBranchesSelecting selected branches).alphabet = alphabet :=
         (parallelTypeBranchesSelecting_alphabet_wellFormed hAlphaWF hSelectedMem
-          hAlphabetBranches hPairwise hSafe).1
+          hAlphabetBranches hPairwise).1
       simpa [hGeneratedAlphabet] using hSignatureSymbol
     constructor
     · intro hStep

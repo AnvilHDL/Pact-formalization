@@ -84,6 +84,108 @@ namespace PactType
       omega
   end
 
+  /-- `TailOccurrences` is monotone in its tail parameter: every clause either
+  passes `tail` through unchanged or replaces it by a constant. -/
+  theorem tailOccurrences_mono (name : String) {tail₁ tail₂ : Prop}
+      (hImp : tail₁ → tail₂) :
+      ∀ processType : PactType,
+        TailOccurrences name tail₁ processType →
+          TailOccurrences name tail₂ processType := by
+    intro processType
+    induction hSize : sizeOf processType using Nat.strong_induction_on
+        generalizing processType with
+    | _ n ih =>
+        have hBranches : ∀ branches : List (BareMessage × PactType),
+            sizeOf branches < n →
+            TailBranchOccurrences name tail₁ branches →
+            TailBranchOccurrences name tail₂ branches := by
+          intro branches hBranchesSize hTail
+          induction branches with
+          | nil => simp [TailBranchOccurrences]
+          | cons branch rest restIH =>
+              rcases branch with ⟨action, branchType⟩
+              have hFields : TailOccurrences name tail₁ branchType ∧
+                  TailBranchOccurrences name tail₁ rest := by
+                simpa only [TailBranchOccurrences] using hTail
+              have hBranchSize : sizeOf branchType < n := by
+                have hPair : sizeOf branchType <
+                    sizeOf (action, branchType) := by simp_wf; omega
+                have hHead : sizeOf (action, branchType) <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              have hRestSize : sizeOf rest < n := by
+                have hRest : sizeOf rest <
+                    sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+                omega
+              simpa only [TailBranchOccurrences] using
+                And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
+                    hFields.1)
+                  (restIH hRestSize hFields.2)
+        intro hTail
+        cases processType with
+        | message _ _ _ | progress _ _ | tock _ | skip _ =>
+            simp [TailOccurrences]
+        | var _ other =>
+            simp only [TailOccurrences] at hTail ⊢
+            exact fun hEq => hImp (hTail hEq)
+        | recur _ binder body =>
+            by_cases hBinder : binder = name
+            · simp [TailOccurrences, hBinder]
+            · have hBodySize : sizeOf body < n := by
+                rw [← hSize]; simp_wf; omega
+              simpa only [TailOccurrences, if_neg hBinder] using
+                ih (sizeOf body) hBodySize body rfl
+                  (by simpa only [TailOccurrences, if_neg hBinder] using hTail)
+        | choice _ left right | fairChoice _ _ left right =>
+            have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            have hFields := hTail
+            simp only [TailOccurrences] at hFields ⊢
+            exact ⟨ih (sizeOf left) hLeftSize left rfl hFields.1,
+              ih (sizeOf right) hRightSize right rfl hFields.2⟩
+        | seq _ left right =>
+            have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+            have hFields := hTail
+            simp only [TailOccurrences] at hFields ⊢
+            exact ⟨hFields.1, ih (sizeOf right) hRightSize right rfl hFields.2⟩
+        | par _ left right _ =>
+            simpa only [TailOccurrences] using hTail
+        | xoffer _ elseType branches =>
+            have hElseSize : sizeOf elseType < n := by
+              rw [← hSize]; simp_wf; omega
+            have hBranchesSize : sizeOf branches < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields := hTail
+            simp only [TailOccurrences] at hFields ⊢
+            exact ⟨ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+              hBranches branches hBranchesSize hFields.2⟩
+        | offer _ elseType branches =>
+            have hElseSize : sizeOf elseType < n := by
+              rw [← hSize]; simp_wf; omega
+            have hFields := hTail
+            simp only [TailOccurrences] at hFields ⊢
+            exact ⟨ih (sizeOf elseType) hElseSize elseType rfl hFields.1,
+              hFields.2⟩
+
+  /-- Branch-list form of `tailOccurrences_mono`. -/
+  theorem tailBranchOccurrences_mono (name : String) {tail₁ tail₂ : Prop}
+      (hImp : tail₁ → tail₂) :
+      ∀ branches : List (BareMessage × PactType),
+        TailBranchOccurrences name tail₁ branches →
+          TailBranchOccurrences name tail₂ branches := by
+    intro branches
+    induction branches with
+    | nil => simp [TailBranchOccurrences]
+    | cons branch rest ih =>
+        rcases branch with ⟨action, branchType⟩
+        intro hTail
+        have hFields : TailOccurrences name tail₁ branchType ∧
+            TailBranchOccurrences name tail₁ rest := by
+          simpa only [TailBranchOccurrences] using hTail
+        simpa only [TailBranchOccurrences] using
+          And.intro (tailOccurrences_mono name hImp branchType hFields.1)
+            (ih hFields.2)
+
   /-- A variable outside the ambient bound-name list has no free occurrence
   in a type whose variables are all bound by that list. -/
   theorem tailOccurrences_false_of_allVariablesBound_not_mem
