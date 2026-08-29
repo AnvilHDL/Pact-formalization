@@ -24,7 +24,16 @@ open Classical
 /-! ## Type inference, refinement, and checking -/
 
 /-- Lemma 4.1, "Strategy transfer": honest winning strategies transfer from
-types to processes along conformance. -/
+types to processes along conformance.
+
+The proof follows `pactproofdetails.typ` step for step.  Build `S_P` from
+`S_τ` by concretizing each chosen erased environment (Helper Lemma H3, using
+the representative `γ` of Helper Lemma H2).  Take an arbitrary completed
+process log `ℓ_P` under `S_P`; Helper Lemma H4 supplies a completed type log
+`ℓ_τ` under `S_τ` with `Erase(ℓ_P) = ℓ_τ`.  Since `S_τ` ensures `Φ`, we get
+`ℓ_τ ∈ Φ`, and since `Φ` is value-oblivious — membership depends only on the
+erased log — also `ℓ_P ∈ Φ`.  Honesty of `ℓ_P` is Helper Lemma H5 applied to
+the honest `ℓ_τ`.  As `ℓ_P` was arbitrary, `S_P` is honest and ensures `Φ`. -/
 theorem strategy_transfer
     {process : Proc} {processType : PactType} {objective : ProcessObjective}
     (hConforms : Conforms process processType)
@@ -37,7 +46,24 @@ theorem strategy_transfer
     ∃ strategy : ProcessStrategy process,
       HonestProcessStrategy strategy ∧
       ∀ log, CompletedProcessLog strategy log → log ∈ objective := by
-  sorry
+  obtain ⟨typeStrategy, hHonestType, hEnsures⟩ := hTypeStrategy
+  -- Build `S_P` from `S_τ` by concretizing each chosen erased environment
+  -- (Helper Lemma H3, via `helper_h2`'s representative `γ`).
+  refine ⟨concretizingStrategy processType typeStrategy, ?_, ?_⟩
+  · -- Honesty: the matching completed type log is honest (`S_τ` is honest),
+    -- and honesty is preserved by concretization (Helper Lemmas H4, H5).
+    intro log hCompleted
+    obtain ⟨typeLog, hCompletedType, hErase⟩ :=
+      helper_h4_completed_process_logs_erase hConforms.some typeStrategy hCompleted
+    exact helper_h5_honesty_preserved_by_concretization hErase
+      (hHonestType typeLog hCompletedType)
+  · -- The objective: `S_τ` ensures `Φ` on the matching type log, and `Φ` is
+    -- value-oblivious, so it depends only on the erased log (Helper Lemma H4).
+    intro log hCompleted
+    obtain ⟨typeLog, hCompletedType, hErase⟩ :=
+      helper_h4_completed_process_logs_erase hConforms.some typeStrategy hCompleted
+    obtain ⟨witnessLog, hWitnessErase, hWitnessMem⟩ := hEnsures typeLog hCompletedType
+    exact (hOblivious log witnessLog (hErase.trans hWitnessErase.symm)).mpr hWitnessMem
 
 /-- Lemma 4.2, "Soundness of inferred types": `WFProc(P) ⟹ P ⊧ abs(P)`. -/
 theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
