@@ -380,6 +380,7 @@ mutual
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv →
         outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
           (TypeLabel.combine interface leftLabel rightLabel)
@@ -387,8 +388,105 @@ mutual
             right.alphabet interface))
           (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
           (hideTypeOffers interface (leftFuture ∪ rightFuture))
+    | par_fuse_tock (outer leftEnv rightEnv : TypeEnvironment)
+        (interface : Interface)
+        (left right : PactType) (leftLabel rightLabel : TypeLabel)
+        (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+        TypeOffers leftEnv left leftLabel (.skip left.alphabet)
+          leftCurrent leftFuture →
+        TypeOffers rightEnv right rightLabel (.skip right.alphabet)
+          rightCurrent rightFuture →
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv →
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv →
+        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
+        TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
+            right.alphabet interface) left right interface)
+          (TypeLabel.combine interface leftLabel rightLabel)
+          (.skip (PactTypeAlphabet.mergeHidden left.alphabet
+            right.alphabet interface))
+          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+          ∅
 
 end
+
+/-- A decorated offer step that reaches `skip` has no future offer.
+
+This is the semantic counterpart of the `seq_fuse_tock`/`par_fuse_tock`
+split: once the residual is `skip`, there is no later message menu to
+advertise. -/
+theorem TypeOffers.future_eq_empty_of_target_skip
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future)
+    (hTarget : target = .skip target.alphabet) :
+    future = ∅ := by
+  induction hOffers using TypeOffers.rec with
+  | action =>
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | action_wait =>
+      cases hTarget
+  | choice_left env alphabet left right hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | choice_right env alphabet left right hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | fair_left env alphabet bid left right hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | fair_right env alphabet bid left right hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | cycle =>
+      simp
+  | cycle_wait =>
+      simp
+  | skip =>
+      simp
+  | progress =>
+      simp
+  | recur env alphabet name body hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | seq env alphabet left left' right label current childFuture hChild
+      ihChild =>
+      cases hTarget
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ihChild =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | seq_fuse_tock =>
+      simp
+  | xoffer_branch env alphabet elseType branches action branchType hSelect =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | xoffer_else env alphabet elseType branches hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | xoffer_wait =>
+      cases hTarget
+  | offer_some env alphabet elseType branches enabled hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | offer_else env alphabet elseType branches hConditions =>
+      rw [hTarget]
+      simp [typeFutureOffers, typeFutureOffersFuel]
+  | offer_wait =>
+      cases hTarget
+  | par =>
+      cases hTarget
+  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
+      hLocal2 hConditions hNotTock ihLeft ihRight =>
+      have hLeftFuture : leftFuture = ∅ := ihLeft rfl
+      have hRightFuture : rightFuture = ∅ := ihRight rfl
+      rw [hLeftFuture, hRightFuture]
+      simp [hideTypeOffers]
+  | par_fuse_tock =>
+      simp
 
 end
 

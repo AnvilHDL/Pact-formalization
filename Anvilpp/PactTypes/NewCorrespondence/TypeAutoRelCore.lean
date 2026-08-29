@@ -931,20 +931,23 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                   else .pair leftEdge.target rightEdge.target
                 let current := hideOffers interface
                   (leftEdge.current ∪ rightEdge.current)
+                let label := AutomatonConstructionLabel.combine interface
+                  leftEdge.label rightEdge.label
                 { source := .pair leftEdge.source rightEdge.source
                   environment := combineAutomatonEnvironment interface
                     leftEdge.environment rightEdge.environment
-                  label := AutomatonConstructionLabel.combine interface
-                    leftEdge.label rightEdge.label
+                  label := label
                   current := current
-                  future := .at target current
+                  future := parallelFutureSpec label target current
                   target := target }
             have hRawEdge : rawEdge ∈ parallelRawTransitionEdges signature
                 left.alphabet right.alphabet interface
                 (compileTypeFuel signature fuel left)
                 (compileTypeFuel signature fuel right)
-                (compiledChildFutureFuel signature fuel left)
-                (compiledChildFutureFuel signature fuel right) := by
+                (computeFutureOfFuel signature
+                  (min fuel (typeCompilationFuel left)) left)
+                (computeFutureOfFuel signature
+                  (min fuel (typeCompilationFuel right)) right) := by
               simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
                 Finset.mem_image, Finset.mem_filter]
               exact ⟨leftEdge, hLeftEdge, rightEdge,

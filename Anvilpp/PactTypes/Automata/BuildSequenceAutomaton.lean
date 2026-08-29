@@ -43,6 +43,17 @@ def sequenceRedirect (left right : AutomatonFragment)
   if state ∈ left.accepting then childState 1 right.initial
   else childState 0 state
 
+/-- Future spec used by sequence redirect edges.
+
+A clock edge ends the current cycle, so it must not expose the right entry's
+same-cycle future menu.  Non-clock redirects keep the usual symbolic reference
+to the target state's `OF` equation. -/
+def sequenceRedirectFutureSpec (label : AutomatonConstructionLabel)
+    (target : TypeAutomatonState) (removed : Finset BareMessage) :
+    FutureSpec :=
+  if label.semantic = TypeLabel.tock then .explicit ∅
+  else .at target removed
+
 /-- The image of a left edge whose target is not final.
 
 This is the paper's `δ_seq^left` clause.  The edge stays in the left copy,
@@ -76,7 +87,8 @@ def sequenceRedirectEdge (_left right : AutomatonFragment)
     environment := edge.environment
     label := edge.label
     current := edge.current
-    future := .at (childState 1 right.initial) edge.current
+    future := sequenceRedirectFutureSpec edge.label (childState 1 right.initial)
+      edge.current
     target := childState 1 right.initial }
 
 /-- `δ_seq^left`: keep exactly the left edges whose target is not accepting. -/
@@ -264,11 +276,13 @@ theorem buildSequenceAutomaton_futureTargetsInStates
         simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
           childState, hRightTarget]
   · rcases hRedirect with ⟨leftEdge, _hLeftEdge, rfl⟩
-    simp [sequenceRedirectEdge] at hFuture
-    obtain ⟨hTarget, _⟩ := hFuture
-    subst target
-    simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
-      childState, hRightInitial]
+    simp only [sequenceRedirectEdge, sequenceRedirectFutureSpec] at hFuture
+    by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
+    · simp [hClock] at hFuture
+    · rw [if_neg hClock] at hFuture
+      cases hFuture
+      simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
+        childState, hRightInitial]
 
 end
 

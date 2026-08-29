@@ -520,7 +520,24 @@ inductive SeqCompiledEdgeCase
         (.skip skipAlphabet) q' →
       (compileType signature left).HasEdge q env label
         (TypeOfferSummary.mk current childFuture) q' →
+      label ≠ TypeLabel.tock →
       future = typeFutureOffers right \ current →
+      SeqCompiledEdgeCase signature alphabet left right residual residual' state state'
+        env label current future
+  | leftFuseTock (leftResidual : PactType)
+      (skipAlphabet : PactTypeAlphabet) (q q' : TypeAutomatonState)
+      (childFuture : Finset BareMessage) :
+      residual = .seq alphabet leftResidual right →
+      residual' = right →
+      state = .child 0 q →
+      relationMembership (buildRelationSet left (compileType signature left))
+        leftResidual q →
+      relationMembership (buildRelationSet left (compileType signature left))
+        (.skip skipAlphabet) q' →
+      (compileType signature left).HasEdge q env TypeLabel.tock
+        (TypeOfferSummary.mk current childFuture) q' →
+      label = TypeLabel.tock →
+      future = ∅ →
       SeqCompiledEdgeCase signature alphabet left right residual residual' state state'
         env label current future
   | entryFuse (skipAlphabet : PactTypeAlphabet) :
@@ -703,13 +720,34 @@ lemma helper_h15_sequence_left_public_edge_cases
         childEdge.target env label (TypeOfferSummary.mk current childFuture)
         hChildSymbol]
       exact hChildResolvedEdge
-    have hParentFuture :
-        future = typeFutureOffers right \ current := by
-      simpa [hResidualTarget] using hFutureEq
-    exact SeqCompiledEdgeCase.leftFuse leftResidual
-      childTargetResidual.alphabet q childEdge.target childFuture
-      rfl hResidualTarget rfl hLeftSource hChildTargetRelatedSkip
-      hChildPublicEdge hParentFuture
+    by_cases hLabelTock : label = TypeLabel.tock
+    · have hChildTock :
+          childEdge.label.semantic = TypeLabel.tock := by
+        rw [hChildLabel, hLabelTock]
+        simp [AutomatonConstructionLabel.semantic]
+      have hParentFutureEmpty : future = ∅ := by
+        have hResolvedEmpty :
+            (match pendingEdge.future with
+              | .explicit future => future
+              | .at state removed =>
+                  computeFutureOf signature (.seq alphabet left right) state \
+                    removed) = ∅ := by
+          rw [hChildEdgeEq]
+          simp [sequenceLeftEdge, sequenceRedirectEdge,
+            sequenceRedirectFutureSpec, hAccepting, hChildTock]
+        simpa using hPendingFuture.symm.trans hResolvedEmpty
+      exact SeqCompiledEdgeCase.leftFuseTock leftResidual
+        childTargetResidual.alphabet q childEdge.target childFuture
+        rfl hResidualTarget rfl hLeftSource hChildTargetRelatedSkip
+        (by simpa [hLabelTock] using hChildPublicEdge) hLabelTock
+        hParentFutureEmpty
+    · have hParentFuture :
+          future = typeFutureOffers right \ current := by
+        simpa [hResidualTarget] using hFutureEq
+      exact SeqCompiledEdgeCase.leftFuse leftResidual
+        childTargetResidual.alphabet q childEdge.target childFuture
+        rfl hResidualTarget rfl hLeftSource hChildTargetRelatedSkip
+        hChildPublicEdge hLabelTock hParentFuture
   · have hStateTarget :
         state' = .child 0 childEdge.target := by
       rw [← hPendingTarget, hChildEdgeEq]
@@ -971,7 +1009,12 @@ theorem compileType_seq_lift_left_fuse
                 (compileTypeFuel signature (typeCompilationFuel right) right).initial) =
             typeFutureOffers right := by
         simpa [compileType, childState] using hSeqFuture
-      simp [sequenceRedirectEdge, hPendingCurrent, hSeqFuture']
+      have hPendingNotTock :
+          pendingEdge.label.semantic ≠ TypeLabel.tock := by
+        rw [hPendingLabel]
+        simpa [AutomatonConstructionLabel.semantic] using hNotTock
+      simp [sequenceRedirectEdge, sequenceRedirectFutureSpec, hPendingCurrent,
+        hPendingNotTock, hSeqFuture']
     · simp [sequenceRedirectEdge, compileType, childState]
   have hParentStep :
       DecoratedTypeTransition env (.seq alphabet leftResidual right) label
@@ -981,6 +1024,87 @@ theorem compileType_seq_lift_left_fuse
         hChildStep.1,
       TypeOffers.seq_fuse env alphabet skipAlphabet leftResidual right label
         current childFuture hChildStep.2 hNotTock⟩
+  refine ⟨hParentEdge, ?_⟩
+  exact relationMembership_seq_right signature alphabet left right right
+    (buildRelationSet_initial right (compileType signature right))
+
+/-- Lifts a final left-child clock edge to the redirected public sequence edge
+with empty future offers. -/
+theorem compileType_seq_lift_left_fuse_tock
+    (signature : TypeAlphabet) (alphabet skipAlphabet : PactTypeAlphabet)
+    (left right : PactType)
+    {leftResidual : PactType}
+    {q q' : TypeAutomatonState}
+    {env : TypeEnvironment}
+    {current childFuture : Finset BareMessage}
+    (hParentSource :
+      relationMembership
+        (buildRelationSet (.seq alphabet left right)
+          (compileType signature (.seq alphabet left right)))
+        (.seq alphabet leftResidual right) (.child 0 q))
+    (_hSource :
+      relationMembership (buildRelationSet left (compileType signature left))
+        leftResidual q)
+    (hTarget :
+      relationMembership (buildRelationSet left (compileType signature left))
+        (.skip skipAlphabet) q')
+    (hChildStep :
+      DecoratedTypeTransition env leftResidual TypeLabel.tock
+        (TypeOfferSummary.mk current childFuture) (.skip skipAlphabet))
+    (hParentSymbol :
+      TypeAutomatonSymbol.mk env TypeLabel.tock
+        (TypeOfferSummary.mk current ∅) ∈
+        signature.transitionAlphabetFor alphabet)
+    (hChildEdge :
+      (compileType signature left).HasEdge q env TypeLabel.tock
+        (TypeOfferSummary.mk current childFuture) q') :
+    (compileType signature (.seq alphabet left right)).HasEdge
+      (.child 0 q) env TypeLabel.tock
+        (TypeOfferSummary.mk current ∅)
+        (.child 1 (compileType signature right).initial) ∧
+      relationMembership
+        (buildRelationSet (.seq alphabet left right)
+          (compileType signature (.seq alphabet left right)))
+        right (.child 1 (compileType signature right).initial) := by
+  have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
+  have hChildResolved :=
+    (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env TypeLabel.tock
+      (TypeOfferSummary.mk current childFuture) hChildSymbol).mp hChildEdge
+  rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
+    hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
+    hPendingTarget⟩
+  have hAccepting :
+      q' ∈ (compileTypeFuel signature (typeCompilationFuel left) left).accepting := by
+    have hAccepting' : q' ∈ (compileType signature left).accepting :=
+      (helper_h13_final_states_represent_completion signature hTarget).mpr rfl
+    simpa [compileType] using hAccepting'
+  have hParentEdge :
+      (compileType signature (.seq alphabet left right)).HasEdge
+        (.child 0 q) env TypeLabel.tock
+        (TypeOfferSummary.mk current ∅)
+        (.child 1 (compileType signature right).initial) := by
+    rw [compileType_hasEdge_iff_hasResolvedEdge signature
+      (.seq alphabet left right)
+      (.child 0 q) (.child 1 (compileType signature right).initial)
+      env TypeLabel.tock (TypeOfferSummary.mk current ∅) hParentSymbol]
+    rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
+    refine ⟨sequenceRedirectEdge
+      (compileTypeFuel signature (typeCompilationFuel left) left)
+      (compileTypeFuel signature (typeCompilationFuel right) right)
+      pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRedirectEdges,
+        Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+      exact Or.inr ⟨pendingEdge, ⟨hPendingMem, hPendingTarget ▸ hAccepting⟩, rfl⟩
+    · simp [sequenceRedirectEdge, childState, hPendingSource]
+    · simp [sequenceRedirectEdge, hPendingEnv]
+    · simp [sequenceRedirectEdge, hPendingLabel]
+    · simp [sequenceRedirectEdge, hPendingCurrent]
+    · have hPendingTock : pendingEdge.label.semantic = TypeLabel.tock := by
+        rw [hPendingLabel]
+        simp [AutomatonConstructionLabel.semantic]
+      simp [sequenceRedirectEdge, sequenceRedirectFutureSpec, hPendingCurrent,
+        hPendingTock]
+    · simp [sequenceRedirectEdge, compileType, childState]
   refine ⟨hParentEdge, ?_⟩
   exact relationMembership_seq_right signature alphabet left right right
     (buildRelationSet_initial right (compileType signature right))

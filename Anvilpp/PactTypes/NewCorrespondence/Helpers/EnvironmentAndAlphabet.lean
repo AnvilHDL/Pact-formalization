@@ -253,7 +253,7 @@ theorem typeOffers_future_subset_target_union_current
         · exact Or.inr ⟨Finset.mem_union.mpr (Or.inr hCurrent), hInterface⟩
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
-      hLocal1 hLocal2 hSide hLeftIH hRightIH =>
+      hLocal1 hLocal2 hSide hNotTock hLeftIH hRightIH =>
       intro action hAction
       simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
@@ -268,6 +268,8 @@ theorem typeOffers_future_subset_target_union_current
         simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
           at hRight'
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
+  | par_fuse_tock =>
+      simp
 
 /-- Proves that a transition-alphabet symbol carries an offer summary from the signature. -/
 theorem transitionAlphabet_offerSummary_mem

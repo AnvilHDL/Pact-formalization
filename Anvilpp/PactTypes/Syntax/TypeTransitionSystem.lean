@@ -320,12 +320,19 @@ theorem TypeTransition.exists_typeOffers
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture _ hLeftOffers _
       hRightOffers conditions ihLeft ihRight =>
-      exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-        hideTypeOffers interface (leftFuture ∪ rightFuture),
-        TypeOffers.par_fuse outer leftEnv rightEnv interface left right
-          leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-          hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
-          ⟨conditions.1, conditions.2.2.2⟩⟩
+      by_cases hTock :
+          TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+          TypeOffers.par_fuse_tock outer leftEnv rightEnv interface left right
+            leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+            hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
+          hideTypeOffers interface (leftFuture ∪ rightFuture),
+          TypeOffers.par_fuse outer leftEnv rightEnv interface left right
+            leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+            hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
 
 /-- Package a semantic step together with one of its offer pairs. -/
 theorem TypeTransition.exists_decorated

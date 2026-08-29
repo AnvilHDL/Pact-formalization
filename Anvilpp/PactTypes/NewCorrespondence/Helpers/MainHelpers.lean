@@ -3101,7 +3101,13 @@ theorem offers_label_supported
       exact combine_label_supported hLeftIH hRightIH hConditions.2
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
-      hLocal1 hLocal2 hConditions =>
+      hLocal1 hLocal2 hConditions hNotTock =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hLocal1 hLocal2 hConditions hTock =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2

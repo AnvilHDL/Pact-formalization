@@ -144,9 +144,100 @@ theorem correspondence_par_stepIff
           rw [hTargetEq]
           exact relationMembership_par_pair signature alphabet left right interface
             hLeftTargetRelated hRightTargetRelated hTargetReachable
+      | fuse_tock leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture
+          rightCurrent rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1
+          hLocal2 hSync hTock hLabelEq hCurrentEq hFutureEq =>
+          -- TODO(parallel-alphabet-gap): see the matching comment in the
+          -- `step` case above.
+          have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions := by
+            sorry
+          have hLeftFutureAlphabet : leftFuture ⊆ residualLeft.alphabet.actions := by
+            sorry
+          have hRightCurrentAlphabet : rightCurrent ⊆ residualRight.alphabet.actions := by
+            sorry
+          have hRightFutureAlphabet : rightFuture ⊆ residualRight.alphabet.actions := by
+            sorry
+          have hResidualLeftWellFormed : residualLeft.AlphabetWellFormed := by
+            sorry
+          have hResidualRightWellFormed : residualRight.AlphabetWellFormed := by
+            sorry
+          have hResidualParallelCompatible :
+              PactTypeAlphabet.ParallelCompatible alphabet residualLeft.alphabet
+                residualRight.alphabet interface :=
+            hResidualLeftAlphabet ▸ hResidualRightAlphabet ▸ hParallelCompatible
+          have hLeftFutureEmpty : leftFuture = ∅ :=
+            TypeOffers.future_eq_empty_of_target_skip hLeftStep.2 rfl
+          have hRightFutureEmpty : rightFuture = ∅ :=
+            TypeOffers.future_eq_empty_of_target_skip hRightStep.2 rfl
+          have hHiddenFutureEmpty :
+              hideTypeOffers interface (leftFuture ∪ rightFuture) = ∅ := by
+            rw [hLeftFutureEmpty, hRightFutureEmpty]
+            simp [hideTypeOffers]
+          have hFutureHidden :
+              future = hideTypeOffers interface (leftFuture ∪ rightFuture) := by
+            rw [hFutureEq, hHiddenFutureEmpty]
+          have hParentSymbol :
+              TypeAutomatonSymbol.mk env
+                (TypeLabel.combine interface leftLabel rightLabel)
+                (TypeOfferSummary.mk
+                  (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+                  (hideTypeOffers interface (leftFuture ∪ rightFuture))) ∈
+                signature.transitionAlphabetFor alphabet := by
+            simpa [hLabelEq, hCurrentEq, hFutureEq, hHiddenFutureEmpty]
+              using hSignatureSymbol
+          obtain ⟨hLeftSymbolMem0, hRightSymbolMem0⟩ :=
+            transitionAlphabet_of_par_component
+              (leftCurrent := leftCurrent) (leftFuture := leftFuture)
+              (rightCurrent := rightCurrent) (rightFuture := rightFuture)
+              signature alphabet residualLeft residualRight interface hWF hInterface
+              hResidualLeftWellFormed hResidualRightWellFormed
+              hResidualParallelCompatible
+              hLeftCurrentAlphabet hLeftFutureAlphabet
+              hRightCurrentAlphabet hRightFutureAlphabet
+              hLocal1 hLocal2 hSync rfl hParentSymbol
+          have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel
+              (TypeOfferSummary.mk leftCurrent leftFuture) ∈
+              (compileType signature left).alphabet := by
+            simpa [compileType, hResidualLeftAlphabet] using hLeftSymbolMem0
+          have hRightSymbolMem : TypeAutomatonSymbol.mk rightEnv rightLabel
+              (TypeOfferSummary.mk rightCurrent rightFuture) ∈
+              (compileType signature right).alphabet := by
+            simpa [compileType, hResidualRightAlphabet] using hRightSymbolMem0
+          obtain ⟨q1', hLeftEdge, hLeftTargetRelated⟩ :=
+            (hLeftIH hLeftRelated hLeftSymbolMem).mp hLeftStep
+          obtain ⟨q2', hRightEdge, hRightTargetRelated⟩ :=
+            (hRightIH hRightRelated hRightSymbolMem).mp hRightStep
+          -- H13: both children finish here, so the compiler redirects to `q_done`.
+          have hBothAccept :
+              q1' ∈ (compileType signature left).accepting ∧
+              q2' ∈ (compileType signature right).accepting :=
+            ⟨(helper_h13_final_states_represent_completion signature
+                hLeftTargetRelated).mpr rfl,
+              (helper_h13_final_states_represent_completion signature
+                hRightTargetRelated).mpr rfl⟩
+          have hEdgeFact : (compileType signature (.par alphabet left right interface)).HasEdge
+              (.pair q1 q2) env label (TypeOfferSummary.mk current future)
+              TypeAutomatonState.final := by
+            rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
+              interface q1 q2 TypeAutomatonState.final env label
+              (TypeOfferSummary.mk current future)
+              (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
+              (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
+            refine ⟨leftEnv, rightEnv, leftLabel, rightLabel,
+              TypeOfferSummary.mk leftCurrent leftFuture,
+              TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
+              hLeftEdge, hRightEdge,
+              hSourceReachable, hWF,
+              hLocal1.congrLocalType hResidualLeftAlphabet.symm,
+              hLocal2.congrLocalType hResidualRightAlphabet.symm,
+              hSync, hLabelEq, hCurrentEq, hFutureHidden, ?_⟩
+            simp [hBothAccept]
+          refine ⟨.final, hEdgeFact, ?_⟩
+          rw [hTargetEq]
+          exact relationMembership_par_final signature alphabet left right interface
       | fuse leftEnv rightEnv leftLabel rightLabel leftCurrent leftFuture rightCurrent
-          rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq
-          hCurrentEq hFutureEq =>
+          rightFuture hTargetEq hLeftStep hRightStep hWF hLocal1 hLocal2 hSync
+          hNotTock hLabelEq hCurrentEq hFutureEq =>
           -- TODO(parallel-alphabet-gap): see the matching comment in the
           -- `step` case above.
           have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions := by
@@ -273,27 +364,69 @@ theorem correspondence_par_stepIff
         · injection hEqAgain with hResidualEqAgain hStateEqAgain
           subst hResidualEqAgain
           simp only [] at hCurrentEq hFutureEq
-          rw [hLabelEq, hCurrentEq, hFutureEq]
-          simpa only [hSourceAlphabet] using
-            (⟨TypeTransition.par_fuse env leftEnv rightEnv interface residualLeft
-              residualRight leftLabel rightLabel leftCurrent leftFuture rightCurrent
-              rightFuture hLeftStep.1 hLeftStep.2 hRightStep.1 hRightStep.2
-              ⟨hWF, hLocal1.congrLocalType hResidualLeftAlphabet,
-                hLocal2.congrLocalType hResidualRightAlphabet, hSync⟩,
-            TypeOffers.par_fuse env leftEnv rightEnv interface residualLeft residualRight
-              leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-              hLeftStep.2 hRightStep.2
-              (hLocal1.congrLocalType hResidualLeftAlphabet)
-              (hLocal2.congrLocalType hResidualRightAlphabet)
-              ⟨hWF, hSync⟩⟩ : DecoratedTypeTransition env
-                (.par (PactTypeAlphabet.mergeHidden residualLeft.alphabet
-                  residualRight.alphabet interface) residualLeft residualRight
-                  interface) (TypeLabel.combine interface leftLabel rightLabel)
-                (TypeOfferSummary.mk
-                  (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-                  (hideTypeOffers interface (leftFuture ∪ rightFuture)))
-                (.skip (PactTypeAlphabet.mergeHidden residualLeft.alphabet
-                  residualRight.alphabet interface)))
+          have hLeftFutureEmpty : leftFuture = ∅ := by
+            have hLeftFuture :=
+              helper_h15_edge_future_offers_agree signature hLeftRelated
+                hLeftAcceptRelated hLeftEdge
+            change leftOffers.future = ∅
+            simpa [typeFutureOffers, typeFutureOffersFuel, PactType.alphabet]
+              using hLeftFuture
+          have hRightFutureEmpty : rightFuture = ∅ := by
+            have hRightFuture :=
+              helper_h15_edge_future_offers_agree signature hRightRelated
+                hRightAcceptRelated hRightEdge
+            change rightOffers.future = ∅
+            simpa [typeFutureOffers, typeFutureOffersFuel, PactType.alphabet]
+              using hRightFuture
+          have hHiddenFutureEmpty :
+              hideTypeOffers interface (leftFuture ∪ rightFuture) = ∅ := by
+            rw [hLeftFutureEmpty, hRightFutureEmpty]
+            simp [hideTypeOffers]
+          have hFutureEmpty : future = ∅ := by
+            rw [hFutureEq, hHiddenFutureEmpty]
+          by_cases hTock :
+              TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+          · rw [hLabelEq, hCurrentEq, hFutureEmpty]
+            simpa only [hSourceAlphabet] using
+              (⟨TypeTransition.par_fuse env leftEnv rightEnv interface residualLeft
+                residualRight leftLabel rightLabel leftCurrent leftFuture rightCurrent
+                rightFuture hLeftStep.1 hLeftStep.2 hRightStep.1 hRightStep.2
+                ⟨hWF, hLocal1.congrLocalType hResidualLeftAlphabet,
+                  hLocal2.congrLocalType hResidualRightAlphabet, hSync⟩,
+              TypeOffers.par_fuse_tock env leftEnv rightEnv interface residualLeft
+                residualRight leftLabel rightLabel leftCurrent leftFuture rightCurrent
+                rightFuture hLeftStep.2 hRightStep.2
+                (hLocal1.congrLocalType hResidualLeftAlphabet)
+                (hLocal2.congrLocalType hResidualRightAlphabet)
+                ⟨hWF, hSync⟩ hTock⟩ : DecoratedTypeTransition env
+                  (.par (PactTypeAlphabet.mergeHidden residualLeft.alphabet
+                    residualRight.alphabet interface) residualLeft residualRight
+                    interface) (TypeLabel.combine interface leftLabel rightLabel)
+                  (TypeOfferSummary.mk
+                    (hideTypeOffers interface (leftCurrent ∪ rightCurrent)) ∅)
+                  (.skip (PactTypeAlphabet.mergeHidden residualLeft.alphabet
+                    residualRight.alphabet interface)))
+          · rw [hLabelEq, hCurrentEq, hFutureEq]
+            simpa only [hSourceAlphabet] using
+              (⟨TypeTransition.par_fuse env leftEnv rightEnv interface residualLeft
+                residualRight leftLabel rightLabel leftCurrent leftFuture rightCurrent
+                rightFuture hLeftStep.1 hLeftStep.2 hRightStep.1 hRightStep.2
+                ⟨hWF, hLocal1.congrLocalType hResidualLeftAlphabet,
+                  hLocal2.congrLocalType hResidualRightAlphabet, hSync⟩,
+              TypeOffers.par_fuse env leftEnv rightEnv interface residualLeft
+                residualRight leftLabel rightLabel leftCurrent leftFuture
+                rightCurrent rightFuture hLeftStep.2 hRightStep.2
+                (hLocal1.congrLocalType hResidualLeftAlphabet)
+                (hLocal2.congrLocalType hResidualRightAlphabet)
+                ⟨hWF, hSync⟩ hTock⟩ : DecoratedTypeTransition env
+                  (.par (PactTypeAlphabet.mergeHidden residualLeft.alphabet
+                    residualRight.alphabet interface) residualLeft residualRight
+                    interface) (TypeLabel.combine interface leftLabel rightLabel)
+                  (TypeOfferSummary.mk
+                    (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+                    (hideTypeOffers interface (leftFuture ∪ rightFuture)))
+                  (.skip (PactTypeAlphabet.mergeHidden residualLeft.alphabet
+                    residualRight.alphabet interface)))
       · -- kept edge: the raw target `.pair q1' q2'` survives as its own
         -- state, representing a genuine `.par` continuation.
         rw [if_neg hBothAccept] at hRedirect
