@@ -74,102 +74,64 @@ inductive ParDecoratedStepCase
       future = hideTypeOffers interface (leftFuture ∪ rightFuture) →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
-  | left_complete (leftEnv rightEnv : TypeEnvironment)
-      (leftLabel rightLabel : TypeLabel) (rightTarget : PactType)
-      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+  -- The left side is already `skip`, so the right survives with its own label.
+  | left_complete (rightTarget : PactType)
+      (rightCurrent rightFuture : Finset BareMessage) :
       target = rightTarget.reannotate parentAlphabet →
+      left = .skip left.alphabet →
       rightTarget ≠ .skip rightTarget.alphabet →
-      DecoratedTypeTransition leftEnv left leftLabel
-        (TypeOfferSummary.mk leftCurrent leftFuture) (.skip left.alphabet) →
-      DecoratedTypeTransition rightEnv right rightLabel
+      DecoratedTypeTransition env right label
         (TypeOfferSummary.mk rightCurrent rightFuture) rightTarget →
-      restrictTypeOffers interface leftCurrent = ∅ →
-      restrictTypeOffers interface leftFuture = ∅ →
       restrictTypeOffers interface rightCurrent = ∅ →
       restrictTypeOffers interface rightFuture = ∅ →
       env.WellFormed →
-      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
-        rightFuture leftEnv →
-      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
-        leftFuture rightEnv →
-      TypeLabel.Sync interface leftLabel rightLabel →
-      TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
-      label = TypeLabel.combine interface leftLabel rightLabel →
+      label ≠ TypeLabel.tock →
       current = hideTypeOffers interface rightCurrent →
       future = hideTypeOffers interface rightFuture →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
-  | left_complete_tock (leftEnv rightEnv : TypeEnvironment)
-      (leftLabel rightLabel : TypeLabel) (rightTarget : PactType)
-      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+  | left_complete_tock (rightTarget : PactType)
+      (rightCurrent rightFuture : Finset BareMessage) :
       target = rightTarget.reannotate parentAlphabet →
+      left = .skip left.alphabet →
       rightTarget ≠ .skip rightTarget.alphabet →
-      DecoratedTypeTransition leftEnv left leftLabel
-        (TypeOfferSummary.mk leftCurrent leftFuture) (.skip left.alphabet) →
-      DecoratedTypeTransition rightEnv right rightLabel
+      DecoratedTypeTransition env right label
         (TypeOfferSummary.mk rightCurrent rightFuture) rightTarget →
-      restrictTypeOffers interface leftCurrent = ∅ →
-      restrictTypeOffers interface leftFuture = ∅ →
       restrictTypeOffers interface rightCurrent = ∅ →
       restrictTypeOffers interface rightFuture = ∅ →
       env.WellFormed →
-      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
-        rightFuture leftEnv →
-      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
-        leftFuture rightEnv →
-      TypeLabel.Sync interface leftLabel rightLabel →
-      TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
-      label = TypeLabel.combine interface leftLabel rightLabel →
+      label = TypeLabel.tock →
       current = hideTypeOffers interface rightCurrent →
       future = ∅ →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
-  | right_complete (leftEnv rightEnv : TypeEnvironment)
-      (leftLabel rightLabel : TypeLabel) (leftTarget : PactType)
-      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+  -- Mirror of `left_complete`: the right side is already `skip`.
+  | right_complete (leftTarget : PactType)
+      (leftCurrent leftFuture : Finset BareMessage) :
       target = leftTarget.reannotate parentAlphabet →
+      right = .skip right.alphabet →
       leftTarget ≠ .skip leftTarget.alphabet →
-      DecoratedTypeTransition leftEnv left leftLabel
+      DecoratedTypeTransition env left label
         (TypeOfferSummary.mk leftCurrent leftFuture) leftTarget →
-      DecoratedTypeTransition rightEnv right rightLabel
-        (TypeOfferSummary.mk rightCurrent rightFuture) (.skip right.alphabet) →
       restrictTypeOffers interface leftCurrent = ∅ →
       restrictTypeOffers interface leftFuture = ∅ →
-      restrictTypeOffers interface rightCurrent = ∅ →
-      restrictTypeOffers interface rightFuture = ∅ →
       env.WellFormed →
-      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
-        rightFuture leftEnv →
-      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
-        leftFuture rightEnv →
-      TypeLabel.Sync interface leftLabel rightLabel →
-      TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
-      label = TypeLabel.combine interface leftLabel rightLabel →
+      label ≠ TypeLabel.tock →
       current = hideTypeOffers interface leftCurrent →
       future = hideTypeOffers interface leftFuture →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
-  | right_complete_tock (leftEnv rightEnv : TypeEnvironment)
-      (leftLabel rightLabel : TypeLabel) (leftTarget : PactType)
-      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+  | right_complete_tock (leftTarget : PactType)
+      (leftCurrent leftFuture : Finset BareMessage) :
       target = leftTarget.reannotate parentAlphabet →
+      right = .skip right.alphabet →
       leftTarget ≠ .skip leftTarget.alphabet →
-      DecoratedTypeTransition leftEnv left leftLabel
+      DecoratedTypeTransition env left label
         (TypeOfferSummary.mk leftCurrent leftFuture) leftTarget →
-      DecoratedTypeTransition rightEnv right rightLabel
-        (TypeOfferSummary.mk rightCurrent rightFuture) (.skip right.alphabet) →
       restrictTypeOffers interface leftCurrent = ∅ →
       restrictTypeOffers interface leftFuture = ∅ →
-      restrictTypeOffers interface rightCurrent = ∅ →
-      restrictTypeOffers interface rightFuture = ∅ →
       env.WellFormed →
-      LocalTypeOfferEnvironment env interface left rightEnv rightCurrent
-        rightFuture leftEnv →
-      LocalTypeOfferEnvironment env interface right leftEnv leftCurrent
-        leftFuture rightEnv →
-      TypeLabel.Sync interface leftLabel rightLabel →
-      TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
-      label = TypeLabel.combine interface leftLabel rightLabel →
+      label = TypeLabel.tock →
       current = hideTypeOffers interface leftCurrent →
       future = ∅ →
       ParDecoratedStepCase parentAlphabet left right interface target env label
@@ -237,10 +199,12 @@ theorem TypeOffers.toTypeTransition
       exact TypeTransition.offer_wait env alphabet elseType branches hConditions
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeftNotSkip hRightNotSkip
       hLeftOffers hRightOffers hNotFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       exact TypeTransition.par outer leftEnv rightEnv interface left leftTarget
         right rightTarget leftLabel rightLabel leftCurrent leftFuture
-        rightCurrent rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotFinal
+        rightCurrent rightFuture hLeftNotSkip hRightNotSkip
+        ihLeft hLeftOffers ihRight hRightOffers hNotFinal
         ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
@@ -256,38 +220,26 @@ theorem TypeOffers.toTypeTransition
         leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
         ihLeft hLeftOffers ihRight hRightOffers
         ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
-  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide hNotTock
-      ihLeft ihRight =>
-      exact TypeTransition.left_complete outer leftEnv rightEnv interface left
-        right right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
-        rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotSkip hLC hLF
-        hRC hRF ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
-  | left_complete_tock outer leftEnv rightEnv interface left right right'
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
-      hTock ihLeft ihRight =>
-      exact TypeTransition.left_complete outer leftEnv rightEnv interface left
-        right right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
-        rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotSkip hLC hLF
-        hRC hRF ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
-  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide hNotTock
-      ihLeft ihRight =>
-      exact TypeTransition.right_complete outer leftEnv rightEnv interface left
-        left' right leftLabel rightLabel leftCurrent leftFuture rightCurrent
-        rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotSkip hLC hLF
-        hRC hRF ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
-  | right_complete_tock outer leftEnv rightEnv interface left left' right
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
-      hTock ihLeft ihRight =>
-      exact TypeTransition.right_complete outer leftEnv rightEnv interface left
-        left' right leftLabel rightLabel leftCurrent leftFuture rightCurrent
-        rightFuture ihLeft hLeftOffers ihRight hRightOffers hNotSkip hLC hLF
-        hRC hRF ⟨hSide.1, hLocal1, hLocal2, hSide.2⟩
+  | left_complete outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip hRightNotSkip hRightOffers hNotSkip hRC hRF hWF
+      hNotTock ihRight
+  | left_complete_tock outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip hRightNotSkip hRightOffers hNotSkip hRC hRF hWF
+      hNotTock ihRight =>
+      exact TypeTransition.left_complete outer interface left right right'
+        rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip ihRight
+        hRightOffers
+        hNotSkip hRC hRF hWF
+  | right_complete outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip hLeftNotSkip hLeftOffers hNotSkip hLC hLF hWF
+      hNotTock ihLeft
+  | right_complete_tock outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip hLeftNotSkip hLeftOffers hNotSkip hLC hLF hWF
+      hNotTock ihLeft =>
+      exact TypeTransition.right_complete outer interface left left' right
+        leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip ihLeft
+        hLeftOffers
+        hNotSkip hLC hLF hWF
 
 
 
@@ -310,7 +262,7 @@ theorem decoratedTypeTransition_par_cases
   cases hOffers with
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide =>
+      _ _ hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide =>
       exact ParDecoratedStepCase.step leftEnv rightEnv leftLabel rightLabel
         leftTarget rightTarget leftCurrent leftFuture rightCurrent rightFuture
         rfl hNonFinal
@@ -334,46 +286,32 @@ theorem decoratedTypeTransition_par_cases
         ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
         ⟨hRightOffers.toTypeTransition, hRightOffers⟩
         hSide.1 hLocal1 hLocal2 hSide.2 hTock rfl rfl rfl
-  | left_complete outer leftEnv rightEnv interface left right rightTarget
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
-      hNotTock =>
-      exact ParDecoratedStepCase.left_complete leftEnv rightEnv leftLabel
-        rightLabel rightTarget leftCurrent leftFuture rightCurrent rightFuture
-        rfl hNotSkip
-        ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
+  | left_complete outer interface left right rightTarget rightLabel rightCurrent
+      rightFuture hLeftSkip _ hRightOffers hNotSkip hRC hRF hWF hNotTock =>
+      exact ParDecoratedStepCase.left_complete rightTarget rightCurrent
+        rightFuture rfl hLeftSkip hNotSkip
         ⟨hRightOffers.toTypeTransition, hRightOffers⟩
-        hLC hLF hRC hRF hSide.1 hLocal1 hLocal2 hSide.2 hNotTock rfl rfl rfl
-  | left_complete_tock outer leftEnv rightEnv interface left right rightTarget
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
+        hRC hRF hWF hNotTock rfl rfl
+  | left_complete_tock outer interface left right rightTarget rightLabel
+      rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip hRC hRF hWF
       hTock =>
-      exact ParDecoratedStepCase.left_complete_tock leftEnv rightEnv leftLabel
-        rightLabel rightTarget leftCurrent leftFuture rightCurrent rightFuture
-        rfl hNotSkip
-        ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
+      exact ParDecoratedStepCase.left_complete_tock rightTarget rightCurrent
+        rightFuture rfl hLeftSkip hNotSkip
         ⟨hRightOffers.toTypeTransition, hRightOffers⟩
-        hLC hLF hRC hRF hSide.1 hLocal1 hLocal2 hSide.2 hTock rfl rfl rfl
-  | right_complete outer leftEnv rightEnv interface left leftTarget right
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
-      hNotTock =>
-      exact ParDecoratedStepCase.right_complete leftEnv rightEnv leftLabel
-        rightLabel leftTarget leftCurrent leftFuture rightCurrent rightFuture
-        rfl hNotSkip
+        hRC hRF hWF hTock rfl rfl
+  | right_complete outer interface left leftTarget right leftLabel leftCurrent
+      leftFuture hRightSkip _ hLeftOffers hNotSkip hLC hLF hWF hNotTock =>
+      exact ParDecoratedStepCase.right_complete leftTarget leftCurrent
+        leftFuture rfl hRightSkip hNotSkip
         ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
-        ⟨hRightOffers.toTypeTransition, hRightOffers⟩
-        hLC hLF hRC hRF hSide.1 hLocal1 hLocal2 hSide.2 hNotTock rfl rfl rfl
-  | right_complete_tock outer leftEnv rightEnv interface left leftTarget right
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip hLC hLF hRC hRF hLocal1 hLocal2 hSide
+        hLC hLF hWF hNotTock rfl rfl
+  | right_complete_tock outer interface left leftTarget right leftLabel
+      leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip hLC hLF hWF
       hTock =>
-      exact ParDecoratedStepCase.right_complete_tock leftEnv rightEnv leftLabel
-        rightLabel leftTarget leftCurrent leftFuture rightCurrent rightFuture
-        rfl hNotSkip
+      exact ParDecoratedStepCase.right_complete_tock leftTarget leftCurrent
+        leftFuture rfl hRightSkip hNotSkip
         ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
-        ⟨hRightOffers.toTypeTransition, hRightOffers⟩
-        hLC hLF hRC hRF hSide.1 hLocal1 hLocal2 hSide.2 hTock rfl rfl rfl
+        hLC hLF hWF hTock rfl rfl
 
 
 set_option maxHeartbeats 1000000 in
@@ -1008,7 +946,7 @@ private theorem typeOffers_current_empty_of_clock
       exact absurd hConditions.2.1 (by simp [hClock])
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      _ _ hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       cases hLocal1 with
       | clock _ =>
           rw [ihLeft (by simp [TypeEnvironment.tock]),
@@ -1028,28 +966,14 @@ private theorem typeOffers_current_empty_of_clock
       | ordinary _ _ _ _ _ =>
         rename_i hOuterClock _ _ _ _
         exact absurd hClock (by simp [hOuterClock])
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
-      ihLeft ihRight
-  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
-      ihLeft ihRight =>
-      cases hLocal1 with
-      | clock _ =>
-          rw [ihRight (by simp [TypeEnvironment.tock])]
-          simp [hideTypeOffers]
-      | ordinary _ _ _ _ _ =>
-        rename_i hOuterClock _ _ _ _
-        exact absurd hClock (by simp [hOuterClock])
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
-      ihLeft ihRight
-  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
-      ihLeft ihRight =>
-      cases hLocal1 with
-      | clock _ =>
-          rw [ihLeft (by simp [TypeEnvironment.tock])]
-          simp [hideTypeOffers]
-      | ordinary _ _ _ _ _ =>
-        rename_i hOuterClock _ _ _ _
-        exact absurd hClock (by simp [hOuterClock])
+  -- The survivor steps under the very same environment, so its own offers are
+  -- already empty under a clock.
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight =>
+      rw [ihRight hClock]
+      simp [hideTypeOffers]
   | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
       hLocal1 hLocal2 hSide hTock ihLeft ihRight =>
@@ -1129,7 +1053,7 @@ private theorem typeOffers_label_eq_tock_of_clock
       exact absurd hConditions.2.1 (by simp [hClock])
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      _ _ hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       cases hLocal1 with
       | clock _ =>
           rw [ihLeft (by simp [TypeEnvironment.tock]),
@@ -1149,20 +1073,11 @@ private theorem typeOffers_label_eq_tock_of_clock
       | ordinary _ _ _ _ _ =>
         rename_i hOuterClock _ _ _ _
         exact absurd hClock (by simp [hOuterClock])
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ hNotTock
-      ihLeft ihRight
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ hNotTock
-      ihLeft ihRight =>
-      cases hLocal1 with
-      | clock _ =>
-          rw [ihLeft (by simp [TypeEnvironment.tock]),
-            ihRight (by simp [TypeEnvironment.tock])] at hNotTock
-          exact absurd rfl hNotTock
-      | ordinary _ _ _ _ _ =>
-        rename_i hOuterClock _ _ _ _
-        exact absurd hClock (by simp [hOuterClock])
-  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ _
-  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ _ =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock ihRight
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock ihRight =>
+      exact absurd (ihRight hClock) hNotTock
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ =>
       exact hTock
   | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
@@ -1232,7 +1147,7 @@ theorem typeOffers_current_subset_fixedAlphabet
       exact typeWaitingOffers_subset_fixedAlphabet hSource.2.2.2
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      _ _ hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       simp only [PactType.AlphabetWellFormed] at hSource
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
@@ -1260,10 +1175,8 @@ theorem typeOffers_current_subset_fixedAlphabet
       rcases hAction.1 with hLeftAction | hRightAction
       · exact Or.inl (ihLeft hSource.2.2.1 hLeftAction)
       · exact Or.inr (ihRight hSource.2.2.2 hRightAction)
-  | left_complete _ _ _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
-  | left_complete_tock _ _ _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight =>
+  | left_complete _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ ihRight
+  | left_complete_tock _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ ihRight =>
       simp only [PactType.AlphabetWellFormed] at hSource
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
@@ -1273,10 +1186,8 @@ theorem typeOffers_current_subset_fixedAlphabet
       simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
         Finset.mem_union]
       exact ⟨Or.inr (ihRight hSource.2.2.2 hAction.1), hAction.2⟩
-  | right_complete _ _ _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
-  | right_complete_tock _ _ _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight =>
+  | right_complete _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ ihLeft
+  | right_complete_tock _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ ihLeft =>
       simp only [PactType.AlphabetWellFormed] at hSource
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
@@ -4988,21 +4899,20 @@ private theorem typeTransition_target_messageActions_subset
           elseType.MessageActions ∪ PactType.BranchMessageActions branches)
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hLeftOffers hRight hRightOffers hNonFinal hSide hLeftIH hRightIH =>
+      _ _ hLeft hLeftOffers hRight hRightOffers hNonFinal hSide hLeftIH
+      hRightIH =>
       simpa [PactType.MessageActions] using
         Finset.union_subset_union hLeftIH hRightIH
-  | left_complete outer leftEnv rightEnv interface leftT rightT survivor
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftTrans hLeftOffers hRightTrans hRightOffers hNotSkip hLC hLF hRC hRF
-      hConds ihLeft ihRight =>
+  | left_complete outer interface leftT rightT survivor rightLabel rightCurrent
+      rightFuture hLeftSkip _ hRightTrans hRightOffers hNotSkip hRC hRF hWF
+      ihRight =>
       intro action hAction
       rw [PactType.messageActions_reannotate] at hAction
       simp only [PactType.MessageActions]
       exact Finset.mem_union.mpr (Or.inr (ihRight hAction))
-  | right_complete outer leftEnv rightEnv interface leftT survivor rightT
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftTrans hLeftOffers hRightTrans hRightOffers hNotSkip hLC hLF hRC hRF
-      hConds ihLeft ihRight =>
+  | right_complete outer interface leftT survivor rightT leftLabel leftCurrent
+      leftFuture hRightSkip _ hLeftTrans hLeftOffers hNotSkip hLC hLF hWF
+      ihLeft =>
       intro action hAction
       rw [PactType.messageActions_reannotate] at hAction
       simp only [PactType.MessageActions]
@@ -5093,7 +5003,7 @@ private theorem typeOffers_current_subset_messageActions
         (Or.inr (typeBranchActions_subset_branchMessageActions branches hAction.2))
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
+      _ _ hLeft hRight hNonFinal hLocal1 hLocal2 hSide ihLeft ihRight =>
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
         PactType.MessageActions] at hAction ⊢
@@ -5109,18 +5019,14 @@ private theorem typeOffers_current_subset_messageActions
       rcases hAction.1 with hLeftAction | hRightAction
       · exact Or.inl (ihLeft hLeftAction)
       · exact Or.inr (ihRight hRightAction)
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
-  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihRight =>
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
         PactType.MessageActions] at hAction ⊢
       exact Or.inr (ihRight hAction.1)
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
-  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihLeft
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihLeft =>
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
         PactType.MessageActions] at hAction ⊢

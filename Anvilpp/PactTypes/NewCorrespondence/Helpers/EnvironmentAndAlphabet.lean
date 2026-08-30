@@ -234,7 +234,7 @@ theorem typeOffers_future_subset_target_union_current
       exact Or.inl hAction.1
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide hLeftIH
+      _ _ hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide hLeftIH
       hRightIH =>
       intro action hAction
       rw [typeFutureOffers_parallel]
@@ -272,9 +272,8 @@ theorem typeOffers_future_subset_target_union_current
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
   | par_fuse_tock =>
       simp
-  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hSide hNotTock hLeftIH
+  | left_complete outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hWF hNotTock
       hRightIH =>
       intro action hAction
       rw [typeFutureOffers_reannotate]
@@ -287,10 +286,9 @@ theorem typeOffers_future_subset_target_union_current
       · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
   | left_complete_tock =>
       simp
-  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hSide hNotTock hLeftIH
-      hRightIH =>
+  | right_complete outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hWF hNotTock
+      hLeftIH =>
       intro action hAction
       rw [typeFutureOffers_reannotate]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢

@@ -312,17 +312,23 @@ theorem correspondence_par_stepIff
           refine ⟨.final, hEdgeFact, ?_⟩
           rw [hTargetEq]
           exact relationMembership_par_final signature alphabet left right interface
-      -- Survivor steps leave a single child re-stamped with the parent alphabet.
-      -- The semantic rule keeps `leftCurrent ∪ rightCurrent`; the survivor edge
-      -- offers only the surviving child's current set.
-      | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-      | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-      | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-      | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+      -- Survivor steps leave a single child re-stamped with the parent alphabet;
+      -- the sibling is already `skip` at the source, so its state is accepting.
+      -- The label and offers now line up with the survivor edge, and H13 turns
+      -- the `skip` sibling into the accepting state the edge needs.  What is
+      -- still missing is purely automaton-side: the survivor edge carries the
+      -- product environment unprojected, so `parallelComponentEdgeAllowed`
+      -- demands the parent symbol be legal for the CHILD alphabet, and
+      -- `q1 ∈ states` for the finished sibling.  Neither transports from the
+      -- parent symbol, since `mergeHidden` keeps the other side's actions.
+      | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- OPEN: parent symbol does not transport to the child alphabet
+      | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- OPEN: parent symbol does not transport to the child alphabet
+      | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- OPEN: parent symbol does not transport to the child alphabet
+      | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- OPEN: parent symbol does not transport to the child alphabet
     · rintro ⟨state', hEdge, hTargetRelated⟩
       rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
         interface q1 q2 state' env label (TypeOfferSummary.mk current future)
@@ -475,17 +481,45 @@ theorem correspondence_par_stepIff
                   hLeftTargetRelated).mpr hL,
                 (helper_h13_final_states_represent_completion signature
                   hRightTargetRelated).mpr hR⟩
+          -- A `skip` source only steps to `skip`, so `hNonFinal` bounds the
+          -- targets but not the sources.
+          have hLeftSourceSkip : residualLeft = .skip residualLeft.alphabet →
+              leftTarget = .skip leftTarget.alphabet := by
+            intro hSkip
+            rw [hSkip] at hLeftStep
+            cases hLeftStep.1
+            simp [PactType.alphabet]
+          have hRightSourceSkip : residualRight = .skip residualRight.alphabet →
+              rightTarget = .skip rightTarget.alphabet := by
+            intro hSkip
+            rw [hSkip] at hRightStep
+            cases hRightStep.1
+            simp [PactType.alphabet]
+          by_cases hLeftSkip : residualLeft = .skip residualLeft.alphabet
+          · -- Left source is `skip`, so `left_complete` is the only applicable
+            -- rule; its target is `rightTarget.reannotate`, not the `.par` node
+            -- the `.pair` state forces here.
+            by_cases hRightSkip : residualRight = .skip residualRight.alphabet
+            · exact absurd ⟨hLeftSourceSkip hLeftSkip, hRightSourceSkip hRightSkip⟩
+                hNonFinal
+            · sorry -- OPEN: `left_complete` targets `reannotate`, not `.par`
+          by_cases hRightSkip : residualRight = .skip residualRight.alphabet
+          · -- Mirror: `right_complete` targets `leftTarget.reannotate`.
+            sorry -- OPEN: `right_complete` targets `reannotate`, not `.par`
+          have hLeftNotSkip : residualLeft ≠ .skip residualLeft.alphabet := hLeftSkip
+          have hRightNotSkip : residualRight ≠ .skip residualRight.alphabet := hRightSkip
           simp only [] at hCurrentEq hFutureEq
           rw [hLabelEq, hCurrentEq, hFutureEq, hResidualEqAgain]
           simpa only [hSourceAlphabet] using
             (⟨TypeTransition.par env leftEnv rightEnv interface residualLeft leftTarget
               residualRight rightTarget leftLabel rightLabel leftCurrent leftFuture
-              rightCurrent rightFuture hLeftStep.1 hLeftStep.2 hRightStep.1 hRightStep.2
+              rightCurrent rightFuture hLeftNotSkip hRightNotSkip
+              hLeftStep.1 hLeftStep.2 hRightStep.1 hRightStep.2
               hNonFinal ⟨hWF, hLocal1.congrLocalType hResidualLeftAlphabet,
                 hLocal2.congrLocalType hResidualRightAlphabet, hSync⟩,
             TypeOffers.par env leftEnv rightEnv interface residualLeft leftTarget
               residualRight rightTarget leftLabel rightLabel leftCurrent leftFuture
-              rightCurrent rightFuture
+              rightCurrent rightFuture hLeftNotSkip hRightNotSkip
               hLeftStep.2 hRightStep.2 hNonFinal
               (hLocal1.congrLocalType hResidualLeftAlphabet)
               (hLocal2.congrLocalType hResidualRightAlphabet) ⟨hWF, hSync⟩⟩ :

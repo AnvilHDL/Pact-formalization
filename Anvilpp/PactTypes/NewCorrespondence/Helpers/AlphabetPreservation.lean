@@ -3575,7 +3575,8 @@ theorem TypeTransition.preserves_alphabetWellFormed
   | offer_wait env alphabet elseType branches conditions =>
       intro hWF _ _; exact hWF
   | par outer leftEnv rightEnv interface left left' right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _
+      leftTransition
       hLeftOffers rightTransition hRightOffers hNotBothSkip conditions ihLeft
       ihRight =>
       intro hWF hTailRec hDisjoint
@@ -3597,16 +3598,15 @@ theorem TypeTransition.preserves_alphabetWellFormed
       exact hWF.1
   -- Unlike `par_fuse`, whose target is `.skip`, the survivor targets keep the
   -- residual and re-stamp it with the parent alphabet.
-  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
-      hLeftOffers rightTransition hRightOffers hNotSkip hLeftCurrent
-      hLeftFuture hRightCurrent hRightFuture conditions ihLeft ihRight =>
+  | left_complete outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip _ rightTransition hRightOffers hNotSkip
+      hRightCurrent
+      hRightFuture hOuterWF ihRight =>
       intro hWF hTailRec hDisjoint
       sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
-      hLeftOffers rightTransition hRightOffers hNotSkip hLeftCurrent
-      hLeftFuture hRightCurrent hRightFuture conditions ihLeft ihRight =>
+  | right_complete outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip _ leftTransition hLeftOffers hNotSkip hLeftCurrent
+      hLeftFuture hOuterWF ihLeft =>
       intro hWF hTailRec hDisjoint
       sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
 

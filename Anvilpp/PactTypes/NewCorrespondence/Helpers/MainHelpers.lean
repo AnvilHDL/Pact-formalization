@@ -3991,7 +3991,8 @@ theorem offers_label_supported
         Finset.mem_union]
       exact Or.inr (branch_action_mem hConditions.2.1)
   | par outer leftEnv rightEnv interface left left' right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _
+      hLeftOffers
       hRightOffers hNonFinal hLocal1 hLocal2 hConditions =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
@@ -4008,32 +4009,39 @@ theorem offers_label_supported
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions hNotTock =>
-      have hLeftIH := offers_label_supported hLeftOffers
+  -- Only the survivor steps, so its own support carries over to the product.
+  | left_complete outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hWF hNotTock
+  | left_complete_tock outer interface left right right' rightLabel rightCurrent
+      rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hWF hNotTock =>
       have hRightIH := offers_label_supported hRightOffers
-      exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | left_complete_tock outer leftEnv rightEnv interface left right right'
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions
-      hTock =>
+      revert hRightIH
+      cases label with
+      | tock => intro _; trivial
+      | actions observations =>
+          intro hRightIH observation hMem
+          have hOwned := hRightIH observation hMem
+          cases observation <;>
+            simp only [ObservationOwnedBy, PactType.MessageActions,
+              PactType.ProgressIds, PactType.FairChoiceIds,
+              Finset.mem_union] at hOwned ⊢ <;>
+            simp [hOwned]
+  | right_complete outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hWF hNotTock
+  | right_complete_tock outer interface left left' right leftLabel leftCurrent
+      leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hWF hNotTock =>
       have hLeftIH := offers_label_supported hLeftOffers
-      have hRightIH := offers_label_supported hRightOffers
-      exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
-      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions hNotTock =>
-      have hLeftIH := offers_label_supported hLeftOffers
-      have hRightIH := offers_label_supported hRightOffers
-      exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | right_complete_tock outer leftEnv rightEnv interface left left' right
-      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      hLeftOffers hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions
-      hTock =>
-      have hLeftIH := offers_label_supported hLeftOffers
-      have hRightIH := offers_label_supported hRightOffers
-      exact combine_label_supported hLeftIH hRightIH hConditions.2
+      revert hLeftIH
+      cases label with
+      | tock => intro _; trivial
+      | actions observations =>
+          intro hLeftIH observation hMem
+          have hOwned := hLeftIH observation hMem
+          cases observation <;>
+            simp only [ObservationOwnedBy, PactType.MessageActions,
+              PactType.ProgressIds, PactType.FairChoiceIds,
+              Finset.mem_union] at hOwned ⊢ <;>
+            simp [hOwned]
   | _ =>
       simp_all [LabelSupportedBy, ObservationOwnedBy, TypeLabel.silent,
         TypeLabel.message, TypeLabel.fair, TypeLabel.progress,
