@@ -80,29 +80,6 @@ namespace TypeAlphabet
         (alphabet.localEnvironmentActions \ immediate).powerset.image fun future =>
           { immediate := immediate, future := future, clock := false }
 
-  /-- `TypeEnvironment.tock` is the only clocked local environment: every
-  other member is built with `clock := false`. -/
-  theorem eq_tock_of_mem_localEnvironments_of_clock {alphabet : TypeAlphabet}
-      {environment : TypeEnvironment}
-      (hEnvironment : environment ∈ alphabet.localEnvironments)
-      (hClock : environment.clock = true) :
-      environment = TypeEnvironment.tock := by
-    simp only [localEnvironments, Finset.mem_union, Finset.mem_singleton,
-      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
-      at hEnvironment
-    rcases hEnvironment with hTock | ⟨immediate, _, future, _, rfl⟩
-    · exact hTock
-    · exact absurd hClock (by simp)
-
-  /-- A clocked local environment offers nothing immediately. -/
-  theorem immediate_eq_empty_of_mem_localEnvironments_of_clock
-      {alphabet : TypeAlphabet} {environment : TypeEnvironment}
-      (hEnvironment : environment ∈ alphabet.localEnvironments)
-      (hClock : environment.clock = true) :
-      environment.immediate = ∅ := by
-    rw [eq_tock_of_mem_localEnvironments_of_clock hEnvironment hClock]
-    rfl
-
   theorem environments_subset_localEnvironments (alphabet : TypeAlphabet) :
       alphabet.environments ⊆ alphabet.localEnvironments := by
     intro environment hEnvironment
@@ -186,12 +163,12 @@ namespace TypeAlphabet
       alphabet.localOfferSets.image fun future =>
         { current := current, future := future }
 
-  /-- Actions from the surrounding signature that belong to one fixed type
-  alphabet.  The intersection keeps malformed annotations from enlarging the
-  signature; admissible types make it redundant for every action they use. -/
-  def localActionsFor (signature : TypeAlphabet)
+  /-- Exactly the actions one fixed type alphabet declares.  The signature is
+  carried only so the `For` family reads uniformly; it never narrows the set,
+  because a type owns every action it declares. -/
+  def localActionsFor (_signature : TypeAlphabet)
       (alphabet : PactTypeAlphabet) : Finset BareMessage :=
-    signature.localActions ∩ alphabet.actions
+    alphabet.actions
 
   /-- Environment actions visible to a type with fixed alphabet `alphabet`. -/
   def localEnvironmentActionsFor (signature : TypeAlphabet)
@@ -215,56 +192,51 @@ namespace TypeAlphabet
       (signature.localActionsFor alphabet).powerset.image fun future =>
         { current := current, future := future }
 
-  theorem localActionsFor_subset_localActions (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) :
-      signature.localActionsFor alphabet ⊆ signature.localActions := by
-    intro action hAction
-    exact (Finset.mem_inter.mp hAction).1
-
-  theorem localEnvironmentActionsFor_subset_localEnvironmentActions
-      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
-      signature.localEnvironmentActionsFor alphabet ⊆
-        signature.localEnvironmentActions := by
-    apply Finset.image_mono
-    exact localActionsFor_subset_localActions signature alphabet
-
-  theorem localEnvironmentsFor_subset_localEnvironments
-      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
-      signature.localEnvironmentsFor alphabet ⊆
-        signature.localEnvironments := by
-    intro environment hEnvironment
-    simp only [localEnvironmentsFor, localEnvironments, Finset.mem_union,
-      Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
-      Finset.mem_image] at hEnvironment ⊢
-    rcases hEnvironment with hTock | ⟨immediate, hImmediate, future,
-      hFuture, rfl⟩
-    · exact Or.inl hTock
-    · right
-      refine ⟨immediate, hImmediate.trans
-        (localEnvironmentActionsFor_subset_localEnvironmentActions
-          signature alphabet), future, ?_, rfl⟩
-      intro action hAction
-      have hMember := hFuture hAction
-      simp only [Finset.mem_sdiff] at hMember ⊢
-      exact ⟨
-        localEnvironmentActionsFor_subset_localEnvironmentActions
-          signature alphabet hMember.1,
-        hMember.2⟩
-
-  theorem localOfferSummariesFor_subset_localOfferSummaries
-      (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
-      signature.localOfferSummariesFor alphabet ⊆
-        signature.localOfferSummaries := by
-    intro offers hOffers
-    simp only [localOfferSummariesFor, localOfferSummaries, localOfferSets,
+  /-- `TypeEnvironment.tock` is the only clocked environment over one type's
+  alphabet: every other member is built with `clock := false`. -/
+  theorem eq_tock_of_mem_localEnvironmentsFor_of_clock
+      {signature : TypeAlphabet} {alphabet : PactTypeAlphabet}
+      {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet)
+      (hClock : environment.clock = true) :
+      environment = TypeEnvironment.tock := by
+    simp only [localEnvironmentsFor, Finset.mem_union, Finset.mem_singleton,
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
-      at hOffers ⊢
-    rcases hOffers with ⟨current, hCurrent, future, hFuture, rfl⟩
-    exact ⟨current,
-      hCurrent.trans (localActionsFor_subset_localActions signature alphabet),
-      future,
-      hFuture.trans (localActionsFor_subset_localActions signature alphabet),
-      rfl⟩
+      at hEnvironment
+    rcases hEnvironment with hTock | ⟨immediate, _, future, _, rfl⟩
+    · exact hTock
+    · exact absurd hClock (by simp)
+
+  /-- A clocked environment over one type's alphabet offers nothing immediately. -/
+  theorem immediate_eq_empty_of_mem_localEnvironmentsFor_of_clock
+      {signature : TypeAlphabet} {alphabet : PactTypeAlphabet}
+      {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet)
+      (hClock : environment.clock = true) :
+      environment.immediate = ∅ := by
+    rw [eq_tock_of_mem_localEnvironmentsFor_of_clock hEnvironment hClock]
+    rfl
+
+  /-- Environments over one type's alphabet are well formed. -/
+  theorem environmentFor_wellFormed {signature : TypeAlphabet}
+      {alphabet : PactTypeAlphabet} {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet) :
+      environment.WellFormed := by
+    simp only [localEnvironmentsFor, Finset.mem_union, Finset.mem_singleton,
+      Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+      at hEnvironment
+    rcases hEnvironment with rfl | ⟨immediate, _, future, hFuture, rfl⟩
+    · simp [TypeEnvironment.WellFormed, TypeEnvironment.tock]
+    · constructor
+      · simp
+      · intro _
+        change immediate ∩ future = ∅
+        rw [← Finset.disjoint_iff_inter_eq_empty]
+        apply Finset.disjoint_left.mpr
+        intro action hImmediate hFutureMember
+        have hAvailable := hFuture hFutureMember
+        simp only [Finset.mem_sdiff] at hAvailable
+        exact hAvailable.2 hImmediate
 
   /-
   Validate a type against a previously chosen alphabet.  This checks use of

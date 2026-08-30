@@ -103,23 +103,6 @@ theorem TypeAlphabet.supports_reannotate_iff
   classical
   simp [TypeAlphabet.transitionAlphabetFor]
 
-/-- A symbol admitted by a fixed type alphabet is also admitted by the
-surrounding signature's local alphabet. -/
-theorem transitionAlphabetFor_subset_transitionAlphabet
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
-    signature.transitionAlphabetFor alphabet ⊆
-      signature.transitionAlphabet := by
-  intro symbol hSymbol
-  rcases symbol with ⟨environment, label, offers⟩
-  rw [transitionAlphabetFor_mk_mem_iff] at hSymbol
-  rw [transitionAlphabet_mk_mem_iff]
-  exact ⟨
-    TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
-      signature alphabet hSymbol.1,
-    hSymbol.2.1,
-    TypeAlphabet.localOfferSummariesFor_subset_localOfferSummaries
-      signature alphabet hSymbol.2.2⟩
-
 @[simp] theorem localOfferSummaries_mk_mem_iff
     (signature : TypeAlphabet) (current future : Finset BareMessage) :
     TypeOfferSummary.mk current future ∈ signature.localOfferSummaries ↔
@@ -137,26 +120,6 @@ theorem transitionAlphabetFor_subset_transitionAlphabet
       future ⊆ signature.localActionsFor alphabet := by
   classical
   simp [TypeAlphabet.localOfferSummariesFor]
-
-theorem localEnvironment_wellFormed
-    (signature : TypeAlphabet) {environment : TypeEnvironment}
-    (hEnvironment : environment ∈ signature.localEnvironments) :
-    environment.WellFormed := by
-  simp only [TypeAlphabet.localEnvironments, Finset.mem_union,
-    Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
-    Finset.mem_image] at hEnvironment
-  rcases hEnvironment with rfl | ⟨immediate, _hImmediate, future, hFuture, rfl⟩
-  · simp [TypeEnvironment.WellFormed, TypeEnvironment.tock]
-  · constructor
-    · simp
-    · intro _hClock
-      change immediate ∩ future = ∅
-      rw [← Finset.disjoint_iff_inter_eq_empty]
-      apply Finset.disjoint_left.mpr
-      intro action hImmediate hFutureMember
-      have hAvailable := hFuture hFutureMember
-      simp only [Finset.mem_sdiff] at hAvailable
-      exact hAvailable.2 hImmediate
 
 /- Decorated type transitions are intentionally not target-deterministic.  For
 example, an unresolved choice may silently select either branch while exposing

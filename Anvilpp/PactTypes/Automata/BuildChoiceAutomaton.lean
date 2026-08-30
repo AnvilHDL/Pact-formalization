@@ -16,12 +16,13 @@ edges leave the root, and the accepting states are the union of both children.
 The supplied labels distinguish ordinary epsilon choice from fair choice.
 -/
 def buildChoiceAutomaton (signature : TypeAlphabet)
+    (alphabet : PactTypeAlphabet)
     (left right : AutomatonFragment) (selectionLeft selectionRight : TypeLabel) :
     AutomatonFragment :=
   let states := {TypeAutomatonState.root} ∪ childStates 0 left ∪ childStates 1 right
   let accepting := childAccepting 0 left ∪ childAccepting 1 right
-  let selections := (signature.localEnvironments.filter fun environment =>
-      environment.clock = false).biUnion fun environment =>
+  let selections := ((signature.localEnvironmentsFor alphabet).filter
+      fun environment => environment.clock = false).biUnion fun environment =>
     { { source := TypeAutomatonState.root
         environment := environment
         label := .visible selectionLeft
@@ -38,10 +39,11 @@ def buildChoiceAutomaton (signature : TypeAlphabet)
     (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
 
 theorem buildChoiceAutomaton_outgoing_left
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     edge ∈ choice.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ left.edges,
@@ -77,10 +79,11 @@ theorem buildChoiceAutomaton_outgoing_left
     · simp [childPendingEdge, childState, hChildSource]
 
 theorem buildChoiceAutomaton_outgoing_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     edge ∈ choice.edges ∧ edge.source = .child 1 state ↔
       ∃ childEdge ∈ right.edges,
@@ -116,10 +119,11 @@ theorem buildChoiceAutomaton_outgoing_right
     · simp [childPendingEdge, childState, hChildSource]
 
 private theorem buildChoiceAutomaton_referencedStates_left
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     let parent : PendingAutomaton :=
       { states := choice.states, edges := choice.edges }
@@ -131,16 +135,17 @@ private theorem buildChoiceAutomaton_referencedStates_left
   ext target
   simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
     Finset.mem_filter, Finset.mem_image]
-  simp_rw [buildChoiceAutomaton_outgoing_left signature left right
+  simp_rw [buildChoiceAutomaton_outgoing_left signature alphabet left right
     selectionLeft selectionRight]
   simp [childPendingEdge, childFutureSpec, childState]
   grind
 
 private theorem buildChoiceAutomaton_referencedStates_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     let parent : PendingAutomaton :=
       { states := choice.states, edges := choice.edges }
@@ -152,16 +157,17 @@ private theorem buildChoiceAutomaton_referencedStates_right
   ext target
   simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
     Finset.mem_filter, Finset.mem_image]
-  simp_rw [buildChoiceAutomaton_outgoing_right signature left right
+  simp_rw [buildChoiceAutomaton_outgoing_right signature alphabet left right
     selectionLeft selectionRight]
   simp [childPendingEdge, childFutureSpec, childState]
   grind
 
 private theorem buildChoiceAutomaton_offersAt_left
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     let parent : PendingAutomaton :=
       { states := choice.states, edges := choice.edges }
@@ -172,16 +178,17 @@ private theorem buildChoiceAutomaton_offersAt_left
   ext action
   simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
     Finset.mem_filter]
-  simp_rw [buildChoiceAutomaton_outgoing_left signature left right
+  simp_rw [buildChoiceAutomaton_outgoing_left signature alphabet left right
     selectionLeft selectionRight]
   simp [childPendingEdge, childFutureSpec, childState]
   grind
 
 private theorem buildChoiceAutomaton_offersAt_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (state : TypeAutomatonState) :
-    let choice := buildChoiceAutomaton signature left right
+    let choice := buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight
     let parent : PendingAutomaton :=
       { states := choice.states, edges := choice.edges }
@@ -192,7 +199,7 @@ private theorem buildChoiceAutomaton_offersAt_right
   ext action
   simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
     Finset.mem_filter]
-  simp_rw [buildChoiceAutomaton_outgoing_right signature left right
+  simp_rw [buildChoiceAutomaton_outgoing_right signature alphabet left right
     selectionLeft selectionRight]
   simp [childPendingEdge, childFutureSpec, childState]
   grind
@@ -202,26 +209,27 @@ private theorem buildChoiceAutomaton_offersAt_right
 /-- Marker reachability inside the left tagged child of a choice is exactly the
 child fragment's own marker reachability. -/
 theorem buildChoiceAutomaton_markerReachable_left
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (name : String)
     (state : TypeAutomatonState)
     (hClosed : ({ states := left.states, edges := left.edges } :
       PendingAutomaton).ReferencesClosed)
     (hState : state ∈ left.states)
     (hCard : left.states.card ≤
-      (buildChoiceAutomaton signature left right
+      (buildChoiceAutomaton signature alphabet left right
         selectionLeft selectionRight).states.card) :
-    MarkerReachable (buildChoiceAutomaton signature left right
+    MarkerReachable (buildChoiceAutomaton signature alphabet left right
         selectionLeft selectionRight) name (.child 0 state) ↔
       MarkerReachable left name state := by
   have hResult := markerReachable_of_embedding left
-    (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+    (buildChoiceAutomaton signature alphabet left right selectionLeft selectionRight)
     name (childState 0)
-    (fun current => buildChoiceAutomaton_referencedStates_left signature left
+    (fun current => buildChoiceAutomaton_referencedStates_left signature alphabet left
       right selectionLeft selectionRight current)
     hClosed hCard
     (fun current _ => markerSource_of_outgoing_childPendingEdge _ left 0 name
-      current (fun edge => buildChoiceAutomaton_outgoing_left signature left
+      current (fun edge => buildChoiceAutomaton_outgoing_left signature alphabet left
         right selectionLeft selectionRight current edge))
     state hState
   simpa [childState] using hResult
@@ -229,26 +237,27 @@ theorem buildChoiceAutomaton_markerReachable_left
 /-- Marker reachability inside the right tagged child of a choice is exactly
 the child fragment's own marker reachability. -/
 theorem buildChoiceAutomaton_markerReachable_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (name : String)
     (state : TypeAutomatonState)
     (hClosed : ({ states := right.states, edges := right.edges } :
       PendingAutomaton).ReferencesClosed)
     (hState : state ∈ right.states)
     (hCard : right.states.card ≤
-      (buildChoiceAutomaton signature left right
+      (buildChoiceAutomaton signature alphabet left right
         selectionLeft selectionRight).states.card) :
-    MarkerReachable (buildChoiceAutomaton signature left right
+    MarkerReachable (buildChoiceAutomaton signature alphabet left right
         selectionLeft selectionRight) name (.child 1 state) ↔
       MarkerReachable right name state := by
   have hResult := markerReachable_of_embedding right
-    (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+    (buildChoiceAutomaton signature alphabet left right selectionLeft selectionRight)
     name (childState 1)
-    (fun current => buildChoiceAutomaton_referencedStates_right signature left
+    (fun current => buildChoiceAutomaton_referencedStates_right signature alphabet left
       right selectionLeft selectionRight current)
     hClosed hCard
     (fun current _ => markerSource_of_outgoing_childPendingEdge _ right 1 name
-      current (fun edge => buildChoiceAutomaton_outgoing_right signature left
+      current (fun edge => buildChoiceAutomaton_outgoing_right signature alphabet left
         right selectionLeft selectionRight current edge))
     state hState
   simpa [childState] using hResult
@@ -256,11 +265,12 @@ theorem buildChoiceAutomaton_markerReachable_right
 /-- Selection edges carry an explicit `clock = false` guard, and both tagged
 child copies preserve their child's environment and label. -/
 theorem buildChoiceAutomaton_clockEdgesAreTock
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (hLeftClock : left.ClockEdgesAreTock)
     (hRightClock : right.ClockEdgesAreTock) :
-    (buildChoiceAutomaton signature left right
+    (buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight).ClockEdgesAreTock := by
   classical
   intro edge hEdge hClock
@@ -279,13 +289,14 @@ theorem buildChoiceAutomaton_clockEdgesAreTock
         exact absurd hClock (by simp)
 
 theorem buildChoiceAutomaton_futureTargetsInStates
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
     (hLeftInitial : left.initial ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
-    (buildChoiceAutomaton signature left right
+    (buildChoiceAutomaton signature alphabet left right
       selectionLeft selectionRight).FutureTargetsInStates := by
   classical
   intro edge hEdge target removed hFuture

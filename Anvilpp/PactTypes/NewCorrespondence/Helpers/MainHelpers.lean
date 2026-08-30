@@ -587,22 +587,24 @@ theorem automatonSameCycleReachesAccepting_of_child_tag
 edges, tagged (labels are copied verbatim by `childPendingEdge`, so
 tock-ness is preserved). -/
 theorem automatonNonClockStep_binaryChoice_child0
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (q target : TypeAutomatonState) :
     AutomatonNonClockStep
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         (childState 0 q) target ↔
       ∃ q', target = childState 0 q' ∧ AutomatonNonClockStep left q q' := by
   constructor
   · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
     obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
-      (buildChoiceAutomaton_outgoing_left signature left right
+      (buildChoiceAutomaton_outgoing_left signature alphabet left right
         selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
     refine ⟨childEdge.target, ?_, childEdge, hChildEdge, hChildSource, rfl, ?_⟩
     · rw [← hTarget, hEdgeEq]; simp [childPendingEdge, childState]
     · simpa [hEdgeEq, childPendingEdge] using hNotTock
   · rintro ⟨q', hTargetEq, childEdge, hChildEdge, hChildSource, hChildTarget, hChildNotTock⟩
-    have hOut := (buildChoiceAutomaton_outgoing_left signature left right
+    have hOut := (buildChoiceAutomaton_outgoing_left signature alphabet left right
       selectionLeft selectionRight q (childPendingEdge 0 childEdge)).mpr
       ⟨childEdge, hChildEdge, hChildSource, rfl⟩
     exact ⟨childPendingEdge 0 childEdge, hOut.1, hOut.2,
@@ -611,22 +613,24 @@ theorem automatonNonClockStep_binaryChoice_child0
 
 /-- Right-side analogue of `automatonNonClockStep_binaryChoice_child0`. -/
 theorem automatonNonClockStep_binaryChoice_child1
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (q target : TypeAutomatonState) :
     AutomatonNonClockStep
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         (childState 1 q) target ↔
       ∃ q', target = childState 1 q' ∧ AutomatonNonClockStep right q q' := by
   constructor
   · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
     obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
-      (buildChoiceAutomaton_outgoing_right signature left right
+      (buildChoiceAutomaton_outgoing_right signature alphabet left right
         selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
     refine ⟨childEdge.target, ?_, childEdge, hChildEdge, hChildSource, rfl, ?_⟩
     · rw [← hTarget, hEdgeEq]; simp [childPendingEdge, childState]
     · simpa [hEdgeEq, childPendingEdge] using hNotTock
   · rintro ⟨q', hTargetEq, childEdge, hChildEdge, hChildSource, hChildTarget, hChildNotTock⟩
-    have hOut := (buildChoiceAutomaton_outgoing_right signature left right
+    have hOut := (buildChoiceAutomaton_outgoing_right signature alphabet left right
       selectionLeft selectionRight q (childPendingEdge 1 childEdge)).mpr
       ⟨childEdge, hChildEdge, hChildSource, rfl⟩
     exact ⟨childPendingEdge 1 childEdge, hOut.1, hOut.2,
@@ -634,39 +638,48 @@ theorem automatonNonClockStep_binaryChoice_child1
       by simpa [childPendingEdge] using hChildNotTock⟩
 
 theorem buildChoiceAutomaton_child0_accepting_iff
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (q : TypeAutomatonState) :
     childState 0 q ∈
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting ↔
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight).accepting ↔
       q ∈ left.accepting := by
   simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
 
 theorem buildChoiceAutomaton_child1_accepting_iff
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) (q : TypeAutomatonState) :
     childState 1 q ∈
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting ↔
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight).accepting ↔
       q ∈ right.accepting := by
   simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
 
 theorem buildChoiceAutomaton_root_not_accepting
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel) :
     TypeAutomatonState.root ∉
-      (buildChoiceAutomaton signature left right selectionLeft selectionRight).accepting := by
+      (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight).accepting := by
   simp [buildChoiceAutomaton, finishAutomatonFragment, childAccepting, childState]
 
 /-- The root's only one-step raw targets are the two children's initial
 states — read off `buildChoiceAutomaton`'s selection edges, which fire for
 any supported environment (the empty one always qualifies). -/
 theorem automatonNonClockStep_root_binaryChoice_iff
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
-    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironments)
+    (hEnvMem :
+      TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet)
     (hLeftNotTock : ¬ selectionLeft.isTock) (hRightNotTock : ¬ selectionRight.isTock)
     (target : TypeAutomatonState) :
     AutomatonNonClockStep
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         TypeAutomatonState.root target ↔
       target = childState 0 left.initial ∨ target = childState 1 right.initial := by
   constructor
@@ -687,7 +700,8 @@ theorem automatonNonClockStep_root_binaryChoice_iff
           future := FutureSpec.at (childState 0 left.initial) ∅,
           target := childState 0 left.initial } with hEdgeDef
       have hEdgeMem : edge ∈
-          (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
+          (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight).edges := by
         simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
           Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
           Finset.mem_singleton]
@@ -701,7 +715,8 @@ theorem automatonNonClockStep_root_binaryChoice_iff
           future := FutureSpec.at (childState 1 right.initial) ∅,
           target := childState 1 right.initial } with hEdgeDef
       have hEdgeMem : edge ∈
-          (buildChoiceAutomaton signature left right selectionLeft selectionRight).edges := by
+          (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight).edges := by
         simp only [buildChoiceAutomaton, finishAutomatonFragment, Finset.mem_union,
           Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
           Finset.mem_singleton]
@@ -715,18 +730,23 @@ and its only one-step targets are the two children's initial states,
 reaching an accepting state from the root is exactly reaching one from
 either tagged child-initial state. -/
 theorem automatonSameCycleReachesAccepting_root_binaryChoice
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
-    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironments)
+    (hEnvMem :
+      TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet)
     (hLeftNotTock : ¬ selectionLeft.isTock) (hRightNotTock : ¬ selectionRight.isTock) :
     AutomatonSameCycleReachesAccepting
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         TypeAutomatonState.root ↔
       AutomatonSameCycleReachesAccepting
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         (childState 0 left.initial) ∨
       AutomatonSameCycleReachesAccepting
-        (buildChoiceAutomaton signature left right selectionLeft selectionRight)
+        (buildChoiceAutomaton signature alphabet left right selectionLeft
+          selectionRight)
         (childState 1 right.initial) := by
   constructor
   · rintro ⟨finalState, hReach, hFinal⟩
@@ -734,20 +754,20 @@ theorem automatonSameCycleReachesAccepting_root_binaryChoice
     · exfalso
       rw [← hEq] at hFinal
       exact absurd hFinal
-        (buildChoiceAutomaton_root_not_accepting signature left right
+        (buildChoiceAutomaton_root_not_accepting signature alphabet left right
           selectionLeft selectionRight)
-    · rcases (automatonNonClockStep_root_binaryChoice_iff signature left right
+    · rcases (automatonNonClockStep_root_binaryChoice_iff signature alphabet left right
         selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock mid).mp hStep with
         rfl | rfl
       · exact Or.inl ⟨finalState, hRest, hFinal⟩
       · exact Or.inr ⟨finalState, hRest, hFinal⟩
   · rintro (⟨finalState, hReach, hFinal⟩ | ⟨finalState, hReach, hFinal⟩)
     · refine ⟨finalState, Relation.ReflTransGen.head ?_ hReach, hFinal⟩
-      exact (automatonNonClockStep_root_binaryChoice_iff signature left right
+      exact (automatonNonClockStep_root_binaryChoice_iff signature alphabet left right
         selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock
         (childState 0 left.initial)).mpr (Or.inl rfl)
     · refine ⟨finalState, Relation.ReflTransGen.head ?_ hReach, hFinal⟩
-      exact (automatonNonClockStep_root_binaryChoice_iff signature left right
+      exact (automatonNonClockStep_root_binaryChoice_iff signature alphabet left right
         selectionLeft selectionRight hEnvMem hLeftNotTock hRightNotTock
         (childState 1 right.initial)).mpr (Or.inr rfl)
 
@@ -1110,15 +1130,16 @@ theorem compileTypeFuel_nonClockStep_of_initial_accepting
       (compileTypeFuel signature fuel processType).initial target ∧
       target ∈ (compileTypeFuel signature fuel processType).accepting := by
   classical
-  have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-    simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-      Finset.mem_powerset, Finset.mem_image]
-    exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
   cases fuel with
   | zero => simp [compileTypeFuel] at hAccepting
   | succ fuel =>
       cases processType with
       | skip alphabet =>
+          have hEmptyLocal :
+              TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet := by
+            simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+              Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+            exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
           refine ⟨TypeAutomatonState.root, ?_, ?_⟩
           · refine ⟨PendingAutomatonEdge.mk TypeAutomatonState.root
               TypeEnvironment.empty (AutomatonConstructionLabel.visible TypeLabel.silent)
@@ -1375,12 +1396,9 @@ theorem compileType_var_no_edge
     (offers : TypeOfferSummary) (target : TypeAutomatonState) :
     ¬ (compileType signature (.var alphabet name)).HasEdge source env label offers target := by
   intro hEdge
-  have hSymbol :=
-    NewCorrespondence.compileType_hasEdge_symbol_mem signature (.var alphabet name) hEdge
   have hResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature (.var alphabet name)
-      source target env label
-      offers hSymbol).mp hEdge
+      source target env label offers).mp hEdge
   obtain ⟨pendingEdge, hMem, -, -, hLabel, -, -, -⟩ := hResolved
   simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     Finset.mem_image] at hMem
@@ -1565,10 +1583,11 @@ theorem stateProductInfoFuel_eq_of_sufficient'
 /-- Tag-transparency for `.choice`/`.fairChoice`: `ofStage` at a `.child 0`-tagged
 state agrees with `ofStage` inside `left`'s own automaton, at every stage. -/
 theorem ofStage_binaryChoice_child0
-    (signature : TypeAlphabet) (whole left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (whole left right : PactType)
     (selectionLeft selectionRight : TypeLabel)
     (hEdgesEq : (compileTypeFuel signature (typeCompilationFuel whole) whole).edges =
-      (buildChoiceAutomaton signature
+      (buildChoiceAutomaton signature alphabet
         (compileTypeFuel signature (typeCompilationFuel left) left)
         (compileTypeFuel signature (typeCompilationFuel right) right)
         selectionLeft selectionRight).edges)
@@ -1590,7 +1609,7 @@ theorem ofStage_binaryChoice_child0
       constructor
       · rintro ⟨edge, ⟨hEdgeMem, hSource, hNotTock⟩, hx⟩
         obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
-          (buildChoiceAutomaton_outgoing_left signature
+          (buildChoiceAutomaton_outgoing_left signature alphabet
             (compileTypeFuel signature (typeCompilationFuel left) left)
             (compileTypeFuel signature (typeCompilationFuel right) right)
             selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
@@ -1600,7 +1619,7 @@ theorem ofStage_binaryChoice_child0
           simp only [childPendingEdge, childState] at hx
           rwa [ih childEdge.target] at hx
       · rintro ⟨childEdge, ⟨hChildMem, hChildSource, hNotTock⟩, hx⟩
-        have hOut := (buildChoiceAutomaton_outgoing_left signature
+        have hOut := (buildChoiceAutomaton_outgoing_left signature alphabet
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
           selectionLeft selectionRight q (childPendingEdge 0 childEdge)).mpr
@@ -1612,10 +1631,11 @@ theorem ofStage_binaryChoice_child0
 
 /-- Tag-transparency for `.choice`/`.fairChoice`, right side. -/
 theorem ofStage_binaryChoice_child1
-    (signature : TypeAlphabet) (whole left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (whole left right : PactType)
     (selectionLeft selectionRight : TypeLabel)
     (hEdgesEq : (compileTypeFuel signature (typeCompilationFuel whole) whole).edges =
-      (buildChoiceAutomaton signature
+      (buildChoiceAutomaton signature alphabet
         (compileTypeFuel signature (typeCompilationFuel left) left)
         (compileTypeFuel signature (typeCompilationFuel right) right)
         selectionLeft selectionRight).edges)
@@ -1637,7 +1657,7 @@ theorem ofStage_binaryChoice_child1
       constructor
       · rintro ⟨edge, ⟨hEdgeMem, hSource, hNotTock⟩, hx⟩
         obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
-          (buildChoiceAutomaton_outgoing_right signature
+          (buildChoiceAutomaton_outgoing_right signature alphabet
             (compileTypeFuel signature (typeCompilationFuel left) left)
             (compileTypeFuel signature (typeCompilationFuel right) right)
             selectionLeft selectionRight q edge).mp ⟨hEdgeMem, hSource⟩
@@ -1647,7 +1667,7 @@ theorem ofStage_binaryChoice_child1
           simp only [childPendingEdge, childState] at hx
           rwa [ih childEdge.target] at hx
       · rintro ⟨childEdge, ⟨hChildMem, hChildSource, hNotTock⟩, hx⟩
-        have hOut := (buildChoiceAutomaton_outgoing_right signature
+        have hOut := (buildChoiceAutomaton_outgoing_right signature alphabet
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
           selectionLeft selectionRight q (childPendingEdge 1 childEdge)).mpr
@@ -1773,9 +1793,10 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
           have hNoProduct : ∀ q, stateProductInfo (.message alphabet msg dir) q = none := by
             intro q
             simp [stateProductInfo, typeCompilationFuel, stateProductInfoFuel]
-          have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-            simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-              Finset.mem_powerset, Finset.mem_image]
+          have hEmptyLocal :
+            TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet := by
+            simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+              Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
             exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
           have hWitness : PendingAutomatonEdge.mk TypeAutomatonState.root TypeEnvironment.empty
               (AutomatonConstructionLabel.visible TypeLabel.silent) {(msg, dir)}
@@ -1955,19 +1976,19 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
           have hWhole :
               compileTypeFuel signature (typeCompilationFuel (.choice alphabet left right))
                 (.choice alphabet left right) =
-                buildChoiceAutomaton signature
+                buildChoiceAutomaton signature alphabet
                   (compileTypeFuel signature (typeCompilationFuel left) left)
                   (compileTypeFuel signature (typeCompilationFuel right) right)
                   TypeLabel.silent TypeLabel.silent := by
             rw [hFuelEq]
             rw [compileTypeFuel.eq_def]
-            show buildChoiceAutomaton signature
+            show buildChoiceAutomaton signature alphabet
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
                 TypeLabel.silent TypeLabel.silent =
-              buildChoiceAutomaton signature (compileTypeFuel signature
+              buildChoiceAutomaton signature alphabet (compileTypeFuel signature
                 (typeCompilationFuel left) left) (compileTypeFuel signature
                 (typeCompilationFuel right) right) TypeLabel.silent TypeLabel.silent
             rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
@@ -1988,18 +2009,21 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               stateProductInfoFuel (typeCompilationFuel right) right q
             rw [hFuelEq]
             exact stateProductInfoFuel_eq_of_sufficient' right q (le_max_right _ _) le_rfl
-          have hTag0 := ofStage_binaryChoice_child0 signature (.choice alphabet left right) left right
+          have hTag0 := ofStage_binaryChoice_child0 signature alphabet
+            (.choice alphabet left right) left right
             TypeLabel.silent TypeLabel.silent (by rw [hWhole]) hProductEq0
-          have hTag1 := ofStage_binaryChoice_child1 signature (.choice alphabet left right) left right
+          have hTag1 := ofStage_binaryChoice_child1 signature alphabet
+            (.choice alphabet left right) left right
             TypeLabel.silent TypeLabel.silent (by rw [hWhole]) hProductEq1
           have hShape := helper_h12_binaryChoice_shape signature (.choice alphabet left right) left right
             rfl hFuelEq hRelated
           rcases hShape with ⟨hResidualEq, hStateEq⟩ |
             ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
           · subst hResidualEq; subst hStateEq
-            have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-              simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-                Finset.mem_powerset, Finset.mem_image]
+            have hEmptyLocal : TypeEnvironment.empty ∈
+                signature.localEnvironmentsFor alphabet := by
+              simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+                Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
               exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
             have hNoProductRoot : stateProductInfo (.choice alphabet left right)
                 TypeAutomatonState.root = none := by
@@ -2122,19 +2146,19 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
           have hWhole :
               compileTypeFuel signature (typeCompilationFuel (.fairChoice alphabet bid left right))
                 (.fairChoice alphabet bid left right) =
-                buildChoiceAutomaton signature
+                buildChoiceAutomaton signature alphabet
                   (compileTypeFuel signature (typeCompilationFuel left) left)
                   (compileTypeFuel signature (typeCompilationFuel right) right)
                   (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
             rw [hFuelEq]
             rw [compileTypeFuel.eq_def]
-            show buildChoiceAutomaton signature
+            show buildChoiceAutomaton signature alphabet
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
                 (compileTypeFuel signature
                   (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
-              buildChoiceAutomaton signature (compileTypeFuel signature
+              buildChoiceAutomaton signature alphabet (compileTypeFuel signature
                 (typeCompilationFuel left) left) (compileTypeFuel signature
                 (typeCompilationFuel right) right) (TypeLabel.fair bid true)
                 (TypeLabel.fair bid false)
@@ -2156,10 +2180,12 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               stateProductInfoFuel (typeCompilationFuel right) right q
             rw [hFuelEq]
             exact stateProductInfoFuel_eq_of_sufficient' right q (le_max_right _ _) le_rfl
-          have hTag0 := ofStage_binaryChoice_child0 signature (.fairChoice alphabet bid left right)
+          have hTag0 := ofStage_binaryChoice_child0 signature alphabet
+            (.fairChoice alphabet bid left right)
             left right (TypeLabel.fair bid true) (TypeLabel.fair bid false)
             (by rw [hWhole]) hProductEq0
-          have hTag1 := ofStage_binaryChoice_child1 signature (.fairChoice alphabet bid left right)
+          have hTag1 := ofStage_binaryChoice_child1 signature alphabet
+            (.fairChoice alphabet bid left right)
             left right (TypeLabel.fair bid true) (TypeLabel.fair bid false)
             (by rw [hWhole]) hProductEq1
           have hShape := helper_h12_binaryChoice_shape signature (.fairChoice alphabet bid left right)
@@ -2167,9 +2193,10 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
           rcases hShape with ⟨hResidualEq, hStateEq⟩ |
             ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
           · subst hResidualEq; subst hStateEq
-            have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-              simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-                Finset.mem_powerset, Finset.mem_image]
+            have hEmptyLocal : TypeEnvironment.empty ∈
+                signature.localEnvironmentsFor alphabet := by
+              simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+                Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
               exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
             have hNoProductRoot : stateProductInfo (.fairChoice alphabet bid left right)
                 TypeAutomatonState.root = none := by
@@ -2815,19 +2842,19 @@ lemma helper_h13_final_states_represent_completion
         have hWhole :
             compileTypeFuel signature (typeCompilationFuel (.choice alphabet left right))
               (.choice alphabet left right) =
-              buildChoiceAutomaton signature
+              buildChoiceAutomaton signature alphabet
                 (compileTypeFuel signature (typeCompilationFuel left) left)
                 (compileTypeFuel signature (typeCompilationFuel right) right)
                 TypeLabel.silent TypeLabel.silent := by
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show buildChoiceAutomaton signature
+          show buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
               TypeLabel.silent TypeLabel.silent =
-            buildChoiceAutomaton signature (compileTypeFuel signature
+            buildChoiceAutomaton signature alphabet (compileTypeFuel signature
               (typeCompilationFuel left) left) (compileTypeFuel signature
               (typeCompilationFuel right) right) TypeLabel.silent TypeLabel.silent
           rw [compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
@@ -2874,19 +2901,19 @@ lemma helper_h13_final_states_represent_completion
         have hWhole :
             compileTypeFuel signature (typeCompilationFuel (.fairChoice alphabet bid left right))
               (.fairChoice alphabet bid left right) =
-              buildChoiceAutomaton signature
+              buildChoiceAutomaton signature alphabet
                 (compileTypeFuel signature (typeCompilationFuel left) left)
                 (compileTypeFuel signature (typeCompilationFuel right) right)
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show buildChoiceAutomaton signature
+          show buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
               (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
-            buildChoiceAutomaton signature (compileTypeFuel signature
+            buildChoiceAutomaton signature alphabet (compileTypeFuel signature
               (typeCompilationFuel left) left) (compileTypeFuel signature
               (typeCompilationFuel right) right) (TypeLabel.fair bid true)
               (TypeLabel.fair bid false)
@@ -2935,7 +2962,7 @@ lemma helper_h13_final_states_represent_completion
             (.recur alphabet name body)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildRecursionAutomaton signature name
+          show (buildRecursionAutomaton signature alphabet name
             (compileTypeFuel signature (typeCompilationFuel body) body)).accepting = _
           simp [buildRecursionAutomaton, finishAutomatonFragment]
         rw [hAcceptEq]
@@ -3138,47 +3165,31 @@ lemma helper_h13_final_states_represent_completion
                 (parallelTypeBranchesSelecting item.1 branches)), item.2),
               List.mk_mem_zipIdx_iff_getElem?.mpr hMapGet, a.2, hIH.mpr hSkip, rfl⟩
 
-/-- A supported message action's complement is always a local environment
-action, so some `signature.localEnvironments` member can immediately fire
-it — the automaton-side counterpart of the semantic side's ability to build
-a firing environment for `(msg, dir)` directly, with no signature at all. -/
-theorem typeNeed_message_mem_localEnvironmentActions
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
-    (hSupports : (msg, dir) ∈ signature.boundary ∨ msg ∈ signature.interface) :
-    (msg, dir.invert) ∈ signature.localEnvironmentActions := by
-  have hMem : (msg, dir) ∈ signature.localActions := by
-    rcases hSupports with hBoundary | hInterface
-    · exact Finset.mem_union_left _ hBoundary
-    · refine Finset.mem_union_right _ ?_
-      simp only [TypeAlphabet.interfaceActions, Finset.mem_biUnion]
-      refine ⟨msg, hInterface, ?_⟩
-      cases dir <;> simp
-  have := Finset.mem_image_of_mem typeNeed hMem
-  simpa [typeNeed, TypeAlphabet.localEnvironmentActions] using this
-
-/-- A witness local environment that lets `(msg, dir.invert)` fire
-immediately and nothing else — built directly from `signature`'s own
-membership fact, matching the construction `TypeAlphabet.localEnvironments`
-itself ranges over. -/
-theorem firing_environment_mem_localEnvironments
-    (signature : TypeAlphabet) (msg : MessageId) (dir : MessageDir)
-    (hSupports : (msg, dir) ∈ signature.boundary ∨ msg ∈ signature.interface) :
+/-- A witness environment over the type's own alphabet that lets
+`(msg, dir.invert)` fire immediately and nothing else — built directly from
+the declaring alphabet, which is what the compiled edges now range over. -/
+theorem firing_environment_mem_localEnvironmentsFor
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (msg : MessageId) (dir : MessageDir)
+    (hAction : (msg, dir) ∈ alphabet.actions) :
     ({ immediate := {(msg, dir.invert)}, future := ∅, clock := false } :
-      TypeEnvironment) ∈ signature.localEnvironments := by
-  have hMem := typeNeed_message_mem_localEnvironmentActions signature msg dir hSupports
-  simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
+      TypeEnvironment) ∈ signature.localEnvironmentsFor alphabet := by
+  have hMem : (msg, dir.invert) ∈
+      signature.localEnvironmentActionsFor alphabet := by
+    have hImage := Finset.mem_image_of_mem typeNeed hAction
+    simpa [typeNeed, TypeAlphabet.localEnvironmentActionsFor,
+      TypeAlphabet.localActionsFor] using hImage
+  simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union, Finset.mem_biUnion,
     Finset.mem_powerset, Finset.mem_image]
   refine Or.inr ⟨{(msg, dir.invert)}, Finset.singleton_subset_iff.mpr hMem, ∅,
     Finset.empty_subset _, rfl⟩
 
 /-- Helper Lemma H14: same-cycle completion. Needs `signature.Supports
-processType` (unlike H12/H13, which hold unconditionally) — without it a
-message with no supporting environment in `signature.localEnvironments`
-would have no path to an accepting state at all, while the semantic side
-(`TypeTransition`, not indexed by any signature) can always complete via a
-directly-constructed witness environment; `pact.pdf`'s own Lemma 4.5
-already fixes an admissible (hence supported) type throughout, so this
-hypothesis is implicit there and needs to be made explicit here. -/
+processType` (unlike H12/H13, which hold unconditionally), because the
+choice, sequence and parallel cases recurse into subterms and the induction
+hypothesis carries the same premise; `pact.pdf`'s own Lemma 4.5 already
+fixes an admissible (hence supported) type throughout, so this hypothesis
+is implicit there and needs to be made explicit here. -/
 theorem helper_h14_same_cycle_completion
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
@@ -3224,7 +3235,6 @@ theorem helper_h14_same_cycle_completion
             · exact nomatch h
             · cases hTrans)
     | message alphabet msg dir =>
-        simp only [TypeAlphabet.Supports] at hSupports
         set env : TypeEnvironment :=
           { immediate := {(msg, dir.invert)}, future := ∅, clock := false } with hEnvDef
         have hHasNeed : env.hasNeed (msg, dir) := by simp [TypeEnvironment.hasNeed, hEnvDef]
@@ -3241,7 +3251,11 @@ theorem helper_h14_same_cycle_completion
               TypeTransition.action env alphabet msg dir ⟨hWF, hHasNeed⟩ hAction,
               by simp [TypeLabel.isTock, TypeLabel.message]⟩⟩
           · intro _
-            have hEnvMem := firing_environment_mem_localEnvironments signature msg dir hSupports
+            have hDeclared : (msg, dir) ∈ alphabet.actions := by
+              simp only [PactType.AlphabetWellFormed] at hAlphabet
+              exact hAlphabet.2
+            have hEnvMem := firing_environment_mem_localEnvironmentsFor signature
+              alphabet msg dir hDeclared
             rw [← hEnvDef] at hEnvMem
             set edge : PendingAutomatonEdge :=
               { source := TypeAutomatonState.root, environment := env,
@@ -3323,9 +3337,10 @@ theorem helper_h14_same_cycle_completion
               TypeTransition.progress TypeEnvironment.empty alphabet pid hEnv rfl,
               by simp [TypeLabel.isTock, TypeLabel.progress]⟩⟩
           · intro _
-            have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-              simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-                Finset.mem_powerset, Finset.mem_image]
+            have hEmptyLocal : TypeEnvironment.empty ∈
+                signature.localEnvironmentsFor alphabet := by
+              simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+                Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
               exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
             set edge : PendingAutomatonEdge :=
               { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
@@ -3366,47 +3381,56 @@ theorem helper_h14_same_cycle_completion
         have hWhole :
             compileTypeFuel signature (typeCompilationFuel (.choice alphabet left right))
               (.choice alphabet left right) =
-              buildChoiceAutomaton signature leftAuto rightAuto
+              buildChoiceAutomaton signature alphabet leftAuto rightAuto
                 TypeLabel.silent TypeLabel.silent := by
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show buildChoiceAutomaton signature
+          show buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
               TypeLabel.silent TypeLabel.silent =
-            buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent
+            buildChoiceAutomaton signature alphabet leftAuto rightAuto
+              TypeLabel.silent TypeLabel.silent
           rw [hLeftAutoDef, hRightAutoDef,
             compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
             compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
         rw [hWhole]
         simp only [TypeAlphabet.Supports] at hSupports
-        have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-          simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-            Finset.mem_powerset, Finset.mem_image]
+        have hEmptyLocal :
+            TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet := by
+          simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
           exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
         have hShape := helper_h12_binaryChoice_shape signature (.choice alphabet left right) left right
           rfl hFuelEq hRelated
         have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
-          (buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent)
-          leftAuto 0
-          (automatonNonClockStep_binaryChoice_child0 signature leftAuto rightAuto
+          (buildChoiceAutomaton signature alphabet leftAuto rightAuto
             TypeLabel.silent TypeLabel.silent)
-          (buildChoiceAutomaton_child0_accepting_iff signature leftAuto rightAuto
+          leftAuto 0
+          (automatonNonClockStep_binaryChoice_child0 signature alphabet leftAuto
+            rightAuto
+            TypeLabel.silent TypeLabel.silent)
+          (buildChoiceAutomaton_child0_accepting_iff signature alphabet leftAuto
+            rightAuto
             TypeLabel.silent TypeLabel.silent)
         have hTag1 := automatonSameCycleReachesAccepting_of_child_tag
-          (buildChoiceAutomaton signature leftAuto rightAuto TypeLabel.silent TypeLabel.silent)
-          rightAuto 1
-          (automatonNonClockStep_binaryChoice_child1 signature leftAuto rightAuto
+          (buildChoiceAutomaton signature alphabet leftAuto rightAuto
             TypeLabel.silent TypeLabel.silent)
-          (buildChoiceAutomaton_child1_accepting_iff signature leftAuto rightAuto
+          rightAuto 1
+          (automatonNonClockStep_binaryChoice_child1 signature alphabet leftAuto
+            rightAuto
+            TypeLabel.silent TypeLabel.silent)
+          (buildChoiceAutomaton_child1_accepting_iff signature alphabet leftAuto
+            rightAuto
             TypeLabel.silent TypeLabel.silent)
         rcases hShape with ⟨hResidualEq, hStateEq⟩ |
           ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
         · subst hResidualEq; subst hStateEq
           rw [typeSameCycleCanComplete_choice_iff,
-            automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
+            automatonSameCycleReachesAccepting_root_binaryChoice signature alphabet
+              leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.silent])
               (by simp [TypeLabel.isTock, TypeLabel.silent])]
           have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hAWLeft hCGLeft hTRLeft
@@ -3441,50 +3465,56 @@ theorem helper_h14_same_cycle_completion
         have hWhole :
             compileTypeFuel signature (typeCompilationFuel (.fairChoice alphabet bid left right))
               (.fairChoice alphabet bid left right) =
-              buildChoiceAutomaton signature leftAuto rightAuto
+              buildChoiceAutomaton signature alphabet leftAuto rightAuto
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show buildChoiceAutomaton signature
+          show buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
               (compileTypeFuel signature
                 (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
               (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
-            buildChoiceAutomaton signature leftAuto rightAuto
+            buildChoiceAutomaton signature alphabet leftAuto rightAuto
               (TypeLabel.fair bid true) (TypeLabel.fair bid false)
           rw [hLeftAutoDef, hRightAutoDef,
             compileTypeFuel_eq_of_sufficient signature left (le_max_left _ _) le_rfl,
             compileTypeFuel_eq_of_sufficient signature right (le_max_right _ _) le_rfl]
         rw [hWhole]
         simp only [TypeAlphabet.Supports] at hSupports
-        have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironments := by
-          simp only [TypeAlphabet.localEnvironments, Finset.mem_union, Finset.mem_biUnion,
-            Finset.mem_powerset, Finset.mem_image]
+        have hEmptyLocal :
+            TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet := by
+          simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
           exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
         have hShape := helper_h12_binaryChoice_shape signature (.fairChoice alphabet bid left right)
           left right rfl hFuelEq hRelated
         have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
-          (buildChoiceAutomaton signature leftAuto rightAuto
+          (buildChoiceAutomaton signature alphabet leftAuto rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
           leftAuto 0
-          (automatonNonClockStep_binaryChoice_child0 signature leftAuto rightAuto
+          (automatonNonClockStep_binaryChoice_child0 signature alphabet leftAuto
+            rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
-          (buildChoiceAutomaton_child0_accepting_iff signature leftAuto rightAuto
+          (buildChoiceAutomaton_child0_accepting_iff signature alphabet leftAuto
+            rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
         have hTag1 := automatonSameCycleReachesAccepting_of_child_tag
-          (buildChoiceAutomaton signature leftAuto rightAuto
+          (buildChoiceAutomaton signature alphabet leftAuto rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
           rightAuto 1
-          (automatonNonClockStep_binaryChoice_child1 signature leftAuto rightAuto
+          (automatonNonClockStep_binaryChoice_child1 signature alphabet leftAuto
+            rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
-          (buildChoiceAutomaton_child1_accepting_iff signature leftAuto rightAuto
+          (buildChoiceAutomaton_child1_accepting_iff signature alphabet leftAuto
+            rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))
         rcases hShape with ⟨hResidualEq, hStateEq⟩ |
           ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
         · subst hResidualEq; subst hStateEq
           rw [typeSameCycleCanComplete_fairChoice_iff,
-            automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
+            automatonSameCycleReachesAccepting_root_binaryChoice signature alphabet
+              leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.fair])
               (by simp [TypeLabel.isTock, TypeLabel.fair])]
           have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1 hAWLeft hCGLeft hTRLeft
@@ -3688,11 +3718,9 @@ lemma helper_h15_edge_future_offers_agree
         (TypeOfferSummary.mk current future) target) :
     future = if label = TypeLabel.tock then ∅
       else typeFutureOffers residual' \ current := by
-  have hSymbol := NewCorrespondence.compileType_hasEdge_symbol_mem signature
-    processType hEdge
   have hResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature processType source
-      target env label (TypeOfferSummary.mk current future) hSymbol).mp hEdge
+      target env label (TypeOfferSummary.mk current future)).mp hEdge
   exact helper_h15_resolved_edge_future_offers_agree signature hSource hTarget
     hResolved
 

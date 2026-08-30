@@ -83,39 +83,11 @@ namespace PactTypeAlphabet
   parallel-compatible alphabets, with the empty interface (no synchronization
   at this internal, compiler-generated parallel node). -/
   theorem branchPart_remove_parallelCompatible
-      (parent : PactTypeAlphabet) (hParentWF : parent.WellFormed)
-      (branch : BareMessage × PactType) :
+      (parent : PactTypeAlphabet) (branch : BareMessage × PactType) :
       ParallelCompatible parent (branchPart parent branch)
         (remove parent (branchPart parent branch)) ∅ := by
-    have hActionsDisjoint : Disjoint (branchPart parent branch).actions
-        (remove parent (branchPart parent branch)).actions := by
-      simp only [branchPart, remove]
-      exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp)
-    have hMessageIdsDisjoint : Disjoint (branchPart parent branch).messageIds
-        (remove parent (branchPart parent branch)).messageIds := by
-      rw [Finset.disjoint_left]
-      rintro msgId hLeft hRight
-      simp only [PactTypeAlphabet.messageIds, Finset.mem_image] at hLeft hRight
-      obtain ⟨⟨lMsg, lDir⟩, hLeftAction, hLeftEq⟩ := hLeft
-      obtain ⟨⟨rMsg, rDir⟩, hRightAction, hRightEq⟩ := hRight
-      simp only at hLeftEq hRightEq
-      rw [← hLeftEq] at hRightEq
-      simp only [branchPart, remove, Finset.mem_inter, Finset.mem_sdiff]
-        at hLeftAction hRightAction
-      rw [hRightEq] at hRightAction
-      rcases lDir with _ | _ <;> rcases rDir with _ | _
-      · exact hRightAction.2 hLeftAction
-      · exact hParentWF lMsg ⟨hLeftAction.1, hRightAction.1⟩
-      · exact hParentWF lMsg ⟨hRightAction.1, hLeftAction.1⟩
-      · exact hRightAction.2 hLeftAction
     exact
       { parent_eq := mergeHidden_branchPart_remove_empty parent branch
-        shared_messageIds := by
-          rw [Finset.disjoint_iff_inter_eq_empty] at hMessageIdsDisjoint
-          simpa using hMessageIdsDisjoint
-        boundary_messageIds_disjoint := by
-          simpa [BoundaryMessageIdsDisjoint] using hMessageIdsDisjoint
-        actions_disjoint := hActionsDisjoint
         complementary := by simp [ComplementaryOn]
         progress_disjoint := by
           simp only [branchPart, remove]
@@ -134,14 +106,15 @@ namespace PactTypeAlphabet
       progress := child.progress ∩ parent.progress
       fair := child.fair ∩ parent.fair }
 
-  /-- Project a new parallel alphabet to the left child.  Declarations that
-  are new to the reannotated parallel node are assigned to the left child, so
-  the two projected children still reconstruct the whole parent alphabet. -/
+  /-- Project a new parallel alphabet to the left child.  The left child keeps
+  its own projection, and additionally absorbs the declarations that are new to
+  the reannotated parallel node, so the two projected children still
+  reconstruct the whole parent alphabet. -/
   def projectParallelLeft (parent left right : PactTypeAlphabet)
       (interface : Interface) : PactTypeAlphabet :=
     let rightPart := projectParallelChild parent right interface
     { actions :=
-        (left.actions.filter fun action => action.1 ∈ interface) ∪
+        (projectParallelChild parent left interface).actions ∪
           (parent.actions \ rightPart.actions)
       progress := parent.progress \ rightPart.progress
       fair := parent.fair \ rightPart.fair }

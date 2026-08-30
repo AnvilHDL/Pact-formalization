@@ -115,7 +115,7 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
             parallelTypeBranchesWithin_alphabet_wellFormed rightAlphabet hRightAlphaWF
               (next :: tail) hTailPairwise (fun item hItem => (hRestWF item hItem).1)
           have hCompatible :=
-            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
+            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet
               (action, processType)
           have hParIH : StepIffStatement signature
               (.par alphabet
@@ -256,7 +256,7 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
           rw [List.pairwise_cons] at hPairwise
           obtain ⟨hHeadDisjoint, hTailPairwise⟩ := hPairwise
           have hCompatible :=
-            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF
+            PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet
               (action, processType)
           have hRestWF : ∀ item ∈ next :: tail,
               BranchAlphabetCarried rightAlphabet item ∧
@@ -600,9 +600,9 @@ theorem correspondence_offer_stepIff
         typeFutureOffers elseType
       exact helper_h15_future_offers_agree signature
         (buildRelationSet_initial elseType (compileType signature elseType))
-    have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
-    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hEnvMem : env ∈ signature.localEnvironmentsFor alphabet :=
+      transitionAlphabetFor_localEnvironment_mem signature alphabet hSignatureSymbol
+    have hWF : env.WellFormed := TypeAlphabet.environmentFor_wellFormed hEnvMem
     have hRootRelated : relationMembership
         (buildRelationSet (.offer alphabet elseType branches)
           (compileType signature (.offer alphabet elseType branches)))
@@ -692,7 +692,7 @@ theorem correspondence_offer_stepIff
                 (typeCompilationFuel (parallelTypeBranchesSelecting enabled branches))
                 (parallelTypeBranchesSelecting enabled branches)).initial) env TypeLabel.silent
               (TypeOfferSummary.mk ∅ (typeFutureOffers
-                (parallelTypeBranchesSelecting enabled branches))) hSignatureSymbol']
+                (parallelTypeBranchesSelecting enabled branches)))]
             rw [hWhole]
             refine ⟨_, hEnabledPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
             simpa [childState] using hFutureBranchEq
@@ -745,8 +745,7 @@ theorem correspondence_offer_stepIff
             rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer alphabet elseType branches)
               TypeAutomatonState.root (.child 0 (compileTypeFuel signature
                 (typeCompilationFuel elseType) elseType).initial) env TypeLabel.silent
-              (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType))
-              hSignatureSymbol']
+              (TypeOfferSummary.mk (typeBranchActions branches) (typeFutureOffers elseType))]
             rw [hWhole]
             refine ⟨_, hElsePending, rfl, rfl, rfl, rfl, ?_, rfl⟩
             simpa [childState] using hFutureElseEq
@@ -797,7 +796,7 @@ theorem correspondence_offer_stepIff
               TypeAutomatonState.root TypeAutomatonState.root env TypeLabel.silent
               (TypeOfferSummary.mk (typeWaitingOffers env branches)
                 (typeFutureOffers (.offer alphabet elseType branches) \
-                  typeWaitingOffers env branches)) hSignatureSymbol']
+                  typeWaitingOffers env branches))]
             rw [hWhole]
             refine ⟨_, hWaitPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
             show computeFutureOf signature (.offer alphabet elseType branches) TypeAutomatonState.root \
@@ -817,8 +816,7 @@ theorem correspondence_offer_stepIff
     · rintro ⟨state', hEdge, hTargetRelated⟩
       have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
         (.offer alphabet elseType branches) TypeAutomatonState.root state' env label
-        (TypeOfferSummary.mk current future)
-        (compileType_hasEdge_symbol_mem signature (.offer alphabet elseType branches) hEdge)).mp hEdge
+        (TypeOfferSummary.mk current future)).mp hEdge
       rw [hWhole] at hResolved
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
@@ -857,7 +855,7 @@ theorem correspondence_offer_stepIff
           obtain ⟨branchType', hSelectedGet, hAutEq⟩ :=
             (branches_map_selecting_getElem?_eq_some_iff signature branches index branchAction
               automaton).mp hIndexedGet
-          have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+          have hWF : env.WellFormed := TypeAlphabet.environmentFor_wellFormed hEnvMem
           have hEnabledMem : (branchAction, branchType') ∈ branches :=
             List.mem_iff_getElem?.mpr ⟨index, hSelectedGet⟩
           simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
@@ -940,7 +938,7 @@ theorem correspondence_offer_stepIff
           ⟨environment, ⟨hEnvMem, hClock, hNoImmediate, hUnresolved, -⟩, rfl⟩
         have hEnvEq : environment = env := hPEnv
         subst environment
-        have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+        have hWF : env.WellFormed := TypeAlphabet.environmentFor_wellFormed hEnvMem
         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
         have hLabelEq : label = TypeLabel.silent := by
           have h := hPLabel; simp at h; exact h.symm
@@ -973,7 +971,7 @@ theorem correspondence_offer_stepIff
           ⟨environment, ⟨hEnvMem, hClock, hNoImmediate, hResolvedNeeds, -⟩, rfl⟩
         have hEnvEq : environment = env := hPEnv
         subst environment
-        have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+        have hWF : env.WellFormed := TypeAlphabet.environmentFor_wellFormed hEnvMem
         simp only [childState] at hPLabel hPCurrent hPFuture hPTarget
         have hLabelEq : label = TypeLabel.silent := by
           have h := hPLabel; simp at h; exact h.symm
@@ -1020,12 +1018,10 @@ theorem correspondence_offer_stepIff
       have hOuterEdge : (compileType signature (.offer alphabet elseType branches)).HasEdge
           (.child 0 q) env label (TypeOfferSummary.mk current future) (.child 0 q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer alphabet elseType branches)
-          (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)
-          hSignatureSymbol]
+          (.child 0 q) (.child 0 q') env label (TypeOfferSummary.mk current future)]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature elseType q q'
-          env label (TypeOfferSummary.mk current future)
-          (compileType_hasEdge_symbol_mem signature elseType hChildEdge)).mp hChildEdge
+          env label (TypeOfferSummary.mk current future)).mp hChildEdge
         obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge 0 childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -1053,8 +1049,7 @@ theorem correspondence_offer_stepIff
     · rintro ⟨state', hEdge, hTargetRelated⟩
       have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
         (.offer alphabet elseType branches) (.child 0 q) state' env label
-        (TypeOfferSummary.mk current future)
-        (compileType_hasEdge_symbol_mem signature (.offer alphabet elseType branches) hEdge)).mp hEdge
+        (TypeOfferSummary.mk current future)).mp hEdge
       rw [hWhole] at hResolved
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
@@ -1070,8 +1065,7 @@ theorem correspondence_offer_stepIff
       have hInnerEdgeMem : (compileType signature elseType).HasEdge q env label
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature elseType q childEdge.target env
-          label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hElseSymbol)]
+          label (TypeOfferSummary.mk current future)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl
@@ -1140,14 +1134,11 @@ theorem correspondence_offer_stepIff
           (.child (i + 1) q') := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature (.offer alphabet elseType branches)
           (.child (i + 1) q) (.child (i + 1) q') env label
-          (TypeOfferSummary.mk current future)
-          hSignatureSymbol]
+          (TypeOfferSummary.mk current future)]
         rw [hWhole]
         have hChildResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
           (parallelTypeBranchesSelecting selected branches)
-          q q' env label (TypeOfferSummary.mk current future)
-          (compileType_hasEdge_symbol_mem signature
-            (parallelTypeBranchesSelecting selected branches) hChildEdge)).mp hChildEdge
+          q q' env label (TypeOfferSummary.mk current future)).mp hChildEdge
         obtain ⟨childEdge, hChildEdgeMem, hCSource, hCEnv, hCLabel, hCCurrent, hCFuture,
           hCTarget⟩ := hChildResolved
         refine ⟨childPendingEdge (i + 1) childEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -1195,8 +1186,7 @@ theorem correspondence_offer_stepIff
         rfl
       have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
         (.offer alphabet elseType branches) (.child (i + 1) q) state' env label
-        (TypeOfferSummary.mk current future)
-        (compileType_hasEdge_symbol_mem signature (.offer alphabet elseType branches) hEdge)).mp hEdge
+        (TypeOfferSummary.mk current future)).mp hEdge
       rw [hWhole] at hResolved
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
@@ -1217,8 +1207,7 @@ theorem correspondence_offer_stepIff
           (TypeOfferSummary.mk current future) childEdge.target := by
         rw [compileType_hasEdge_iff_hasResolvedEdge signature
           (parallelTypeBranchesSelecting selected branches) q childEdge.target
-          env label (TypeOfferSummary.mk current future)
-          (by simpa [compileType] using hBranchSymbol)]
+          env label (TypeOfferSummary.mk current future)]
         refine ⟨childEdge, hChildEdgeMem, hChildEdgeSource, ?_, ?_, ?_, ?_, rfl⟩
         · rw [← hPEnv, hChildEdgeEq]; rfl
         · rw [← hPLabel, hChildEdgeEq]; rfl

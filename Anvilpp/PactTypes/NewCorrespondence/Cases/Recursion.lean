@@ -113,7 +113,7 @@ theorem correspondence_recur_stepIff
   have hWhole :
       compileTypeFuel signature (typeCompilationFuel (.recur alphabet name body))
         (.recur alphabet name body) =
-        buildRecursionAutomaton signature name
+        buildRecursionAutomaton signature alphabet name
           (compileTypeFuel signature (typeCompilationFuel body) body) := by
     rw [hFuelEq]
     rw [compileTypeFuel.eq_def]
@@ -123,8 +123,8 @@ theorem correspondence_recur_stepIff
     simp only [Prod.mk.injEq] at hRoot
     obtain ⟨hResidualEq, hStateEq⟩ := hRoot
     subst hResidualEq; subst hStateEq
-    have hEnvMem : env ∈ signature.localEnvironments :=
-      transitionAlphabetFor_environment_mem signature alphabet hSignatureSymbol
+    have hEnvMem : env ∈ signature.localEnvironmentsFor alphabet :=
+      transitionAlphabetFor_localEnvironment_mem signature alphabet hSignatureSymbol
     have hHeaderPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
@@ -134,12 +134,12 @@ theorem correspondence_recur_stepIff
             target := childState 0
               (compileTypeFuel signature (typeCompilationFuel body) body).initial } :
           PendingAutomatonEdge) ∈
-          (buildRecursionAutomaton signature name
+          (buildRecursionAutomaton signature alphabet name
             (compileTypeFuel signature (typeCompilationFuel body) body)).edges := by
       simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
         Finset.mem_image, Finset.mem_filter]
       exact Or.inl ⟨env, ⟨hEnvMem, hClock⟩, rfl⟩
-    have hWF : env.WellFormed := localEnvironment_wellFormed signature hEnvMem
+    have hWF : env.WellFormed := TypeAlphabet.environmentFor_wellFormed hEnvMem
     constructor
     · intro hStep
       obtain ⟨hTrans, hOffers⟩ := hStep
@@ -168,8 +168,7 @@ theorem correspondence_recur_stepIff
           TypeAutomatonState.root (.child 0 (compileTypeFuel signature
             (typeCompilationFuel body) body).initial) env TypeLabel.silent
           (TypeOfferSummary.mk ∅
-            (typeFutureOffers (body.replaceVar name (.recur alphabet name body))))
-          hSignatureSymbol']
+            (typeFutureOffers (body.replaceVar name (.recur alphabet name body))))]
         rw [hWhole]
         refine ⟨_, hHeaderPending ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
         · assumption
@@ -181,11 +180,9 @@ theorem correspondence_recur_stepIff
       exact relationMembership_recur_child signature alphabet name body body
         (buildRelationSet_initial body (compileType signature body))
     · rintro ⟨state', hEdge, hTargetRelated⟩
-      have hSymbolMem := compileType_hasEdge_symbol_mem signature (.recur alphabet name body)
-        hEdge
       have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
         (.recur alphabet name body) TypeAutomatonState.root state' env label
-        (TypeOfferSummary.mk current future) hSymbolMem).mp hEdge
+        (TypeOfferSummary.mk current future)).mp hEdge
       rw [hWhole] at hResolved
       obtain ⟨pendingEdge, hPendingMem, hPSource, hPEnv, hPLabel, hPCurrent, hPFuture,
         hPTarget⟩ := hResolved
@@ -226,11 +223,11 @@ theorem correspondence_recur_stepIff
           have hEnvironmentEq : environment = env := hPEnv
           rw [hResidualEqAgain, hLabelEq]
           refine ⟨TypeTransition.recur env alphabet name body
-            (localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment.1))
+            (TypeAlphabet.environmentFor_wellFormed (hEnvironmentEq ▸ hEnvironment.1))
             (by simpa [hEnvironmentEq] using hEnvironment.2), ?_⟩
           rw [hCurrentEq, hFutureEq]
           exact TypeOffers.recur env alphabet name body
-            ⟨localEnvironment_wellFormed signature (hEnvironmentEq ▸ hEnvironment.1),
+            ⟨TypeAlphabet.environmentFor_wellFormed (hEnvironmentEq ▸ hEnvironment.1),
               by simpa [hEnvironmentEq] using hEnvironment.2⟩
       · exfalso
         have hRootSource : pendingEdge.source = TypeAutomatonState.root := hPSource

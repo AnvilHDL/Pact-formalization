@@ -214,19 +214,19 @@ lemma relationMembership_fairChoice_cases
       compileTypeFuel signature
         (typeCompilationFuel (.fairChoice alphabet bid left right))
         (.fairChoice alphabet bid left right) =
-        buildChoiceAutomaton signature
+        buildChoiceAutomaton signature alphabet
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
           (TypeLabel.fair bid true) (TypeLabel.fair bid false) := by
     rw [hFuelEq]
     rw [compileTypeFuel.eq_def]
-    show buildChoiceAutomaton signature
+    show buildChoiceAutomaton signature alphabet
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
         (compileTypeFuel signature
           (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
         (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
-      buildChoiceAutomaton signature (compileTypeFuel signature
+      buildChoiceAutomaton signature alphabet (compileTypeFuel signature
         (typeCompilationFuel left) left) (compileTypeFuel signature
         (typeCompilationFuel right) right) (TypeLabel.fair bid true)
         (TypeLabel.fair bid false)

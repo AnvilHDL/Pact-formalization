@@ -357,8 +357,7 @@ theorem buildParallelAutomaton_final_hasEdge_iff
   · intro hEdge
     have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
       (.par alphabet left right interface) TypeAutomatonState.final target env
-      label offers
-      hSymbol).mp hEdge
+      label offers).mp hEdge
     obtain ⟨edge, hPending, hSource, hEnv, hLabel, hCurrent, hFuture, hTarget⟩ := hResolved
     have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
         max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
@@ -425,9 +424,7 @@ theorem buildParallelAutomaton_final_hasEdge_iff
       subst env
       injection hLabel with hLabelEq
       subst hLabelEq
-      refine ⟨localEnvironment_wellFormed signature
-          (TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
-            signature alphabet hEnvironment.1),
+      refine ⟨TypeAlphabet.environmentFor_wellFormed hEnvironment.1,
         hEnvironment.2, rfl, ?_,
         hTarget.symm⟩
       · cases offers with
@@ -437,7 +434,7 @@ theorem buildParallelAutomaton_final_hasEdge_iff
     rw [compileType_hasEdge_iff_hasResolvedEdge signature
       (.par alphabet left right interface) TypeAutomatonState.final
       TypeAutomatonState.final
-      env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅) hSymbol]
+      env TypeLabel.silent (TypeOfferSummary.mk ∅ ∅)]
     have hLocal : env ∈ signature.localEnvironmentsFor alphabet :=
       transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol
     have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
@@ -489,8 +486,6 @@ theorem compiledParallel_pair_edge_target_reachable
     (left right : PactType) (interface : Interface)
     {q1 q2 target : TypeAutomatonState} {env : TypeEnvironment}
     {label : TypeLabel} {offers : TypeOfferSummary}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      (compileType signature (.par alphabet left right interface)).alphabet)
     (hEdge : (compileType signature (.par alphabet left right interface)).HasEdge
       (.pair q1 q2) env label offers target) :
     ParallelReachable signature alphabet left.alphabet right.alphabet interface
@@ -499,8 +494,8 @@ theorem compiledParallel_pair_edge_target_reachable
       (computeFutureOf signature left)
       (computeFutureOf signature right) target := by
   have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-    (.par alphabet left right interface) (.pair q1 q2) target env label offers
-    hSymbol).mp hEdge
+    (.par alphabet left right interface) (.pair q1 q2) target env label
+    offers).mp hEdge
   obtain ⟨edge, hPending, hSource, _, _, _, _, hTarget⟩ := hResolved
   have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
@@ -1464,14 +1459,6 @@ private theorem alphabet_wellFormed_of_type
   cases processType <;> simp [PactType.AlphabetWellFormed, PactType.alphabet] at hWF ⊢
   all_goals tauto
 
-private theorem typeNeed_injective : Function.Injective typeNeed := by
-  intro left right hEq
-  rcases left with ⟨leftMsg, leftDir⟩
-  rcases right with ⟨rightMsg, rightDir⟩
-  cases leftDir <;> cases rightDir <;>
-    simp [typeNeed, MessageDir.invert] at hEq ⊢
-  all_goals exact hEq
-
 private theorem typeNeed_typeNeed (action : BareMessage) :
     typeNeed (typeNeed action) = action := by
   rcases action with ⟨msg, dir⟩
@@ -1515,50 +1502,25 @@ private theorem typeNeed_mem_right_of_left_interface
     · exact False.elim (hLeftWF msg ⟨hSendRecv.1, hAction⟩)
     · exact hRecvSend.2
 
-private theorem projected_environment_action_mem_for
+/-- A type declaring an action's complement admits that action in its
+environments. -/
+private theorem mem_localEnvironmentActionsFor_of_need
     (signature : TypeAlphabet)
-    {parent localAlphabet : PactTypeAlphabet} {action : BareMessage}
-    (hOuter :
-      action ∈ signature.localEnvironmentActionsFor parent)
-    (hProjected : action ∈ localAlphabet.actions.image typeNeed) :
-    action ∈ signature.localEnvironmentActionsFor localAlphabet := by
-  simp only [TypeAlphabet.localEnvironmentActionsFor,
-    TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
-    at hOuter hProjected ⊢
-  rcases hOuter with ⟨outerAction, hOuterAction, hOuterEq⟩
-  rcases hProjected with ⟨localAction, hLocalAction, hLocalEq⟩
-  have hSameNeed : typeNeed localAction = typeNeed outerAction := by
-    rw [hLocalEq, hOuterEq]
-  have hActionEq : localAction = outerAction :=
-    typeNeed_injective hSameNeed
-  subst outerAction
-  exact ⟨localAction, ⟨hOuterAction.1, hLocalAction⟩, hLocalEq⟩
-
-private theorem interface_offer_mem_localEnvironmentActionsFor
-    (signature : TypeAlphabet) {interface : Interface}
-    {localAlphabet sibling : PactTypeAlphabet} {action : BareMessage}
-    (hInterface : interface ⊆ signature.interface)
-    (hSiblingAction : action ∈ signature.localActionsFor sibling)
-    (hActionInterface : action.1 ∈ interface)
+    {localAlphabet : PactTypeAlphabet} {action : BareMessage}
     (hNeed : typeNeed action ∈ localAlphabet.actions) :
     action ∈ signature.localEnvironmentActionsFor localAlphabet := by
   simp only [TypeAlphabet.localEnvironmentActionsFor,
-    TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter] at hSiblingAction ⊢
-  refine ⟨typeNeed action, ⟨?_, hNeed⟩, ?_⟩
-  · exact interface_action_mem_localActions signature hInterface (by
-      rcases action with ⟨msg, dir⟩
-      simpa [typeNeed] using hActionInterface)
-  · rw [typeNeed_typeNeed]
+    TypeAlphabet.localActionsFor, Finset.mem_image]
+  exact ⟨typeNeed action, hNeed, typeNeed_typeNeed action⟩
 
 private theorem localEnvironmentFor_mem_of_localTypeOfferEnvironment
     (signature : TypeAlphabet) {parentAlphabet siblingAlphabet : PactTypeAlphabet}
     {outer localEnv siblingEnv : TypeEnvironment}
     {interface : Interface} {localType : PactType}
     {current future : Finset BareMessage}
-    (hInterface : interface ⊆ signature.interface)
     (hOuter : outer ∈ signature.localEnvironmentsFor parentAlphabet)
-    (hCurrent : current ⊆ signature.localActionsFor siblingAlphabet)
-    (hFuture : future ⊆ signature.localActionsFor siblingAlphabet)
+    (hCurrent : current ⊆ siblingAlphabet.actions)
+    (hFuture : future ⊆ siblingAlphabet.actions)
     (hNeed : ∀ action,
       action ∈ siblingAlphabet.actions → action.1 ∈ interface →
         typeNeed action ∈ localType.alphabet.actions)
@@ -1590,27 +1552,23 @@ private theorem localEnvironmentFor_mem_of_localTypeOfferEnvironment
             projectTypeEnvironmentOffers, Finset.mem_filter] at hAction
           rcases hAction with ⟨hOuterAction, hProjected⟩ |
               ⟨hCurrentAction, hInterfaceAction⟩
-          · exact projected_environment_action_mem_for signature
-              (hOuterImmediate hOuterAction) hProjected
-          · exact interface_offer_mem_localEnvironmentActionsFor signature
-              hInterface (hCurrent hCurrentAction) hInterfaceAction
-              (hNeed action
-                ((Finset.mem_inter.mp (hCurrent hCurrentAction)).2)
-                hInterfaceAction)
+          · simpa [TypeAlphabet.localEnvironmentActionsFor,
+              TypeAlphabet.localActionsFor] using hProjected
+          · exact mem_localEnvironmentActionsFor_of_need signature
+              (hNeed action (hCurrent hCurrentAction) hInterfaceAction)
         · intro action hAction
           rw [hFutureEq] at hAction
           simp only [Finset.mem_sdiff, Finset.mem_union, restrictTypeOffers,
             projectTypeEnvironmentOffers, Finset.mem_filter] at hAction ⊢
           rcases hAction.1 with ⟨hOuterAction, hProjected⟩ |
               ⟨hFutureAction, hInterfaceAction⟩
-          · exact ⟨projected_environment_action_mem_for signature
-              (Finset.mem_sdiff.mp (hOuterFuture hOuterAction)).1 hProjected,
+          · exact ⟨by
+              simpa [TypeAlphabet.localEnvironmentActionsFor,
+                TypeAlphabet.localActionsFor] using hProjected,
               hAction.2⟩
-          · exact ⟨interface_offer_mem_localEnvironmentActionsFor signature
-              hInterface (hFuture hFutureAction) hInterfaceAction
-              (hNeed action
-                ((Finset.mem_inter.mp (hFuture hFutureAction)).2)
-                hInterfaceAction), hAction.2⟩
+          · exact ⟨mem_localEnvironmentActionsFor_of_need signature
+              (hNeed action (hFuture hFutureAction) hInterfaceAction),
+              hAction.2⟩
 
 private theorem localEnvironment_mem_of_localTypeOfferEnvironment
     (signature : TypeAlphabet) {outer localEnv siblingEnv : TypeEnvironment}
@@ -1659,68 +1617,6 @@ private theorem localEnvironment_mem_of_localTypeOfferEnvironment
               hAction.2⟩
           · exact ⟨interface_action_mem_localEnvironmentActions signature
               hInterface hInterfaceAction, hAction.2⟩
-
-private theorem componentOffers_mem_localOfferSummaries
-    (signature : TypeAlphabet) {interface : Interface}
-    (hInterface : interface ⊆ signature.interface)
-    {leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage}
-    (hParent :
-      TypeOfferSummary.mk
-        (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-        (hideTypeOffers interface (leftFuture ∪ rightFuture)) ∈
-          signature.localOfferSummaries) :
-    TypeOfferSummary.mk leftCurrent leftFuture ∈
-        signature.localOfferSummaries ∧
-      TypeOfferSummary.mk rightCurrent rightFuture ∈
-        signature.localOfferSummaries := by
-  rw [localOfferSummaries_mk_mem_iff] at hParent
-  have liftComponent : ∀ {component sibling : Finset BareMessage},
-      hideTypeOffers interface (component ∪ sibling) ⊆
-          signature.localActions →
-      component ⊆ signature.localActions := by
-    intro component sibling hHidden action hAction
-    by_cases hInternal : action.1 ∈ interface
-    · exact interface_action_mem_localActions signature hInterface hInternal
-    · apply hHidden
-      simp [hideTypeOffers, hAction, hInternal]
-  constructor
-  · rw [localOfferSummaries_mk_mem_iff]
-    exact ⟨liftComponent hParent.1, liftComponent hParent.2⟩
-  · rw [localOfferSummaries_mk_mem_iff]
-    exact ⟨
-      liftComponent (component := rightCurrent) (sibling := leftCurrent)
-        (by simpa [Finset.union_comm] using hParent.1),
-      liftComponent (component := rightFuture) (sibling := leftFuture)
-        (by simpa [Finset.union_comm] using hParent.2)⟩
-
-private theorem componentOffers_mem_localOfferSummariesFor
-    (signature : TypeAlphabet) {interface : Interface}
-    {left right : PactType}
-    (hInterface : interface ⊆ signature.interface)
-    {leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage}
-    (hLeftCurrent : leftCurrent ⊆ left.alphabet.actions)
-    (hLeftFuture : leftFuture ⊆ left.alphabet.actions)
-    (hRightCurrent : rightCurrent ⊆ right.alphabet.actions)
-    (hRightFuture : rightFuture ⊆ right.alphabet.actions)
-    (hParent :
-      TypeOfferSummary.mk
-        (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-        (hideTypeOffers interface (leftFuture ∪ rightFuture)) ∈
-          signature.localOfferSummaries) :
-    TypeOfferSummary.mk leftCurrent leftFuture ∈
-        signature.localOfferSummariesFor left.alphabet ∧
-      TypeOfferSummary.mk rightCurrent rightFuture ∈
-        signature.localOfferSummariesFor right.alphabet := by
-  obtain ⟨hUnrestrictedLeft, hUnrestrictedRight⟩ :=
-    componentOffers_mem_localOfferSummaries signature hInterface hParent
-  rw [localOfferSummaries_mk_mem_iff] at hUnrestrictedLeft hUnrestrictedRight
-  refine ⟨?_, ?_⟩
-  · rw [localOfferSummariesFor_mk_mem_iff]
-    exact ⟨Finset.subset_inter hUnrestrictedLeft.1 hLeftCurrent,
-      Finset.subset_inter hUnrestrictedLeft.2 hLeftFuture⟩
-  · rw [localOfferSummariesFor_mk_mem_iff]
-    exact ⟨Finset.subset_inter hUnrestrictedRight.1 hRightCurrent,
-      Finset.subset_inter hUnrestrictedRight.2 hRightFuture⟩
 
 private theorem componentLabels_mem_localLabels
     (signature : TypeAlphabet) {interface : Interface}
@@ -1855,49 +1751,31 @@ theorem transitionAlphabet_of_par_component
   obtain ⟨hEnv, hParentLabel, hParentOffers⟩ := hSymbol
   have hLeftWF := alphabet_wellFormed_of_type hLeftWellFormed
   have hRightWF := alphabet_wellFormed_of_type hRightWellFormed
-  have hParentOffersUnrestricted :
-      TypeOfferSummary.mk
-        (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-        (hideTypeOffers interface (leftFuture ∪ rightFuture)) ∈
-          signature.localOfferSummaries := by
-    rw [localOfferSummariesFor_mk_mem_iff] at hParentOffers
-    rw [localOfferSummaries_mk_mem_iff]
-    exact ⟨hParentOffers.1.trans (TypeAlphabet.localActionsFor_subset_localActions signature
-        alphabet),
-      hParentOffers.2.trans (TypeAlphabet.localActionsFor_subset_localActions signature
-        alphabet)⟩
-  obtain ⟨hUnrestrictedLeft, hUnrestrictedRight⟩ :=
-    componentOffers_mem_localOfferSummaries signature hInterface
-      hParentOffersUnrestricted
-  rw [localOfferSummaries_mk_mem_iff] at hUnrestrictedLeft hUnrestrictedRight
   have hLeftEnv := localEnvironmentFor_mem_of_localTypeOfferEnvironment signature
     (parentAlphabet := alphabet) (siblingAlphabet := right.alphabet)
-    hInterface hEnv
-    (Finset.subset_inter hUnrestrictedRight.1 hRightCurrent)
-    (Finset.subset_inter hUnrestrictedRight.2 hRightFuture)
+    hEnv hRightCurrent hRightFuture
     (fun action hAction hInterfaceAction =>
       typeNeed_mem_left_of_right_interface hLeftWF hRightWF
         hParallelCompatible hAction hInterfaceAction)
     hLocal1
   have hRightEnv := localEnvironmentFor_mem_of_localTypeOfferEnvironment signature
     (parentAlphabet := alphabet) (siblingAlphabet := left.alphabet)
-    hInterface hEnv
-    (Finset.subset_inter hUnrestrictedLeft.1 hLeftCurrent)
-    (Finset.subset_inter hUnrestrictedLeft.2 hLeftFuture)
+    hEnv hLeftCurrent hLeftFuture
     (fun action hAction hInterfaceAction =>
       typeNeed_mem_right_of_left_interface hLeftWF hRightWF
         hParallelCompatible hAction hInterfaceAction)
     hLocal2
   have hLabels := componentLabels_mem_localLabels signature hInterface hSync
     hLabelEq hParentLabel
-  have hOffers := componentOffers_mem_localOfferSummariesFor signature
-    hInterface hLeftCurrent hLeftFuture hRightCurrent hRightFuture
-    hParentOffersUnrestricted
   constructor
   · rw [transitionAlphabetFor_mk_mem_iff]
-    exact ⟨hLeftEnv, hLabels.1, hOffers.1⟩
+    exact ⟨hLeftEnv, hLabels.1,
+      (localOfferSummariesFor_mk_mem_iff signature left.alphabet leftCurrent
+        leftFuture).mpr ⟨hLeftCurrent, hLeftFuture⟩⟩
   · rw [transitionAlphabetFor_mk_mem_iff]
-    exact ⟨hRightEnv, hLabels.2, hOffers.2⟩
+    exact ⟨hRightEnv, hLabels.2,
+      (localOfferSummariesFor_mk_mem_iff signature right.alphabet rightCurrent
+        rightFuture).mpr ⟨hRightCurrent, hRightFuture⟩⟩
 
 /-- Lift a pair of child relation states into the product relation. -/
 lemma relationMembership_par_pair
@@ -2105,7 +1983,7 @@ theorem relationMembership_of_accepting
             (.choice alphabet left right)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildChoiceAutomaton signature
+          show (buildChoiceAutomaton signature alphabet
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
             (compileTypeFuel signature
@@ -2163,7 +2041,7 @@ theorem relationMembership_of_accepting
             (.fairChoice alphabet bid left right)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildChoiceAutomaton signature
+          show (buildChoiceAutomaton signature alphabet
             (compileTypeFuel signature
               (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
             (compileTypeFuel signature
@@ -2288,7 +2166,7 @@ theorem relationMembership_of_accepting
             (.recur alphabet name body)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildRecursionAutomaton signature name
+          show (buildRecursionAutomaton signature alphabet name
             (compileTypeFuel signature (typeCompilationFuel body) body)).accepting = _
           simp [buildRecursionAutomaton, finishAutomatonFragment]
         rw [hAcceptEq] at hAccept
@@ -2709,15 +2587,6 @@ theorem survivorRight_mem_edges
     (left right : PactType) (interface : Interface)
     (q1 q2 q' : TypeAutomatonState) (env : TypeEnvironment)
     (label : TypeLabel) (childOffers : TypeOfferSummary)
-    (hSymbolResolved : TypeAutomatonSymbol.mk env label
-      (TypeOfferSummary.mk childOffers.current
-        (match parallelFutureSpec (.visible label) (.survivor 1 q')
-            childOffers.current with
-          | .explicit offers => offers
-          | .at state removed =>
-              computeFutureOf signature (.par alphabet left right interface)
-                state \ removed)) ∈
-      signature.transitionAlphabetFor alphabet)
     (hReach : ParallelReachable signature alphabet left.alphabet right.alphabet
       interface
       (compileTypeFuel signature (typeCompilationFuel left) left)
@@ -2727,6 +2596,9 @@ theorem survivorRight_mem_edges
     (hOffCur : restrictTypeOffers interface childOffers.current = ∅)
     (hOffFut : restrictTypeOffers interface childOffers.future = ∅)
     (hEdge : (compileType signature right).HasEdge q2 env label childOffers q')
+    -- The survivor edge family gates on the child's own fixed alphabet.
+    (hChildSymbol : TypeAutomatonSymbol.mk env label childOffers ∈
+      signature.transitionAlphabetFor right.alphabet)
     (hQ1Acc : q1 ∈ (compileType signature left).accepting)
     (hQ1St : q1 ∈ (compileTypeFuel signature (typeCompilationFuel left) left).states)
     (hQ'NotAcc : q' ∉ (compileType signature right).accepting)
@@ -2776,17 +2648,6 @@ theorem survivorRight_mem_edges
       compiledChildFutureFuel_eq_computeFutureOf signature _ right
         (le_max_right _ _)]
     rfl
-  have hSymbol' : TypeAutomatonSymbol.mk env label
-      (TypeOfferSummary.mk childOffers.current
-        (match parallelFutureSpec (.visible label) (.survivor 1 q')
-            childOffers.current with
-          | .explicit offers => offers
-          | .at state removed =>
-              computeFutureOf signature (.par alphabet left right interface)
-                state \ removed)) ∈
-      signature.transitionAlphabetFor
-        (PactType.par alphabet left right interface).alphabet := by
-    simpa [PactType.alphabet] using hSymbolResolved
   have hAcceptEqLeft :
       (compileTypeFuel signature (typeCompilationFuel left) left).accepting
         = (compileType signature left).accepting := by simp [compileType]
@@ -2795,13 +2656,12 @@ theorem survivorRight_mem_edges
         = (compileType signature right).accepting := by simp [compileType]
   rw [compileType_hasEdge_iff_resolvedEdge_mem signature
     (.par alphabet left right interface) (.pair q1 q2) (.survivor 1 q') env
-    label _ hSymbol']
+    label _]
   rw [hWhole]
   simp only [resolveAutomatonEdgesWith, Finset.mem_image]
-  have hSymbolRight := compileType_hasEdge_symbol_mem signature right hEdge
   have hChildMem :=
     (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q' env label
-      childOffers hSymbolRight).mp hEdge
+      childOffers).mp hEdge
   refine ⟨{ source := .pair q1 q2
             environment := env
             label := .visible label
@@ -2819,7 +2679,7 @@ theorem survivorRight_mem_edges
     refine ⟨q1, ⟨hAcceptEqLeft ▸ hQ1Acc, hQ1St⟩, _,
       ⟨hChildMem, ?_, ?_, hOffCur, hOffFut⟩, rfl⟩
     · simp only [parallelComponentEdgeAllowed]
-      exact hSymbolRight
+      exact hChildSymbol
     · exact hAcceptEqRight ▸ hQ'NotAcc
   · simp only [parallelFutureSpec]
     split_ifs with hTock
@@ -2827,10 +2687,9 @@ theorem survivorRight_mem_edges
       obtain ⟨childResidual, hChildRel⟩ :
           ∃ residual, relationMembership
             (buildRelationSet right (compileType signature right)) residual q' := by
-        have hSym := compileType_hasEdge_symbol_mem signature right hEdge
         have hMem :=
           (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q' env
-            label childOffers hSym).mp hEdge
+            label childOffers).mp hEdge
         simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hMem
         obtain ⟨raw, hRawMem, hRawEq⟩ := hMem
         have hRawTarget : raw.target = q' :=
@@ -2853,10 +2712,9 @@ theorem survivorRight_mem_edges
       obtain ⟨childResidual, hChildRel⟩ :
           ∃ residual, relationMembership
             (buildRelationSet right (compileType signature right)) residual q' := by
-        have hSym := compileType_hasEdge_symbol_mem signature right hEdge
         have hMem :=
           (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q' env
-            label childOffers hSym).mp hEdge
+            label childOffers).mp hEdge
         simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hMem
         obtain ⟨raw, hRawMem, hRawEq⟩ := hMem
         have hRawTarget : raw.target = q' :=
@@ -2887,15 +2745,6 @@ theorem survivorLeft_mem_edges
     (left right : PactType) (interface : Interface)
     (q1 q2 q' : TypeAutomatonState) (env : TypeEnvironment)
     (label : TypeLabel) (childOffers : TypeOfferSummary)
-    (hSymbolResolved : TypeAutomatonSymbol.mk env label
-      (TypeOfferSummary.mk childOffers.current
-        (match parallelFutureSpec (.visible label) (.survivor 0 q')
-            childOffers.current with
-          | .explicit offers => offers
-          | .at state removed =>
-              computeFutureOf signature (.par alphabet left right interface)
-                state \ removed)) ∈
-      signature.transitionAlphabetFor alphabet)
     (hReach : ParallelReachable signature alphabet left.alphabet right.alphabet
       interface
       (compileTypeFuel signature (typeCompilationFuel left) left)
@@ -2905,6 +2754,9 @@ theorem survivorLeft_mem_edges
     (hOffCur : restrictTypeOffers interface childOffers.current = ∅)
     (hOffFut : restrictTypeOffers interface childOffers.future = ∅)
     (hEdge : (compileType signature left).HasEdge q1 env label childOffers q')
+    -- The survivor edge family gates on the child's own fixed alphabet.
+    (hChildSymbol : TypeAutomatonSymbol.mk env label childOffers ∈
+      signature.transitionAlphabetFor left.alphabet)
     (hQ2Acc : q2 ∈ (compileType signature right).accepting)
     (hQ2St : q2 ∈ (compileTypeFuel signature (typeCompilationFuel right) right).states)
     (hQ'NotAcc : q' ∉ (compileType signature left).accepting)
@@ -2954,17 +2806,6 @@ theorem survivorLeft_mem_edges
       compiledChildFutureFuel_eq_computeFutureOf signature _ right
         (le_max_right _ _)]
     rfl
-  have hSymbol' : TypeAutomatonSymbol.mk env label
-      (TypeOfferSummary.mk childOffers.current
-        (match parallelFutureSpec (.visible label) (.survivor 0 q')
-            childOffers.current with
-          | .explicit offers => offers
-          | .at state removed =>
-              computeFutureOf signature (.par alphabet left right interface)
-                state \ removed)) ∈
-      signature.transitionAlphabetFor
-        (PactType.par alphabet left right interface).alphabet := by
-    simpa [PactType.alphabet] using hSymbolResolved
   have hAcceptEqLeft :
       (compileTypeFuel signature (typeCompilationFuel left) left).accepting
         = (compileType signature left).accepting := by simp [compileType]
@@ -2973,13 +2814,12 @@ theorem survivorLeft_mem_edges
         = (compileType signature right).accepting := by simp [compileType]
   rw [compileType_hasEdge_iff_resolvedEdge_mem signature
     (.par alphabet left right interface) (.pair q1 q2) (.survivor 0 q') env
-    label _ hSymbol']
+    label _]
   rw [hWhole]
   simp only [resolveAutomatonEdgesWith, Finset.mem_image]
-  have hSymbolLeft := compileType_hasEdge_symbol_mem signature left hEdge
   have hChildMem :=
     (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q' env label
-      childOffers hSymbolLeft).mp hEdge
+      childOffers).mp hEdge
   refine ⟨{ source := .pair q1 q2
             environment := env
             label := .visible label
@@ -2997,7 +2837,7 @@ theorem survivorLeft_mem_edges
     refine ⟨q2, ⟨hAcceptEqRight ▸ hQ2Acc, hQ2St⟩, _,
       ⟨hChildMem, ?_, ?_, hOffCur, hOffFut⟩, rfl⟩
     · simp only [parallelComponentEdgeAllowed]
-      exact hSymbolLeft
+      exact hChildSymbol
     · exact hAcceptEqLeft ▸ hQ'NotAcc
   · simp only [parallelFutureSpec]
     split_ifs with hTock
@@ -3005,10 +2845,9 @@ theorem survivorLeft_mem_edges
       obtain ⟨childResidual, hChildRel⟩ :
           ∃ residual, relationMembership
             (buildRelationSet left (compileType signature left)) residual q' := by
-        have hSym := compileType_hasEdge_symbol_mem signature left hEdge
         have hMem :=
           (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q' env
-            label childOffers hSym).mp hEdge
+            label childOffers).mp hEdge
         simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hMem
         obtain ⟨raw, hRawMem, hRawEq⟩ := hMem
         have hRawTarget : raw.target = q' :=
@@ -3031,10 +2870,9 @@ theorem survivorLeft_mem_edges
       obtain ⟨childResidual, hChildRel⟩ :
           ∃ residual, relationMembership
             (buildRelationSet left (compileType signature left)) residual q' := by
-        have hSym := compileType_hasEdge_symbol_mem signature left hEdge
         have hMem :=
           (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q' env
-            label childOffers hSym).mp hEdge
+            label childOffers).mp hEdge
         simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hMem
         obtain ⟨raw, hRawMem, hRawEq⟩ := hMem
         have hRawTarget : raw.target = q' :=
@@ -3095,6 +2933,11 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         (leftOffers rightOffers : TypeOfferSummary) (q1' q2' : TypeAutomatonState),
         (compileType signature left).HasEdge q1 leftEnv leftLabel leftOffers q1' ∧
         (compileType signature right).HasEdge q2 rightEnv rightLabel rightOffers q2' ∧
+        -- `SyncEdges_I` gates each component edge on its own fixed alphabet.
+        TypeAutomatonSymbol.mk leftEnv leftLabel leftOffers ∈
+          signature.transitionAlphabetFor left.alphabet ∧
+        TypeAutomatonSymbol.mk rightEnv rightLabel rightOffers ∈
+          signature.transitionAlphabetFor right.alphabet ∧
         ParallelReachable signature alphabet left.alphabet right.alphabet
           interface
           (compileTypeFuel signature (typeCompilationFuel left) left)
@@ -3139,6 +2982,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
           (.pair q1 q2) ∧
         ((∃ childOffers : TypeOfferSummary,
             (compileType signature left).HasEdge q1 env label childOffers q' ∧
+            -- The survivor family gates on the child's own fixed alphabet.
+            TypeAutomatonSymbol.mk env label childOffers ∈
+              signature.transitionAlphabetFor left.alphabet ∧
             restrictTypeOffers interface childOffers.current = ∅ ∧
             restrictTypeOffers interface childOffers.future = ∅ ∧
             offers = TypeOfferSummary.mk childOffers.current
@@ -3157,6 +3003,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
             target = .survivor 0 q') ∨
           (∃ childOffers : TypeOfferSummary,
             (compileType signature right).HasEdge q2 env label childOffers q' ∧
+            -- The survivor family gates on the child's own fixed alphabet.
+            TypeAutomatonSymbol.mk env label childOffers ∈
+              signature.transitionAlphabetFor right.alphabet ∧
             restrictTypeOffers interface childOffers.current = ∅ ∧
             restrictTypeOffers interface childOffers.future = ∅ ∧
             offers = TypeOfferSummary.mk childOffers.current
@@ -3207,14 +3056,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
     rfl
   constructor
   · intro hEdge
-    have hSymbol := compileType_hasEdge_symbol_mem signature
-      (.par alphabet left right interface) hEdge
-    have hSymbol' : TypeAutomatonSymbol.mk env label offers ∈
-        signature.transitionAlphabetFor alphabet := by
-      simpa [PactType.alphabet] using hSymbol
     have hResolved := (compileType_hasEdge_iff_hasResolvedEdge signature
-      (.par alphabet left right interface) (.pair q1 q2) target env label offers
-      hSymbol').mp hEdge
+      (.par alphabet left right interface) (.pair q1 q2) target env label
+      offers).mp hEdge
     obtain ⟨edge, hPending, hSource, hEnv, hLabel, hCurrent, hFuture, hTarget⟩ :=
       hResolved
     rw [hWhole] at hPending
@@ -3271,7 +3115,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
               leftEdge.target := by
             rw [compileType_hasEdge_iff_resolvedEdge_mem signature left
               leftEdge.source leftEdge.target leftEdge.environment leftVisible
-              (TypeOfferSummary.mk leftEdge.current leftEdge.future) hSymbolMem]
+              (TypeOfferSummary.mk leftEdge.current leftEdge.future)]
             have hEdgeEq :
                 AutomatonFragmentEdge.mk leftEdge.source leftEdge.environment
                   (AutomatonConstructionLabel.visible leftVisible)
@@ -3284,11 +3128,13 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
             injection hLabel
           refine Or.inr ⟨leftEdge.target, ?_,
             Or.inl ⟨TypeOfferSummary.mk leftEdge.current leftEdge.future,
-              hQ1Eq ▸ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+              hQ1Eq ▸ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
               hTarget.symm⟩⟩
           · rw [← hQ1Eq, ← hQ2Eq]; exact hReach
           · rw [← hLabelVis, ← hEnv]
             exact hHasEdge
+          · rw [← hLabelVis, ← hEnv]
+            exact hSymbolMem
           · exact hLeftCur
           · exact hLeftFut
           · -- Both components come straight from the resolved product edge.
@@ -3332,8 +3178,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
             rw [compileType_hasEdge_iff_resolvedEdge_mem signature right
               rightEdge.source rightEdge.target rightEdge.environment
               rightVisible
-              (TypeOfferSummary.mk rightEdge.current rightEdge.future)
-              hSymbolMem]
+              (TypeOfferSummary.mk rightEdge.current rightEdge.future)]
             have hEdgeEq :
                 AutomatonFragmentEdge.mk rightEdge.source rightEdge.environment
                   (AutomatonConstructionLabel.visible rightVisible)
@@ -3347,11 +3192,13 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
             injection hLabel
           refine Or.inr ⟨rightEdge.target, ?_,
             Or.inr ⟨TypeOfferSummary.mk rightEdge.current rightEdge.future,
-              hQ2Eq ▸ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+              hQ2Eq ▸ ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
               hTarget.symm⟩⟩
           · rw [← hQ1Eq, ← hQ2Eq]; exact hReach
           · rw [← hLabelVis, ← hEnv]
             exact hHasEdge
+          · rw [← hLabelVis, ← hEnv]
+            exact hSymbolMem
           · exact hRightCur
           · exact hRightFut
           · -- Both components come straight from the resolved product edge.
@@ -3402,7 +3249,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         (TypeOfferSummary.mk leftEdge.current leftEdge.future) leftEdge.target := by
       rw [compileType_hasEdge_iff_resolvedEdge_mem signature left leftEdge.source
         leftEdge.target leftEdge.environment leftVisible
-        (TypeOfferSummary.mk leftEdge.current leftEdge.future) hLeftSymbolMem]
+        (TypeOfferSummary.mk leftEdge.current leftEdge.future)]
       have hEdgeEq :
           AutomatonFragmentEdge.mk leftEdge.source leftEdge.environment
             (AutomatonConstructionLabel.visible leftVisible) leftEdge.current
@@ -3415,7 +3262,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         (TypeOfferSummary.mk rightEdge.current rightEdge.future) rightEdge.target := by
       rw [compileType_hasEdge_iff_resolvedEdge_mem signature right rightEdge.source
         rightEdge.target rightEdge.environment rightVisible
-        (TypeOfferSummary.mk rightEdge.current rightEdge.future) hRightSymbolMem]
+        (TypeOfferSummary.mk rightEdge.current rightEdge.future)]
       have hEdgeEq :
           AutomatonFragmentEdge.mk rightEdge.source rightEdge.environment
             (AutomatonConstructionLabel.visible rightVisible) rightEdge.current
@@ -3424,11 +3271,8 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       rw [hEdgeEq]
       exact hRightMem
     have hEnvWF : env.WellFormed :=
-      localEnvironment_wellFormed signature
-        (TypeAlphabet.localEnvironmentsFor_subset_localEnvironments
-          signature alphabet
-          (transitionAlphabetFor_localEnvironment_mem signature alphabet
-            hSymbol'))
+      TypeAlphabet.environmentFor_wellFormed
+        (transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol)
     have hLocal1 : LocalTypeOfferEnvironment env interface left
         rightEdge.environment rightEdge.current rightEdge.future
         leftEdge.environment := by
@@ -3550,25 +3394,13 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
               (computeFutureOf signature left) (computeFutureOf signature right)
               (.pair leftEdge.target rightEdge.target) := by
           have hRaw := compiledParallel_pair_edge_target_reachable signature alphabet
-            left right interface hSymbol hEdge
+            left right interface hEdge
           rw [← hTarget] at hRaw
           rwa [if_neg (hAcceptEqLeft ▸ hAcceptEqRight ▸ hAccept)] at hRaw
         have hParTargetRelated := relationMembership_par_pair signature alphabet
           left right interface hLeftTargetRelated hRightTargetRelated hReachTarget
         rw [helper_h15_future_offers_agree signature hParTargetRelated,
           typeFutureOffers_parallel]
-    have hRightCurrentSubset : rightEdge.current ⊆ right.alphabet.actions := by
-      rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
-      have := hRightSymbolMem.2.2
-      rw [localOfferSummariesFor_mk_mem_iff] at this
-      exact this.1.trans Finset.inter_subset_right
-    have hLeftCurrentSubset : leftEdge.current ⊆ left.alphabet.actions := by
-      rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
-      have := hLeftSymbolMem.2.2
-      rw [localOfferSummariesFor_mk_mem_iff] at this
-      exact this.1.trans Finset.inter_subset_right
-    have hActionsDisjoint : Disjoint left.alphabet.actions right.alphabet.actions :=
-      hParallelCompatible.actions_disjoint
     have hFutureEq : offers.future =
         hideTypeOffers interface (leftEdge.future ∪ rightEdge.future) := by
       by_cases hTockL : leftVisible = TypeLabel.tock
@@ -3594,35 +3426,24 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       have hRightFutureEq : rightEdge.future =
           typeFutureOffers rightTargetResidual \ rightEdge.current := by
         rw [hRightFutureEqIf, if_neg (fun h => hTockL (hTockIff.mpr h))]
-      -- An action in `left`'s future menu but not its own current offer is
-      -- exactly an action of the resolved edge `leftEdge.future`, which stays
-      -- within `left`'s own fixed alphabet; the two children's fixed
-      -- alphabets are disjoint (`ParallelCompatible`), so it can never sit in
-      -- `right`'s current offer, and symmetrically.
+      -- OPEN: the two children never offer the same action.  This used to
+      -- follow from `ParallelCompatible.actions_disjoint`, bounding each
+      -- edge's offers by its own fixed alphabet.  With declared alphabets
+      -- allowed to overlap it is now a body-level fact: an offered action is
+      -- one the child's own body performs, and `ParallelMessageOwnership`
+      -- keeps the two bodies apart.  Neither half reaches here — that
+      -- ownership is not among this lemma's hypotheses, and the bridge from a
+      -- compiled edge to its source residual's `MessageActions` (the
+      -- current-offer analogue of `helper_h15_resolved_edge_future_offers_agree`)
+      -- does not exist.
       have hLeftFutureRightCurrentDisjoint :
           ∀ action, action ∈ typeFutureOffers leftTargetResidual →
             action ∉ leftEdge.current → action ∉ rightEdge.current := by
-        intro action hLeftFuture hNotLeftCurrent hRightCurrent
-        have hLeftAlph : action ∈ left.alphabet.actions := by
-          rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbolMem
-          rw [localOfferSummariesFor_mk_mem_iff] at hLeftSymbolMem
-          refine (hLeftSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
-          rw [hLeftFutureEq]
-          exact Finset.mem_sdiff.mpr ⟨hLeftFuture, hNotLeftCurrent⟩
-        exact Finset.disjoint_left.mp hActionsDisjoint hLeftAlph
-          (hRightCurrentSubset hRightCurrent)
+        sorry
       have hRightFutureLeftCurrentDisjoint :
           ∀ action, action ∈ typeFutureOffers rightTargetResidual →
             action ∉ rightEdge.current → action ∉ leftEdge.current := by
-        intro action hRightFuture hNotRightCurrent hLeftCurrent
-        have hRightAlph : action ∈ right.alphabet.actions := by
-          rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbolMem
-          rw [localOfferSummariesFor_mk_mem_iff] at hRightSymbolMem
-          refine (hRightSymbolMem.2.2.2.trans Finset.inter_subset_right) ?_
-          rw [hRightFutureEq]
-          exact Finset.mem_sdiff.mpr ⟨hRightFuture, hNotRightCurrent⟩
-        exact Finset.disjoint_right.mp hActionsDisjoint hRightAlph
-          (hLeftCurrentSubset hLeftCurrent)
+        sorry
       have hCombineNotTock :
           ¬ (AutomatonConstructionLabel.combine interface leftEdge.label
             rightEdge.label).semantic = TypeLabel.tock := by
@@ -3668,6 +3489,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       TypeOfferSummary.mk leftEdge.current leftEdge.future,
       TypeOfferSummary.mk rightEdge.current rightEdge.future,
       leftEdge.target, rightEdge.target, hQ1Eq ▸ hLeftHasEdge, hQ2Eq ▸ hRightHasEdge,
+      hLeftSymbolMem, hRightSymbolMem,
       hQ1Eq ▸ hQ2Eq ▸ hReach, ?_, hEnvWF, hLocal1, hLocal2, hSyncCond,
       ?_, ?_, ?_, ?_⟩
     · intro hNotBoth
@@ -3685,35 +3507,34 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
   -- Backward direction: given two edges and a reachable pair of targets, we
   -- can reconstruct a parallel edge.
   · rintro (⟨leftEnv, rightEnv, leftLabel, rightLabel, leftOffers, rightOffers, q1', q2',
-      hLeftEdge, hRightEdge, hReach, hSrcLive, hEnvWF, hLocal1, hLocal2,
+      hLeftEdge, hRightEdge, hLeftSymbol, hRightSymbol, hReach, hSrcLive, hEnvWF,
+      hLocal1, hLocal2,
       hSyncCond, hLabelEq, hCurrentEq, hFutureEq, hRedirect⟩ | hSurvivorCase)
     case inr =>
       -- A survivor edge is already one of the product's own edge families.
       obtain ⟨q', hReachSurv, hSide⟩ := hSurvivorCase
       rcases hSide with
-          ⟨childOffers, hEdge, hOffCur, hOffFut,
+          ⟨childOffers, hEdge, hChildSymbol, hOffCur, hOffFut,
             hOffEq, hQ2Acc, hQ2St, hQ'NotAcc, hQ'NotAccFuel, hTargetEq⟩ |
-          ⟨childOffers, hEdge, hOffCur, hOffFut,
+          ⟨childOffers, hEdge, hChildSymbol, hOffCur, hOffFut,
             hOffEq, hQ1Acc, hQ1St, hQ'NotAcc, hQ'NotAccFuel, hTargetEq⟩
       all_goals subst hOffEq
       · rw [hTargetEq]
         exact survivorLeft_mem_edges signature alphabet left right interface
-          q1 q2 q' env label childOffers hSymbol hReachSurv hOffCur
-          hOffFut hEdge hQ2Acc hQ2St hQ'NotAcc
+          q1 q2 q' env label childOffers hReachSurv hOffCur
+          hOffFut hEdge hChildSymbol hQ2Acc hQ2St hQ'NotAcc
           hQ'NotAccFuel hChildLeftRelated
       · rw [hTargetEq]
         exact survivorRight_mem_edges signature alphabet left right interface
-          q1 q2 q' env label childOffers hSymbol hReachSurv hOffCur
-          hOffFut hEdge hQ1Acc hQ1St hQ'NotAcc
+          q1 q2 q' env label childOffers hReachSurv hOffCur
+          hOffFut hEdge hChildSymbol hQ1Acc hQ1St hQ'NotAcc
           hQ'NotAccFuel hChildRightRelated
-    have hLeftSymbol := compileType_hasEdge_symbol_mem signature left hLeftEdge
-    have hRightSymbol := compileType_hasEdge_symbol_mem signature right hRightEdge
     have hLeftResolvedMem :=
       (compileType_hasEdge_iff_resolvedEdge_mem signature left q1 q1' leftEnv leftLabel
-        leftOffers hLeftSymbol).mp hLeftEdge
+        leftOffers).mp hLeftEdge
     have hRightResolvedMem :=
       (compileType_hasEdge_iff_resolvedEdge_mem signature right q2 q2' rightEnv rightLabel
-        rightOffers hRightSymbol).mp hRightEdge
+        rightOffers).mp hRightEdge
     -- Reconstruct the parent environment from the two consistent local
     -- views: `env` is well-formed over the merged, interface-hidden
     -- alphabet, so it can only mention actions coming from `left`/`right`,
@@ -3743,9 +3564,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         refine ⟨?_, hNotInterface⟩
         have hActionMem := hEnvSetMem hAction
         simp only [TypeAlphabet.localEnvironmentActionsFor,
-          TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+          TypeAlphabet.localActionsFor, Finset.mem_image]
           at hActionMem
-        obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hActionMem
+        obtain ⟨localAction, hLocalActionAlph, hNeedEq⟩ := hActionMem
         rw [hAlphabetEq] at hLocalActionAlph
         simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
           Finset.mem_union] at hLocalActionAlph
@@ -3788,9 +3609,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         alphabet, action.1 ∉ interface := by
       intro action hAction
       simp only [TypeAlphabet.localEnvironmentActionsFor,
-        TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+        TypeAlphabet.localActionsFor, Finset.mem_image]
         at hAction
-      obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
+      obtain ⟨localAction, hLocalActionAlph, hNeedEq⟩ := hAction
       rw [hAlphabetEq] at hLocalActionAlph
       simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
       have hMsgEq : localAction.1 = action.1 := by
@@ -3838,9 +3659,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
               alphabet, action.1 ∉ interface := by
             intro action hAction
             simp only [TypeAlphabet.localEnvironmentActionsFor,
-              TypeAlphabet.localActionsFor, Finset.mem_image, Finset.mem_inter]
+              TypeAlphabet.localActionsFor, Finset.mem_image]
               at hAction
-            obtain ⟨localAction, ⟨_, hLocalActionAlph⟩, hNeedEq⟩ := hAction
+            obtain ⟨localAction, hLocalActionAlph, hNeedEq⟩ := hAction
             rw [hAlphabetEq] at hLocalActionAlph
             simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at hLocalActionAlph
             have hMsgEq : localAction.1 = action.1 := by
@@ -4067,46 +3888,16 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       split_ifs with hTock
       · exact Finset.disjoint_empty_left _
       · exact Finset.sdiff_disjoint
-    have hRightCurrentSubset : rightOffers.current ⊆ right.alphabet.actions := by
-      rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbol
-      have := hRightSymbol.2.2
-      rw [localOfferSummariesFor_mk_mem_iff] at this
-      exact this.1.trans Finset.inter_subset_right
-    have hLeftCurrentSubset : leftOffers.current ⊆ left.alphabet.actions := by
-      rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbol
-      have := hLeftSymbol.2.2
-      rw [localOfferSummariesFor_mk_mem_iff] at this
-      exact this.1.trans Finset.inter_subset_right
-    have hActionsDisjoint : Disjoint left.alphabet.actions right.alphabet.actions :=
-      hParallelCompatible.actions_disjoint
-    -- Mirrors the forward direction's identically named facts: a future
-    -- action outside a child's own current offer stays in that child's fixed
-    -- alphabet, disjoint from the sibling's, so it can't be the sibling's
-    -- current offer either.
+    -- OPEN: backward-direction mirror of the same body-level gap the forward
+    -- direction hits — see the `hLeftFutureRightCurrentDisjoint` note there.
     have hLeftFutureRightCurrentDisjoint : leftLabel ≠ TypeLabel.tock →
         ∀ action, action ∈ typeFutureOffers leftTargetResidual →
           action ∉ leftOffers.current → action ∉ rightOffers.current := by
-      intro hNotTock action hLeftFuture hNotLeftCurrent hRightCurrent
-      have hLeftAlph : action ∈ left.alphabet.actions := by
-        rw [transitionAlphabetFor_mk_mem_iff] at hLeftSymbol
-        rw [localOfferSummariesFor_mk_mem_iff] at hLeftSymbol
-        refine (hLeftSymbol.2.2.2.trans Finset.inter_subset_right) ?_
-        rw [hLeftFutureEqIf, if_neg hNotTock]
-        exact Finset.mem_sdiff.mpr ⟨hLeftFuture, hNotLeftCurrent⟩
-      exact Finset.disjoint_left.mp hActionsDisjoint hLeftAlph
-        (hRightCurrentSubset hRightCurrent)
+      sorry
     have hRightFutureLeftCurrentDisjoint : rightLabel ≠ TypeLabel.tock →
         ∀ action, action ∈ typeFutureOffers rightTargetResidual →
           action ∉ rightOffers.current → action ∉ leftOffers.current := by
-      intro hNotTock action hRightFuture hNotRightCurrent hLeftCurrent
-      have hRightAlph : action ∈ right.alphabet.actions := by
-        rw [transitionAlphabetFor_mk_mem_iff] at hRightSymbol
-        rw [localOfferSummariesFor_mk_mem_iff] at hRightSymbol
-        refine (hRightSymbol.2.2.2.trans Finset.inter_subset_right) ?_
-        rw [hRightFutureEqIf, if_neg hNotTock]
-        exact Finset.mem_sdiff.mpr ⟨hRightFuture, hNotRightCurrent⟩
-      exact Finset.disjoint_right.mp hActionsDisjoint hRightAlph
-        (hLeftCurrentSubset hLeftCurrent)
+      sorry
     have hSameOnInterface :
         sameOnInterface interface leftOffers.current rightEnv.immediate ∧
         sameOnInterface interface rightOffers.current leftEnv.immediate ∧
@@ -4141,12 +3932,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
                 childLabel childOffers q' →
               childLabel = TypeLabel.tock ∧ childOffers.current = ∅ := by
             intro child q q' childLabel childOffers hChildEdge
-            have hChildSymbol :=
-              compileType_hasEdge_symbol_mem signature child hChildEdge
             have hResolvedMem :=
               (compileType_hasEdge_iff_resolvedEdge_mem signature child q q'
-                TypeEnvironment.tock childLabel childOffers hChildSymbol).mp
-                hChildEdge
+                TypeEnvironment.tock childLabel childOffers).mp hChildEdge
             simp only [resolveAutomatonEdgesWith, Finset.mem_image]
               at hResolvedMem
             obtain ⟨raw, hRawMem, hRawEq⟩ := hResolvedMem
@@ -4315,7 +4103,7 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
         ⟨Finset.mem_union_left _ (Finset.mem_union_left _
           (Finset.mem_union_left _ (Finset.mem_union_left _ hRawMem))), hReach⟩
     rw [compileType_hasEdge_iff_resolvedEdge_mem signature (.par alphabet left right interface)
-      (.pair q1 q2) target env label offers hSymbol]
+      (.pair q1 q2) target env label offers]
     rw [hWhole]
     simp only [resolveAutomatonEdgesWith, Finset.mem_image]
     refine ⟨_, hTransitionMem, ?_⟩

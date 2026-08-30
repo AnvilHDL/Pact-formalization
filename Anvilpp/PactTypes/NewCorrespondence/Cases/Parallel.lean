@@ -143,6 +143,7 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
+              hLeftSymbolMem, hRightSymbolMem,
               hSourceReachable,
               -- The ordinary rule's source guard transports through H13.
               (fun _ =>
@@ -159,8 +160,7 @@ theorem correspondence_par_stepIff
             simp [hNotBothAccept]
           have hTargetReachable :=
             compiledParallel_pair_edge_target_reachable signature alphabet left
-              right interface
-              hSignatureSymbol hEdgeFact
+              right interface hEdgeFact
           refine ⟨.pair q1' q2', hEdgeFact, ?_⟩
           rw [hTargetEq]
           exact relationMembership_par_pair signature alphabet left right interface
@@ -245,6 +245,7 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
+              hLeftSymbolMem, hRightSymbolMem,
               hSourceReachable,
               -- This edge redirects to `q_done`, so it realizes the fusing
               -- rule and carries no source guard.
@@ -317,6 +318,7 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
+              hLeftSymbolMem, hRightSymbolMem,
               hSourceReachable,
               -- As in `fuse_tock`: a redirecting edge carries no source guard.
               (fun hNotBoth => absurd hBothAccept hNotBoth), hWF,
@@ -354,6 +356,7 @@ theorem correspondence_par_stepIff
       on_goal 2 => sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
       obtain ⟨leftEnv, rightEnv, leftLabel, rightLabel,
         leftOffers, rightOffers, q1', q2', hLeftEdge, hRightEdge,
+        hLeftSync, hRightSync,
         _hEdgeSourceReachable, _hEdgeSourceLive,
         hWF, hLocal1, hLocal2, hSync, hLabelEq, hCurrentEq, hFutureEq,
         hRedirect⟩ := hEdge
@@ -361,12 +364,11 @@ theorem correspondence_par_stepIff
       let leftFuture := leftOffers.future
       let rightCurrent := rightOffers.current
       let rightFuture := rightOffers.future
+      -- `SyncEdges_I` already carried each component symbol's own alphabet.
       have hLeftSymbolMem : TypeAutomatonSymbol.mk leftEnv leftLabel leftOffers ∈
-          (compileType signature left).alphabet :=
-        compileType_hasEdge_symbol_mem signature left hLeftEdge
+          (compileType signature left).alphabet := hLeftSync
       have hRightSymbolMem : TypeAutomatonSymbol.mk rightEnv rightLabel rightOffers ∈
-          (compileType signature right).alphabet :=
-        compileType_hasEdge_symbol_mem signature right hRightEdge
+          (compileType signature right).alphabet := hRightSync
       by_cases hBothAccept : q1' ∈ (compileType signature left).accepting ∧
           q2' ∈ (compileType signature right).accepting
       · -- redirected edge: the compiler already sent this edge straight to

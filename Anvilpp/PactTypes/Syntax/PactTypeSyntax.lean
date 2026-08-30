@@ -24,9 +24,6 @@ instance : SizeOf PactTypeAlphabet := ⟨fun _ => 0⟩
 
 namespace PactTypeAlphabet
 
-  def messageIds (alphabet : PactTypeAlphabet) : Finset MessageId :=
-    alphabet.actions.image Prod.fst
-
   def OnePolarity (alphabet : PactTypeAlphabet) : Prop :=
     ∀ msg, ¬ ((msg, MessageDir.send) ∈ alphabet.actions ∧
       (msg, MessageDir.recv) ∈ alphabet.actions)
@@ -86,28 +83,17 @@ namespace PactTypeAlphabet
         ((msg, MessageDir.recv) ∈ left.actions ∧
           (msg, MessageDir.send) ∈ right.actions))
 
-  /-- Outside the synchronizing interface, the two parallel children own
-  disjoint message names.  This is stated on message ids, not polarized
-  actions, because `(m, send)` and `(m, recv)` are different actions but still
-  refer to the same boundary message name. -/
-  def BoundaryMessageIdsDisjoint
-      (left right : PactTypeAlphabet) (interface : Interface) : Prop :=
-    Disjoint (left.messageIds \ interface) (right.messageIds \ interface)
-
   /-- Compatibility of the fixed alphabets at a parallel node.
 
   The parent alphabet is the union of the two child alphabets with the
-  interface messages hidden.  The children may overlap only on the interface
-  message ids, and on those ids they must use complementary polarities.  Away
-  from the interface, boundary message ids are disjoint.  Concrete polarized
-  actions, progress ids, and fair-choice ids are also disjoint. -/
+  interface messages hidden.  On interface ids the two children must use
+  complementary polarities.  Declared actions may overlap freely: what the two
+  bodies actually perform is kept apart by `ParallelMessageOwnership`, and a
+  sequenced sibling forces both children to declare its actions.  Progress ids
+  and fair-choice ids are still disjoint. -/
   structure ParallelCompatible
       (parent left right : PactTypeAlphabet) (interface : Interface) : Prop where
     parent_eq : parent = mergeHidden left right interface
-    shared_messageIds : left.messageIds ∩ right.messageIds = interface
-    boundary_messageIds_disjoint :
-      BoundaryMessageIdsDisjoint left right interface
-    actions_disjoint : Disjoint left.actions right.actions
     complementary : ComplementaryOn left right interface
     progress_disjoint : Disjoint left.progress right.progress
     fair_disjoint : Disjoint left.fair right.fair

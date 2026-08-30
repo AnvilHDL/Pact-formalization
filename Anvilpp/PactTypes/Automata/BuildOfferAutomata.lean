@@ -152,7 +152,8 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
       let action := indexed.1.1
       let automaton := indexed.1.2
       let newEdges : Finset PendingAutomatonEdge :=
-        let enablingEnvironments := signature.localEnvironments.filter fun environment =>
+        let enablingEnvironments :=
+          (signature.localEnvironmentsFor alphabet).filter fun environment =>
           typeNeed action ∈ environment.immediate ∧
           needs ∩ environment.future = ∅ ∧
           ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
@@ -165,7 +166,8 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
             target := childState (index + 1) automaton.initial }
       edges ∪ newEdges) ∅
   let waitEdges : Finset PendingAutomatonEdge :=
-    let waitingEnvironments := signature.localEnvironments.filter fun environment =>
+    let waitingEnvironments :=
+      (signature.localEnvironmentsFor alphabet).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.future ≠ ∅ ∧
       ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
@@ -178,7 +180,8 @@ def buildExclusiveOfferAutomaton (signature : TypeAlphabet)
         future := .at TypeAutomatonState.root waiting
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
-    let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+    let resolvedEnvironments :=
+      (signature.localEnvironmentsFor alphabet).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future = ∅ ∧
@@ -222,7 +225,7 @@ theorem buildExclusiveOfferAutomaton_clockEdgesAreTock
     · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
       obtain ⟨environment, ⟨hEnvMem, hEnabled, _⟩, rfl⟩ := hNewEdge
       simp only at hClock
-      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironmentsFor_of_clock
         hEnvMem hClock] at hEnabled
       exact absurd hEnabled (by simp)
   · exfalso
@@ -295,97 +298,6 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
-/-- Legacy unspecialized conjunction builder, retained for the generic graph
-lemmas about an arbitrary conjunction child.  The compiler uses the selected
-builder below, which removes only the all-else outcome after an enabled branch
-has witnessed entry. -/
-def buildConjunctiveOfferAutomaton (signature : TypeAlphabet)
-    (branches : List (BareMessage × PactType))
-    (elseAutomaton conjunction : AutomatonFragment) : AutomatonFragment := by
-  classical
-  let states := {TypeAutomatonState.root} ∪ childStates 0 conjunction ∪
-    childStates 1 elseAutomaton
-  let accepting := childAccepting 0 conjunction ∪ childAccepting 1 elseAutomaton
-  let needs := typeBranchNeeds branches
-  let actions := typeBranchActions branches
-  let enabledEdges : Finset PendingAutomatonEdge :=
-    let enablingEnvironments := signature.localEnvironments.filter fun environment =>
-      needs ∩ environment.immediate ≠ ∅
-    enablingEnvironments.image fun environment =>
-      { source := TypeAutomatonState.root
-        environment := environment
-        label := .visible TypeLabel.silent
-        current := ∅
-        future := .at (childState 0 conjunction.initial) ∅
-        target := childState 0 conjunction.initial }
-  let waitEdges : Finset PendingAutomatonEdge :=
-    let waitingEnvironments := signature.localEnvironments.filter fun environment =>
-      environment.clock = false ∧
-      needs ∩ environment.immediate = ∅ ∧
-      needs ∩ environment.future ≠ ∅
-    waitingEnvironments.image fun environment =>
-      let waiting := (environment.future.image typeNeed) ∩ actions
-      { source := TypeAutomatonState.root
-        environment := environment
-        label := .visible TypeLabel.silent
-        current := waiting
-        future := .at TypeAutomatonState.root waiting
-        target := TypeAutomatonState.root }
-  let elseEdges : Finset PendingAutomatonEdge :=
-    let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
-      environment.clock = false ∧
-      needs ∩ environment.immediate = ∅ ∧
-      needs ∩ environment.future = ∅
-    resolvedEnvironments.image fun environment =>
-      { source := TypeAutomatonState.root
-        environment := environment
-        label := .visible TypeLabel.silent
-        current := actions
-        future := .at (childState 1 elseAutomaton.initial) ∅
-        target := childState 1 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting
-    (childPendingEdges 0 conjunction ∪ childPendingEdges 1 elseAutomaton ∪
-      enabledEdges ∪ waitEdges ∪ elseEdges)
-
-theorem buildConjunctiveOfferAutomaton_futureTargetsInStates
-    (signature : TypeAlphabet)
-    (branches : List (BareMessage × PactType))
-    (elseAutomaton conjunction : AutomatonFragment)
-    (hElseTargets : elseAutomaton.FutureTargetsInStates)
-    (hConjunctionTargets : conjunction.FutureTargetsInStates)
-    (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
-    (hConjunctionInitial : conjunction.initial ∈ conjunction.states) :
-    (buildConjunctiveOfferAutomaton signature branches elseAutomaton
-      conjunction).FutureTargetsInStates := by
-  classical
-  intro edge hEdge target removed hFuture
-  simp only [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-    Finset.mem_union] at hEdge
-  rcases hEdge with ((((hConjunction | hElse) | hEnabled) | hWait) | hResolved)
-  · have hTarget := childPendingEdges_futureTargetsInStates 0 conjunction
-      hConjunctionTargets edge hConjunction target removed hFuture
-    simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
-  · have hTarget := childPendingEdges_futureTargetsInStates 1 elseAutomaton
-      hElseTargets edge hElse target removed hFuture
-    simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
-  · simp only [Finset.mem_image, Finset.mem_filter] at hEnabled
-    rcases hEnabled with ⟨environment, _, rfl⟩
-    simp only at hFuture
-    cases hFuture
-    simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-      childStates, childState, hConjunctionInitial]
-  · simp only [Finset.mem_image, Finset.mem_filter] at hWait
-    rcases hWait with ⟨environment, _, rfl⟩
-    simp only at hFuture
-    cases hFuture
-    simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment]
-  · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
-    rcases hResolved with ⟨environment, _, rfl⟩
-    simp only at hFuture
-    cases hFuture
-    simp [buildConjunctiveOfferAutomaton, finishAutomatonFragment,
-      childStates, childState, hElseInitial]
-
 /-- Post-construction conjunctive-offer builder.  Each enabled witness enters
 its own copy of the singleton product with that witness's synthetic else arm
 removed; the other singleton else arms remain available.
@@ -410,7 +322,7 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
       let index := indexed.2
       let action := indexed.1.1
       let conjunction := indexed.1.2
-      let enablingEnvironments := signature.localEnvironments.filter
+      let enablingEnvironments := (signature.localEnvironmentsFor alphabet).filter
         fun environment => typeNeed action ∈ environment.immediate ∧
           ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
       edges ∪ enablingEnvironments.image fun environment =>
@@ -421,7 +333,8 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
           future := .at (childState (index + 1) conjunction.initial) ∅
           target := childState (index + 1) conjunction.initial }) ∅
   let waitEdges : Finset PendingAutomatonEdge :=
-    let waitingEnvironments := signature.localEnvironments.filter fun environment =>
+    let waitingEnvironments :=
+      (signature.localEnvironmentsFor alphabet).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future ≠ ∅ ∧
@@ -435,7 +348,8 @@ def buildSelectedConjunctiveOfferAutomaton (signature : TypeAlphabet)
         future := .at TypeAutomatonState.root waiting
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
-    let resolvedEnvironments := signature.localEnvironments.filter fun environment =>
+    let resolvedEnvironments :=
+      (signature.localEnvironmentsFor alphabet).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
       needs ∩ environment.future = ∅ ∧
@@ -480,7 +394,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_clockEdgesAreTock
     · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
       obtain ⟨environment, ⟨hEnvMem, hEnabledNeed, _⟩, rfl⟩ := hNewEdge
       simp only at hClock
-      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+      rw [TypeAlphabet.immediate_eq_empty_of_mem_localEnvironmentsFor_of_clock
         hEnvMem hClock] at hEnabledNeed
       exact absurd hEnabledNeed (by simp)
   · exfalso

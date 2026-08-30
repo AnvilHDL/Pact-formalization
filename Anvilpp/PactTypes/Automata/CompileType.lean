@@ -391,8 +391,9 @@ def compileTypeFuel (signature : TypeAlphabet) :
       classical
       match processType with
       -- skip: Q = {root}, i = root, F = {root}; epsilon self-loops.
-      | .skip _ =>
-          let idleEnvironments := signature.localEnvironments.filter fun environment =>
+      | .skip alphabet =>
+          let idleEnvironments :=
+            (signature.localEnvironmentsFor alphabet).filter fun environment =>
             environment.clock = false
           exact finishAutomatonFragment {.root} .root {.root} <|
             idleEnvironments.image fun environment =>
@@ -410,7 +411,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
       | .message alphabet msg dir =>
           let action : BareMessage := (msg, dir)
           let firingEdges : Finset PendingAutomatonEdge :=
-            (signature.localEnvironments.filter fun environment =>
+            ((signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.hasNeed action ∧
               action ∈ alphabet.actions).image fun environment =>
                 { source := TypeAutomatonState.root
@@ -420,7 +421,7 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   future := .at .final ∅
                   target := .final }
           let waitingEdges : Finset PendingAutomatonEdge :=
-            (signature.localEnvironments.filter fun environment =>
+            ((signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false ∧
               ¬ environment.hasNeed action ∧
               action ∈ alphabet.actions).image fun environment =>
@@ -431,7 +432,8 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   future := .at .root {action}
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
-            let idleEnvironments := signature.localEnvironments.filter fun environment =>
+            let idleEnvironments :=
+              (signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
@@ -444,9 +446,9 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
-      | .tock _ =>
+      | .tock alphabet =>
           let actionEdges : Finset PendingAutomatonEdge :=
-            signature.localEnvironments.image fun environment =>
+            (signature.localEnvironmentsFor alphabet).image fun environment =>
               if environment.clock then
                 { source := TypeAutomatonState.root
                   environment := environment
@@ -462,7 +464,8 @@ def compileTypeFuel (signature : TypeAlphabet) :
                   future := .explicit ∅
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
-            let idleEnvironments := signature.localEnvironments.filter fun environment =>
+            let idleEnvironments :=
+              (signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
@@ -475,9 +478,9 @@ def compileTypeFuel (signature : TypeAlphabet) :
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
-      | .progress _ pid =>
+      | .progress alphabet pid =>
           let actionEdges : Finset PendingAutomatonEdge :=
-            (signature.localEnvironments.filter fun environment =>
+            ((signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false).image fun environment =>
               { source := TypeAutomatonState.root
                 environment := environment
@@ -486,7 +489,8 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 future := .at .final ∅
                 target := .final }
           let finalEdges : Finset PendingAutomatonEdge :=
-            let idleEnvironments := signature.localEnvironments.filter fun environment =>
+            let idleEnvironments :=
+              (signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false
             idleEnvironments.image fun environment =>
               { source := TypeAutomatonState.final
@@ -503,9 +507,9 @@ def compileTypeFuel (signature : TypeAlphabet) :
       -- and the semantic `recur` rule fires only under a non-clock
       -- environment, so a clocked marker would become a back-edge with no
       -- semantic counterpart.  Guard it exactly like every other family.
-      | .var _ name =>
+      | .var alphabet name =>
           exact finishAutomatonFragment {.root, .final} .root ∅  <|
-            (signature.localEnvironments.filter fun environment =>
+            ((signature.localEnvironmentsFor alphabet).filter fun environment =>
               environment.clock = false).image fun environment =>
               { source := .root
                 environment := environment
@@ -515,19 +519,19 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 target := .final }
 
       -- recursion: replace matching variable edges by silent back-edges.
-      | .recur _ name body =>
-          exact buildRecursionAutomaton signature name
+      | .recur alphabet name body =>
+          exact buildRecursionAutomaton signature alphabet name
             (compileTypeFuel signature fuel body)
       -- ordinary choice: add a fresh root with two silent selection edges.
-      | .choice _ left right =>
-          exact buildChoiceAutomaton signature
+      | .choice alphabet left right =>
+          exact buildChoiceAutomaton signature alphabet
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
             TypeLabel.silent TypeLabel.silent
 
       -- fair choice: use the same sum construction with observable outcomes.
-      | .fairChoice _ bid left right =>
-          exact buildChoiceAutomaton signature
+      | .fairChoice alphabet bid left right =>
+          exact buildChoiceAutomaton signature alphabet
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right)
             (TypeLabel.fair bid true) (TypeLabel.fair bid false)
@@ -631,19 +635,19 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
       | skip alphabet => rfl
       | var alphabet name => rfl
       | recur alphabet name body =>
-          change buildRecursionAutomaton signature name
+          change buildRecursionAutomaton signature alphabet name
               (compileTypeFuel signature (fuel + 1) body) =
-            buildRecursionAutomaton signature name
+            buildRecursionAutomaton signature alphabet name
               (compileTypeFuel signature fuel body)
           rw [ih body (by
             simp [typeCompilationFuel] at hFuel
             omega)]
       | choice alphabet left right =>
-          change buildChoiceAutomaton signature
+          change buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
               TypeLabel.silent TypeLabel.silent =
-            buildChoiceAutomaton signature
+            buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature fuel left)
               (compileTypeFuel signature fuel right)
               TypeLabel.silent TypeLabel.silent
@@ -654,11 +658,11 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
               simp [typeCompilationFuel] at hFuel
               omega)]
       | fairChoice alphabet bid left right =>
-          change buildChoiceAutomaton signature
+          change buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature (fuel + 1) left)
               (compileTypeFuel signature (fuel + 1) right)
               (TypeLabel.fair bid true) (TypeLabel.fair bid false) =
-            buildChoiceAutomaton signature
+            buildChoiceAutomaton signature alphabet
               (compileTypeFuel signature fuel left)
               (compileTypeFuel signature fuel right)
               (TypeLabel.fair bid true) (TypeLabel.fair bid false)
@@ -889,7 +893,8 @@ def resolvedAutomatonEdges (signature : TypeAlphabet)
 
 /--
 Compile a type by composing its constructor automata,
-then remove unresolved variable edges and transitions outside the fixed external alphabet.
+then remove unresolved variable edges.  Alphabet legality is already enforced
+by each constructor's builder, so no second filter is applied here.
 -/
 def compileType
     (signature : TypeAlphabet)
@@ -908,9 +913,7 @@ def compileType
           { environment := edge.environment
             label := label
             offers := { current := edge.current, future := edge.future } }
-        if symbol ∈ transitionAlphabet then
-          {{ source := edge.source, symbol := symbol, target := edge.target }}
-        else ∅
+        {{ source := edge.source, symbol := symbol, target := edge.target }}
   { signature := signature
     -- Closing the exported carrier under edge endpoints makes the usual
     -- finite-automaton state invariant explicit even if an intermediate
@@ -927,14 +930,12 @@ def compileType
       signature.transitionAlphabetFor processType.alphabet := by
   rfl
 
-/-- Once a symbol belongs to the fixed alphabet, public edge membership is
-exactly resolved membership in the constructor fragment. -/
+/-- Public edge membership is exactly resolved membership in the constructor
+fragment. -/
 theorem compileType_hasEdge_iff_hasResolvedEdge
     (signature : TypeAlphabet) (processType : PactType)
     (source target : TypeAutomatonState) (env : TypeEnvironment)
-    (label : TypeLabel) (offers : TypeOfferSummary)
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabetFor processType.alphabet) :
+    (label : TypeLabel) (offers : TypeOfferSummary) :
     (compileType signature processType).HasEdge source env label offers target ↔
       AutomatonFragment.HasResolvedEdge signature processType
         (compileTypeFuel signature (typeCompilationFuel processType) processType)
@@ -942,17 +943,14 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
   classical
   simp [TypeAutomaton.HasEdge, compileType,
     AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdges,
-    resolveAutomatonEdgesWith, hSymbol]
+    resolveAutomatonEdgesWith]
   aesop
 
-/-- Once the visible symbol is admitted by the type's fixed alphabet, a
-public edge is equivalently the corresponding resolved fragment edge. -/
+/-- A public edge is equivalently the corresponding resolved fragment edge. -/
 theorem compileType_hasEdge_iff_resolvedEdge_mem
     (signature : TypeAlphabet) (processType : PactType)
     (source target : TypeAutomatonState) (env : TypeEnvironment)
-    (label : TypeLabel) (offers : TypeOfferSummary)
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabetFor processType.alphabet) :
+    (label : TypeLabel) (offers : TypeOfferSummary) :
     (compileType signature processType).HasEdge source env label offers target ↔
       ({ source := source,
           environment := env,
@@ -965,7 +963,7 @@ theorem compileType_hasEdge_iff_resolvedEdge_mem
             processType)
           (computeFutureOf signature processType) := by
   rw [compileType_hasEdge_iff_hasResolvedEdge signature processType source
-    target env label offers hSymbol]
+    target env label offers]
   simp [AutomatonFragment.HasResolvedEdge, resolveAutomatonEdgesWith]
   aesop
 

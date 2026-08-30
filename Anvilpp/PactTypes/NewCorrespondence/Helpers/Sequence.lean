@@ -592,7 +592,6 @@ inductive SeqCompiledEdgeCase
 lemma helper_h15_sequence_left_public_edge_cases
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType)
-    (hLeftAlphabet : left.alphabet = alphabet)
     {leftResidual residual' : PactType}
     {q state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -626,12 +625,10 @@ lemma helper_h15_sequence_left_public_edge_cases
     compileTypeFuel signature (typeCompilationFuel left) left
   let rightFragment :=
     compileTypeFuel signature (typeCompilationFuel right) right
-  have hSymbol := compileType_hasEdge_symbol_mem signature
-    (.seq alphabet left right) hEdge
   have hResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature
       (.seq alphabet left right) (.child 0 q) state' env label
-      (TypeOfferSummary.mk current future) hSymbol).mp hEdge
+      (TypeOfferSummary.mk current future)).mp hEdge
   rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     at hResolved
   rcases hResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
@@ -717,32 +714,11 @@ lemma helper_h15_sequence_left_public_edge_cases
           (.skip childTargetResidual.alphabet) childEdge.target := by
       rw [← hChildTargetSkip]
       exact hChildTargetRelated
-    have hChildTargetFutureEmpty :
-        typeFutureOffers childTargetResidual = ∅ := by
-      conv_lhs => rw [hChildTargetSkip]
-      simp [typeFutureOffers, typeFutureOffersFuel]
-    have hChildFutureEmpty : childFuture = ∅ := by
-      rw [helper_h15_resolved_edge_future_offers_agree signature hLeftSource
-        hChildTargetRelated hChildResolvedEdge]
-      split
-      · rfl
-      · simp [hChildTargetFutureEmpty]
-    have hChildSymbol :
-        TypeAutomatonSymbol.mk env label
-            (TypeOfferSummary.mk current childFuture) ∈
-          signature.transitionAlphabetFor left.alphabet := by
-      apply transitionAlphabetFor_change_future_of_subset_union signature
-        left.alphabet
-        (by simpa [hLeftAlphabet] using hSymbol)
-      intro action hAction
-      rw [hChildFutureEmpty] at hAction
-      simp at hAction
     have hChildPublicEdge :
         (compileType signature left).HasEdge q env label
           (TypeOfferSummary.mk current childFuture) childEdge.target := by
       rw [compileType_hasEdge_iff_hasResolvedEdge signature left q
-        childEdge.target env label (TypeOfferSummary.mk current childFuture)
-        hChildSymbol]
+        childEdge.target env label (TypeOfferSummary.mk current childFuture)]
       exact hChildResolvedEdge
     by_cases hLabelTock : label = TypeLabel.tock
     · have hChildTock :
@@ -799,65 +775,26 @@ lemma helper_h15_sequence_left_public_edge_cases
         exact hAccepting (by
           simpa [compileType, leftFragment] using hAcceptingPublic)
       by_cases hLabelTock : label = TypeLabel.tock
-      · have hChildFutureEq : childFuture = ∅ :=
-          helper_h15_resolved_edge_future_offers_agree_of_tock signature
-            hLeftSource hLeftTargetRelated hChildResolvedEdge hLabelTock
-        have hParentFuture : future = ∅ := by
+      · have hParentFuture : future = ∅ := by
           rw [hFutureEq, if_pos hLabelTock]
-        have hChildSymbol :
-            TypeAutomatonSymbol.mk env label
-                (TypeOfferSummary.mk current childFuture) ∈
-              signature.transitionAlphabetFor left.alphabet := by
-          apply transitionAlphabetFor_change_future_of_subset_union signature
-            left.alphabet (by simpa [hLeftAlphabet] using hSymbol)
-          intro action hAction
-          rw [hChildFutureEq] at hAction
-          simp at hAction
         have hChildPublicEdge :
             (compileType signature left).HasEdge q env label
               (TypeOfferSummary.mk current childFuture) childEdge.target := by
           rw [compileType_hasEdge_iff_hasResolvedEdge signature left q
-            childEdge.target env label (TypeOfferSummary.mk current childFuture)
-            hChildSymbol]
+            childEdge.target env label (TypeOfferSummary.mk current childFuture)]
           exact hChildResolvedEdge
         exact SeqCompiledEdgeCase.leftStepTock leftResidual leftTarget q
           childEdge.target childFuture rfl hResidualTarget rfl hStateTarget
           hNonFinal hLeftSource hLeftTargetRelated hChildPublicEdge hLabelTock
           hParentFuture
-      · have hChildFutureEq :
-            childFuture = typeFutureOffers leftTarget \ current :=
-          helper_h15_resolved_edge_future_offers_agree_of_not_tock signature
-            hLeftSource hLeftTargetRelated hChildResolvedEdge hLabelTock
-        have hParentFuture :
+      · have hParentFuture :
             future = typeFutureOffers (.seq alphabet leftTarget right) \ current := by
           rw [hFutureEq, if_neg hLabelTock, hResidualTarget]
-        have hParentSymbolNormalized :
-            TypeAutomatonSymbol.mk env label
-                (TypeOfferSummary.mk current
-                  (typeFutureOffers (.seq alphabet leftTarget right) \ current)) ∈
-              signature.transitionAlphabetFor alphabet := by
-          simpa [hParentFuture] using hSymbol
-        have hChildSymbolAsParent :
-            TypeAutomatonSymbol.mk env label
-                (TypeOfferSummary.mk current
-                  (typeFutureOffers leftTarget \ current)) ∈
-              signature.transitionAlphabetFor alphabet := by
-          apply transitionAlphabetFor_change_future_of_subset_union signature
-            alphabet hParentSymbolNormalized
-          intro action hAction
-          exact typeFutureOffers_subset_sequence_left_sdiff_union alphabet
-            leftTarget right current (Finset.mem_sdiff.mp hAction).1
-        have hChildSymbol :
-            TypeAutomatonSymbol.mk env label
-                (TypeOfferSummary.mk current childFuture) ∈
-              signature.transitionAlphabetFor left.alphabet := by
-          simpa [hLeftAlphabet, hChildFutureEq] using hChildSymbolAsParent
         have hChildPublicEdge :
             (compileType signature left).HasEdge q env label
               (TypeOfferSummary.mk current childFuture) childEdge.target := by
           rw [compileType_hasEdge_iff_hasResolvedEdge signature left q
-            childEdge.target env label (TypeOfferSummary.mk current childFuture)
-            hChildSymbol]
+            childEdge.target env label (TypeOfferSummary.mk current childFuture)]
           exact hChildResolvedEdge
         exact SeqCompiledEdgeCase.leftStep leftResidual leftTarget q
           childEdge.target childFuture rfl hResidualTarget rfl hStateTarget
@@ -895,11 +832,6 @@ theorem compileType_seq_lift_left_step
       DecoratedTypeTransition env leftResidual label
         (TypeOfferSummary.mk current childFuture) leftTarget)
     (hNotTock : label ≠ TypeLabel.tock)
-    (hParentSymbol :
-      TypeAutomatonSymbol.mk env label
-        (TypeOfferSummary.mk current
-          (typeFutureOffers (.seq alphabet leftTarget right) \ current)) ∈
-        signature.transitionAlphabetFor alphabet)
     (hChildEdge :
       (compileType signature left).HasEdge q env label
         (TypeOfferSummary.mk current childFuture) q') :
@@ -912,10 +844,9 @@ theorem compileType_seq_lift_left_step
         (buildRelationSet (.seq alphabet left right)
           (compileType signature (.seq alphabet left right)))
         (.seq alphabet leftTarget right) (.child 0 q') := by
-  have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env label
-      (TypeOfferSummary.mk current childFuture) hChildSymbol).mp hChildEdge
+      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -940,8 +871,7 @@ theorem compileType_seq_lift_left_step
       (.seq alphabet left right)
       (.child 0 q) (.child 0 q') env label
       (TypeOfferSummary.mk current
-        (typeFutureOffers (.seq alphabet leftTarget right) \ current))
-      hParentSymbol]
+        (typeFutureOffers (.seq alphabet leftTarget right) \ current))]
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     have hNotAcceptingPending :
         pendingEdge.target ∉
@@ -1010,10 +940,6 @@ theorem compileType_seq_lift_left_step_tock
     (hChildStep :
       DecoratedTypeTransition env leftResidual TypeLabel.tock
         (TypeOfferSummary.mk current childFuture) leftTarget)
-    (hParentSymbol :
-      TypeAutomatonSymbol.mk env TypeLabel.tock
-        (TypeOfferSummary.mk current ∅) ∈
-        signature.transitionAlphabetFor alphabet)
     (hChildEdge :
       (compileType signature left).HasEdge q env TypeLabel.tock
         (TypeOfferSummary.mk current childFuture) q') :
@@ -1025,10 +951,9 @@ theorem compileType_seq_lift_left_step_tock
         (buildRelationSet (.seq alphabet left right)
           (compileType signature (.seq alphabet left right)))
         (.seq alphabet leftTarget right) (.child 0 q') := by
-  have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env TypeLabel.tock
-      (TypeOfferSummary.mk current childFuture) hChildSymbol).mp hChildEdge
+      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -1048,7 +973,7 @@ theorem compileType_seq_lift_left_step_tock
     rw [compileType_hasEdge_iff_hasResolvedEdge signature
       (.seq alphabet left right)
       (.child 0 q) (.child 0 q') env TypeLabel.tock
-      (TypeOfferSummary.mk current ∅) hParentSymbol]
+      (TypeOfferSummary.mk current ∅)]
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     have hNotAcceptingPending :
         pendingEdge.target ∉
@@ -1098,10 +1023,6 @@ theorem compileType_seq_lift_left_fuse
       DecoratedTypeTransition env leftResidual label
         (TypeOfferSummary.mk current childFuture) (.skip skipAlphabet))
     (hNotTock : label ≠ TypeLabel.tock)
-    (hParentSymbol :
-      TypeAutomatonSymbol.mk env label
-        (TypeOfferSummary.mk current (typeFutureOffers right \ current)) ∈
-        signature.transitionAlphabetFor alphabet)
     (hChildEdge :
       (compileType signature left).HasEdge q env label
         (TypeOfferSummary.mk current childFuture) q') :
@@ -1113,10 +1034,9 @@ theorem compileType_seq_lift_left_fuse
         (buildRelationSet (.seq alphabet left right)
           (compileType signature (.seq alphabet left right)))
         right (.child 1 (compileType signature right).initial) := by
-  have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env label
-      (TypeOfferSummary.mk current childFuture) hChildSymbol).mp hChildEdge
+      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -1136,8 +1056,7 @@ theorem compileType_seq_lift_left_fuse
     rw [compileType_hasEdge_iff_hasResolvedEdge signature
       (.seq alphabet left right)
       (.child 0 q) (.child 1 (compileType signature right).initial) env label
-      (TypeOfferSummary.mk current (typeFutureOffers right \ current))
-      hParentSymbol]
+      (TypeOfferSummary.mk current (typeFutureOffers right \ current))]
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     refine ⟨sequenceRedirectEdge
       (compileTypeFuel signature (typeCompilationFuel left) left)
@@ -1198,10 +1117,6 @@ theorem compileType_seq_lift_left_fuse_tock
     (hChildStep :
       DecoratedTypeTransition env leftResidual TypeLabel.tock
         (TypeOfferSummary.mk current childFuture) (.skip skipAlphabet))
-    (hParentSymbol :
-      TypeAutomatonSymbol.mk env TypeLabel.tock
-        (TypeOfferSummary.mk current ∅) ∈
-        signature.transitionAlphabetFor alphabet)
     (hChildEdge :
       (compileType signature left).HasEdge q env TypeLabel.tock
         (TypeOfferSummary.mk current childFuture) q') :
@@ -1213,10 +1128,9 @@ theorem compileType_seq_lift_left_fuse_tock
         (buildRelationSet (.seq alphabet left right)
           (compileType signature (.seq alphabet left right)))
         right (.child 1 (compileType signature right).initial) := by
-  have hChildSymbol := compileType_hasEdge_symbol_mem signature left hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature left q q' env TypeLabel.tock
-      (TypeOfferSummary.mk current childFuture) hChildSymbol).mp hChildEdge
+      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -1233,7 +1147,7 @@ theorem compileType_seq_lift_left_fuse_tock
     rw [compileType_hasEdge_iff_hasResolvedEdge signature
       (.seq alphabet left right)
       (.child 0 q) (.child 1 (compileType signature right).initial)
-      env TypeLabel.tock (TypeOfferSummary.mk current ∅) hParentSymbol]
+      env TypeLabel.tock (TypeOfferSummary.mk current ∅)]
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     refine ⟨sequenceRedirectEdge
       (compileTypeFuel signature (typeCompilationFuel left) left)
@@ -1260,7 +1174,6 @@ theorem compileType_seq_lift_left_fuse_tock
 theorem compileType_seq_lift_right_step
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType)
-    (hRightAlphabet : right.alphabet = alphabet)
     {rightResidual rightTarget : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1288,23 +1201,19 @@ theorem compileType_seq_lift_right_step
         (buildRelationSet (.seq alphabet left right)
           (compileType signature (.seq alphabet left right)))
         rightTarget state' := by
-  have hChildSymbol := compileType_hasEdge_symbol_mem signature right hChildEdge
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge signature right q q' env label
-      offers hChildSymbol).mp hChildEdge
+      offers).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, hPendingFuture,
     hPendingTarget⟩
-  have hParentSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabetFor alphabet := by
-    simpa [hRightAlphabet] using hChildSymbol
   have hParentEdge :
       (compileType signature (.seq alphabet left right)).HasEdge
         (.child 1 q) env label
         offers (.child 1 q') := by
     rw [compileType_hasEdge_iff_hasResolvedEdge signature
       (.seq alphabet left right)
-      (.child 1 q) (.child 1 q') env label offers hParentSymbol]
+      (.child 1 q) (.child 1 q') env label offers]
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
     refine ⟨childPendingEdge 1 pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRightEdges,
@@ -1361,8 +1270,6 @@ lemma relationMembership_seq_cases
 theorem compileType_seq_edge_cases
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType)
-    (hLeftAlphabet : left.alphabet = alphabet)
-    (hRightAlphabet : right.alphabet = alphabet)
     {residual residual' : PactType}
     {state state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1387,23 +1294,15 @@ theorem compileType_seq_edge_cases
   · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _hSurvives⟩
     cases hEntry
     exact helper_h15_sequence_left_public_edge_cases signature alphabet left right
-      hLeftAlphabet hRelated hLeftRelated hEdge hTarget
+      hRelated hLeftRelated hEdge hTarget
   · rcases hRight with ⟨q, hState, hRightRelated⟩
     simp only at hState hRightRelated
     subst state
-    have hSymbol := compileType_hasEdge_symbol_mem signature
-      (.seq alphabet left right)
-      hEdge
-    have hRightSymbol :
-        TypeAutomatonSymbol.mk env label
-            (TypeOfferSummary.mk current future) ∈
-          signature.transitionAlphabetFor right.alphabet := by
-      simpa [hRightAlphabet] using hSymbol
     have hResolved :=
       (compileType_hasEdge_iff_hasResolvedEdge signature
         (.seq alphabet left right)
-        (.child 1 q) state' env label (TypeOfferSummary.mk current future)
-        hSymbol).mp hEdge
+        (.child 1 q) state' env label
+        (TypeOfferSummary.mk current future)).mp hEdge
     rw [compileTypeFuel_sequence_eq_build signature alphabet left right]
       at hResolved
     rcases hResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
@@ -1438,8 +1337,7 @@ theorem compileType_seq_edge_cases
         (compileType signature right).HasEdge q env label
           (TypeOfferSummary.mk current future) childEdge.target := by
       rw [compileType_hasEdge_iff_hasResolvedEdge signature right q
-        childEdge.target env label (TypeOfferSummary.mk current future)
-        hRightSymbol]
+        childEdge.target env label (TypeOfferSummary.mk current future)]
       refine ⟨childEdge, hChildEdgeMem, hChildSource, ?_, ?_, ?_, ?_, rfl⟩
       · rw [← hPendingEnv, hChildEdgeEq]
         rfl

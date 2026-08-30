@@ -38,13 +38,14 @@ private theorem indexedFragment_edgeTargetsInStates
     exact Or.inr ⟨indexed, hIndexed, hTarget⟩
 
 private theorem buildChoiceAutomaton_edgeTargetsInStates
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (hLeftTargets : left.EdgeTargetsInStates)
     (hRightTargets : right.EdgeTargetsInStates)
     (hLeftInitial : left.initial ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
-    (buildChoiceAutomaton signature left right selectionLeft
+    (buildChoiceAutomaton signature alphabet left right selectionLeft
       selectionRight).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildChoiceAutomaton, finishAutomatonFragment,
@@ -66,10 +67,11 @@ private theorem buildChoiceAutomaton_edgeTargetsInStates
         childStates, childState, hRightInitial]
 
 private theorem buildRecursionAutomaton_edgeTargetsInStates
-    (signature : TypeAlphabet) (name : String) (body : AutomatonFragment)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (name : String) (body : AutomatonFragment)
     (hBodyTargets : body.EdgeTargetsInStates)
     (hBodyInitial : body.initial ∈ body.states) :
-    (buildRecursionAutomaton signature name body).EdgeTargetsInStates := by
+    (buildRecursionAutomaton signature alphabet name body).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildRecursionAutomaton, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image] at hEdge
@@ -342,7 +344,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildRecursionAutomaton_edgeTargetsInStates signature name
+          exact buildRecursionAutomaton_edgeTargetsInStates signature _ name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
       | choice _ left right =>
@@ -353,7 +355,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_edgeTargetsInStates signature
+          exact buildChoiceAutomaton_edgeTargetsInStates signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) .silent .silent
             (ih left hLeft) (ih right hRight)
@@ -367,7 +369,7 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_edgeTargetsInStates signature
+          exact buildChoiceAutomaton_edgeTargetsInStates signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (.fair bid true)
             (.fair bid false) (ih left hLeft) (ih right hRight)
@@ -486,7 +488,7 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
             exfalso
             simp only at hClock
             rw [TypeEnvironment.hasNeed,
-              TypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
+              TypeAlphabet.immediate_eq_empty_of_mem_localEnvironmentsFor_of_clock
                 hEnvMem hClock] at hNeed
             exact absurd hNeed (by simp)
           · exfalso
@@ -553,7 +555,7 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildRecursionAutomaton_clockEdgesAreTock signature name
+          exact buildRecursionAutomaton_clockEdgesAreTock signature _ name
             (compileTypeFuel signature fuel body) (ih body hBody)
       | choice _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
@@ -563,7 +565,7 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_clockEdgesAreTock signature
+          exact buildChoiceAutomaton_clockEdgesAreTock signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) .silent .silent
             (ih left hLeft) (ih right hRight)
@@ -575,7 +577,7 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_clockEdgesAreTock signature
+          exact buildChoiceAutomaton_clockEdgesAreTock signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (.fair bid true)
             (.fair bid false) (ih left hLeft) (ih right hRight)
@@ -702,7 +704,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildRecursionAutomaton_futureTargetsInStates signature name
+          exact buildRecursionAutomaton_futureTargetsInStates signature _ name
             (compileTypeFuel signature fuel body) (ih body hBody)
             (compileTypeFuel_initial_mem signature fuel body hBody)
       | choice _ left right =>
@@ -713,7 +715,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_futureTargetsInStates signature
+          exact buildChoiceAutomaton_futureTargetsInStates signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) TypeLabel.silent
             TypeLabel.silent (ih left hLeft) (ih right hRight)
@@ -727,7 +729,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
-          exact buildChoiceAutomaton_futureTargetsInStates signature
+          exact buildChoiceAutomaton_futureTargetsInStates signature _
             (compileTypeFuel signature fuel left)
             (compileTypeFuel signature fuel right) (TypeLabel.fair bid true)
             (TypeLabel.fair bid false) (ih left hLeft) (ih right hRight)
@@ -1557,12 +1559,13 @@ private theorem buildExclusiveOfferAutomaton_outgoing_branch
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled binary choice, agrees with the left child's own. -/
 theorem computeFutureOf_binaryChoice_left
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : PactType)
     (selectionLeft selectionRight : TypeLabel)
     (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildChoiceAutomaton signature
+        buildChoiceAutomaton signature alphabet
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
           selectionLeft selectionRight)
@@ -1581,7 +1584,7 @@ theorem computeFutureOf_binaryChoice_left
   let rightFragment :=
     compileTypeFuel signature (typeCompilationFuel right) right
   let parentFragment :=
-    buildChoiceAutomaton signature leftFragment rightFragment
+    buildChoiceAutomaton signature alphabet leftFragment rightFragment
       selectionLeft selectionRight
   have hCard : leftFragment.states.card ≤ parentFragment.states.card := by
     have hTaggedCard :
@@ -1603,18 +1606,19 @@ theorem computeFutureOf_binaryChoice_left
     parentFragment leftFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient left) hFuel hProductInfo
-    (fun q edge => buildChoiceAutomaton_outgoing_left signature
+    (fun q edge => buildChoiceAutomaton_outgoing_left signature alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [leftFragment] using hState)
 
 /-- Proves a `.child 1`-tagged state's future menu, in a compiled binary choice, agrees with the right child's own. -/
 theorem computeFutureOf_binaryChoice_right
-    (signature : TypeAlphabet) (left right : PactType)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (left right : PactType)
     (selectionLeft selectionRight : TypeLabel)
     (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildChoiceAutomaton signature
+        buildChoiceAutomaton signature alphabet
           (compileTypeFuel signature (typeCompilationFuel left) left)
           (compileTypeFuel signature (typeCompilationFuel right) right)
           selectionLeft selectionRight)
@@ -1633,7 +1637,7 @@ theorem computeFutureOf_binaryChoice_right
   let rightFragment :=
     compileTypeFuel signature (typeCompilationFuel right) right
   let parentFragment :=
-    buildChoiceAutomaton signature leftFragment rightFragment
+    buildChoiceAutomaton signature alphabet leftFragment rightFragment
       selectionLeft selectionRight
   have hCard : rightFragment.states.card ≤ parentFragment.states.card := by
     have hTaggedCard :
@@ -1655,7 +1659,7 @@ theorem computeFutureOf_binaryChoice_right
     parentFragment rightFragment 1 hWhole rfl
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient right) hFuel hProductInfo
-    (fun q edge => buildChoiceAutomaton_outgoing_right signature
+    (fun q edge => buildChoiceAutomaton_outgoing_right signature alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [rightFragment] using hState)
 

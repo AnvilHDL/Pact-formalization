@@ -264,47 +264,16 @@ decreasing_by
     omega
 end
 
-/-- A `ParallelCompatible` left child inherits well-formedness from the
-parent: interface actions are complementary, and non-interface actions of
-`left` survive unhidden into the parent. -/
-theorem PactTypeAlphabet.ParallelCompatible.wellFormed_left
-    {parent left right : PactTypeAlphabet} {interface : Interface}
-    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
-    (hParentWF : parent.WellFormed) : left.WellFormed := by
-  intro msg ⟨hSend, hRecv⟩
-  by_cases hI : msg ∈ interface
-  · rcases hCompatible.complementary msg hI with ⟨_, hRecvR⟩ | ⟨_, hSendR⟩
-    · exact hCompatible.actions_disjoint.forall_ne_finset hRecv hRecvR rfl
-    · exact hCompatible.actions_disjoint.forall_ne_finset hSend hSendR rfl
-  · have hSendP : (msg, MessageDir.send) ∈ parent.actions := by
-      rw [hCompatible.parent_eq]
-      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
-      exact ⟨Or.inl hSend, hI⟩
-    have hRecvP : (msg, MessageDir.recv) ∈ parent.actions := by
-      rw [hCompatible.parent_eq]
-      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
-      exact ⟨Or.inl hRecv, hI⟩
-    exact hParentWF msg ⟨hSendP, hRecvP⟩
-
-/-- Right-child counterpart of `wellFormed_left`. -/
-theorem PactTypeAlphabet.ParallelCompatible.wellFormed_right
-    {parent left right : PactTypeAlphabet} {interface : Interface}
-    (hCompatible : PactTypeAlphabet.ParallelCompatible parent left right interface)
-    (hParentWF : parent.WellFormed) : right.WellFormed := by
-  intro msg ⟨hSend, hRecv⟩
-  by_cases hI : msg ∈ interface
-  · rcases hCompatible.complementary msg hI with ⟨hSendL, _⟩ | ⟨hRecvL, _⟩
-    · exact hCompatible.actions_disjoint.forall_ne_finset hSendL hSend rfl
-    · exact hCompatible.actions_disjoint.forall_ne_finset hRecvL hRecv rfl
-  · have hSendP : (msg, MessageDir.send) ∈ parent.actions := by
-      rw [hCompatible.parent_eq]
-      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
-      exact ⟨Or.inr hSend, hI⟩
-    have hRecvP : (msg, MessageDir.recv) ∈ parent.actions := by
-      rw [hCompatible.parent_eq]
-      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter, Finset.mem_union]
-      exact ⟨Or.inr hRecv, hI⟩
-    exact hParentWF msg ⟨hSendP, hRecvP⟩
+/-- Every case of `AlphabetWellFormed` opens with the node alphabet's own
+well-formedness. -/
+theorem PactType.AlphabetWellFormed.alphabet_wellFormed
+    {processType : PactType} (hWF : processType.AlphabetWellFormed) :
+    processType.alphabet.WellFormed := by
+  cases processType <;>
+    simp only [PactType.AlphabetWellFormed] at hWF <;>
+    first
+      | exact hWF
+      | exact hWF.1
 
 /-- One alphabet declares no more than another. -/
 def PactTypeAlphabet.Subalphabet (small large : PactTypeAlphabet) : Prop :=
@@ -319,12 +288,13 @@ theorem PactTypeAlphabet.projectParallelChild_actions
       child.actions.filter fun action =>
         action.1 ∈ interface ∨ action ∈ target.actions := rfl
 
-/-- The left projection keeps the left interface actions and whatever the
+/-- The left projection keeps the left child's own projection and whatever the
 target declares outside the right child. -/
 theorem PactTypeAlphabet.projectParallelLeft_actions
     (target left right : PactTypeAlphabet) (interface : Interface) :
     (projectParallelLeft target left right interface).actions =
-      (left.actions.filter fun action => action.1 ∈ interface) ∪
+      (left.actions.filter fun action =>
+          action.1 ∈ interface ∨ action ∈ target.actions) ∪
         (target.actions \ right.actions) := by
   simp only [projectParallelLeft, projectParallelChild]
   congr 1
@@ -336,6 +306,39 @@ theorem PactTypeAlphabet.projectParallelLeft_actions
     exact ⟨ha, fun hr => hn ⟨hr, Or.inr ha⟩⟩
   · rintro ⟨ha, hn⟩
     exact ⟨ha, fun h => hn h.1⟩
+
+/-- The child projection only filters, so it inherits the child's own
+one-polarity property. -/
+theorem PactTypeAlphabet.projectParallelChild_wellFormed
+    {target child : PactTypeAlphabet} {interface : Interface}
+    (hChildWF : child.WellFormed) :
+    (projectParallelChild target child interface).WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  rw [projectParallelChild_actions] at hSend hRecv
+  exact hChildWF msg
+    ⟨(Finset.mem_filter.mp hSend).1, (Finset.mem_filter.mp hRecv).1⟩
+
+/-- The left projection mixes the left child's declarations with the target's
+own.  A target that hides the interface keeps the two halves from colliding. -/
+theorem PactTypeAlphabet.projectParallelLeft_wellFormed
+    {target left right : PactTypeAlphabet} {interface : Interface}
+    (hLeftWF : left.WellFormed) (hTargetWF : target.WellFormed)
+    (hTargetHidden : ∀ action ∈ target.actions, action.1 ∉ interface) :
+    (projectParallelLeft target left right interface).WellFormed := by
+  intro msg ⟨hSend, hRecv⟩
+  rw [projectParallelLeft_actions] at hSend hRecv
+  simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_sdiff]
+    at hSend hRecv
+  rcases hSend with ⟨hSendL, hSendI⟩ | ⟨hSendT, _⟩ <;>
+    rcases hRecv with ⟨hRecvL, hRecvI⟩ | ⟨hRecvT, _⟩
+  · exact hLeftWF msg ⟨hSendL, hRecvL⟩
+  · rcases hSendI with hI | hSendT
+    · exact hTargetHidden _ hRecvT hI
+    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
+  · rcases hRecvI with hI | hRecvT
+    · exact hTargetHidden _ hSendT hI
+    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
+  · exact hTargetWF msg ⟨hSendT, hRecvT⟩
 
 theorem PactTypeAlphabet.projectParallelLeft_progress
     (target left right : PactTypeAlphabet) (interface : Interface) :
@@ -363,7 +366,6 @@ taken from the original children, so no interface message is lost. -/
 theorem PactTypeAlphabet.projectParallel_compatible
     {parent left right target : PactTypeAlphabet} {interface : Interface}
     (hCompatible : ParallelCompatible parent left right interface)
-    (hTargetWF : target.WellFormed)
     (hSub : Subalphabet target parent) :
     ParallelCompatible target (projectParallelLeft target left right interface)
       (projectParallelChild target right interface) interface := by
@@ -380,63 +382,15 @@ theorem PactTypeAlphabet.projectParallel_compatible
     rw [hParentActions] at this
     exact (Finset.mem_filter.mp this).2
   have hLeftActions : (projectParallelLeft target left right interface).actions =
-      (left.actions.filter fun action => action.1 ∈ interface) ∪
+      (left.actions.filter fun action =>
+          action.1 ∈ interface ∨ action ∈ target.actions) ∪
         (target.actions \ right.actions) :=
     projectParallelLeft_actions target left right interface
   have hRightActions : (projectParallelChild target right interface).actions =
       right.actions.filter fun action =>
         action.1 ∈ interface ∨ action ∈ target.actions := rfl
-  have hActionsDisjoint :
-      Disjoint (projectParallelLeft target left right interface).actions
-        (projectParallelChild target right interface).actions := by
-    rw [Finset.disjoint_left, hLeftActions, hRightActions]
-    rintro a ha hb
-    simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_sdiff] at ha hb
-    rcases ha with ⟨haL, _⟩ | ⟨_, haNR⟩
-    · exact hCompatible.actions_disjoint.forall_ne_finset haL hb.1 rfl
-    · exact haNR hb.1
-  have hSharedIds : (projectParallelLeft target left right interface).messageIds ∩
-      (projectParallelChild target right interface).messageIds = interface := by
-    apply Finset.ext
-    intro msg
-    simp only [Finset.mem_inter, messageIds, Finset.mem_image]
-    constructor
-    · rintro ⟨⟨⟨lMsg, lDir⟩, hLeft, hLeftEq⟩, ⟨⟨rMsg, rDir⟩, hRight, hRightEq⟩⟩
-      simp only at hLeftEq hRightEq
-      subst hLeftEq
-      subst hRightEq
-      rw [hLeftActions] at hLeft
-      rw [hRightActions] at hRight
-      simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_sdiff] at hLeft hRight
-      rcases hLeft with ⟨_, hI⟩ | ⟨hT, hNR⟩
-      · exact hI
-      · rcases hRight.2 with hI | hRT
-        · exact absurd hI (hTargetNoInterface _ hT)
-        · exfalso
-          rcases lDir with _ | _ <;> rcases rDir with _ | _
-          · exact hNR hRight.1
-          · exact hTargetWF _ ⟨hT, hRT⟩
-          · exact hTargetWF _ ⟨hRT, hT⟩
-          · exact hNR hRight.1
-    · intro hMsg
-      rcases hCompatible.complementary msg hMsg with ⟨hL, hR⟩ | ⟨hL, hR⟩
-      · exact ⟨⟨(msg, MessageDir.send), by
-            rw [hLeftActions]
-            exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, hMsg⟩), rfl⟩,
-          ⟨(msg, MessageDir.recv), by
-            rw [hRightActions]
-            exact Finset.mem_filter.mpr ⟨hR, Or.inl hMsg⟩, rfl⟩⟩
-      · exact ⟨⟨(msg, MessageDir.recv), by
-            rw [hLeftActions]
-            exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, hMsg⟩), rfl⟩,
-          ⟨(msg, MessageDir.send), by
-            rw [hRightActions]
-            exact Finset.mem_filter.mpr ⟨hR, Or.inl hMsg⟩, rfl⟩⟩
   refine
     { parent_eq := ?parentEq
-      shared_messageIds := hSharedIds
-      boundary_messageIds_disjoint := ?boundary
-      actions_disjoint := hActionsDisjoint
       complementary := ?complementary
       progress_disjoint := ?progressDisjoint
       fair_disjoint := ?fairDisjoint }
@@ -450,7 +404,9 @@ theorem PactTypeAlphabet.projectParallel_compatible
       simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_sdiff]
       constructor
       · rintro ⟨(((haL | haT) | haR)), hI⟩
-        · exact absurd haL.2 hI
+        · rcases haL.2 with h | h
+          · exact absurd h hI
+          · exact h
         · exact haT.1
         · rcases haR.2 with h | h
           · exact absurd h hI
@@ -493,22 +449,14 @@ theorem PactTypeAlphabet.projectParallel_compatible
     rcases hCompatible.complementary msg hMsg with ⟨hL, hR⟩ | ⟨hL, hR⟩
     · refine Or.inl ⟨?_, ?_⟩
       · rw [hLeftActions]
-        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, hMsg⟩)
+        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, Or.inl hMsg⟩)
       · rw [hRightActions]
         exact Finset.mem_filter.mpr ⟨hR, Or.inl hMsg⟩
     · refine Or.inr ⟨?_, ?_⟩
       · rw [hLeftActions]
-        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, hMsg⟩)
+        exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hL, Or.inl hMsg⟩)
       · rw [hRightActions]
         exact Finset.mem_filter.mpr ⟨hR, Or.inl hMsg⟩
-  case boundary =>
-    rw [BoundaryMessageIdsDisjoint, Finset.disjoint_left]
-    rintro msg hLeft hRight
-    simp only [Finset.mem_sdiff] at hLeft hRight
-    have hShared : msg ∈ interface := by
-      rw [← hSharedIds]
-      exact Finset.mem_inter.mpr ⟨hLeft.1, hRight.1⟩
-    exact hLeft.2 hShared
 
 /-- Progress identifiers occurring in a well-formed type are declared by its
 alphabet.  Unlike message actions, no parallel interface hides them. -/
@@ -828,8 +776,8 @@ theorem PactType.reannotationSafe_of_subalphabet :
           have hCompatible := hWF.2.1
           have hLeftWF := hWF.2.2.1
           have hRightWF := hWF.2.2.2
-          have hLeftAlphaWF := hCompatible.wellFormed_left hWF.1
-          have hRightAlphaWF := hCompatible.wellFormed_right hWF.1
+          have hLeftAlphaWF := hLeftWF.alphabet_wellFormed
+          have hRightAlphaWF := hRightWF.alphabet_wellFormed
           have hParentActions : alphabet.actions =
               (left.alphabet.actions ∪ right.alphabet.actions).filter
                 fun action => action.1 ∉ interface := by
@@ -845,14 +793,20 @@ theorem PactType.reannotationSafe_of_subalphabet :
           set targetRight := PactTypeAlphabet.projectParallelChild target
             right.alphabet interface with hTargetRight
           have hLeftActions : targetLeft.actions =
-              (left.alphabet.actions.filter fun action => action.1 ∈ interface) ∪
+              (left.alphabet.actions.filter fun action =>
+                  action.1 ∈ interface ∨ action ∈ target.actions) ∪
                 (target.actions \ right.alphabet.actions) :=
             PactTypeAlphabet.projectParallelLeft_actions _ _ _ _
           have hRightActions : targetRight.actions =
               right.alphabet.actions.filter fun action =>
                 action.1 ∈ interface ∨ action ∈ target.actions := rfl
+          have hTargetHidden : ∀ action ∈ target.actions, action.1 ∉ interface := by
+            intro a ha
+            have := hSub.1 ha
+            rw [hParentActions] at this
+            exact (Finset.mem_filter.mp this).2
           have hProjCompatible :=
-            PactTypeAlphabet.projectParallel_compatible hCompatible hTargetWF hSub
+            PactTypeAlphabet.projectParallel_compatible hCompatible hSub
           have hL : sizeOf left < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf right < n := by rw [← hSize]; simp_wf; omega
           have hLeftVisible := PactType.progressIds_subset_alphabet left hLeftWF
@@ -861,7 +815,8 @@ theorem PactType.reannotationSafe_of_subalphabet :
           have hRightFairVisible := PactType.fairChoiceIds_subset_alphabet right hRightWF
           refine ⟨hProjCompatible, ?_, ?_⟩
           · refine ih (sizeOf left) hL left rfl targetLeft hLeftWF
-              (hProjCompatible.wellFormed_left hTargetWF) ?_ ?_ ?_ ?_
+              (PactTypeAlphabet.projectParallelLeft_wellFormed hLeftAlphaWF
+                hTargetWF hTargetHidden) ?_ ?_ ?_ ?_
             · refine ⟨?_, ?_, ?_⟩
               · rw [hLeftActions]
                 refine Finset.union_subset (Finset.filter_subset _ _) ?_
@@ -891,17 +846,13 @@ theorem PactType.reannotationSafe_of_subalphabet :
             · intro a ha
               simp only [Finset.mem_inter] at ha
               rw [hLeftActions]
+              refine Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨ha.2, ?_⟩)
               by_cases hI : a.1 ∈ interface
-              · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨ha.2, hI⟩)
-              · have hParent : a ∈ alphabet.actions := by
-                  rw [hParentActions, Finset.mem_filter, Finset.mem_union]
-                  exact ⟨Or.inl ha.2, hI⟩
-                have hTarget : a ∈ target.actions :=
-                  hActions (Finset.mem_inter.mpr
-                    ⟨Finset.mem_union_left _ ha.1, hParent⟩)
-                refine Finset.mem_union_right _ (Finset.mem_sdiff.mpr ⟨hTarget, ?_⟩)
-                exact fun hRight =>
-                  hCompatible.actions_disjoint.forall_ne_finset ha.2 hRight rfl
+              · exact Or.inl hI
+              · refine Or.inr (hActions (Finset.mem_inter.mpr
+                  ⟨Finset.mem_union_left _ ha.1, ?_⟩))
+                rw [hParentActions, Finset.mem_filter, Finset.mem_union]
+                exact ⟨Or.inl ha.2, hI⟩
             · rw [PactTypeAlphabet.projectParallelLeft_progress]
               intro x hx
               refine Finset.mem_sdiff.mpr
@@ -915,7 +866,8 @@ theorem PactType.reannotationSafe_of_subalphabet :
                   hCompatible.fair_disjoint.forall_ne_finset
                     (hLeftFairVisible hx) hRight rfl⟩
           · refine ih (sizeOf right) hR right rfl targetRight hRightWF
-              (hProjCompatible.wellFormed_right hTargetWF) ?_ ?_ ?_ ?_
+              (PactTypeAlphabet.projectParallelChild_wellFormed hRightAlphaWF)
+              ?_ ?_ ?_ ?_
             · exact ⟨Finset.filter_subset _ _, Finset.inter_subset_left,
                 Finset.inter_subset_left⟩
             · intro a ha
@@ -1047,8 +999,20 @@ theorem PactType.reannotate_alphabetWellFormed
           simp only [PactType.reannotate, PactType.AlphabetWellFormed]
           have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          have hLeftAWF := hSafe.1.wellFormed_left hAlphaWF
-          have hRightAWF := hSafe.1.wellFormed_right hAlphaWF
+          -- `parent_eq` hides the interface, so the reannotation target itself
+          -- declares no interface action.
+          have hTargetHidden : ∀ action ∈ alphabet.actions,
+              action.1 ∉ interface := by
+            intro a ha
+            rw [hSafe.1.parent_eq] at ha
+            simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter] at ha
+            exact ha.2
+          have hLeftAWF := PactTypeAlphabet.projectParallelLeft_wellFormed
+            (right := right.alphabet)
+            hWF.2.2.1.alphabet_wellFormed hAlphaWF hTargetHidden
+          have hRightAWF := PactTypeAlphabet.projectParallelChild_wellFormed
+            (target := alphabet) (interface := interface)
+            hWF.2.2.2.alphabet_wellFormed
           refine ⟨hAlphaWF, ?_,
             ih (sizeOf left) hLeftSize _ left rfl hWF.2.2.1 hLeftAWF hSafe.2.1,
             ih (sizeOf right) hRightSize _ right rfl hWF.2.2.2 hRightAWF hSafe.2.2⟩
@@ -1366,7 +1330,7 @@ theorem parallelTypeBranchesWithin_alphabet_wellFormed
       simp only [parallelTypeBranchesWithin, PactType.AlphabetWellFormed]
       rw [hLeftAlphabet, hRightAlphabet]
       exact ⟨hAlphaWF,
-        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF branch,
+        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet branch,
         singletonTypeXOfferAt_alphabetWellFormed
           (PactTypeAlphabet.branchPart alphabet branch) hLeftWF hHeadActionLeft hHead.2.1
           (hHead.reannotationSafe_branchPart hAlphaWF),
@@ -1457,7 +1421,7 @@ theorem parallelTypeBranchesSelectingWithin_alphabet_wellFormed
           (hBranches item (by simp [hItem])).remove_branchPart
             (hHeadDisjoint item hItem)
       have hCompatible :=
-        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet hAlphaWF branch
+        PactTypeAlphabet.branchPart_remove_parallelCompatible alphabet branch
       by_cases hSelected : branch = selected
       · have hLeftAlphabet :
             (selectedTypeBranchAt (PactTypeAlphabet.branchPart alphabet branch) branch).alphabet =
