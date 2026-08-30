@@ -1745,11 +1745,19 @@ theorem relationMembership_alphabet_eq
               hCoherent.2.2.2 hRightRelated).trans hCoherent.2.1
       | par alphabet left right interface =>
           rcases relationMembership_par_cases signature alphabet left right
-              interface hRelated with hPair | hFinal
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, _, _, _⟩
             injection hEntry with hResidual _
             rw [hResidual]
+            simp [PactType.alphabet]
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, _, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual, PactType.reannotate_alphabet]
+            simp [PactType.alphabet]
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, _, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual, PactType.reannotate_alphabet]
             simp [PactType.alphabet]
           · injection hFinal with hResidual _
             rw [hResidual]
@@ -2121,7 +2129,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
               right.TailOccurrences name False := by
             simpa only [PactType.TailOccurrences] using hTail
           rcases relationMembership_par_cases signature alphabet left right
-              interface hRelated with hPair | hFinal
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
             injection hEntry with hResidual _
@@ -2135,6 +2143,24 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
                   leftResidual q1 name False hTailRec.1 hFields.1 hLeftRelated)
                 (ih (typeCompilationFuel right) hRightFuel right rfl
                   rightResidual q2 name False hTailRec.2 hFields.2 hRightRelated)
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact PactType.tailOccurrences_mono name False.elim _
+              (PactType.reannotate_tailOccurrences name residualLeft alphabet
+                False (ih (typeCompilationFuel left) hLeftFuel left rfl
+                  residualLeft q1 name False hTailRec.1 hFields.1 hLeftRelated))
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, hRightRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact PactType.tailOccurrences_mono name False.elim _
+              (PactType.reannotate_tailOccurrences name residualRight alphabet
+                False (ih (typeCompilationFuel right) hRightFuel right rfl
+                  residualRight q2 name False hTailRec.2 hFields.2 hRightRelated))
           · injection hFinal with hResidual _
             rw [hResidual]
             simp [PactType.TailOccurrences]
@@ -2362,7 +2388,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
               fun other => PactType.tailOccurrences_mono other False.elim right
                 (hSplit other).2⟩
           rcases relationMembership_par_cases signature alphabet left right
-              interface hRelated with hPair | hFinal
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
             injection hEntry with hResidual _
@@ -2376,6 +2402,22 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
                   leftResidual q1 hTailRec.1 hClosedFields.1 hLeftRelated).1
                 (ih (typeCompilationFuel right) hRightFuel right rfl
                   rightResidual q2 hTailRec.2 hClosedFields.2 hRightRelated).1
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact PactType.reannotate_tailRecursive residualLeft alphabet
+              (ih (typeCompilationFuel left) hLeftFuel left rfl residualLeft q1
+                hTailRec.1 hClosedFields.1 hLeftRelated).1
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, hRightRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact PactType.reannotate_tailRecursive residualRight alphabet
+              (ih (typeCompilationFuel right) hRightFuel right rfl residualRight
+                q2 hTailRec.2 hClosedFields.2 hRightRelated).1
           · injection hFinal with hResidual _
             rw [hResidual]
             simp [PactType.TailRecursive]
@@ -3078,7 +3120,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rcases relationMembership_par_cases signature alphabet left right
-              interface hRelated with hPair | hFinal
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
             injection hEntry with hResidual _
@@ -3103,6 +3145,10 @@ theorem relationMembership_alphabetWellFormed
                 hWF.2.2.2 hTailRec.2 hDisjoint.2 hRightRelated⟩
             rw [hLeftAlphabet, hRightAlphabet]
             exact hWF.2.1
+          -- Survivor residuals carry the parent alphabet, which `mergeHidden`
+          -- strips of interface actions the residual may still mention.
+          · sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+          · sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
           · injection hFinal with hResidual _
             rw [hResidual]
             simpa [PactType.AlphabetWellFormed] using hWF.1
@@ -3302,7 +3348,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rcases relationMembership_par_cases signature alphabet left right
-              interface hRelated with hPair | hFinal
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
             injection hEntry with hResidual _
@@ -3316,6 +3362,22 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
                 q1 hTailRec.1 hDisjoint.1 hLeftRelated,
               ih (typeCompilationFuel right) hRightFuel right rfl rightResidual
                 q2 hTailRec.2 hDisjoint.2 hRightRelated⟩
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact reannotate_offerBranchesDisjoint residualLeft alphabet
+              (ih (typeCompilationFuel left) hLeftFuel left rfl residualLeft q1
+                hTailRec.1 hDisjoint.1 hLeftRelated)
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, hRightRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact reannotate_offerBranchesDisjoint residualRight alphabet
+              (ih (typeCompilationFuel right) hRightFuel right rfl residualRight
+                q2 hTailRec.2 hDisjoint.2 hRightRelated)
           · injection hFinal with hResidual _
             rw [hResidual]
             simp [PactType.OfferBranchesDisjoint]
@@ -3533,6 +3595,20 @@ theorem TypeTransition.preserves_alphabetWellFormed
       intro hWF _ _
       simp only [PactType.AlphabetWellFormed] at hWF ⊢
       exact hWF.1
+  -- Unlike `par_fuse`, whose target is `.skip`, the survivor targets keep the
+  -- residual and re-stamp it with the parent alphabet.
+  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
+      hLeftOffers rightTransition hRightOffers hNotSkip hLeftCurrent
+      hLeftFuture hRightCurrent hRightFuture conditions ihLeft ihRight =>
+      intro hWF hTailRec hDisjoint
+      sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
+      hLeftOffers rightTransition hRightOffers hNotSkip hLeftCurrent
+      hLeftFuture hRightCurrent hRightFuture conditions ihLeft ihRight =>
+      intro hWF hTailRec hDisjoint
+      sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
 
 /-- Offer-level form of `TypeTransition.preserves_alphabetWellFormed`. -/
 theorem DecoratedTypeTransition.preserves_alphabetWellFormed

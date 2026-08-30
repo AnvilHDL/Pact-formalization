@@ -272,6 +272,48 @@ theorem typeOffers_future_subset_target_union_current
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
   | par_fuse_tock =>
       simp
+  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hSide hNotTock hLeftIH
+      hRightIH =>
+      intro action hAction
+      rw [typeFutureOffers_reannotate]
+      simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
+      obtain ⟨hAction, hInterface⟩ := hAction
+      simp only [Finset.mem_union] at hAction
+      rcases hAction with hLeft | hRight
+      · have hLeft' := hLeftIH hLeft
+        simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
+          at hLeft'
+        exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inl hLeft'), hInterface⟩))
+      · have hRight' := hRightIH hRight
+        simp only [Finset.mem_union] at hRight'
+        rcases hRight' with hFuture | hCurrent
+        · exact Finset.mem_union.mpr (Or.inl hFuture)
+        · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inr hCurrent), hInterface⟩))
+  | left_complete_tock =>
+      simp
+  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hSide hNotTock hLeftIH
+      hRightIH =>
+      intro action hAction
+      rw [typeFutureOffers_reannotate]
+      simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
+      obtain ⟨hAction, hInterface⟩ := hAction
+      simp only [Finset.mem_union] at hAction
+      rcases hAction with hLeft | hRight
+      · have hLeft' := hLeftIH hLeft
+        simp only [Finset.mem_union] at hLeft'
+        rcases hLeft' with hFuture | hCurrent
+        · exact Finset.mem_union.mpr (Or.inl hFuture)
+        · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inl hCurrent), hInterface⟩))
+      · have hRight' := hRightIH hRight
+        simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
+          at hRight'
+        exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩))
+  | right_complete_tock =>
+      simp
 
 /-- Proves that a transition-alphabet symbol carries an offer summary from the signature. -/
 theorem transitionAlphabet_offerSummary_mem

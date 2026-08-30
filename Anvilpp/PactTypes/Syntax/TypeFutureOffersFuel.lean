@@ -374,6 +374,113 @@ theorem typeFutureOffersFuel_eq_typeFutureOffers
   exact typeFutureOffersFuel_add_stable processType
     (sizeOf processType + 1) extra (by omega)
 
+/-- Same-cycle completion ignores alphabet annotations. -/
+theorem typeCanCompleteThisCycleFuel_reannotate :
+    ∀ (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet),
+      typeCanCompleteThisCycleFuel fuel (processType.reannotate alphabet) =
+        typeCanCompleteThisCycleFuel fuel processType := by
+  intro fuel
+  induction fuel with
+  | zero => intro processType alphabet; rfl
+  | succ fuel ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (alphabet : PactTypeAlphabet),
+          (PactType.reannotateBranches alphabet branches).any
+              (fun branch => typeCanCompleteThisCycleFuel fuel branch.2) =
+            branches.any fun branch =>
+              typeCanCompleteThisCycleFuel fuel branch.2 := by
+        intro branches alphabet
+        induction branches with
+        | nil => simp
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.reannotateBranches_cons, List.any_cons, restIH,
+              ih branchType alphabet]
+      intro processType alphabet
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
+      | recur a binder body =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            ih body alphabet
+      | choice a l r =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· || ·) (ih l alphabet) (ih r alphabet)
+      | fairChoice a b l r =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· || ·) (ih l alphabet) (ih r alphabet)
+      | seq a l r =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· && ·) (ih l alphabet) (ih r alphabet)
+      | par a l r bdry =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· && ·) (ih l _) (ih r _)
+      | xoffer a e bs =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· || ·) (ih e alphabet) (hBranches bs alphabet)
+      | offer a e bs =>
+          simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
+            congrArg₂ (· || ·) (ih e alphabet) (hBranches bs alphabet)
+
+/-- The future-offer menu ignores alphabet annotations. -/
+theorem typeFutureOffersFuel_reannotate :
+    ∀ (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet),
+      typeFutureOffersFuel fuel (processType.reannotate alphabet) =
+        typeFutureOffersFuel fuel processType := by
+  intro fuel
+  induction fuel with
+  | zero => intro processType alphabet; rfl
+  | succ fuel ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (alphabet : PactTypeAlphabet) (seed : Finset BareMessage),
+          (PactType.reannotateBranches alphabet branches).foldl
+              (fun offers branch =>
+                offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2) seed =
+            branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2) seed := by
+        intro branches alphabet
+        induction branches with
+        | nil => intro seed; simp
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            intro seed
+            simp only [PactType.reannotateBranches_cons, List.foldl_cons,
+              ih branchType alphabet]
+            exact restIH _
+      intro processType alphabet
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, typeFutureOffersFuel]
+      | recur a binder body =>
+          simpa [PactType.reannotate, typeFutureOffersFuel] using ih body alphabet
+      | choice a l r =>
+          simpa [PactType.reannotate, typeFutureOffersFuel] using
+            congrArg₂ (· ∪ ·) (ih l alphabet) (ih r alphabet)
+      | fairChoice a b l r =>
+          simpa [PactType.reannotate, typeFutureOffersFuel] using
+            congrArg₂ (· ∪ ·) (ih l alphabet) (ih r alphabet)
+      | seq a l r =>
+          simp only [PactType.reannotate, typeFutureOffersFuel,
+            ih l alphabet, ih r alphabet,
+            typeCanCompleteThisCycleFuel_reannotate fuel l alphabet]
+      | par a l r bdry =>
+          simp only [PactType.reannotate, typeFutureOffersFuel, ih l _, ih r _]
+      | xoffer a e bs =>
+          simp only [PactType.reannotate, typeFutureOffersFuel, ih e alphabet]
+          exact hBranches bs alphabet _
+      | offer a e bs =>
+          simp only [PactType.reannotate, typeFutureOffersFuel, ih e alphabet]
+          exact hBranches bs alphabet _
+
+/-- Relabelling leaves the public future menu unchanged. -/
+theorem typeFutureOffers_reannotate (processType : PactType)
+    (alphabet : PactTypeAlphabet) :
+    typeFutureOffers (processType.reannotate alphabet) =
+      typeFutureOffers processType := by
+  unfold typeFutureOffers
+  rw [PactType.reannotate_sizeOf processType alphabet]
+  exact typeFutureOffersFuel_reannotate _ processType alphabet
+
 end
 
 end Pact

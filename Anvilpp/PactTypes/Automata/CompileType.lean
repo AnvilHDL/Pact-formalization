@@ -1056,7 +1056,8 @@ theorem compileTypeFuel_initial_mem (signature : TypeAlphabet) :
           have hRightMem := ih right hRight
           simp only [compileTypeFuel, buildParallelAutomaton,
             finishAutomatonFragment, Finset.mem_insert]
-          refine Or.inr (Finset.mem_biUnion.mpr ⟨_, hLeftMem, ?_⟩)
+          refine Or.inr (Finset.mem_union_left _ (Finset.mem_union_left _
+            (Finset.mem_biUnion.mpr ⟨_, hLeftMem, ?_⟩)))
           exact Finset.mem_image.mpr ⟨_, hRightMem, rfl⟩
       | xoffer alphabet elseType branches =>
           simp [compileTypeFuel, buildExclusiveOfferAutomaton,

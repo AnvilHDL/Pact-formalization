@@ -123,11 +123,14 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
       leftFuture rightFuture).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildParallelAutomaton, finishAutomatonFragment,
-    parallelRawTransitionEdges, parallelDoneEdges,
+    parallelRawTransitionEdges, parallelLeftCompleteEdges,
+    parallelRightCompleteEdges, parallelDoneEdges,
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
-    Finset.mem_filter] at hEdge
+    Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩, _⟩ |
+      ⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
+        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
+        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
@@ -150,8 +153,23 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
         parallelRawTransitionEdges, parallelDoneEdges,
         hLeftTargets leftRaw hLeftRaw,
         hRightTargets rightRaw hRightRaw]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
+    obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+    rw [← hRightEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelLeftCompleteEdges,
+      parallelRightCompleteEdges, parallelDoneEdges,
+      hRightTargets rightRaw hRightRaw]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
+    obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+    rw [← hLeftEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelLeftCompleteEdges,
+      parallelRightCompleteEdges, parallelDoneEdges,
+      hLeftTargets leftRaw hLeftRaw]
   · simp [buildParallelAutomaton, finishAutomatonFragment,
-      parallelRawTransitionEdges, parallelDoneEdges]
+      parallelRawTransitionEdges, parallelLeftCompleteEdges,
+      parallelRightCompleteEdges, parallelDoneEdges]
 
 private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
     (signature : TypeAlphabet)

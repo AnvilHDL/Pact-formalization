@@ -713,6 +713,90 @@ theorem PactType.reannotate_tailRecursive :
                 hFields.1)
               (hBranches branches alphabet hBranchesSize hFields.2)
 
+/-- Reannotation rewrites only alphabets, so it preserves the syntax size. -/
+theorem PactType.reannotate_sizeOf :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
+      sizeOf (processType.reannotate alphabet) = sizeOf processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro alphabet
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet),
+          sizeOf branches < n →
+          sizeOf (PactType.reannotateBranches branchAlphabet branches) =
+            sizeOf branches := by
+        intro branches branchAlphabet hBranchesSize
+        induction branches with
+        | nil => rw [PactType.reannotateBranches_nil]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateBranches_cons]
+            simp_wf
+            rw [ih (sizeOf branchType) hBranchSize branchType rfl branchAlphabet,
+              restIH hRestSize]
+      subst hSize
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate]
+      | recur a binder body =>
+          have hBodySize : sizeOf body < sizeOf (PactType.recur a binder body) := by
+            simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hBodySize body rfl alphabet]
+      | choice a l r =>
+          have hL : sizeOf l < sizeOf (PactType.choice a l r) := by simp_wf; omega
+          have hR : sizeOf r < sizeOf (PactType.choice a l r) := by simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hL l rfl alphabet, ih _ hR r rfl alphabet]
+      | seq a l r =>
+          have hL : sizeOf l < sizeOf (PactType.seq a l r) := by simp_wf; omega
+          have hR : sizeOf r < sizeOf (PactType.seq a l r) := by simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hL l rfl alphabet, ih _ hR r rfl alphabet]
+      | fairChoice a b l r =>
+          have hL : sizeOf l < sizeOf (PactType.fairChoice a b l r) := by
+            simp_wf; omega
+          have hR : sizeOf r < sizeOf (PactType.fairChoice a b l r) := by
+            simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hL l rfl alphabet, ih _ hR r rfl alphabet]
+      | par a l r bdry =>
+          have hL : sizeOf l < sizeOf (PactType.par a l r bdry) := by
+            simp_wf; omega
+          have hR : sizeOf r < sizeOf (PactType.par a l r bdry) := by
+            simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hL l rfl _, ih _ hR r rfl _]
+      | xoffer a e bs =>
+          have hE : sizeOf e < sizeOf (PactType.xoffer a e bs) := by simp_wf; omega
+          have hB : sizeOf bs < sizeOf (PactType.xoffer a e bs) := by simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hE e rfl alphabet, hBranches bs alphabet hB]
+      | offer a e bs =>
+          have hE : sizeOf e < sizeOf (PactType.offer a e bs) := by simp_wf; omega
+          have hB : sizeOf bs < sizeOf (PactType.offer a e bs) := by simp_wf; omega
+          simp only [PactType.reannotate]
+          simp_wf
+          rw [ih _ hE e rfl alphabet, hBranches bs alphabet hB]
+
 /-- Reannotation preserves clock guardedness for the same structural reason. -/
 theorem PactType.reannotate_clockGuarded :
     ∀ (processType : PactType) (alphabet : PactTypeAlphabet),

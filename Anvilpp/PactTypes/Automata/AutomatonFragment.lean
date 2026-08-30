@@ -16,6 +16,7 @@ Tagged States
 * `root` and `final` are the two distinguished states used by atomic types.
 * `child i q` injects state `q` into child automaton `i` of a sum/sequence.
 * `pair q₁ q₂` is a state of a synchronized parallel product.
+* `survivor i q` is state `q` of the component `i` that outlives its sibling.
 -/
 inductive TypeAutomatonState : Type where
   /-- Fresh entry state introduced by a constructor. -/
@@ -26,6 +27,9 @@ inductive TypeAutomatonState : Type where
   | child : Nat → TypeAutomatonState → TypeAutomatonState
   /-- Product state containing one state from each parallel component. -/
   | pair : TypeAutomatonState → TypeAutomatonState → TypeAutomatonState
+  /-- State of the surviving component `index` of a parallel product whose
+  sibling has already completed. -/
+  | survivor : Nat → TypeAutomatonState → TypeAutomatonState
   deriving DecidableEq
 
 /-- Exactly the semantic edges--/

@@ -511,38 +511,6 @@ theorem typeLabel_sync_not_isTock (interface : Interface) (left right : TypeLabe
       | tock => exact absurd (hSync.2.2.mpr trivial) (by simp [TypeLabel.isTock])
       | actions ra => exact ⟨by simp [TypeLabel.isTock], by simp [TypeLabel.isTock]⟩
 
-/-- A parallel residual only completes in the current cycle by fusing, which
-needs its left component to reach `skip` first. -/
-theorem typeSameCycleCanComplete_par_left (alphabet : PactTypeAlphabet)
-    (left right : PactType) (interface : Interface)
-    (hComplete : TypeSameCycleCanComplete (.par alphabet left right interface)) :
-    TypeSameCycleCanComplete left := by
-  obtain ⟨targetAlphabet, hPath⟩ := hComplete
-  have hAux : ∀ current,
-      Relation.ReflTransGen TypeNonClockStep (.par alphabet left right interface) current →
-      (∃ l r, current = .par alphabet l r interface ∧ TypeSameCycleReaches left l) ∨
-      TypeSameCycleCanComplete left := by
-    intro current hReach
-    induction hReach with
-    | refl => exact Or.inl ⟨left, right, rfl, Relation.ReflTransGen.refl⟩
-    | tail _ hStep ih =>
-        rcases ih with ⟨l, r, hEq, hLeftReach⟩ | hDone
-        · subst hEq
-          obtain ⟨env, label, hTrans, hNotTock⟩ := hStep
-          cases hTrans with
-          | par _ lEnv rEnv _ la la' ra ra' lLbl rLbl lC lF rC rF
-              hLTrans hLOff hRTrans hROff hNotBoth hConds =>
-              exact Or.inl ⟨la', ra', rfl, hLeftReach.tail ⟨lEnv, lLbl, hLTrans,
-                (typeLabel_sync_not_isTock _ lLbl rLbl hConds.2.2.2 hNotTock).1⟩⟩
-          | par_fuse _ lEnv rEnv _ la ra lLbl rLbl lC lF rC rF
-              hLTrans hLOff hRTrans hROff hConds =>
-              exact Or.inr ⟨_, hLeftReach.tail ⟨lEnv, lLbl, hLTrans,
-                (typeLabel_sync_not_isTock _ lLbl rLbl hConds.2.2.2 hNotTock).1⟩⟩
-        · exact Or.inr hDone
-  rcases hAux _ hPath with ⟨l, r, hEq, -⟩ | hDone
-  · exact nomatch hEq
-  · exact hDone
-
 /-- A non-clock raw automaton edge — matching `ofStage`'s own edge filter
 (`compileTypeFuel`'s pending edges, before the external-alphabet filter
 `compileType` applies), not the public, alphabet-filtered `TypeAutomaton`.
@@ -2313,6 +2281,16 @@ theorem replaceVar_eq_skip_iff (ty : PactType) (var : String) (replacement : Pac
 theorem helper_h13_par_case
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
+    (hLeftH13 : ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership (buildRelationSet left (compileType signature left))
+        residual state →
+      (state ∈ (compileType signature left).accepting ↔
+        residual = .skip residual.alphabet))
+    (hRightH13 : ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership (buildRelationSet right (compileType signature right))
+        residual state →
+      (state ∈ (compileType signature right).accepting ↔
+        residual = .skip residual.alphabet))
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated : relationMembership
       (buildRelationSet (.par alphabet left right interface)
@@ -2345,11 +2323,37 @@ theorem helper_h13_par_case
         (typeCompilationFuel (.par alphabet left right interface))
         (.par alphabet left right interface) := hRelated
   rw [hFuelEq] at hMem
-  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_image,
-    Prod.mk.injEq] at hMem
-  rcases hMem with ⟨hResidualEq, hStateEq⟩ | ⟨entry, -, hR, hS⟩
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
+    Finset.mem_image, Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hResidualEq, hStateEq⟩ | (⟨entry, -, hR, hS⟩ |
+      ⟨entry, hEntryMem, hR, hS⟩) | ⟨entry, hEntryMem, hR, hS⟩
   · subst hResidualEq; subst hStateEq; simp [PactType.alphabet]
   · subst hR; subst hS; simp [PactType.alphabet]
+  · -- A survivor state is non-accepting, so H13 forces a non-`skip` residual.
+    subst hR; subst hS
+    obtain ⟨hEntry, hNotAcc⟩ := Finset.mem_filter.mp hEntryMem
+    rw [buildRelationSetCoreFuel_eq_of_sufficient signature left
+      (le_max_left _ _) le_rfl] at hEntry
+    rw [compileTypeFuel_eq_of_sufficient signature left
+      (le_max_left _ _) le_rfl] at hNotAcc
+    refine ⟨fun hIn => absurd hIn (by simp), fun hSkip => ?_⟩
+    refine absurd ((hLeftH13 hEntry).mpr ?_) hNotAcc
+    rw [PactType.reannotate_alphabet] at hSkip
+    cases hForm : entry.1 with
+    | skip a => simp [PactType.alphabet]
+    | _ => rw [hForm] at hSkip; simp [PactType.reannotate] at hSkip
+  · subst hR; subst hS
+    obtain ⟨hEntry, hNotAcc⟩ := Finset.mem_filter.mp hEntryMem
+    rw [buildRelationSetCoreFuel_eq_of_sufficient signature right
+      (le_max_right _ _) le_rfl] at hEntry
+    rw [compileTypeFuel_eq_of_sufficient signature right
+      (le_max_right _ _) le_rfl] at hNotAcc
+    refine ⟨fun hIn => absurd hIn (by simp), fun hSkip => ?_⟩
+    refine absurd ((hRightH13 hEntry).mpr ?_) hNotAcc
+    rw [PactType.reannotate_alphabet] at hSkip
+    cases hForm : entry.1 with
+    | skip a => simp [PactType.alphabet]
+    | _ => rw [hForm] at hSkip; simp [PactType.reannotate] at hSkip
 
 /-- H13 for any `.seq first second`, given H13 for `second` alone. -/
 theorem helper_h13_seq_case
@@ -2542,6 +2546,158 @@ theorem helper_h13_xoffer_case
           compileTypeFuel signature (typeCompilationFuel item.1.2) item.1.2), item.2),
         List.mk_mem_zipIdx_iff_getElem?.mpr hMapGet, a.2, hIH.mpr hSkip, rfl⟩
 
+/-- H13 for one singleton branch node, at any alphabet. -/
+theorem helper_h13_singletonTypeXOfferAt_case
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branch : BareMessage × PactType)
+    (hBranchH13 : ∀ branchAlphabet,
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership
+          (buildRelationSet (branch.2.reannotate branchAlphabet)
+            (compileType signature (branch.2.reannotate branchAlphabet)))
+          residual state →
+      (state ∈ (compileType signature
+          (branch.2.reannotate branchAlphabet)).accepting ↔
+        residual = .skip residual.alphabet))
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet (singletonTypeXOfferAt alphabet branch)
+        (compileType signature (singletonTypeXOfferAt alphabet branch)))
+      residual state) :
+    state ∈ (compileType signature
+        (singletonTypeXOfferAt alphabet branch)).accepting ↔
+      residual = .skip residual.alphabet := by
+  simp only [singletonTypeXOfferAt] at hRelated ⊢
+  exact helper_h13_xoffer_case signature alphabet (.skip alphabet)
+    [(branch.1, branch.2.reannotate alphabet)]
+    (fun hR => by
+      obtain ⟨hR', hS'⟩ :=
+        NewCorrespondence.relationMembership_skip_cases signature alphabet hR
+      subst hR'; subst hS'
+      simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
+        finishAutomatonFragment])
+    (by
+      intro branch' hBranch' residual state hR
+      have hEq : branch' = (branch.1, branch.2.reannotate alphabet) := by
+        simpa using hBranch'
+      subst branch'
+      exact hBranchH13 alphabet hR)
+    hRelated
+
+/-- H13 for the unselected branch product, at any alphabet. -/
+theorem helper_h13_parallelTypeBranchesWithin_case
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (hBranchesH13 : ∀ branch ∈ branches, ∀ branchAlphabet,
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership
+          (buildRelationSet (branch.2.reannotate branchAlphabet)
+            (compileType signature (branch.2.reannotate branchAlphabet)))
+          residual state →
+      (state ∈ (compileType signature
+          (branch.2.reannotate branchAlphabet)).accepting ↔
+        residual = .skip residual.alphabet))
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet (parallelTypeBranchesWithin alphabet branches)
+        (compileType signature (parallelTypeBranchesWithin alphabet branches)))
+      residual state) :
+    state ∈ (compileType signature
+        (parallelTypeBranchesWithin alphabet branches)).accepting ↔
+      residual = .skip residual.alphabet := by
+  match branches with
+  | [] =>
+      simp only [parallelTypeBranchesWithin] at hRelated ⊢
+      obtain ⟨hR, hS⟩ :=
+        NewCorrespondence.relationMembership_skip_cases signature alphabet hRelated
+      subst hR; subst hS
+      simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
+        finishAutomatonFragment]
+  | [branch] =>
+      simp only [parallelTypeBranchesWithin] at hRelated ⊢
+      exact helper_h13_singletonTypeXOfferAt_case signature alphabet branch
+        (fun ba => hBranchesH13 branch (by simp) ba) hRelated
+  | branch :: b2 :: rest =>
+      simp only [parallelTypeBranchesWithin] at hRelated ⊢
+      exact helper_h13_par_case signature alphabet _ _ ∅
+        (fun hR => helper_h13_singletonTypeXOfferAt_case signature
+          (alphabet.branchPart branch) branch
+          (fun ba => hBranchesH13 branch (by simp) ba) hR)
+        (fun hR => helper_h13_parallelTypeBranchesWithin_case signature
+          (alphabet.remove (alphabet.branchPart branch)) (b2 :: rest)
+          (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
+        hRelated
+
+/-- H13 for the branch product after a selection, at any alphabet. -/
+theorem helper_h13_parallelTypeBranchesSelectingWithin_case
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hBranchesH13 : ∀ branch ∈ branches, ∀ branchAlphabet,
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+      relationMembership
+          (buildRelationSet (branch.2.reannotate branchAlphabet)
+            (compileType signature (branch.2.reannotate branchAlphabet)))
+          residual state →
+      (state ∈ (compileType signature
+          (branch.2.reannotate branchAlphabet)).accepting ↔
+        residual = .skip residual.alphabet))
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet
+        (parallelTypeBranchesSelectingWithin alphabet selected branches)
+        (compileType signature
+          (parallelTypeBranchesSelectingWithin alphabet selected branches)))
+      residual state) :
+    state ∈ (compileType signature
+        (parallelTypeBranchesSelectingWithin alphabet selected
+          branches)).accepting ↔
+      residual = .skip residual.alphabet := by
+  match branches with
+  | [] =>
+      simp only [parallelTypeBranchesSelectingWithin] at hRelated ⊢
+      obtain ⟨hR, hS⟩ :=
+        NewCorrespondence.relationMembership_skip_cases signature alphabet hRelated
+      subst hR; subst hS
+      simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
+        finishAutomatonFragment]
+  | [branch] =>
+      simp only [parallelTypeBranchesSelectingWithin] at hRelated ⊢
+      by_cases hSel : branch = selected
+      · rw [if_pos hSel] at hRelated ⊢
+        simp only [selectedTypeBranchAt] at hRelated ⊢
+        exact helper_h13_seq_case signature alphabet
+          (.message alphabet branch.1.1 branch.1.2)
+          (branch.2.reannotate alphabet)
+          (hBranchesH13 branch (by simp) alphabet) hRelated
+      · rw [if_neg hSel] at hRelated ⊢
+        exact helper_h13_singletonTypeXOfferAt_case signature alphabet branch
+          (fun ba => hBranchesH13 branch (by simp) ba) hRelated
+  | branch :: b2 :: rest =>
+      simp only [parallelTypeBranchesSelectingWithin] at hRelated ⊢
+      by_cases hSel : branch = selected
+      · rw [if_pos hSel] at hRelated ⊢
+        exact helper_h13_par_case signature alphabet _ _ ∅
+          (fun hR => by
+            simp only [selectedTypeBranchAt] at hR ⊢
+            exact helper_h13_seq_case signature (alphabet.branchPart branch)
+              (.message (alphabet.branchPart branch) branch.1.1 branch.1.2)
+              (branch.2.reannotate (alphabet.branchPart branch))
+              (hBranchesH13 branch (by simp) (alphabet.branchPart branch)) hR)
+          (fun hR => helper_h13_parallelTypeBranchesWithin_case signature
+            (alphabet.remove (alphabet.branchPart branch)) (b2 :: rest)
+            (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
+          hRelated
+      · rw [if_neg hSel] at hRelated ⊢
+        exact helper_h13_par_case signature alphabet _ _ ∅
+          (fun hR => helper_h13_singletonTypeXOfferAt_case signature
+            (alphabet.branchPart branch) branch
+            (fun ba => hBranchesH13 branch (by simp) ba) hR)
+          (fun hR => helper_h13_parallelTypeBranchesSelectingWithin_case signature
+            (alphabet.remove (alphabet.branchPart branch)) selected (b2 :: rest)
+            (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
+          hRelated
+
 /-- H13 for `parallelTypeBranchesSelecting selected branches`, given H13 for
 every branch's own continuation type. -/
 theorem helper_h13_parallelTypeBranchesSelecting
@@ -2572,48 +2728,10 @@ theorem helper_h13_parallelTypeBranchesSelecting
       subst hR; subst hS
       simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
         finishAutomatonFragment]
-  | [branch] =>
-      simp only [parallelTypeBranchesSelecting,
-        parallelTypeBranchesSelectingWithin] at hRelated ⊢
-      by_cases hSel : branch = selected
-      · rw [if_pos hSel] at hRelated ⊢
-        simp only [selectedTypeBranchAt] at hRelated ⊢
-        exact helper_h13_seq_case signature branch.2.alphabet
-          (.message branch.2.alphabet branch.1.1 branch.1.2)
-          (branch.2.reannotate branch.2.alphabet)
-          (hBranchesH13 branch (by simp) branch.2.alphabet) hRelated
-      · rw [if_neg hSel] at hRelated ⊢
-        simp only [singletonTypeXOfferAt] at hRelated ⊢
-        exact helper_h13_xoffer_case signature branch.2.alphabet
-          (.skip branch.2.alphabet)
-          [(branch.1, branch.2.reannotate branch.2.alphabet)]
-          (fun hR => by
-            obtain ⟨hR', hS'⟩ :=
-              NewCorrespondence.relationMembership_skip_cases signature
-                branch.2.alphabet hR
-            subst hR'; subst hS'
-            simp [PactType.alphabet, compileType, typeCompilationFuel, compileTypeFuel,
-              finishAutomatonFragment])
-          (by
-            intro branch' hBranch' residual state hR
-            have hEq : branch' =
-                (branch.1, branch.2.reannotate branch.2.alphabet) := by
-              simpa using hBranch'
-            subst branch'
-            exact hBranchesH13 branch (by simp) branch.2.alphabet hR)
-          hRelated
-  | branch :: b2 :: rest =>
-      simp only [parallelTypeBranchesSelecting,
-        parallelTypeBranchesSelectingWithin] at hRelated ⊢
-      by_cases hSel : branch = selected
-      · rw [if_pos hSel] at hRelated ⊢
-        exact helper_h13_par_case signature
-          branch.2.alphabet
-          _ _ ∅ hRelated
-      · rw [if_neg hSel] at hRelated ⊢
-        exact helper_h13_par_case signature
-          branch.2.alphabet
-          _ _ ∅ hRelated
+  | branch :: rest =>
+      simp only [parallelTypeBranchesSelecting] at hRelated ⊢
+      exact helper_h13_parallelTypeBranchesSelectingWithin_case signature
+        branch.2.alphabet selected (branch :: rest) hBranchesH13 hRelated
 
 /-- Helper Lemma H13: final states represent completion. -/
 lemma helper_h13_final_states_represent_completion
@@ -2824,7 +2942,13 @@ lemma helper_h13_final_states_represent_completion
         exact helper_h13_seq_case signature alphabet first second
           (fun hR => ih (typeCompilationFuel second) hSecondSize hR rfl) hRelated
     | par alphabet left right interface =>
-        exact helper_h13_par_case signature alphabet left right interface hRelated
+        have hLeftSize : typeCompilationFuel left < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        have hRightSize : typeCompilationFuel right < n := by
+          rw [← hFuel]; simp [typeCompilationFuel]; omega
+        exact helper_h13_par_case signature alphabet left right interface
+          (fun hR => ih (typeCompilationFuel left) hLeftSize hR rfl)
+          (fun hR => ih (typeCompilationFuel right) hRightSize hR rfl) hRelated
     | xoffer alphabet elseType branches =>
         have hElseSize : typeCompilationFuel elseType < n := by
           rw [← hFuel]; simp [typeCompilationFuel]; omega
@@ -3881,6 +4005,32 @@ theorem offers_label_supported
   | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
       hRightOffers hLocal1 hLocal2 hConditions hTock =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions hNotTock =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | left_complete_tock outer leftEnv rightEnv interface left right right'
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeftOffers hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions
+      hTock =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
+      hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions hNotTock =>
+      have hLeftIH := offers_label_supported hLeftOffers
+      have hRightIH := offers_label_supported hRightOffers
+      exact combine_label_supported hLeftIH hRightIH hConditions.2
+  | right_complete_tock outer leftEnv rightEnv interface left left' right
+      leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
+      hLeftOffers hRightOffers hNotSkip _ _ _ _ hLocal1 hLocal2 hConditions
+      hTock =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2

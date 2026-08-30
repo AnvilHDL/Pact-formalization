@@ -221,6 +221,58 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (TypeLabel.combine interface leftLabel rightLabel)
       (.skip (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet
         interface))
+  | left_complete (outer leftEnv rightEnv : TypeEnvironment)
+      (interface : Interface)
+      (left right right' : PactType) (leftLabel rightLabel : TypeLabel)
+      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+      TypeTransition leftEnv left leftLabel (.skip left.alphabet) →
+      TypeOffers leftEnv left leftLabel (.skip left.alphabet) leftCurrent
+        leftFuture →
+      TypeTransition rightEnv right rightLabel right' →
+      TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
+      right' ≠ .skip right'.alphabet →
+      restrictTypeOffers interface leftCurrent = ∅ →
+      restrictTypeOffers interface leftFuture = ∅ →
+      restrictTypeOffers interface rightCurrent = ∅ →
+      restrictTypeOffers interface rightFuture = ∅ →
+      (outer.WellFormed ∧
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv ∧
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv ∧
+        TypeLabel.Sync interface leftLabel rightLabel) →
+      --
+      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
+        right.alphabet interface) left right interface)
+      (TypeLabel.combine interface leftLabel rightLabel)
+      (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
+        right.alphabet interface))
+  | right_complete (outer leftEnv rightEnv : TypeEnvironment)
+      (interface : Interface)
+      (left left' right : PactType) (leftLabel rightLabel : TypeLabel)
+      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
+      TypeTransition leftEnv left leftLabel left' →
+      TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
+      TypeTransition rightEnv right rightLabel (.skip right.alphabet) →
+      TypeOffers rightEnv right rightLabel (.skip right.alphabet) rightCurrent
+        rightFuture →
+      left' ≠ .skip left'.alphabet →
+      restrictTypeOffers interface leftCurrent = ∅ →
+      restrictTypeOffers interface leftFuture = ∅ →
+      restrictTypeOffers interface rightCurrent = ∅ →
+      restrictTypeOffers interface rightFuture = ∅ →
+      (outer.WellFormed ∧
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv ∧
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv ∧
+        TypeLabel.Sync interface leftLabel rightLabel) →
+      --
+      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
+        right.alphabet interface) left right interface)
+      (TypeLabel.combine interface leftLabel rightLabel)
+      (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
+        right.alphabet interface))
 
 structure TypeOfferSummary : Type where
   current : Finset BareMessage
@@ -338,6 +390,48 @@ theorem TypeTransition.exists_typeOffers
             leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
             hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
+  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture _ hLeftOffers
+      _ hRightOffers hNotSkip hLeftCurrentHidden hLeftFutureHidden
+      hRightCurrentHidden hRightFutureHidden conditions ihLeft ihRight =>
+      by_cases hTock :
+          TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+          TypeOffers.left_complete_tock outer leftEnv rightEnv interface left
+            right right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
+            hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
+            conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
+          hideTypeOffers interface (leftFuture ∪ rightFuture),
+          TypeOffers.left_complete outer leftEnv rightEnv interface left right
+            right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
+            hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
+            conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
+  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture _ hLeftOffers
+      _ hRightOffers hNotSkip hLeftCurrentHidden hLeftFutureHidden
+      hRightCurrentHidden hRightFutureHidden conditions ihLeft ihRight =>
+      by_cases hTock :
+          TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+          TypeOffers.right_complete_tock outer leftEnv rightEnv interface left
+            left' right leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
+            hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
+            conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
+      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
+          hideTypeOffers interface (leftFuture ∪ rightFuture),
+          TypeOffers.right_complete outer leftEnv rightEnv interface left left'
+            right leftLabel rightLabel leftCurrent leftFuture rightCurrent
+            rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
+            hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
+            conditions.2.1 conditions.2.2.1
+            ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
 
 /-- Package a semantic step together with one of its offer pairs. -/
 theorem TypeTransition.exists_decorated
@@ -428,6 +522,18 @@ theorem TypeTransition.preserves_alphabet
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture leftTransition
       hLeftOffers rightTransition hRightOffers conditions ihLeft ihRight =>
+      simp [PactType.alphabet]
+  | left_complete outer leftEnv rightEnv interface left right right' leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
+      hLeftOffers rightTransition hRightOffers hNotSkip _ _ _ _ conditions
+      ihLeft ihRight =>
+      rw [PactType.reannotate_alphabet]
+      simp [PactType.alphabet]
+  | right_complete outer leftEnv rightEnv interface left left' right leftLabel
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture leftTransition
+      hLeftOffers rightTransition hRightOffers hNotSkip _ _ _ _ conditions
+      ihLeft ihRight =>
+      rw [PactType.reannotate_alphabet]
       simp [PactType.alphabet]
 
 theorem DecoratedTypeTransition.preserves_alphabet
