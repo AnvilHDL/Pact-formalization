@@ -124,13 +124,16 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
   intro edge hEdge
   simp only [buildParallelAutomaton, finishAutomatonFragment,
     parallelRawTransitionEdges, parallelLeftCompleteEdges,
-    parallelRightCompleteEdges, parallelDoneEdges,
+    parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
+    parallelRightCompleteSurvivorEdges, parallelDoneEdges,
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
     Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
+      ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
         ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
+        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, rfl⟩⟩ |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
@@ -167,12 +170,26 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges,
       hLeftTargets leftRaw hLeftRaw]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
+    obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+    rw [← hRightEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelLeftCompleteEdges,
+      parallelRightCompleteEdges, parallelDoneEdges,
+      hRightTargets rightRaw hRightRaw]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
+    obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+    rw [← hLeftEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment,
+      parallelRawTransitionEdges, parallelLeftCompleteEdges,
+      parallelRightCompleteEdges, parallelDoneEdges,
+      hLeftTargets leftRaw hLeftRaw]
   · simp [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges]
 
 private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
@@ -182,7 +199,7 @@ private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
     (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
     (hBranchInitial : ∀ entry ∈ branchAutomata,
       entry.2.initial ∈ entry.2.states) :
-    (buildExclusiveOfferAutomaton signature branches elseAutomaton
+    (buildExclusiveOfferAutomaton signature alphabet branches elseAutomaton
       branchAutomata).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
@@ -219,7 +236,7 @@ private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
       childStates, childState, hElseInitial]
 
 private theorem buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
-    (signature : TypeAlphabet)
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
@@ -229,8 +246,8 @@ private theorem buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
     (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
     (hConjunctionInitial : ∀ entry ∈ selectedConjunctions,
       entry.2.initial ∈ entry.2.states) :
-    (buildSelectedConjunctiveOfferAutomaton signature branches elseAutomaton
-      selectedConjunctions).EdgeTargetsInStates := by
+    (buildSelectedConjunctiveOfferAutomaton signature alphabet branches
+      elseAutomaton selectedConjunctions).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
@@ -745,7 +762,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             (compiledChildFutureFuel signature fuel right)
             (compileTypeFuel_edgeTargetsInStates signature fuel left hLeft)
             (compileTypeFuel_edgeTargetsInStates signature fuel right hRight)
-      | xoffer _ elseType branches =>
+      | xoffer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -759,7 +776,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             omega
           rw [compileTypeFuel.eq_def]
           have hResult := buildExclusiveOfferAutomaton_futureTargetsInStates
-            signature branches (compileTypeFuel signature fuel elseType)
+            signature alphabet branches (compileTypeFuel signature fuel elseType)
             (branches.map fun branch =>
               (branch.1, compileTypeFuel signature fuel branch.2))
             (ih elseType hElse)
@@ -776,7 +793,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
               exact compileTypeFuel_initial_mem signature fuel original.2
                 (hBranches original hOriginal))
           simpa [compileTypeFuel] using hResult
-      | offer _ elseType branches =>
+      | offer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -791,7 +808,8 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
           rw [compileTypeFuel.eq_def]
           have hResult :=
             buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
-              signature branches (compileTypeFuel signature fuel elseType)
+              signature alphabet branches
+              (compileTypeFuel signature fuel elseType)
               (branches.map fun selected =>
                 (selected.1, compileTypeFuel signature fuel
                   (parallelTypeBranchesSelecting selected branches)))
@@ -1417,11 +1435,12 @@ theorem computeFutureOfFuel_child_embedding
           hRightLarge hRightSmall]
 
 private theorem buildExclusiveOfferAutomaton_outgoing_else
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature branches
+    let offer := buildExclusiveOfferAutomaton signature alphabet branches
       elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ elseAutomaton.edges,
@@ -1468,13 +1487,14 @@ private theorem buildExclusiveOfferAutomaton_outgoing_else
     · simp [childPendingEdge, childState, hChildSource]
 
 private theorem buildExclusiveOfferAutomaton_outgoing_branch
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
     (hBranch : branchAutomata[i]? = some (action, automaton))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature branches
+    let offer := buildExclusiveOfferAutomaton signature alphabet branches
       elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child (i + 1) state ↔
       ∃ childEdge ∈ automaton.edges,
@@ -1641,11 +1661,12 @@ theorem computeFutureOf_binaryChoice_right
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled exclusive offer, agrees with the else child's own. -/
 theorem computeFutureOf_exclusiveOffer_else
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildExclusiveOfferAutomaton signature branches
+        buildExclusiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun branch => (branch.1, compileTypeFuel signature
             (typeCompilationFuel branch.2) branch.2)))
@@ -1665,7 +1686,8 @@ theorem computeFutureOf_exclusiveOffer_else
     (branch.1, compileTypeFuel signature (typeCompilationFuel branch.2)
       branch.2)
   let parentFragment :=
-    buildExclusiveOfferAutomaton signature branches elseFragment branchFragments
+    buildExclusiveOfferAutomaton signature alphabet branches elseFragment
+      branchFragments
   have hCard : elseFragment.states.card ≤ parentFragment.states.card := by
     have hTaggedCard :
         (childStates 0 elseFragment).card = elseFragment.states.card := by
@@ -1686,17 +1708,18 @@ theorem computeFutureOf_exclusiveOffer_else
     parentFragment elseFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient elseType) hFuel hProductInfo
-    (fun q edge => buildExclusiveOfferAutomaton_outgoing_else signature
+    (fun q edge => buildExclusiveOfferAutomaton_outgoing_else signature alphabet
       branches elseFragment branchFragments q edge)
     hCard state (by simpa [elseFragment] using hState)
 
 /-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled exclusive offer, agrees with branch `i`'s own. -/
 theorem computeFutureOf_exclusiveOffer_branch
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildExclusiveOfferAutomaton signature branches
+        buildExclusiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun branch => (branch.1, compileTypeFuel signature
             (typeCompilationFuel branch.2) branch.2)))
@@ -1720,7 +1743,8 @@ theorem computeFutureOf_exclusiveOffer_branch
   let branchFragment :=
     compileTypeFuel signature (typeCompilationFuel branchType) branchType
   let parentFragment :=
-    buildExclusiveOfferAutomaton signature branches elseFragment branchFragments
+    buildExclusiveOfferAutomaton signature alphabet branches elseFragment
+      branchFragments
   have hBranchFragment :
       branchFragments[i]? = some (action, branchFragment) := by
     simp [branchFragments, branchFragment, List.getElem?_map, hBranch]
@@ -1749,7 +1773,7 @@ theorem computeFutureOf_exclusiveOffer_branch
     parentFragment branchFragment (i + 1) hWhole rfl
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient branchType) hFuel hProductInfo
-    (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch signature
+    (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch signature alphabet
       branches elseFragment branchFragments i action branchFragment
       hBranchFragment q edge)
     hCard state (by simpa [branchFragment] using hState)

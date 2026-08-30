@@ -568,6 +568,8 @@ private theorem correspondence_stepIff_aux
             hAlphabetWF.2.1
             (fun action branchType hMember =>
               PactType.branch_alphabet_eq_of_mem hAlphabetWF.2.2.2 hMember)
+            (fun b hMem =>
+              branch_action_mem_fixedAlphabet_of_mem hAlphabetWF.2.2.2 (by simpa using hMem))
             hElseIH hBranchesIH hRelated hSymbol
       | offer alphabet elseType branches =>
           intro residual residual' state env label offers hRelated hSymbol

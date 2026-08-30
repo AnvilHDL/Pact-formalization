@@ -8,12 +8,13 @@ open Classical
 open Pact.NewCorrespondence
 
 theorem buildExclusiveOfferAutomaton_outgoing_else
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature branches elseAutomaton
-      branchAutomata
+    let offer := buildExclusiveOfferAutomaton signature alphabet branches
+      elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ elseAutomaton.edges,
         childEdge.source = state ∧ edge = childPendingEdge 0 childEdge := by
@@ -60,14 +61,15 @@ theorem buildExclusiveOfferAutomaton_outgoing_else
 
 /-- Characterizes a public exclusive-offer edge leaving a tagged branch-`i`-child state as a copy of that branch's own outgoing edge. -/
 theorem buildExclusiveOfferAutomaton_outgoing_branch
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
     (hBranch : branchAutomata[i]? = some (action, automaton))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature branches elseAutomaton
-      branchAutomata
+    let offer := buildExclusiveOfferAutomaton signature alphabet branches
+      elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child (i + 1) state ↔
       ∃ childEdge ∈ automaton.edges,
         childEdge.source = state ∧ edge = childPendingEdge (i + 1) childEdge := by

@@ -230,11 +230,13 @@ mutual
     | action (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
         env.WellFormed ∧ env.hasNeed (msg, dir) →
+        (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) (TypeLabel.message msg dir)
           (.skip alphabet) {(msg, dir)} (typeFutureOffers (.skip alphabet))
     | action_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
         env.WellFormed ∧ ¬ env.hasNeed (msg, dir) ∧ env.clock = false →
+        (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) TypeLabel.silent
           (.message alphabet msg dir) {(msg, dir)}
           (typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)})
@@ -316,6 +318,7 @@ mutual
           (action, processType) ∈ branches ∧
           TypeBranchEnabled env (action, processType) ∧
           TypeResolved env branches →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches)
           (TypeLabel.message action.1 action.2) processType
           {action} (typeFutureOffers processType)
@@ -324,12 +327,14 @@ mutual
         (branches : List (BareMessage × PactType)) :
         env.WellFormed ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           elseType ∅ (typeFutureOffers elseType)
     | xoffer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
         env.WellFormed ∧ ¬ TypeResolved env branches ∧ env.clock = false →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           (.xoffer alphabet elseType branches) (typeWaitingOffers env branches)
           (typeFutureOffers (.xoffer alphabet elseType branches) \
@@ -339,6 +344,7 @@ mutual
         (branches : List (BareMessage × PactType))
         (enabled : BareMessage × PactType) :
         env.WellFormed ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           (parallelTypeBranchesSelecting enabled branches) ∅
           (typeFutureOffers (parallelTypeBranchesSelecting enabled branches))
@@ -347,6 +353,7 @@ mutual
         (branches : List (BareMessage × PactType)) :
         env.WellFormed ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           elseType (typeBranchActions branches) (typeFutureOffers elseType)
     | offer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
@@ -354,6 +361,7 @@ mutual
         (branches : List (BareMessage × PactType)) :
         env.WellFormed ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ ¬ TypeResolved env branches →
+        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           (.offer alphabet elseType branches) (typeWaitingOffers env branches)
           (typeFutureOffers (.offer alphabet elseType branches) \

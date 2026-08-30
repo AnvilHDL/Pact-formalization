@@ -1004,15 +1004,19 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
           simp only [compileTypeFuel, buildParallelAutomaton,
             finishAutomatonFragment, parallelRawTransitionEdges,
             parallelLeftCompleteEdges, parallelRightCompleteEdges,
+            parallelLeftCompleteSurvivorEdges,
+            parallelRightCompleteSurvivorEdges,
             parallelDoneEdges, Finset.mem_union, Finset.mem_biUnion,
             Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
           rcases hEdge with
-              ⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
+              ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
                   ⟨hRightEdge, hSync⟩, rfl⟩ |
                 ⟨leftState, -, rightEdge,
                   ⟨hRightEdge, -, hRightNotAcc, -⟩, rfl⟩⟩ |
                 ⟨rightState, -, leftEdge,
-                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, rfl⟩, hReachable⟩ |
+                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, rfl⟩⟩ |
+                ⟨rightEdge, ⟨hRightEdge, -, hRightNotAcc, -⟩, rfl⟩⟩ |
+                ⟨leftEdge, ⟨hLeftEdge, -, hLeftNotAcc, -⟩, rfl⟩, hReachable⟩ |
               ⟨environment, _, rfl⟩
           · let rawEdge : PendingAutomatonEdge :=
                 let bothAccept :=
@@ -1115,6 +1119,39 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 simpa [hTargetEq] using hRightNotAcc⟩
             · exact Or.inr ⟨rightMarker, hRightLabel⟩
           · -- The mirror case for a surviving left component.
+            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
+            obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+            have hTargetEq : leftRaw.target = leftEdge.target :=
+              congrArg AutomatonFragmentEdge.target hLeftEq
+            rw [← hLeftEq]
+            rcases ih left hLeft leftRaw hLeftRaw with
+                ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
+            · left
+              refine ⟨leftResidual.reannotate alphabet, ?_⟩
+              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              refine Or.inr (Or.inl (Or.inr ⟨(leftResidual, leftRaw.target),
+                ?_, rfl⟩))
+              exact Finset.mem_filter.mpr ⟨hLeftResidual, by
+                simpa [hTargetEq] using hLeftNotAcc⟩
+            · exact Or.inr ⟨leftMarker, hLeftLabel⟩
+          · -- The right survivor continuing inside the survivor region.
+            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
+            obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+            have hTargetEq : rightRaw.target = rightEdge.target :=
+              congrArg AutomatonFragmentEdge.target hRightEq
+            rw [← hRightEq]
+            rcases ih right hRight rightRaw hRightRaw with
+                ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
+            · left
+              refine ⟨rightResidual.reannotate alphabet, ?_⟩
+              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              refine Or.inr (Or.inr ⟨(rightResidual, rightRaw.target), ?_, rfl⟩)
+              exact Finset.mem_filter.mpr ⟨hRightResidual, by
+                simpa [hTargetEq] using hRightNotAcc⟩
+            · exact Or.inr ⟨rightMarker, hRightLabel⟩
+          · -- The mirror case for a left survivor continuing.
             simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
             obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
             have hTargetEq : leftRaw.target = leftEdge.target :=

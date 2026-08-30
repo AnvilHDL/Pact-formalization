@@ -178,12 +178,13 @@ lemma relationMembership_xoffer_cases
 
 /-- Characterizes a public conjunctive-offer edge leaving a tagged else-child state as a copy of the else automaton's own outgoing edge. -/
 theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildSelectedConjunctiveOfferAutomaton signature branches
-      elseAutomaton selectedConjunctions
+    let offer := buildSelectedConjunctiveOfferAutomaton signature alphabet
+      branches elseAutomaton selectedConjunctions
     edge ∈ offer.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ elseAutomaton.edges,
         childEdge.source = state ∧ edge = childPendingEdge 0 childEdge := by
@@ -231,14 +232,15 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
 
 /-- Characterizes a public conjunctive-offer edge leaving a tagged branch-`i`-child state as a copy of that branch's generated commit type's own outgoing edge. -/
 theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (selectedConjunctions : List (BareMessage × AutomatonFragment))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
     (hBranch : selectedConjunctions[i]? = some (action, automaton))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildSelectedConjunctiveOfferAutomaton signature branches
-      elseAutomaton selectedConjunctions
+    let offer := buildSelectedConjunctiveOfferAutomaton signature alphabet
+      branches elseAutomaton selectedConjunctions
     edge ∈ offer.edges ∧ edge.source = .child (i + 1) state ↔
       ∃ childEdge ∈ automaton.edges,
         childEdge.source = state ∧ edge = childPendingEdge (i + 1) childEdge := by
@@ -302,11 +304,12 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled conjunctive offer, agrees with the else child's own. -/
 theorem computeFutureOf_selectedConjunctiveOffer_else
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton signature branches
+        buildSelectedConjunctiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun selected => (selected.1, compileTypeFuel signature
             (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
@@ -328,8 +331,8 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
       (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
       (parallelTypeBranchesSelecting selected branches))
   let parentFragment :=
-    buildSelectedConjunctiveOfferAutomaton signature branches elseFragment
-      selectedConjunctions
+    buildSelectedConjunctiveOfferAutomaton signature alphabet branches
+      elseFragment selectedConjunctions
   have hCard : elseFragment.states.card ≤ parentFragment.states.card := by
     have hTaggedCard :
         (childStates 0 elseFragment).card = elseFragment.states.card := by
@@ -351,16 +354,17 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient elseType) hFuel hProductInfo
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else
-      signature branches elseFragment selectedConjunctions q edge)
+      signature alphabet branches elseFragment selectedConjunctions q edge)
     hCard state (by simpa [elseFragment] using hState)
 
 /-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled conjunctive offer, agrees with branch `i`'s generated commit type's own. -/
 theorem computeFutureOf_selectedConjunctiveOffer_branch
-    (signature : TypeAlphabet) (elseType : PactType)
+    (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
+    (elseType : PactType)
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel signature (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton signature branches
+        buildSelectedConjunctiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun selected => (selected.1, compileTypeFuel signature
             (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
@@ -391,8 +395,8 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
   let branchFragment :=
     compileTypeFuel signature (typeCompilationFuel branchType) branchType
   let parentFragment :=
-    buildSelectedConjunctiveOfferAutomaton signature branches elseFragment
-      selectedConjunctions
+    buildSelectedConjunctiveOfferAutomaton signature alphabet branches
+      elseFragment selectedConjunctions
   have hBranchFragment :
       selectedConjunctions[i]? = some (selected.1, branchFragment) := by
     simp [selectedConjunctions, branchFragment, branchType, List.getElem?_map,
@@ -423,7 +427,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient branchType) hFuel hProductInfo
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
-      signature branches elseFragment selectedConjunctions i selected.1
+      signature alphabet branches elseFragment selectedConjunctions i selected.1
       branchFragment hBranchFragment q edge)
     hCard state (by simpa [branchFragment] using hState)
 

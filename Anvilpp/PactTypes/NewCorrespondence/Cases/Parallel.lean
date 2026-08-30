@@ -80,6 +80,7 @@ theorem correspondence_par_stepIff
       cases decoratedTypeTransition_par_cases hStep with
       | step leftEnv rightEnv leftLabel rightLabel leftTarget rightTarget
           leftCurrent leftFuture rightCurrent rightFuture hTargetEq hNonFinal
+          hLeftSrcNotSkip hRightSrcNotSkip
           hLeftStep hRightStep hWF hLocal1 hLocal2 hSync hLabelEq hCurrentEq hFutureEq =>
           have hLeftCurrentAlphabet : leftCurrent ⊆ residualLeft.alphabet.actions :=
             typeOffers_current_subset_fixedAlphabet hResidualLeftWellFormed
@@ -142,7 +143,16 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
-              hSourceReachable, hWF,
+              hSourceReachable,
+              -- The ordinary rule's source guard transports through H13.
+              (fun _ =>
+                ⟨fun hAcc => hLeftSrcNotSkip
+                    ((helper_h13_final_states_represent_completion signature
+                      hLeftRelated).mp hAcc),
+                  fun hAcc => hRightSrcNotSkip
+                    ((helper_h13_final_states_represent_completion signature
+                      hRightRelated).mp hAcc)⟩),
+              hWF,
               hLocal1.congrLocalType hResidualLeftAlphabet.symm,
               hLocal2.congrLocalType hResidualRightAlphabet.symm,
               hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
@@ -235,7 +245,10 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
-              hSourceReachable, hWF,
+              hSourceReachable,
+              -- This edge redirects to `q_done`, so it realizes the fusing
+              -- rule and carries no source guard.
+              (fun hNotBoth => absurd hBothAccept hNotBoth), hWF,
               hLocal1.congrLocalType hResidualLeftAlphabet.symm,
               hLocal2.congrLocalType hResidualRightAlphabet.symm,
               hSync, hLabelEq, hCurrentEq, hFutureHidden, ?_⟩
@@ -304,7 +317,9 @@ theorem correspondence_par_stepIff
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
-              hSourceReachable, hWF,
+              hSourceReachable,
+              -- As in `fuse_tock`: a redirecting edge carries no source guard.
+              (fun hNotBoth => absurd hBothAccept hNotBoth), hWF,
               hLocal1.congrLocalType hResidualLeftAlphabet.symm,
               hLocal2.congrLocalType hResidualRightAlphabet.symm,
               hSync, hLabelEq, hCurrentEq, hFutureEq, ?_⟩
@@ -339,7 +354,7 @@ theorem correspondence_par_stepIff
       on_goal 2 => sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
       obtain ⟨leftEnv, rightEnv, leftLabel, rightLabel,
         leftOffers, rightOffers, q1', q2', hLeftEdge, hRightEdge,
-        _hEdgeSourceReachable,
+        _hEdgeSourceReachable, _hEdgeSourceLive,
         hWF, hLocal1, hLocal2, hSync, hLabelEq, hCurrentEq, hFutureEq,
         hRedirect⟩ := hEdge
       let leftCurrent := leftOffers.current

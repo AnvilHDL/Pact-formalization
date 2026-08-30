@@ -404,11 +404,15 @@ def compileTypeFuel (signature : TypeAlphabet) :
                 target := .root }
 
       -- message: fire to final when its complement is immediate; otherwise wait.
-      | .message _ msg dir =>
+      -- Both action families are gated on the type's own alphabet, exactly as
+      -- the semantic `action`/`action_wait` rules are.  The final idle loop
+      -- mirrors `skip`, which carries no such gate.
+      | .message alphabet msg dir =>
           let action : BareMessage := (msg, dir)
           let firingEdges : Finset PendingAutomatonEdge :=
             (signature.localEnvironments.filter fun environment =>
-              environment.hasNeed action).image fun environment =>
+              environment.hasNeed action ∧
+              action ∈ alphabet.actions).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible (TypeLabel.message msg dir)
@@ -418,7 +422,8 @@ def compileTypeFuel (signature : TypeAlphabet) :
           let waitingEdges : Finset PendingAutomatonEdge :=
             (signature.localEnvironments.filter fun environment =>
               environment.clock = false ∧
-              ¬ environment.hasNeed action).image fun environment =>
+              ¬ environment.hasNeed action ∧
+              action ∈ alphabet.actions).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible TypeLabel.silent
@@ -545,21 +550,21 @@ def compileTypeFuel (signature : TypeAlphabet) :
               (min fuel (typeCompilationFuel right)) right)
 
       -- exclusive offer: compile else and every branch independently first.
-      | .xoffer _ elseType branches =>
+      | .xoffer alphabet elseType branches =>
           let elseAutomaton := compileTypeFuel signature fuel elseType
           let branchAutomata := branches.map fun branch =>
             (branch.1, compileTypeFuel signature fuel branch.2)
           exact buildExclusiveOfferAutomaton
-            signature branches elseAutomaton branchAutomata
+            signature alphabet branches elseAutomaton branchAutomata
 
       -- conjunctive offer: compile its singleton-offer parallel product first.
-      | .offer _ elseType branches =>
+      | .offer alphabet elseType branches =>
           let elseAutomaton := compileTypeFuel signature fuel elseType
           let selectedConjunctions := branches.map fun selected =>
             (selected.1, compileTypeFuel signature fuel
               (parallelTypeBranchesSelecting selected branches))
           exact buildSelectedConjunctiveOfferAutomaton
-            signature branches elseAutomaton selectedConjunctions
+            signature alphabet branches elseAutomaton selectedConjunctions
 
 termination_by fuel processType => (fuel, 0)
 
@@ -706,11 +711,11 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
             ih right (by
               exact hRight)]
       | xoffer alphabet elseType branches =>
-          change buildExclusiveOfferAutomaton signature branches
+          change buildExclusiveOfferAutomaton signature alphabet branches
               (compileTypeFuel signature (fuel + 1) elseType)
               (branches.map fun branch =>
                 (branch.1, compileTypeFuel signature (fuel + 1) branch.2)) =
-            buildExclusiveOfferAutomaton signature branches
+            buildExclusiveOfferAutomaton signature alphabet branches
               (compileTypeFuel signature fuel elseType)
               (branches.map fun branch =>
                 (branch.1, compileTypeFuel signature fuel branch.2))
@@ -745,12 +750,13 @@ private theorem compileTypeFuel_succ_stable (signature : TypeAlphabet) :
                 omega
           exact hMap branches hBranches
       | offer alphabet elseType branches =>
-          change buildSelectedConjunctiveOfferAutomaton signature branches
+          change buildSelectedConjunctiveOfferAutomaton signature alphabet
+              branches
               (compileTypeFuel signature (fuel + 1) elseType)
               (branches.map fun selected =>
                 (selected.1, compileTypeFuel signature (fuel + 1)
                   (parallelTypeBranchesSelecting selected branches))) =
-            buildSelectedConjunctiveOfferAutomaton signature branches
+            buildSelectedConjunctiveOfferAutomaton signature alphabet branches
               (compileTypeFuel signature fuel elseType)
               (branches.map fun selected =>
                 (selected.1, compileTypeFuel signature fuel

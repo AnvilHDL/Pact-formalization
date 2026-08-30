@@ -83,6 +83,32 @@ lemma transitionAlphabetFor_environment_mem
     signature alphabet
     (transitionAlphabetFor_localEnvironment_mem signature alphabet hSymbol)
 
+/-- A symbol in a type's fixed public alphabet reports only current offers
+owned by that alphabet. -/
+lemma transitionAlphabetFor_current_mem
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    {action : BareMessage}
+    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
+      signature.transitionAlphabetFor alphabet)
+    (hAction : action ∈ offers.current) :
+    action ∈ alphabet.actions := by
+  classical
+  unfold TypeAlphabet.transitionAlphabetFor at hSymbol
+  rw [Finset.mem_biUnion] at hSymbol
+  rcases hSymbol with ⟨_env0, _hEnv0, hRest⟩
+  rw [Finset.mem_biUnion] at hRest
+  rcases hRest with ⟨_label0, _hLabel0, hImage⟩
+  rw [Finset.mem_image] at hImage
+  rcases hImage with ⟨offers0, hOffers0, hEq⟩
+  injection hEq with _ _ hOffersEq
+  subst hOffersEq
+  simp only [TypeAlphabet.localOfferSummariesFor, Finset.mem_biUnion,
+    Finset.mem_powerset, Finset.mem_image] at hOffers0
+  rcases hOffers0 with ⟨current, hCurrent, future, _hFuture, hMk⟩
+  rw [← hMk] at hAction
+  exact (Finset.mem_inter.mp (hCurrent hAction)).2
+
 /-- Proves that compiled `skip` has the non-clock silent self-loop edge. -/
 lemma compileType_skip_edge
     (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
@@ -204,6 +230,9 @@ lemma compileType_message_action_edge
     (.message alphabet msg dir)
     .root .final env (TypeLabel.message msg dir)
     (TypeOfferSummary.mk {(msg, dir)} ∅) hSymbol]
+  -- The alphabet gate is recovered from the symbol's own current offers.
+  have hAction : (msg, dir) ∈ alphabet.actions :=
+    transitionAlphabetFor_current_mem signature alphabet hSymbol (by simp)
   refine ⟨
     { source := .root
       environment := env
@@ -212,13 +241,14 @@ lemma compileType_message_action_edge
       future := .at .final ∅
       target := .final }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocal, hNeed]
+      hLocal, hNeed, hAction]
   · simp [computeFutureOf_message_final]
 
 /-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
 lemma computeFutureOf_message_root
     (signature : TypeAlphabet) {alphabet : PactTypeAlphabet}
-    (msg : MessageId) (dir : MessageDir) :
+    (msg : MessageId) (dir : MessageDir)
+    (hDeclared : (msg, dir) ∈ alphabet.actions) :
     computeFutureOf signature (.message alphabet msg dir) .root =
       {(msg, dir)} := by
   classical
@@ -312,7 +342,7 @@ lemma computeFutureOf_message_root
       have hEmptyNoNeed : ¬ TypeEnvironment.empty.hasNeed (msg, dir) := by
         simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
       refine ⟨_, ⟨Or.inl (Or.inr ⟨TypeEnvironment.empty,
-        ⟨hEmptyLocal, rfl, hEmptyNoNeed⟩, rfl⟩), rfl⟩, ?_⟩
+        ⟨hEmptyLocal, rfl, hEmptyNoNeed, hDeclared⟩, rfl⟩), rfl⟩, ?_⟩
       simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
   have hOffersFinal : pending.offersAt TypeAutomatonState.final = ∅ := by
     apply Finset.eq_empty_iff_forall_notMem.mpr
@@ -358,6 +388,9 @@ lemma compileType_message_wait_edge
     (.message alphabet msg dir)
     .root .root env TypeLabel.silent
     (TypeOfferSummary.mk {(msg, dir)} ∅) hSymbol]
+  -- The alphabet gate is recovered from the symbol's own current offers.
+  have hDeclared : (msg, dir) ∈ alphabet.actions :=
+    transitionAlphabetFor_current_mem signature alphabet hSymbol (by simp)
   refine ⟨
     { source := .root
       environment := env
@@ -366,8 +399,8 @@ lemma compileType_message_wait_edge
       future := .at .root {(msg, dir)}
       target := .root }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocal, hClock, hNoNeed]
-  · simp [computeFutureOf_message_root]
+      hLocal, hClock, hNoNeed, hDeclared]
+  · simp [computeFutureOf_message_root signature msg dir hDeclared]
 
 /-- Proves that compiled message has the final-state non-clock idle edge. -/
 lemma compileType_message_final_edge
@@ -425,7 +458,7 @@ lemma compileType_message_edge_cases
   simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hPending
   rcases hPending with (hFiring | hWaiting) | hFinal
-  · rcases hFiring with ⟨edgeEnv, ⟨_hLocal, hNeed⟩, hEdgeEq⟩
+  · rcases hFiring with ⟨edgeEnv, ⟨_hLocal, hNeed, _hDeclared⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
     simp only [computeFutureOf_message_final] at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
@@ -433,9 +466,10 @@ lemma compileType_message_edge_cases
     injection hLabel with hLabelVisible
     subst label; subst current; subst target
     exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hNeed⟩
-  · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed⟩, hEdgeEq⟩
+  · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed, hDeclared⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only [computeFutureOf_message_root] at hFuture
+    simp only [computeFutureOf_message_root signature msg dir hDeclared]
+      at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
     injection hLabel with hLabelVisible

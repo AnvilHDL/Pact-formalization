@@ -10,13 +10,19 @@ noncomputable section
 
 /-! ## Type transition system -/
 
-/-- The erased, environment-indexed type judgment `Eτ ⊢ τ -α→ τ'`. -/
+/-- The erased, environment-indexed type judgment `Eτ ⊢ τ -α→ τ'`.
+
+Action rules are gated on the type's own alphabet: a rule fires only when the
+action it involves is declared there.  Offer rules require *every* branch head
+to be declared, so a partly-declared offer is stuck rather than silently
+narrowed to its declared branches. -/
 @[aesop unsafe]
 inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactType → Prop where
   | action (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (msg : MessageId) (dir : MessageDir) :
       env.WellFormed ∧
       env.hasNeed (msg, dir) →
+      (msg, dir) ∈ alphabet.actions →
       --
       TypeTransition env (.message alphabet msg dir)
       (TypeLabel.message msg dir)
@@ -26,6 +32,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed ∧
       ¬ env.hasNeed (msg, dir) ∧
       env.clock = false →
+      (msg, dir) ∈ alphabet.actions →
       --
       TypeTransition env (.message alphabet msg dir)
       TypeLabel.silent
@@ -122,6 +129,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (action, processType) ∈ branches ∧
       TypeBranchEnabled env (action, processType) ∧
       TypeResolved env branches →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       (TypeLabel.message action.1 action.2)
@@ -133,6 +141,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       TypeLabel.silent
@@ -143,6 +152,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed ∧
       ¬ TypeResolved env branches ∧
       env.clock = false →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       TypeLabel.silent
@@ -154,6 +164,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed ∧
       enabled ∈ branches ∧
       TypeBranchEnabled env enabled →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -165,6 +176,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -176,6 +188,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       ¬ TypeResolved env branches →
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -280,13 +293,13 @@ theorem TypeTransition.exists_typeOffers
     (transition : TypeTransition env source label target) :
     ∃ current future, TypeOffers env source label target current future := by
   induction transition with
-  | action env alphabet msg dir conditions =>
+  | action env alphabet msg dir conditions hAlphabet =>
       exact ⟨{(msg, dir)}, typeFutureOffers (.skip alphabet),
-        TypeOffers.action env alphabet msg dir conditions⟩
-  | action_wait env alphabet msg dir conditions =>
+        TypeOffers.action env alphabet msg dir conditions hAlphabet⟩
+  | action_wait env alphabet msg dir conditions hAlphabet =>
       exact ⟨{(msg, dir)},
         typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)},
-        TypeOffers.action_wait env alphabet msg dir conditions⟩
+        TypeOffers.action_wait env alphabet msg dir conditions hAlphabet⟩
   | choice_left env alphabet left right hEnv hClock =>
       exact ⟨∅, typeFutureOffers left,
         TypeOffers.choice_left env alphabet left right ⟨hEnv, hClock⟩⟩
@@ -331,29 +344,35 @@ theorem TypeTransition.exists_typeOffers
       · exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
           TypeOffers.seq env alphabet left left' right label current childFuture
             hOffers hNotSkip hTock⟩
-  | xoffer_branch env alphabet elseType branches action processType conditions =>
+  | xoffer_branch env alphabet elseType branches action processType conditions
+      hAlphabet =>
       exact ⟨{action}, typeFutureOffers processType,
         TypeOffers.xoffer_branch env alphabet elseType branches action
-          processType conditions⟩
-  | xoffer_else env alphabet elseType branches conditions =>
+          processType conditions hAlphabet⟩
+  | xoffer_else env alphabet elseType branches conditions hAlphabet =>
       exact ⟨∅, typeFutureOffers elseType,
-        TypeOffers.xoffer_else env alphabet elseType branches conditions⟩
-  | xoffer_wait env alphabet elseType branches conditions =>
+        TypeOffers.xoffer_else env alphabet elseType branches conditions
+          hAlphabet⟩
+  | xoffer_wait env alphabet elseType branches conditions hAlphabet =>
       exact ⟨typeWaitingOffers env branches,
         typeFutureOffers (.xoffer alphabet elseType branches) \
           typeWaitingOffers env branches,
-        TypeOffers.xoffer_wait env alphabet elseType branches conditions⟩
-  | offer_some env alphabet elseType branches enabled conditions =>
+        TypeOffers.xoffer_wait env alphabet elseType branches conditions
+          hAlphabet⟩
+  | offer_some env alphabet elseType branches enabled conditions hAlphabet =>
       exact ⟨∅, typeFutureOffers (parallelTypeBranchesSelecting enabled branches),
-        TypeOffers.offer_some env alphabet elseType branches enabled conditions⟩
-  | offer_else env alphabet elseType branches conditions =>
+        TypeOffers.offer_some env alphabet elseType branches enabled conditions
+          hAlphabet⟩
+  | offer_else env alphabet elseType branches conditions hAlphabet =>
       exact ⟨typeBranchActions branches, typeFutureOffers elseType,
-        TypeOffers.offer_else env alphabet elseType branches conditions⟩
-  | offer_wait env alphabet elseType branches conditions =>
+        TypeOffers.offer_else env alphabet elseType branches conditions
+          hAlphabet⟩
+  | offer_wait env alphabet elseType branches conditions hAlphabet =>
       exact ⟨typeWaitingOffers env branches,
         typeFutureOffers (.offer alphabet elseType branches) \
           typeWaitingOffers env branches,
-        TypeOffers.offer_wait env alphabet elseType branches conditions⟩
+        TypeOffers.offer_wait env alphabet elseType branches conditions
+          hAlphabet⟩
   | par outer leftEnv rightEnv interface left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip _ hLeftOffers

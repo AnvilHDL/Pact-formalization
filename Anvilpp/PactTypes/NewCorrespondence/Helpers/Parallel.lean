@@ -20,6 +20,9 @@ inductive ParDecoratedStepCase
       target = .par parentAlphabet leftTarget rightTarget interface →
       ¬ (leftTarget = .skip leftTarget.alphabet ∧
         rightTarget = .skip rightTarget.alphabet) →
+      -- The ordinary rule's own source guard: both components still live.
+      left ≠ .skip left.alphabet →
+      right ≠ .skip right.alphabet →
       DecoratedTypeTransition leftEnv left leftLabel
         (TypeOfferSummary.mk leftCurrent leftFuture) leftTarget →
       DecoratedTypeTransition rightEnv right rightLabel
@@ -146,10 +149,10 @@ theorem TypeOffers.toTypeTransition
     (hOffers : TypeOffers env source label target current future) :
     TypeTransition env source label target := by
   induction hOffers using TypeOffers.rec with
-  | action env alphabet msg dir hConditions =>
-      exact TypeTransition.action env alphabet msg dir hConditions
-  | action_wait env alphabet msg dir hConditions =>
-      exact TypeTransition.action_wait env alphabet msg dir hConditions
+  | action env alphabet msg dir hConditions hAlphabet =>
+      exact TypeTransition.action env alphabet msg dir hConditions hAlphabet
+  | action_wait env alphabet msg dir hConditions hAlphabet =>
+      exact TypeTransition.action_wait env alphabet msg dir hConditions hAlphabet
   | choice_left env alphabet left right hEnv =>
       exact TypeTransition.choice_left env alphabet left right hEnv.1 hEnv.2
   | choice_right env alphabet left right hEnv =>
@@ -183,20 +186,25 @@ theorem TypeOffers.toTypeTransition
       hOffers ih =>
       exact TypeTransition.seq_fuse env alphabet skipAlphabet left right
         TypeLabel.tock ih
-  | xoffer_branch env alphabet elseType branches action processType hConditions =>
+  | xoffer_branch env alphabet elseType branches action processType hConditions
+      hAlphabet =>
       exact TypeTransition.xoffer_branch env alphabet elseType branches action
-        processType hConditions
-  | xoffer_else env alphabet elseType branches hConditions =>
+        processType hConditions hAlphabet
+  | xoffer_else env alphabet elseType branches hConditions hAlphabet =>
       exact TypeTransition.xoffer_else env alphabet elseType branches hConditions
-  | xoffer_wait env alphabet elseType branches hConditions =>
+        hAlphabet
+  | xoffer_wait env alphabet elseType branches hConditions hAlphabet =>
       exact TypeTransition.xoffer_wait env alphabet elseType branches hConditions
-  | offer_some env alphabet elseType branches enabled hConditions =>
+        hAlphabet
+  | offer_some env alphabet elseType branches enabled hConditions hAlphabet =>
       exact TypeTransition.offer_some env alphabet elseType branches enabled
-        hConditions
-  | offer_else env alphabet elseType branches hConditions =>
+        hConditions hAlphabet
+  | offer_else env alphabet elseType branches hConditions hAlphabet =>
       exact TypeTransition.offer_else env alphabet elseType branches hConditions
-  | offer_wait env alphabet elseType branches hConditions =>
+        hAlphabet
+  | offer_wait env alphabet elseType branches hConditions hAlphabet =>
       exact TypeTransition.offer_wait env alphabet elseType branches hConditions
+        hAlphabet
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftNotSkip hRightNotSkip
@@ -262,10 +270,11 @@ theorem decoratedTypeTransition_par_cases
   cases hOffers with
   | par outer leftEnv rightEnv interface left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
-      _ _ hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide =>
+      hLeftNotSkip hRightNotSkip hLeftOffers hRightOffers hNonFinal hLocal1
+      hLocal2 hSide =>
       exact ParDecoratedStepCase.step leftEnv rightEnv leftLabel rightLabel
         leftTarget rightTarget leftCurrent leftFuture rightCurrent rightFuture
-        rfl hNonFinal
+        rfl hNonFinal hLeftNotSkip hRightNotSkip
         ⟨hLeftOffers.toTypeTransition, hLeftOffers⟩
         ⟨hRightOffers.toTypeTransition, hRightOffers⟩
         hSide.1 hLocal1 hLocal2 hSide.2 rfl rfl rfl
@@ -385,14 +394,23 @@ theorem buildParallelAutomaton_final_hasEdge_iff
     rw [hWhole] at hPending
     simp only [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
-      parallelRightCompleteEdges, parallelDoneEdges, Finset.mem_union,
+      parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
+      parallelRightCompleteSurvivorEdges, parallelDoneEdges, Finset.mem_union,
       Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image,
       Finset.mem_inter] at hPending
     rcases hPending with
-        ⟨⟨⟨leftEdge, -, rightEdge, -, hEq⟩ |
+        ⟨⟨⟨⟨⟨leftEdge, -, rightEdge, -, hEq⟩ |
           ⟨leftState, -, rightEdge, -, hEq⟩⟩ |
-          ⟨rightState, -, leftEdge, -, hEq⟩, -⟩ |
+          ⟨rightState, -, leftEdge, -, hEq⟩⟩ |
+          ⟨rightEdge, -, hEq⟩⟩ |
+          ⟨leftEdge, -, hEq⟩, -⟩ |
         ⟨environment, hEnvironment, hEq⟩
+    · exfalso
+      rw [← hEq] at hSource
+      simp at hSource
+    · exfalso
+      rw [← hEq] at hSource
+      simp at hSource
     · exfalso
       rw [← hEq] at hSource
       simp at hSource
@@ -530,8 +548,7 @@ theorem compiledParallel_pair_edge_target_reachable
           (computeFutureOf signature left) (computeFutureOf signature right)
           edge.target :=
       hReachable.tail_raw
-        ⟨edge, Finset.mem_union_left _
-          (Finset.mem_union.mpr (Or.imp_left Finset.mem_union.mpr hRawEdge)),
+        ⟨edge, by simp only [Finset.mem_union]; exact Or.inl hRawEdge,
           rfl, rfl⟩
     rw [hTarget] at hTargetReachable
     exact hTargetReachable
@@ -2321,7 +2338,7 @@ theorem relationMembership_of_accepting
             (.xoffer alphabet elseType branches)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildExclusiveOfferAutomaton signature branches
+          show (buildExclusiveOfferAutomaton signature alphabet branches
             (compileTypeFuel signature (max (typeCompilationFuel elseType)
               (typeBranchCompilationFuel branches)) elseType)
             (List.map (fun branch => (branch.1,
@@ -2429,7 +2446,7 @@ theorem relationMembership_of_accepting
             (.offer alphabet elseType branches)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildSelectedConjunctiveOfferAutomaton signature branches
+          show (buildSelectedConjunctiveOfferAutomaton signature alphabet branches
             (compileTypeFuel signature
               (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
               elseType)
@@ -2795,7 +2812,8 @@ theorem survivorRight_mem_edges
   · simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
     left
     refine Finset.mem_filter.mpr
-      ⟨Finset.mem_union_left _ (Finset.mem_union_right _ ?_), hReach⟩
+      ⟨Finset.mem_union_left _ (Finset.mem_union_left _
+        (Finset.mem_union_left _ (Finset.mem_union_right _ ?_))), hReach⟩
     simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
       Finset.mem_filter, Finset.mem_inter]
     refine ⟨q1, ⟨hAcceptEqLeft ▸ hQ1Acc, hQ1St⟩, _,
@@ -2972,7 +2990,8 @@ theorem survivorLeft_mem_edges
   · simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
     left
     refine Finset.mem_filter.mpr
-      ⟨Finset.mem_union_right _ ?_, hReach⟩
+      ⟨Finset.mem_union_left _ (Finset.mem_union_left _
+        (Finset.mem_union_right _ ?_)), hReach⟩
     simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
       Finset.mem_filter, Finset.mem_inter]
     refine ⟨q2, ⟨hAcceptEqRight ▸ hQ2Acc, hQ2St⟩, _,
@@ -3083,6 +3102,13 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
           (computeFutureOf signature left)
           (computeFutureOf signature right)
           (.pair q1 q2) ∧
+        -- A non-redirecting edge realizes the ordinary rule, which fires only
+        -- from a live pair.  A redirecting one realizes the fusing rule, whose
+        -- sources are unconstrained.
+        (¬ (q1' ∈ (compileType signature left).accepting ∧
+              q2' ∈ (compileType signature right).accepting) →
+          q1 ∉ (compileType signature left).accepting ∧
+          q2 ∉ (compileType signature right).accepting) ∧
         env.WellFormed ∧
         LocalTypeOfferEnvironment env interface left rightEnv
           rightOffers.current rightOffers.future leftEnv ∧
@@ -3194,13 +3220,27 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
     rw [hWhole] at hPending
     simp only [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
-      parallelRightCompleteEdges, parallelDoneEdges, Finset.mem_union,
+      parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
+      parallelRightCompleteSurvivorEdges, parallelDoneEdges, Finset.mem_union,
       Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image,
       Finset.mem_inter] at hPending
     rcases hPending with ⟨hTransition, hReach⟩ | hDoneEdge
     swap
     · exfalso
       obtain ⟨environment, hEnvironment, hEq⟩ := hDoneEdge
+      rw [← hEq] at hSource
+      simp at hSource
+    -- The two survivor-region families source from `.survivor`, never a pair.
+    rcases hTransition with hTransition | hLeftSurvivorCont
+    swap
+    · exfalso
+      obtain ⟨leftEdge, -, hEq⟩ := hLeftSurvivorCont
+      rw [← hEq] at hSource
+      simp at hSource
+    rcases hTransition with hTransition | hRightSurvivorCont
+    swap
+    · exfalso
+      obtain ⟨rightEdge, -, hEq⟩ := hRightSurvivorCont
       rw [← hEq] at hSource
       simp at hSource
     rcases hTransition with hSynced | hRightFinished
@@ -3261,7 +3301,8 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
           · rw [← compileType_accepting_eq signature left]; exact hLeftNotAcc
           · exact hLeftNotAcc
     rcases hSynced with
-        ⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, hSync0⟩, hEq⟩ |
+        ⟨leftEdge, hLeftMem, rightEdge,
+          ⟨hRightMem, hSync0, hSrcLive⟩, hEq⟩ |
         hLeftFinished
     swap
     · -- The mirror case: the left component has finished and the right
@@ -3627,7 +3668,11 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       TypeOfferSummary.mk leftEdge.current leftEdge.future,
       TypeOfferSummary.mk rightEdge.current rightEdge.future,
       leftEdge.target, rightEdge.target, hQ1Eq ▸ hLeftHasEdge, hQ2Eq ▸ hRightHasEdge,
-      hQ1Eq ▸ hQ2Eq ▸ hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, ?_, ?_, ?_, ?_⟩
+      hQ1Eq ▸ hQ2Eq ▸ hReach, ?_, hEnvWF, hLocal1, hLocal2, hSyncCond,
+      ?_, ?_, ?_, ?_⟩
+    · intro hNotBoth
+      rw [← hAcceptEqLeft, ← hAcceptEqRight, ← hQ1Eq, ← hQ2Eq]
+      exact hSrcLive (by rw [hAcceptEqLeft, hAcceptEqRight]; exact hNotBoth)
     · rw [hLabelForm, hRightLabelForm, AutomatonConstructionLabel.combine] at hLabel
       injection hLabel with hLabelEq
       exact hLabelEq.symm
@@ -3640,8 +3685,8 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
   -- Backward direction: given two edges and a reachable pair of targets, we
   -- can reconstruct a parallel edge.
   · rintro (⟨leftEnv, rightEnv, leftLabel, rightLabel, leftOffers, rightOffers, q1', q2',
-      hLeftEdge, hRightEdge, hReach, hEnvWF, hLocal1, hLocal2, hSyncCond, hLabelEq,
-      hCurrentEq, hFutureEq, hRedirect⟩ | hSurvivorCase)
+      hLeftEdge, hRightEdge, hReach, hSrcLive, hEnvWF, hLocal1, hLocal2,
+      hSyncCond, hLabelEq, hCurrentEq, hFutureEq, hRedirect⟩ | hSurvivorCase)
     case inr =>
       -- A survivor edge is already one of the product's own edge families.
       obtain ⟨q', hReachSurv, hSide⟩ := hSurvivorCase
@@ -4245,7 +4290,10 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       have hAcceptEqRight :
           (compileTypeFuel signature (typeCompilationFuel right) right).accepting
             = (compileType signature right).accepting := compileType_accepting_eq signature _
-      refine ⟨_, hLeftEdgeMem, _, ⟨hRightEdgeMem, hSyncEdges⟩, ?_⟩
+      refine ⟨_, hLeftEdgeMem, _, ⟨hRightEdgeMem, hSyncEdges, ?_⟩, ?_⟩
+      · intro hNotBoth
+        rw [hAcceptEqLeft, hAcceptEqRight]
+        exact hSrcLive (by rw [← hAcceptEqLeft, ← hAcceptEqRight]; exact hNotBoth)
       by_cases hAccept : q1' ∈ (compileType signature left).accepting ∧
           q2' ∈ (compileType signature right).accepting
       · rw [← (hBothAccept.mp hAccept)]
@@ -4264,7 +4312,8 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
       simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
       left
       exact Finset.mem_filter.mpr
-        ⟨Finset.mem_union_left _ (Finset.mem_union_left _ hRawMem), hReach⟩
+        ⟨Finset.mem_union_left _ (Finset.mem_union_left _
+          (Finset.mem_union_left _ (Finset.mem_union_left _ hRawMem))), hReach⟩
     rw [compileType_hasEdge_iff_resolvedEdge_mem signature (.par alphabet left right interface)
       (.pair q1 q2) target env label offers hSymbol]
     rw [hWhole]

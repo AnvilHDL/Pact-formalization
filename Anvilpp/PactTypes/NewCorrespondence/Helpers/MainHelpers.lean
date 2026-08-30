@@ -293,7 +293,8 @@ theorem typeSameCycleCanComplete_recur_iff (alphabet : PactTypeAlphabet)
 /-- An exclusive offer may idle at its root, so its same-cycle completion is
 its else-branch's or some branch body's. -/
 theorem typeSameCycleReaches_xoffer_iff (alphabet targetAlphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hBranchActions : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     TypeSameCycleReaches (.xoffer alphabet elseType branches) (.skip targetAlphabet) ↔
       TypeSameCycleReaches elseType (.skip targetAlphabet) ∨
       ∃ entry ∈ branches, TypeSameCycleReaches entry.2 (.skip targetAlphabet) := by
@@ -328,7 +329,8 @@ theorem typeSameCycleReaches_xoffer_iff (alphabet targetAlphabet : PactTypeAlpha
     rintro (hElse | ⟨entry, hMem, hEntry⟩)
     · refine Relation.ReflTransGen.head ⟨TypeEnvironment.empty, _,
         TypeTransition.xoffer_else TypeEnvironment.empty alphabet elseType branches
-          ⟨hWF, rfl, ?_, ?_⟩, by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
+          ⟨hWF, rfl, ?_, ?_⟩ hBranchActions,
+        by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
       · simp [TypeNoImmediateBranch, TypeEnvironment.empty]
       · simp [TypeResolved, TypeEnvironment.empty]
     · rcases entry with ⟨action, branchType⟩
@@ -338,32 +340,34 @@ theorem typeSameCycleReaches_xoffer_iff (alphabet targetAlphabet : PactTypeAlpha
         simp [TypeEnvironment.WellFormed, hEnvDef]
       refine Relation.ReflTransGen.head ⟨env, _,
         TypeTransition.xoffer_branch env alphabet elseType branches action branchType
-          ⟨hWFenv, hMem, ?_, ?_⟩, ?_⟩ hEntry
+          ⟨hWFenv, hMem, ?_, ?_⟩ hBranchActions, ?_⟩ hEntry
       · simp [TypeBranchEnabled, hEnvDef]
       · simp [TypeResolved, hEnvDef]
       · simp [TypeLabel.isTock, TypeLabel.message]
 
 theorem typeSameCycleCanComplete_xoffer_iff (alphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hBranchActions : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     TypeSameCycleCanComplete (.xoffer alphabet elseType branches) ↔
       TypeSameCycleCanComplete elseType ∨
       ∃ entry ∈ branches, TypeSameCycleCanComplete entry.2 := by
   constructor
   · rintro ⟨targetAlphabet, reach⟩
     rcases (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet elseType
-        branches).mp reach with hElse | ⟨entry, hMem, hEntry⟩
+        branches hBranchActions).mp reach with hElse | ⟨entry, hMem, hEntry⟩
     · exact Or.inl ⟨targetAlphabet, hElse⟩
     · exact Or.inr ⟨entry, hMem, targetAlphabet, hEntry⟩
   · rintro (⟨targetAlphabet, hElse⟩ | ⟨entry, hMem, targetAlphabet, hEntry⟩)
     · exact ⟨targetAlphabet, (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet
-        elseType branches).mpr (Or.inl hElse)⟩
+        elseType branches hBranchActions).mpr (Or.inl hElse)⟩
     · exact ⟨targetAlphabet, (typeSameCycleReaches_xoffer_iff alphabet targetAlphabet
-        elseType branches).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
+        elseType branches hBranchActions).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
 
 /-- A conjunctive offer may idle at its root, so its same-cycle completion is
 its else-branch's or some selected branch product's. -/
 theorem typeSameCycleReaches_offer_iff (alphabet targetAlphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hBranchActions : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     TypeSameCycleReaches (.offer alphabet elseType branches) (.skip targetAlphabet) ↔
       TypeSameCycleReaches elseType (.skip targetAlphabet) ∨
       ∃ entry ∈ branches, TypeSameCycleReaches
@@ -399,7 +403,8 @@ theorem typeSameCycleReaches_offer_iff (alphabet targetAlphabet : PactTypeAlphab
     rintro (hElse | ⟨entry, hMem, hEntry⟩)
     · refine Relation.ReflTransGen.head ⟨TypeEnvironment.empty, _,
         TypeTransition.offer_else TypeEnvironment.empty alphabet elseType branches
-          ⟨hWF, rfl, ?_, ?_⟩, by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
+          ⟨hWF, rfl, ?_, ?_⟩ hBranchActions,
+        by simp [TypeLabel.isTock, TypeLabel.silent]⟩ hElse
       · simp [TypeNoImmediateBranch, TypeEnvironment.empty]
       · simp [TypeResolved, TypeEnvironment.empty]
     · set env : TypeEnvironment :=
@@ -408,12 +413,13 @@ theorem typeSameCycleReaches_offer_iff (alphabet targetAlphabet : PactTypeAlphab
         simp [TypeEnvironment.WellFormed, hEnvDef]
       refine Relation.ReflTransGen.head ⟨env, _,
         TypeTransition.offer_some env alphabet elseType branches entry
-          ⟨hWFenv, hMem, ?_⟩, ?_⟩ hEntry
+          ⟨hWFenv, hMem, ?_⟩ hBranchActions, ?_⟩ hEntry
       · simp [TypeBranchEnabled, hEnvDef]
       · simp [TypeLabel.isTock, TypeLabel.silent]
 
 theorem typeSameCycleCanComplete_offer_iff (alphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hBranchActions : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     TypeSameCycleCanComplete (.offer alphabet elseType branches) ↔
       TypeSameCycleCanComplete elseType ∨
       ∃ entry ∈ branches,
@@ -421,14 +427,14 @@ theorem typeSameCycleCanComplete_offer_iff (alphabet : PactTypeAlphabet)
   constructor
   · rintro ⟨targetAlphabet, reach⟩
     rcases (typeSameCycleReaches_offer_iff alphabet targetAlphabet elseType
-        branches).mp reach with hElse | ⟨entry, hMem, hEntry⟩
+        branches hBranchActions).mp reach with hElse | ⟨entry, hMem, hEntry⟩
     · exact Or.inl ⟨targetAlphabet, hElse⟩
     · exact Or.inr ⟨entry, hMem, targetAlphabet, hEntry⟩
   · rintro (⟨targetAlphabet, hElse⟩ | ⟨entry, hMem, targetAlphabet, hEntry⟩)
     · exact ⟨targetAlphabet, (typeSameCycleReaches_offer_iff alphabet targetAlphabet
-        elseType branches).mpr (Or.inl hElse)⟩
+        elseType branches hBranchActions).mpr (Or.inl hElse)⟩
     · exact ⟨targetAlphabet, (typeSameCycleReaches_offer_iff alphabet targetAlphabet
-        elseType branches).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
+        elseType branches hBranchActions).mpr (Or.inr ⟨entry, hMem, hEntry⟩)⟩
 
 /-- A mandatory clock survives substitution: neither operand of any clause
 depends on which term replaces a variable. -/
@@ -1651,9 +1657,12 @@ theorem ofStage_binaryChoice_child1
         · simp only [childPendingEdge, childState]
           rwa [ih childEdge.target]
 
+/-- The compiler's action families are gated on the type's own alphabet, so
+the staged menus only agree for an alphabet-well-formed type. -/
 theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : PactType)
     (hClockGuarded : processType.ClockGuarded)
-    (hTailRecursive : processType.TailRecursive) :
+    (hTailRecursive : processType.TailRecursive)
+    (hAlphabet : processType.AlphabetWellFormed) :
     ∀ n, ∀ {residual : PactType} {state : TypeAutomatonState},
       relationMembership (buildRelationSet processType (compileType signature processType))
         residual state →
@@ -1773,9 +1782,11 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
               (FutureSpec.at TypeAutomatonState.root {(msg, dir)}) TypeAutomatonState.root ∈
               (compileTypeFuel signature (typeCompilationFuel (.message alphabet msg dir))
                 (.message alphabet msg dir)).edges := by
+            simp only [PactType.AlphabetWellFormed] at hAlphabet
             simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
               Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-            refine Or.inl (Or.inr ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl, ?_⟩, rfl⟩)
+            refine Or.inl (Or.inr ⟨TypeEnvironment.empty,
+              ⟨hEmptyLocal, rfl, ?_, hAlphabet.2⟩, rfl⟩)
             simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
           obtain ⟨hR, hS⟩ | ⟨hR, hS⟩ :=
             NewCorrespondence.relationMembership_message_cases signature alphabet msg dir hRelated
@@ -1932,6 +1943,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
       | choice alphabet left right =>
           have hLeftSize : sizeOf left < k := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < k := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.AlphabetWellFormed] at hAlphabet
+          obtain ⟨-, -, -, hAWLeft, hAWRight⟩ := hAlphabet
           simp only [PactType.ClockGuarded] at hClockGuarded
           simp only [PactType.TailRecursive] at hTailRecursive
           obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
@@ -2051,7 +2064,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel left) left).initial] at hx
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
-                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated] at hx
+                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl n
+                  hLeftInitRelated] at hx
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -2059,7 +2073,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hRightInitRelated := buildRelationSet_initial right
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
-                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated] at hx
+                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl n
+                  hRightInitRelated] at hx
                 exact Or.inr hx
             · intro hx
               simp only [Finset.mem_union] at hx
@@ -2072,7 +2087,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hLeftInitRelated := buildRelationSet_initial left
                     (compileType signature left)
                   simp only [compileType] at hLeftInitRelated
-                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated]
+                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl n
+                    hLeftInitRelated]
               · refine ⟨_, ⟨hWitness1, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
                 · right
@@ -2081,16 +2097,21 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hRightInitRelated := buildRelationSet_initial right
                     (compileType signature right)
                   simp only [compileType] at hRightInitRelated
-                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated]
+                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl n
+                    hRightInitRelated]
           · subst hStateEq
             rw [hTag0 (n + 1) q]
-            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl (n + 1) hLeftRelated
+            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl (n + 1)
+              hLeftRelated
           · subst hStateEq
             rw [hTag1 (n + 1) q]
-            exact ih (sizeOf right) hRightSize right hCGRight hTRRight rfl (n + 1) hRightRelated
+            exact ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl (n + 1)
+              hRightRelated
       | fairChoice alphabet bid left right =>
           have hLeftSize : sizeOf left < k := by rw [← hSize]; simp_wf; omega
           have hRightSize : sizeOf right < k := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.AlphabetWellFormed] at hAlphabet
+          obtain ⟨-, -, -, -, hAWLeft, hAWRight⟩ := hAlphabet
           simp only [PactType.ClockGuarded] at hClockGuarded
           simp only [PactType.TailRecursive] at hTailRecursive
           obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
@@ -2214,7 +2235,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   (compileTypeFuel signature (typeCompilationFuel left) left).initial] at hx
                 have hLeftInitRelated := buildRelationSet_initial left (compileType signature left)
                 simp only [compileType] at hLeftInitRelated
-                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated] at hx
+                rw [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl n
+                  hLeftInitRelated] at hx
                 exact Or.inl hx
               · simp only [hCurrent, hTarget, Finset.notMem_empty, false_or] at hx
                 rw [hTag1 n
@@ -2222,7 +2244,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                 have hRightInitRelated := buildRelationSet_initial right
                   (compileType signature right)
                 simp only [compileType] at hRightInitRelated
-                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated] at hx
+                rw [ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl n
+                  hRightInitRelated] at hx
                 exact Or.inr hx
             · intro hx
               simp only [Finset.mem_union] at hx
@@ -2235,7 +2258,8 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hLeftInitRelated := buildRelationSet_initial left
                     (compileType signature left)
                   simp only [compileType] at hLeftInitRelated
-                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl n hLeftInitRelated]
+                  rwa [ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl n
+                    hLeftInitRelated]
               · refine ⟨_, ⟨hWitness1, rfl, ?_⟩, ?_⟩
                 · simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.fair]
                 · right
@@ -2244,13 +2268,16 @@ theorem ofStage_futOffStage_agree (signature : TypeAlphabet) (processType : Pact
                   have hRightInitRelated := buildRelationSet_initial right
                     (compileType signature right)
                   simp only [compileType] at hRightInitRelated
-                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight rfl n hRightInitRelated]
+                  rwa [ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl n
+                    hRightInitRelated]
           · subst hStateEq
             rw [hTag0 (n + 1) q]
-            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft rfl (n + 1) hLeftRelated
+            exact ih (sizeOf left) hLeftSize left hCGLeft hTRLeft hAWLeft rfl (n + 1)
+              hLeftRelated
           · subst hStateEq
             rw [hTag1 (n + 1) q]
-            exact ih (sizeOf right) hRightSize right hCGRight hTRRight rfl (n + 1) hRightRelated
+            exact ih (sizeOf right) hRightSize right hCGRight hTRRight hAWRight rfl (n + 1)
+              hRightRelated
       | _ => sorry
 
 /-- Substitution cannot create or remove a `skip` when the replacement is not
@@ -2456,7 +2483,7 @@ theorem helper_h13_xoffer_case
       (.xoffer alphabet elseType branches)).accepting = _
     rw [hFuelEq]
     rw [compileTypeFuel.eq_def]
-    show (buildExclusiveOfferAutomaton signature branches
+    show (buildExclusiveOfferAutomaton signature alphabet branches
       (compileTypeFuel signature
         (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches)) elseType)
       (branches.map fun branch => (branch.1, compileTypeFuel signature
@@ -3008,7 +3035,7 @@ lemma helper_h13_final_states_represent_completion
             (.offer alphabet elseType branches)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildSelectedConjunctiveOfferAutomaton signature branches
+          show (buildSelectedConjunctiveOfferAutomaton signature alphabet branches
             (compileTypeFuel signature
               (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)) elseType)
             (branches.map fun selected => (selected.1, compileTypeFuel signature
@@ -3156,6 +3183,7 @@ theorem helper_h14_same_cycle_completion
     (signature : TypeAlphabet) {processType residual : PactType}
     {state : TypeAutomatonState}
     (hSupports : signature.Supports processType)
+    (hAlphabet : processType.AlphabetWellFormed)
     (hClockGuarded : processType.ClockGuarded)
     (hTailRecursive : processType.TailRecursive)
     (hRelated :
@@ -3206,8 +3234,11 @@ theorem helper_h14_same_cycle_completion
         · constructor
           · intro _
             have hWF : env.WellFormed := by simp [TypeEnvironment.WellFormed, hEnvDef]
+            have hAction : (msg, dir) ∈ alphabet.actions := by
+              simp only [PactType.AlphabetWellFormed] at hAlphabet
+              exact hAlphabet.2
             exact ⟨alphabet, Relation.ReflTransGen.single ⟨env, _,
-              TypeTransition.action env alphabet msg dir ⟨hWF, hHasNeed⟩,
+              TypeTransition.action env alphabet msg dir ⟨hWF, hHasNeed⟩ hAction,
               by simp [TypeLabel.isTock, TypeLabel.message]⟩⟩
           · intro _
             have hEnvMem := firing_environment_mem_localEnvironments signature msg dir hSupports
@@ -3220,9 +3251,12 @@ theorem helper_h14_same_cycle_completion
             have hEdgeMem : edge ∈
                 (compileTypeFuel signature (typeCompilationFuel (.message alphabet msg dir))
                   (.message alphabet msg dir)).edges := by
+              have hAction : (msg, dir) ∈ alphabet.actions := by
+                simp only [PactType.AlphabetWellFormed] at hAlphabet
+                exact hAlphabet.2
               simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
                 Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-              exact Or.inl (Or.inl ⟨env, ⟨hEnvMem, hHasNeed⟩, hEdgeDef.symm⟩)
+              exact Or.inl (Or.inl ⟨env, ⟨hEnvMem, hHasNeed, hAction⟩, hEdgeDef.symm⟩)
             refine ⟨TypeAutomatonState.final,
               Relation.ReflTransGen.single ⟨edge, hEdgeMem, rfl, rfl, ?_⟩, ?_⟩
             · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
@@ -3317,6 +3351,8 @@ theorem helper_h14_same_cycle_completion
     | choice alphabet left right =>
         have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
         have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.AlphabetWellFormed] at hAlphabet
+        obtain ⟨-, -, -, hAWLeft, hAWRight⟩ := hAlphabet
         simp only [PactType.ClockGuarded] at hClockGuarded
         simp only [PactType.TailRecursive] at hTailRecursive
         obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
@@ -3373,21 +3409,25 @@ theorem helper_h14_same_cycle_completion
             automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.silent])
               (by simp [TypeLabel.isTock, TypeLabel.silent])]
-          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hAWLeft hCGLeft hTRLeft
             (buildRelationSet_initial left (compileType signature left)) rfl
-          have hIHRight := ih (sizeOf right) hRightSize hSupports.2 hCGRight hTRRight
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2 hAWRight hCGRight hTRRight
             (buildRelationSet_initial right (compileType signature right)) rfl
           simp only [compileType] at hIHLeft hIHRight
           rw [← hLeftAutoDef] at hIHLeft
           rw [← hRightAutoDef] at hIHRight
           rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
         · subst hStateEq
-          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft hLeftRelated rfl)
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.1 hAWLeft hCGLeft
+            hTRLeft hLeftRelated rfl)
         · subst hStateEq
-          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2 hCGRight hTRRight hRightRelated rfl)
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2 hAWRight hCGRight
+            hTRRight hRightRelated rfl)
     | fairChoice alphabet bid left right =>
         have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
         have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.AlphabetWellFormed] at hAlphabet
+        obtain ⟨-, -, -, -, hAWLeft, hAWRight⟩ := hAlphabet
         simp only [PactType.ClockGuarded] at hClockGuarded
         simp only [PactType.TailRecursive] at hTailRecursive
         obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
@@ -3447,21 +3487,25 @@ theorem helper_h14_same_cycle_completion
             automatonSameCycleReachesAccepting_root_binaryChoice signature leftAuto rightAuto _ _
               hEmptyLocal (by simp [TypeLabel.isTock, TypeLabel.fair])
               (by simp [TypeLabel.isTock, TypeLabel.fair])]
-          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1 hCGLeft hTRLeft
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.2.1 hAWLeft hCGLeft hTRLeft
             (buildRelationSet_initial left (compileType signature left)) rfl
-          have hIHRight := ih (sizeOf right) hRightSize hSupports.2.2 hCGRight hTRRight
+          have hIHRight := ih (sizeOf right) hRightSize hSupports.2.2 hAWRight hCGRight hTRRight
             (buildRelationSet_initial right (compileType signature right)) rfl
           simp only [compileType] at hIHLeft hIHRight
           rw [← hLeftAutoDef] at hIHLeft
           rw [← hRightAutoDef] at hIHRight
           rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
         · subst hStateEq
-          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.2.1 hCGLeft hTRLeft hLeftRelated rfl)
+          exact (hTag0 q).trans (ih (sizeOf left) hLeftSize hSupports.2.1 hAWLeft hCGLeft
+            hTRLeft hLeftRelated rfl)
         · subst hStateEq
-          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2.2 hCGRight hTRRight hRightRelated rfl)
+          exact (hTag1 q).trans (ih (sizeOf right) hRightSize hSupports.2.2 hAWRight hCGRight
+            hTRRight hRightRelated rfl)
     | seq alphabet left right =>
         have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
         have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+        simp only [PactType.AlphabetWellFormed] at hAlphabet
+        obtain ⟨-, -, -, hAWLeft, hAWRight⟩ := hAlphabet
         simp only [PactType.ClockGuarded] at hClockGuarded
         simp only [PactType.TailRecursive] at hTailRecursive
         obtain ⟨hCGLeft, hCGRight⟩ := hClockGuarded
@@ -3497,9 +3541,9 @@ theorem helper_h14_same_cycle_completion
           ⟨ρ, q1, hResidualEq, hStateEq, hLeftRelated, hSurvives⟩ |
           ⟨q2, hStateEq, hRightRelated⟩
         · subst hResidualEq; subst hStateEq
-          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hCGLeft hTRLeft
+          have hIHLeft := ih (sizeOf left) hLeftSize hSupports.1 hAWLeft hCGLeft hTRLeft
             hLeftRelated rfl
-          have hIHRightInit := ih (sizeOf right) hRightSize hSupports.2 hCGRight
+          have hIHRightInit := ih (sizeOf right) hRightSize hSupports.2 hAWRight hCGRight
             hTRRight (buildRelationSet_initial right (compileType signature right)) rfl
           simp only [compileType] at hIHRightInit
           rw [← hRightAutoDef] at hIHRightInit
@@ -3542,7 +3586,7 @@ theorem helper_h14_same_cycle_completion
                 rightAuto leftAuto.initial _).mpr ⟨target, hStep, ?_⟩
               rw [sequenceRedirect, if_pos hTargetAccepting]
         · subst hStateEq
-          exact (hTag1 q2).trans (ih (sizeOf right) hRightSize hSupports.2 hCGRight
+          exact (hTag1 q2).trans (ih (sizeOf right) hRightSize hSupports.2 hAWRight hCGRight
             hTRRight hRightRelated rfl)
     | par alphabet left right interface => sorry
     | recur alphabet name body => sorry
