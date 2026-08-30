@@ -396,15 +396,15 @@ theorem TypeTransition.exists_typeOffers
       hRightCurrentHidden hRightFutureHidden conditions ihLeft ihRight =>
       by_cases hTock :
           TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+      · exact ⟨hideTypeOffers interface rightCurrent, ∅,
           TypeOffers.left_complete_tock outer leftEnv rightEnv interface left
             right right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
             rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
             hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
             conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-          hideTypeOffers interface (leftFuture ∪ rightFuture),
+      · exact ⟨hideTypeOffers interface rightCurrent,
+          hideTypeOffers interface rightFuture,
           TypeOffers.left_complete outer leftEnv rightEnv interface left right
             right' leftLabel rightLabel leftCurrent leftFuture rightCurrent
             rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
@@ -417,15 +417,15 @@ theorem TypeTransition.exists_typeOffers
       hRightCurrentHidden hRightFutureHidden conditions ihLeft ihRight =>
       by_cases hTock :
           TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+      · exact ⟨hideTypeOffers interface leftCurrent, ∅,
           TypeOffers.right_complete_tock outer leftEnv rightEnv interface left
             left' right leftLabel rightLabel leftCurrent leftFuture rightCurrent
             rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden
             hLeftFutureHidden hRightCurrentHidden hRightFutureHidden
             conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-          hideTypeOffers interface (leftFuture ∪ rightFuture),
+      · exact ⟨hideTypeOffers interface leftCurrent,
+          hideTypeOffers interface leftFuture,
           TypeOffers.right_complete outer leftEnv rightEnv interface left left'
             right leftLabel rightLabel leftCurrent leftFuture rightCurrent
             rightFuture hLeftOffers hRightOffers hNotSkip hLeftCurrentHidden

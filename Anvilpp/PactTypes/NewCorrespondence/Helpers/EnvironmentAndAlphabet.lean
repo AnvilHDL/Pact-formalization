@@ -280,17 +280,11 @@ theorem typeOffers_future_subset_target_union_current
       rw [typeFutureOffers_reannotate]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
       obtain ⟨hAction, hInterface⟩ := hAction
-      simp only [Finset.mem_union] at hAction
-      rcases hAction with hLeft | hRight
-      · have hLeft' := hLeftIH hLeft
-        simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
-          at hLeft'
-        exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inl hLeft'), hInterface⟩))
-      · have hRight' := hRightIH hRight
-        simp only [Finset.mem_union] at hRight'
-        rcases hRight' with hFuture | hCurrent
-        · exact Finset.mem_union.mpr (Or.inl hFuture)
-        · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inr hCurrent), hInterface⟩))
+      have hRight' := hRightIH hAction
+      simp only [Finset.mem_union] at hRight'
+      rcases hRight' with hFuture | hCurrent
+      · exact Finset.mem_union.mpr (Or.inl hFuture)
+      · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
   | left_complete_tock =>
       simp
   | right_complete outer leftEnv rightEnv interface left left' right leftLabel
@@ -301,17 +295,11 @@ theorem typeOffers_future_subset_target_union_current
       rw [typeFutureOffers_reannotate]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
       obtain ⟨hAction, hInterface⟩ := hAction
-      simp only [Finset.mem_union] at hAction
-      rcases hAction with hLeft | hRight
-      · have hLeft' := hLeftIH hLeft
-        simp only [Finset.mem_union] at hLeft'
-        rcases hLeft' with hFuture | hCurrent
-        · exact Finset.mem_union.mpr (Or.inl hFuture)
-        · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inl hCurrent), hInterface⟩))
-      · have hRight' := hRightIH hRight
-        simp only [typeFutureOffers, typeFutureOffersFuel, Finset.empty_union]
-          at hRight'
-        exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩))
+      have hLeft' := hLeftIH hAction
+      simp only [Finset.mem_union] at hLeft'
+      rcases hLeft' with hFuture | hCurrent
+      · exact Finset.mem_union.mpr (Or.inl hFuture)
+      · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
   | right_complete_tock =>
       simp
 

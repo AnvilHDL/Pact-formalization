@@ -440,8 +440,8 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-          (hideTypeOffers interface (leftFuture ∪ rightFuture))
+          (hideTypeOffers interface rightCurrent)
+          (hideTypeOffers interface rightFuture)
     | left_complete_tock (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface)
         (left right right' : PactType) (leftLabel rightLabel : TypeLabel)
@@ -465,7 +465,7 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+          (hideTypeOffers interface rightCurrent)
           ∅
     | right_complete (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface)
@@ -490,8 +490,8 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-          (hideTypeOffers interface (leftFuture ∪ rightFuture))
+          (hideTypeOffers interface leftCurrent)
+          (hideTypeOffers interface leftFuture)
     | right_complete_tock (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface)
         (left left' right : PactType) (leftLabel rightLabel : TypeLabel)
@@ -515,7 +515,7 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+          (hideTypeOffers interface leftCurrent)
           ∅
 
 end

@@ -95,8 +95,8 @@ inductive ParDecoratedStepCase
       TypeLabel.Sync interface leftLabel rightLabel →
       TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
       label = TypeLabel.combine interface leftLabel rightLabel →
-      current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
-      future = hideTypeOffers interface (leftFuture ∪ rightFuture) →
+      current = hideTypeOffers interface rightCurrent →
+      future = hideTypeOffers interface rightFuture →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
   | left_complete_tock (leftEnv rightEnv : TypeEnvironment)
@@ -120,7 +120,7 @@ inductive ParDecoratedStepCase
       TypeLabel.Sync interface leftLabel rightLabel →
       TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
       label = TypeLabel.combine interface leftLabel rightLabel →
-      current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
+      current = hideTypeOffers interface rightCurrent →
       future = ∅ →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
@@ -145,8 +145,8 @@ inductive ParDecoratedStepCase
       TypeLabel.Sync interface leftLabel rightLabel →
       TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
       label = TypeLabel.combine interface leftLabel rightLabel →
-      current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
-      future = hideTypeOffers interface (leftFuture ∪ rightFuture) →
+      current = hideTypeOffers interface leftCurrent →
+      future = hideTypeOffers interface leftFuture →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
   | right_complete_tock (leftEnv rightEnv : TypeEnvironment)
@@ -170,7 +170,7 @@ inductive ParDecoratedStepCase
       TypeLabel.Sync interface leftLabel rightLabel →
       TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
       label = TypeLabel.combine interface leftLabel rightLabel →
-      current = hideTypeOffers interface (leftCurrent ∪ rightCurrent) →
+      current = hideTypeOffers interface leftCurrent →
       future = ∅ →
       ParDecoratedStepCase parentAlphabet left right interface target env label
         current future
@@ -1031,15 +1031,21 @@ private theorem typeOffers_current_empty_of_clock
   | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
       ihLeft ihRight
   | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
-      ihLeft ihRight
+      ihLeft ihRight =>
+      cases hLocal1 with
+      | clock _ =>
+          rw [ihRight (by simp [TypeEnvironment.tock])]
+          simp [hideTypeOffers]
+      | ordinary _ _ _ _ _ =>
+        rename_i hOuterClock _ _ _ _
+        exact absurd hClock (by simp [hOuterClock])
   | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
       ihLeft ihRight
   | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocal1 _ _ _
       ihLeft ihRight =>
       cases hLocal1 with
       | clock _ =>
-          rw [ihLeft (by simp [TypeEnvironment.tock]),
-            ihRight (by simp [TypeEnvironment.tock])]
+          rw [ihLeft (by simp [TypeEnvironment.tock])]
           simp [hideTypeOffers]
       | ordinary _ _ _ _ _ =>
         rename_i hOuterClock _ _ _ _
@@ -1257,7 +1263,16 @@ theorem typeOffers_current_subset_fixedAlphabet
   | left_complete _ _ _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
       ihLeft ihRight
   | left_complete_tock _ _ _ _ leftT rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
+      ihLeft ihRight =>
+      simp only [PactType.AlphabetWellFormed] at hSource
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.alphabet] at hAction ⊢
+      change action ∈
+        (PactTypeAlphabet.mergeHidden leftT.alphabet rightT.alphabet _).actions
+      simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
+        Finset.mem_union]
+      exact ⟨Or.inr (ihRight hSource.2.2.2 hAction.1), hAction.2⟩
   | right_complete _ _ _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
       ihLeft ihRight
   | right_complete_tock _ _ _ _ leftT _ rightT _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
@@ -1270,10 +1285,7 @@ theorem typeOffers_current_subset_fixedAlphabet
         (PactTypeAlphabet.mergeHidden leftT.alphabet rightT.alphabet _).actions
       simp only [PactTypeAlphabet.mergeHidden, Finset.mem_filter,
         Finset.mem_union]
-      refine ⟨?_, hAction.2⟩
-      rcases hAction.1 with hLeftAction | hRightAction
-      · exact Or.inl (ihLeft hSource.2.2.1 hLeftAction)
-      · exact Or.inr (ihRight hSource.2.2.2 hRightAction)
+      exact ⟨Or.inl (ihLeft hSource.2.2.1 hAction.1), hAction.2⟩
   | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
       hLocal1 hLocal2 hSide hTock ihLeft ihRight =>
@@ -5100,7 +5112,11 @@ private theorem typeOffers_current_subset_messageActions
   | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
       ihLeft ihRight
   | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-      ihLeft ihRight
+      ihLeft ihRight =>
+      intro action hAction
+      simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
+        PactType.MessageActions] at hAction ⊢
+      exact Or.inr (ihRight hAction.1)
   | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
       ihLeft ihRight
   | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
@@ -5108,9 +5124,7 @@ private theorem typeOffers_current_subset_messageActions
       intro action hAction
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union,
         PactType.MessageActions] at hAction ⊢
-      rcases hAction.1 with hLeftAction | hRightAction
-      · exact Or.inl (ihLeft hLeftAction)
-      · exact Or.inr (ihRight hRightAction)
+      exact Or.inl (ihLeft hAction.1)
   | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeft hRight
       hLocal1 hLocal2 hSide hTock ihLeft ihRight =>

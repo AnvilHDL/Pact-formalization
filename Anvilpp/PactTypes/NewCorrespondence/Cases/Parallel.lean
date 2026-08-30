@@ -34,7 +34,8 @@ theorem correspondence_par_stepIff
   rcases relationMembership_par_cases signature alphabet left right interface
     hRelated with
     ⟨q1, q2, residualLeft, residualRight, hEntryEq, hLeftRelated,
-      hRightRelated, hSourceReachable⟩ | hEntryEq
+      hRightRelated, hSourceReachable⟩ | hSurvivorLeft | hSurvivorRight |
+      hEntryEq
   · -- general product case: `residual` represents `residualLeft ‖_I residualRight`
     injection hEntryEq with hResidualEq hStateEq
     subst hResidualEq; subst hStateEq
@@ -137,7 +138,7 @@ theorem correspondence_par_stepIff
               (TypeOfferSummary.mk current future)
               (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
-            refine ⟨leftEnv, rightEnv, leftLabel, rightLabel,
+            refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
@@ -230,7 +231,7 @@ theorem correspondence_par_stepIff
               (TypeOfferSummary.mk current future)
               (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
-            refine ⟨leftEnv, rightEnv, leftLabel, rightLabel,
+            refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
@@ -299,7 +300,7 @@ theorem correspondence_par_stepIff
               (TypeOfferSummary.mk current future)
               (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
-            refine ⟨leftEnv, rightEnv, leftLabel, rightLabel,
+            refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
               TypeOfferSummary.mk rightCurrent rightFuture, q1', q2',
               hLeftEdge, hRightEdge,
@@ -311,11 +312,25 @@ theorem correspondence_par_stepIff
           refine ⟨.final, hEdgeFact, ?_⟩
           rw [hTargetEq]
           exact relationMembership_par_final signature alphabet left right interface
+      -- Survivor steps leave a single child re-stamped with the parent alphabet.
+      -- The semantic rule keeps `leftCurrent ∪ rightCurrent`; the survivor edge
+      -- offers only the surviving child's current set.
+      | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+      | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+      | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+      | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ =>
+          sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
     · rintro ⟨state', hEdge, hTargetRelated⟩
       rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
         interface q1 q2 state' env label (TypeOfferSummary.mk current future)
         (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
         (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)] at hEdge
+      -- survivor edge: one component already rests at an accepting state.
+      rcases hEdge with hEdge | hSurvivorEdge
+      on_goal 2 => sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
       obtain ⟨leftEnv, rightEnv, leftLabel, rightLabel,
         leftOffers, rightOffers, q1', q2', hLeftEdge, hRightEdge,
         _hEdgeSourceReachable,
@@ -363,7 +378,10 @@ theorem correspondence_par_stepIff
             ⟨q2', hRightEdge, hRightAcceptRelated⟩
         rcases relationMembership_par_cases signature alphabet left right
           interface hTargetRelated with
-          ⟨qq1, qq2, resL, resR, hEqAgain, _, _, _⟩ | hEqAgain
+          ⟨qq1, qq2, resL, resR, hEqAgain, _, _, _⟩ |
+            ⟨qq, resL, hEqAgain, _, _⟩ | ⟨qq, resR, hEqAgain, _, _⟩ | hEqAgain
+        · simp at hEqAgain
+        · simp at hEqAgain
         · simp at hEqAgain
         · injection hEqAgain with hResidualEqAgain hStateEqAgain
           subst hResidualEqAgain
@@ -438,7 +456,8 @@ theorem correspondence_par_stepIff
         rcases relationMembership_par_cases signature alphabet left right
           interface hTargetRelated with
           ⟨qq1, qq2, leftTarget, rightTarget, hEqAgain, hLeftTargetRelated,
-            hRightTargetRelated, _hTargetReachable⟩ | hEqAgain
+            hRightTargetRelated, _hTargetReachable⟩ |
+            ⟨qq, resL, hEqAgain, _, _⟩ | ⟨qq, resR, hEqAgain, _, _⟩ | hEqAgain
         · injection hEqAgain with hResidualEqAgain hPairEqAgain
           injection hPairEqAgain with hQ1EqAgain hQ2EqAgain
           subst hQ1EqAgain; subst hQ2EqAgain
@@ -481,6 +500,12 @@ theorem correspondence_par_stepIff
                   residualRight.alphabet interface) leftTarget rightTarget
                   interface))
         · simp at hEqAgain
+        · simp at hEqAgain
+        · simp at hEqAgain
+  · -- survivor-left: the parent alphabet is stamped onto a left child residual.
+    sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
+  · -- survivor-right: the parent alphabet is stamped onto a right child residual.
+    sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
   · -- `q_done` case: `residual` already represents literal `.skip`, whose
     -- only rule is `T-Skip`; matches `.final`'s own non-clock silent idle
     -- self-loop (paper's "Forward direction at the done state" / third
