@@ -27,12 +27,12 @@ def composeProcesses : List Proc → List Interface → Option Proc
       | none => none
   | _, _ => none
 
-def TypeTupleCompatible (signature : TypeAlphabet)
+def TypeTupleCompatible
     (types : List PactType) (interfaces : List Interface)
     (progress : Finset ProcId) : Prop :=
   ∃ composition,
     composeTypes types interfaces = some composition ∧
-    TypeCompatible signature composition progress
+    TypeCompatible composition progress
 
 def ComponentwiseRefines (precise abstract : List PactType) : Prop :=
   List.Forall₂ Refines precise abstract

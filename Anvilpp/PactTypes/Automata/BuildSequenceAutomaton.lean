@@ -122,8 +122,7 @@ def sequenceLeftEdge (left right : AutomatonFragment)
   else
     sequenceKeptLeftEdge left right edge
 
-def buildSequenceAutomaton (_signature : TypeAlphabet)
-    (left right : AutomatonFragment) : AutomatonFragment :=
+def buildSequenceAutomaton (left right : AutomatonFragment) : AutomatonFragment :=
   let states := (left.states \ sequenceDeleted left).image (childState 0) ∪
     childStates 1 right
   let accepting := childAccepting 1 right
@@ -135,9 +134,9 @@ def buildSequenceAutomaton (_signature : TypeAlphabet)
 right fragment. Neither the left-edge nor redirect clause can have a
 `.child 1` source. -/
 theorem buildSequenceAutomaton_outgoing_right
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+     (left right : AutomatonFragment)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    edge ∈ (buildSequenceAutomaton signature left right).edges ∧
+    edge ∈ (buildSequenceAutomaton left right).edges ∧
         edge.source = .child 1 state ↔
       ∃ childEdge ∈ right.edges,
         childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
@@ -229,13 +228,13 @@ theorem sequenceRedirect_eq_or (left right : AutomatonFragment)
 /-- Invariant 2, in the form every reachability lemma needs: a redirected
 state is always a state of the sequence fragment, provided the original was a
 left state or a left edge target. -/
-theorem sequenceRedirect_mem_states (signature : TypeAlphabet)
+theorem sequenceRedirect_mem_states
     (left right : AutomatonFragment)
     (hRightInitial : right.initial ∈ right.states)
     (state : TypeAutomatonState)
     (hState : state ∈ left.states) :
     sequenceRedirect left right state ∈
-      (buildSequenceAutomaton signature left right).states := by
+      (buildSequenceAutomaton left right).states := by
   classical
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, childStates, childState,
@@ -251,10 +250,10 @@ theorem sequenceRedirect_mem_states (signature : TypeAlphabet)
 /-- All three sequence clauses copy the child edge's environment, label, and
 current offers verbatim; only the target and future field are rebuilt. -/
 theorem buildSequenceAutomaton_clockEdgesAreTock
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+     (left right : AutomatonFragment)
     (hLeftClock : left.ClockEdgesAreTock)
     (hRightClock : right.ClockEdgesAreTock) :
-    (buildSequenceAutomaton signature left right).ClockEdgesAreTock := by
+    (buildSequenceAutomaton left right).ClockEdgesAreTock := by
   classical
   intro edge hEdge hClock
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
@@ -270,11 +269,11 @@ theorem buildSequenceAutomaton_clockEdgesAreTock
     exact hLeftClock leftEdge hLeftEdge hClock
 
 theorem buildSequenceAutomaton_futureTargetsInStates
-    (signature : TypeAlphabet) (left right : AutomatonFragment)
+     (left right : AutomatonFragment)
     (hRightTargets : right.FutureTargetsInStates)
     (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
-    (buildSequenceAutomaton signature left right).FutureTargetsInStates := by
+    (buildSequenceAutomaton left right).FutureTargetsInStates := by
   classical
   intro edge hEdge target removed hFuture
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
@@ -289,7 +288,7 @@ theorem buildSequenceAutomaton_futureTargetsInStates
     · rw [if_neg hClock] at hFuture
       injection hFuture with hTargetEq _
       subst hTargetEq
-      apply sequenceRedirect_mem_states signature left right hRightInitial
+      apply sequenceRedirect_mem_states left right hRightInitial
       exact hLeftEdgeTargets leftEdge hLeftEdge.1
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with

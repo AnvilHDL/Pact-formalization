@@ -10,9 +10,9 @@ noncomputable section
 
 /-- Relation Set Builder, related type to its compiled automaton state --/
 def buildRelationSetCoreFuel :
-    TypeAlphabet → Nat → PactType → Finset (PactType × TypeAutomatonState)
-  | _, 0, ty => {(ty, .root)}
-  | signature, fuel + 1, ty =>
+    Nat → PactType → Finset (PactType × TypeAutomatonState)
+  | 0, ty => {(ty, .root)}
+  | fuel + 1, ty =>
       match ty with
       | .skip alphabet => {(.skip alphabet, .root)}
       | .message alphabet msg dir =>
@@ -23,106 +23,106 @@ def buildRelationSetCoreFuel :
       | .var alphabet name => {(.var alphabet name, .root)}
       | .choice _ left right =>
           insert (ty, TypeAutomatonState.root)
-            ((buildRelationSetCoreFuel signature fuel
+            ((buildRelationSetCoreFuel fuel
                   left).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-              (buildRelationSetCoreFuel signature fuel
+              (buildRelationSetCoreFuel fuel
                   right).image
                 (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
       | .fairChoice _ _ left right =>
           insert (ty, TypeAutomatonState.root)
-            ((buildRelationSetCoreFuel signature fuel
+            ((buildRelationSetCoreFuel fuel
                   left).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-              (buildRelationSetCoreFuel signature fuel
+              (buildRelationSetCoreFuel fuel
                   right).image
                 (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
       | .seq alphabet left right =>
-          ((buildRelationSetCoreFuel signature fuel
+          ((buildRelationSetCoreFuel fuel
               left).filter (fun entry =>
               entry.2 ∉ sequenceDeleted
-                (compileTypeFuel signature fuel left))).image
+                (compileTypeFuel fuel left))).image
               (fun entry =>
                 (.seq alphabet entry.1 right,
                   TypeAutomatonState.child 0 entry.2)) ∪
-            (buildRelationSetCoreFuel signature fuel
+            (buildRelationSetCoreFuel fuel
                 right).image
               (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
       | .par alphabet left right interface =>
           insert (PactType.skip alphabet, TypeAutomatonState.final)
             (((Finset.product
-                (buildRelationSetCoreFuel signature fuel left)
-                (buildRelationSetCoreFuel signature fuel
+                (buildRelationSetCoreFuel fuel left)
+                (buildRelationSetCoreFuel fuel
                   right)).filter fun entry =>
-                  ParallelReachable signature alphabet left.alphabet
+                  ParallelReachable alphabet left.alphabet
                     right.alphabet interface
-                    (compileTypeFuel signature fuel left)
-                    (compileTypeFuel signature fuel right)
-                    (compiledChildFutureFuel signature fuel left)
-                    (compiledChildFutureFuel signature fuel
+                    (compileTypeFuel fuel left)
+                    (compileTypeFuel fuel right)
+                    (compiledChildFutureFuel fuel left)
+                    (compiledChildFutureFuel fuel
                       right)
                     (.pair entry.1.2 entry.2.2)).image
               (fun entry =>
                 (.par alphabet entry.1.1 entry.2.1 interface,
                   TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
-              ((buildRelationSetCoreFuel signature fuel
+              ((buildRelationSetCoreFuel fuel
                   left).filter fun entry =>
                   entry.2 ∉
-                    (compileTypeFuel signature fuel
+                    (compileTypeFuel fuel
                       left).accepting).image
                 (fun entry =>
                   (entry.1.reannotate alphabet,
                     TypeAutomatonState.survivor 0 entry.2)) ∪
-              ((buildRelationSetCoreFuel signature fuel
+              ((buildRelationSetCoreFuel fuel
                   right).filter fun entry =>
                   entry.2 ∉
-                    (compileTypeFuel signature fuel
+                    (compileTypeFuel fuel
                       right).accepting).image
                 (fun entry =>
                   (entry.1.reannotate alphabet,
                     TypeAutomatonState.survivor 1 entry.2)))
       | .recur alphabet name body =>
           insert (ty, TypeAutomatonState.root)
-            ((buildRelationSetCoreFuel signature fuel
+            ((buildRelationSetCoreFuel fuel
                 body).image
               (fun entry =>
                 (entry.1.replaceVar name (.recur alphabet name body),
                   TypeAutomatonState.child 0 entry.2)))
       | .xoffer _ elseType branches =>
           insert (ty, TypeAutomatonState.root)
-            ((buildRelationSetCoreFuel signature fuel
+            ((buildRelationSetCoreFuel fuel
                 elseType).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
               branches.zipIdx.foldl (fun acc indexed =>
                 acc ∪ (buildRelationSetCoreFuel
-                    signature fuel indexed.1.2).image
+                    fuel indexed.1.2).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
       | .offer alphabet elseType branches =>
           insert (ty, TypeAutomatonState.root)
-            ((buildRelationSetCoreFuel signature fuel
+            ((buildRelationSetCoreFuel fuel
                 elseType).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
               branches.zipIdx.foldl (fun acc indexed =>
                 acc ∪ (buildRelationSetCoreFuel
-                    signature fuel
+                    fuel
                     (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
 
 /-- Public, provenance-directed relation: `buildRelationSetCoreFuel` at
 `typeCompilationFuel`'s own budget. -/
-def buildRelationSetCore (signature : TypeAlphabet) (ty : PactType) :
+def buildRelationSetCore  (ty : PactType) :
     Finset (PactType × TypeAutomatonState) :=
-  buildRelationSetCoreFuel signature (typeCompilationFuel ty) ty
+  buildRelationSetCoreFuel (typeCompilationFuel ty) ty
 
 /-- The seed pair is always in the fuel-indexed relation, for sufficient fuel. -/
-theorem buildRelationSetCoreFuel_initial_mem (signature : TypeAlphabet) :
+theorem buildRelationSetCoreFuel_initial_mem  :
     ∀ fuel processType, TypeCompilationFuelSufficient processType fuel →
-      (processType, (compileTypeFuel signature fuel processType).initial) ∈
-        buildRelationSetCoreFuel signature fuel processType := by
+      (processType, (compileTypeFuel fuel processType).initial) ∈
+        buildRelationSetCoreFuel fuel processType := by
   intro fuel
-  induction fuel generalizing signature with
+  induction fuel with
   | zero =>
       intro processType hFuel
       exact (Nat.not_lt_zero _
@@ -174,7 +174,7 @@ theorem buildRelationSetCoreFuel_initial_mem (signature : TypeAlphabet) :
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hLeftMem := ih signature left hLeft
+          have hLeftMem := ih left hLeft
           simp only [compileTypeFuel, buildSequenceAutomaton,
             finishAutomatonFragment, childState, buildRelationSetCoreFuel,
             Finset.mem_union]
@@ -188,46 +188,46 @@ theorem buildRelationSetCoreFuel_initial_mem (signature : TypeAlphabet) :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hLeftMem := ih signature left hLeft
-          have hRightMem := ih signature right hRight
+          have hLeftMem := ih left hLeft
+          have hRightMem := ih right hRight
           simp only [compileTypeFuel, buildParallelAutomaton,
             finishAutomatonFragment, buildRelationSetCoreFuel,
             Finset.mem_insert]
           right
           refine Finset.mem_union_left _ (Finset.mem_union_left _
             (Finset.mem_image.mpr ⟨
-              ((left, (compileTypeFuel signature fuel left).initial),
-                (right, (compileTypeFuel signature fuel right).initial)),
+              ((left, (compileTypeFuel fuel left).initial),
+                (right, (compileTypeFuel fuel right).initial)),
               Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hLeftMem, hRightMem⟩,
-                parallelReachable_initial signature alphabet left.alphabet
+                parallelReachable_initial alphabet left.alphabet
                   right.alphabet interface
-                  (compileTypeFuel signature fuel left)
-                  (compileTypeFuel signature fuel right)
-                  (compiledChildFutureFuel signature fuel left)
-                  (compiledChildFutureFuel signature fuel right)⟩,
+                  (compileTypeFuel fuel left)
+                  (compileTypeFuel fuel right)
+                  (compiledChildFutureFuel fuel left)
+                  (compiledChildFutureFuel fuel right)⟩,
               rfl⟩))
 
 /-- The seed pair for the public compiler's own fuel choice. -/
 theorem buildRelationSetCore_initial_mem
-    (signature : TypeAlphabet) (processType : PactType) :
-    (processType, (compileType signature processType).initial) ∈
-      buildRelationSetCore signature
+     (processType : PactType) :
+    (processType, (compileType processType).initial) ∈
+      buildRelationSetCore
         processType := by
   simp only [compileType, buildRelationSetCore]
   exact buildRelationSetCoreFuel_initial_mem
-    signature
+   
     (typeCompilationFuel processType) processType
     (typeCompilationFuel_sufficient processType)
 
 /-- Every compiled state relates to at most one residual, unconditionally. -/
-theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
+theorem buildRelationSetCoreFuel_functional  :
     ∀ fuel (ty : PactType) {residual residual' : PactType}
       {state : TypeAutomatonState},
-      (residual, state) ∈ buildRelationSetCoreFuel signature fuel ty →
-      (residual', state) ∈ buildRelationSetCoreFuel signature fuel ty →
+      (residual, state) ∈ buildRelationSetCoreFuel fuel ty →
+      (residual', state) ∈ buildRelationSetCoreFuel fuel ty →
       residual = residual' := by
   intro fuel
-  induction fuel generalizing signature with
+  induction fuel with
   | zero =>
       intro ty residual residual' state h h'
       simp only [buildRelationSetCoreFuel, Finset.mem_singleton,
@@ -273,13 +273,13 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
             · exact nomatch (ha2.trans ha2')
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              exact ih signature left ha (hStateEq ▸ ha')
+              exact ih left ha (hStateEq ▸ ha')
             · exact nomatch (ha2.trans ha2'.symm)
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
             · exact nomatch (ha2.trans ha2')
             · exact nomatch (ha2.trans ha2'.symm)
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              exact ih signature right ha (hStateEq ▸ ha')
+              exact ih right ha (hStateEq ▸ ha')
       | fairChoice alphabet bid left right =>
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
             Finset.mem_union, Finset.mem_image, Prod.mk.injEq] at h h'
@@ -291,28 +291,28 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
             · exact nomatch (ha2.trans ha2')
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              exact ih signature left ha (hStateEq ▸ ha')
+              exact ih left ha (hStateEq ▸ ha')
             · exact nomatch (ha2.trans ha2'.symm)
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
             · exact nomatch (ha2.trans ha2')
             · exact nomatch (ha2.trans ha2'.symm)
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              exact ih signature right ha (hStateEq ▸ ha')
+              exact ih right ha (hStateEq ▸ ha')
       | seq alphabet left right =>
           simp only [buildRelationSetCoreFuel, Finset.mem_union,
             Finset.mem_image, Finset.mem_filter, Prod.mk.injEq] at h h'
           rcases h with ⟨a, ⟨ha, _⟩, rfl, ha2⟩ | ⟨a, ha, rfl, ha2⟩ <;>
             rcases h' with ⟨a', ⟨ha', _⟩, rfl, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
           · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-            have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel left :=
+            have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel left :=
               hStateEq ▸ ha'
-            rw [ih signature left ha ha'']
+            rw [ih left ha ha'']
           · exact nomatch (ha2.trans ha2'.symm)
           · exact nomatch (ha2.trans ha2'.symm)
           · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-            have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel right :=
+            have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel right :=
               hStateEq ▸ ha'
-            exact ih signature right ha ha''
+            exact ih right ha ha''
       | par alphabet left right interface =>
           -- The four families are distinguished by the state's own shape:
           -- `.final`, `.pair`, `.survivor 0` and `.survivor 1` are pairwise
@@ -347,11 +347,11 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
             have hR : a.2.2 = a'.2.2 := by injection hState
             refine (congrArg Prod.fst hEq).symm.trans
               (Eq.trans ?_ (congrArg Prod.fst hEq'))
-            have hLm : (a'.1.1, a.1.2) ∈ buildRelationSetCoreFuel signature fuel left := by
+            have hLm : (a'.1.1, a.1.2) ∈ buildRelationSetCoreFuel fuel left := by
               rw [hL]; exact (Prod.mk.eta (p := a'.1)) ▸ ha'Left
-            have hRm : (a'.2.1, a.2.2) ∈ buildRelationSetCoreFuel signature fuel right := by
+            have hRm : (a'.2.1, a.2.2) ∈ buildRelationSetCoreFuel fuel right := by
               rw [hR]; exact (Prod.mk.eta (p := a'.2)) ▸ ha'Right
-            rw [ih signature left haLeft hLm, ih signature right haRight hRm]
+            rw [ih left haLeft hLm, ih right haRight hRm]
           · obtain ⟨a, -, hEq⟩ := hProd
             obtain ⟨a', -, hEq'⟩ := hS0'
             have h1 : _ = state := congrArg Prod.snd hEq
@@ -377,9 +377,9 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
             have hInner : a.2 = a'.2 := by injection hState
             refine (congrArg Prod.fst hEq).symm.trans
               (Eq.trans ?_ (congrArg Prod.fst hEq'))
-            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel left := by
+            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel left := by
               rw [hInner]; exact (Prod.mk.eta (p := a')) ▸ ha'
-            rw [ih signature left ha.1 hm]
+            rw [ih left ha.1 hm]
           · obtain ⟨a, -, hEq⟩ := hS0
             obtain ⟨a', -, hEq'⟩ := hS1'
             have h1 : _ = state := congrArg Prod.snd hEq
@@ -405,9 +405,9 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
             have hInner : a.2 = a'.2 := by injection hState
             refine (congrArg Prod.fst hEq).symm.trans
               (Eq.trans ?_ (congrArg Prod.fst hEq'))
-            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel right := by
+            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel right := by
               rw [hInner]; exact (Prod.mk.eta (p := a')) ▸ ha'
-            rw [ih signature right ha.1 hm]
+            rw [ih right ha.1 hm]
       | recur alphabet name body =>
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
             Finset.mem_image, Prod.mk.injEq] at h h'
@@ -418,9 +418,9 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩
             · exact nomatch (ha2.trans ha2')
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel signature fuel body :=
+              have ha'' : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel body :=
                 hStateEq ▸ ha'
-              rw [ih signature body ha ha'']
+              rw [ih body ha ha'']
       | xoffer alphabet elseType branches =>
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
             Finset.mem_union, mem_foldl_union_iff, Finset.notMem_empty,
@@ -437,49 +437,9 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
             · exact nomatch (ha2.trans ha2')
             · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
               have ha'' : (a'.1, a.2) ∈
-                  buildRelationSetCoreFuel signature fuel elseType :=
+                  buildRelationSetCoreFuel fuel elseType :=
                 hStateEq ▸ ha'
-              rw [ih signature elseType ha ha'']
-            · exact nomatch (ha2.trans ha2'.symm)
-          · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ |
-              ⟨item', hItem', a', ha', rfl, ha2'⟩
-            · exact nomatch (ha2.trans ha2')
-            · exact nomatch (ha2.trans ha2'.symm)
-            · have hIdxEq : item.2 = item'.2 := by
-                injection ha2.trans ha2'.symm with hIdxEq
-                omega
-              have hItemEq : item = item' := by
-                have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
-                have hGet' := List.mk_mem_zipIdx_iff_getElem?.mp hItem'
-                rw [hIdxEq] at hGet
-                rw [hGet'] at hGet
-                have hFst : item.1 = item'.1 := by injection hGet with hFst; exact hFst.symm
-                exact Prod.ext hFst hIdxEq
-              have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              have ha'' : (a'.1, a.2) ∈
-                  buildRelationSetCoreFuel signature
-                    fuel item.1.2 :=
-                hItemEq ▸ hStateEq ▸ ha'
-              rw [ih signature item.1.2 ha ha'']
-      | offer alphabet elseType branches =>
-          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
-            Finset.mem_union, mem_foldl_union_iff, Finset.notMem_empty,
-            false_or, Finset.mem_image, Prod.mk.injEq] at h h'
-          rcases h with ⟨rfl, rfl⟩ | ⟨a, ha, rfl, ha2⟩ |
-            ⟨item, hItem, a, ha, rfl, ha2⟩
-          · rcases h' with ⟨rfl, -⟩ | ⟨a', ha', rfl, ha2'⟩ |
-              ⟨item', hItem', a', ha', rfl, ha2'⟩
-            · rfl
-            · exact nomatch ha2'
-            · exact nomatch ha2'
-          · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ |
-              ⟨item', hItem', a', ha', rfl, ha2'⟩
-            · exact nomatch (ha2.trans ha2')
-            · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
-              have ha'' : (a'.1, a.2) ∈
-                  buildRelationSetCoreFuel signature fuel elseType :=
-                hStateEq ▸ ha'
-              rw [ih signature elseType ha ha'']
+              rw [ih elseType ha ha'']
             · exact nomatch (ha2.trans ha2'.symm)
           · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ |
               ⟨item', hItem', a', ha', rfl, ha2'⟩
@@ -498,10 +458,50 @@ theorem buildRelationSetCoreFuel_functional (signature : TypeAlphabet) :
               have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
               have ha'' : (a'.1, a.2) ∈
                   buildRelationSetCoreFuel
-                    signature fuel
+                    fuel item.1.2 :=
+                hItemEq ▸ hStateEq ▸ ha'
+              rw [ih item.1.2 ha ha'']
+      | offer alphabet elseType branches =>
+          simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+            Finset.mem_union, mem_foldl_union_iff, Finset.notMem_empty,
+            false_or, Finset.mem_image, Prod.mk.injEq] at h h'
+          rcases h with ⟨rfl, rfl⟩ | ⟨a, ha, rfl, ha2⟩ |
+            ⟨item, hItem, a, ha, rfl, ha2⟩
+          · rcases h' with ⟨rfl, -⟩ | ⟨a', ha', rfl, ha2'⟩ |
+              ⟨item', hItem', a', ha', rfl, ha2'⟩
+            · rfl
+            · exact nomatch ha2'
+            · exact nomatch ha2'
+          · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ |
+              ⟨item', hItem', a', ha', rfl, ha2'⟩
+            · exact nomatch (ha2.trans ha2')
+            · have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
+              have ha'' : (a'.1, a.2) ∈
+                  buildRelationSetCoreFuel fuel elseType :=
+                hStateEq ▸ ha'
+              rw [ih elseType ha ha'']
+            · exact nomatch (ha2.trans ha2'.symm)
+          · rcases h' with ⟨-, ha2'⟩ | ⟨a', ha', rfl, ha2'⟩ |
+              ⟨item', hItem', a', ha', rfl, ha2'⟩
+            · exact nomatch (ha2.trans ha2')
+            · exact nomatch (ha2.trans ha2'.symm)
+            · have hIdxEq : item.2 = item'.2 := by
+                injection ha2.trans ha2'.symm with hIdxEq
+                omega
+              have hItemEq : item = item' := by
+                have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
+                have hGet' := List.mk_mem_zipIdx_iff_getElem?.mp hItem'
+                rw [hIdxEq] at hGet
+                rw [hGet'] at hGet
+                have hFst : item.1 = item'.1 := by injection hGet with hFst; exact hFst.symm
+                exact Prod.ext hFst hIdxEq
+              have hStateEq : a.2 = a'.2 := by injection ha2.trans ha2'.symm
+              have ha'' : (a'.1, a.2) ∈
+                  buildRelationSetCoreFuel
+                    fuel
                     (parallelTypeBranchesSelecting alphabet item.1 branches) :=
                 hItemEq ▸ hStateEq ▸ ha'
-              rw [ih signature
+              rw [ih
                 (parallelTypeBranchesSelecting alphabet item.1 branches) ha ha'']
 
 /-- The public-fuel relation is functional: each compiled state relates to at
@@ -509,12 +509,12 @@ most one residual. Unconditional — no fuel-sufficiency side condition needed,
 unlike `buildRelationSetCoreFuel_initial_mem`, since `buildRelationSetCoreFuel_functional`
 holds for *every* fuel value, not just sufficient ones. -/
 theorem buildRelationSetCore_functional
-    (signature : TypeAlphabet) (processType : PactType)
+     (processType : PactType)
     {residual residual' : PactType} {state : TypeAutomatonState}
-    (hRelated : (residual, state) ∈ buildRelationSetCore signature processType)
-    (hRelated' : (residual', state) ∈ buildRelationSetCore signature processType) :
+    (hRelated : (residual, state) ∈ buildRelationSetCore processType)
+    (hRelated' : (residual', state) ∈ buildRelationSetCore processType) :
     residual = residual' :=
-  buildRelationSetCoreFuel_functional signature (typeCompilationFuel processType)
+  buildRelationSetCoreFuel_functional (typeCompilationFuel processType)
     processType hRelated hRelated'
 
 /-! ### Fuel-sufficiency stability (needed to reconcile a shared parent fuel,
@@ -524,12 +524,12 @@ reconciliation `compileTypeFuel_eq_of_sufficient` provides for `compileType`,
 needed here for the same reason: `buildRelationSetCoreFuel` mirrors
 `compileTypeFuel`'s exact fuel-passing convention.) -/
 
-private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) :
+private theorem buildRelationSetCoreFuel_succ_stable  :
     ∀ fuel processType, typeCompilationFuel processType ≤ fuel →
-      buildRelationSetCoreFuel signature (fuel + 1) processType =
-        buildRelationSetCoreFuel signature fuel processType := by
+      buildRelationSetCoreFuel (fuel + 1) processType =
+        buildRelationSetCoreFuel fuel processType := by
   intro fuel
-  induction fuel generalizing signature with
+  induction fuel with
   | zero =>
       intro processType hFuel
       have hPositive := typeCompilationFuel_positive processType
@@ -548,16 +548,16 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           change insert (PactType.choice alphabet left right, TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature (fuel+1) left).image
+              ((buildRelationSetCoreFuel (fuel+1) left).image
                   (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature (fuel+1) right).image
+                (buildRelationSetCoreFuel (fuel+1) right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))) =
             insert (PactType.choice alphabet left right, TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature fuel left).image
+              ((buildRelationSetCoreFuel fuel left).image
                   (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature fuel right).image
+                (buildRelationSetCoreFuel fuel right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
-          rw [ih signature left hLeft, ih signature right hRight]
+          rw [ih left hLeft, ih right hRight]
       | fairChoice alphabet bid left right =>
           have hLeft : typeCompilationFuel left ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
@@ -565,133 +565,133 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
             simp [typeCompilationFuel] at hFuel; omega
           change insert (PactType.fairChoice alphabet bid left right,
               TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature (fuel+1) left).image
+              ((buildRelationSetCoreFuel (fuel+1) left).image
                   (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature (fuel+1) right).image
+                (buildRelationSetCoreFuel (fuel+1) right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))) =
             insert (PactType.fairChoice alphabet bid left right,
               TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature fuel left).image
+              ((buildRelationSetCoreFuel fuel left).image
                   (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature fuel right).image
+                (buildRelationSetCoreFuel fuel right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
-          rw [ih signature left hLeft, ih signature right hRight]
+          rw [ih left hLeft, ih right hRight]
       | seq alphabet left right =>
           have hLeft : typeCompilationFuel left ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           have hCompileLeft :
-              compileTypeFuel signature (fuel + 1) left =
-                compileTypeFuel signature fuel left :=
-            compileTypeFuel_eq_of_sufficient signature left
+              compileTypeFuel (fuel + 1) left =
+                compileTypeFuel fuel left :=
+            compileTypeFuel_eq_of_sufficient left
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hLeft) hLeft
           change
-              ((buildRelationSetCoreFuel signature (fuel+1) left).filter (fun entry =>
+              ((buildRelationSetCoreFuel (fuel+1) left).filter (fun entry =>
                   entry.2 ∉ sequenceDeleted
-                    (compileTypeFuel signature (fuel+1) left))).image
+                    (compileTypeFuel (fuel+1) left))).image
                   (fun entry =>
                     (PactType.seq alphabet entry.1 right,
                       TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature (fuel+1) right).image
+                (buildRelationSetCoreFuel (fuel+1) right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)) =
-              ((buildRelationSetCoreFuel signature fuel left).filter (fun entry =>
+              ((buildRelationSetCoreFuel fuel left).filter (fun entry =>
                   entry.2 ∉ sequenceDeleted
-                    (compileTypeFuel signature fuel left))).image
+                    (compileTypeFuel fuel left))).image
                   (fun entry =>
                     (PactType.seq alphabet entry.1 right,
                       TypeAutomatonState.child 0 entry.2)) ∪
-                (buildRelationSetCoreFuel signature fuel right).image
+                (buildRelationSetCoreFuel fuel right).image
                   (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
-          rw [ih signature left hLeft, ih signature right hRight, hCompileLeft]
+          rw [ih left hLeft, ih right hRight, hCompileLeft]
       | par alphabet left right interface =>
           have hLeft : typeCompilationFuel left ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           have hCompileLeft :
-              compileTypeFuel signature (fuel + 1) left =
-                compileTypeFuel signature fuel left :=
-            compileTypeFuel_eq_of_sufficient signature left
+              compileTypeFuel (fuel + 1) left =
+                compileTypeFuel fuel left :=
+            compileTypeFuel_eq_of_sufficient left
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hLeft) hLeft
           have hCompileRight :
-              compileTypeFuel signature (fuel + 1) right =
-                compileTypeFuel signature fuel right :=
-            compileTypeFuel_eq_of_sufficient signature right
+              compileTypeFuel (fuel + 1) right =
+                compileTypeFuel fuel right :=
+            compileTypeFuel_eq_of_sufficient right
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hRight) hRight
           change insert (PactType.skip alphabet, TypeAutomatonState.final)
-              (((Finset.product (buildRelationSetCoreFuel signature (fuel+1) left)
-                  (buildRelationSetCoreFuel signature (fuel+1) right)).filter fun entry =>
-                    ParallelReachable signature alphabet left.alphabet
+              (((Finset.product (buildRelationSetCoreFuel (fuel+1) left)
+                  (buildRelationSetCoreFuel (fuel+1) right)).filter fun entry =>
+                    ParallelReachable alphabet left.alphabet
                       right.alphabet interface
-                      (compileTypeFuel signature (fuel+1) left)
-                      (compileTypeFuel signature (fuel+1) right)
-                      (compiledChildFutureFuel signature (fuel+1) left)
-                      (compiledChildFutureFuel signature (fuel+1) right)
+                      (compileTypeFuel (fuel+1) left)
+                      (compileTypeFuel (fuel+1) right)
+                      (compiledChildFutureFuel (fuel+1) left)
+                      (compiledChildFutureFuel (fuel+1) right)
                       (.pair entry.1.2 entry.2.2)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
-                ((buildRelationSetCoreFuel signature (fuel+1) left).filter
+                ((buildRelationSetCoreFuel (fuel+1) left).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel signature (fuel+1) left).accepting).image
+                      (compileTypeFuel (fuel+1) left).accepting).image
                   (fun entry =>
                     (entry.1.reannotate alphabet,
                       TypeAutomatonState.survivor 0 entry.2)) ∪
-                ((buildRelationSetCoreFuel signature (fuel+1) right).filter
+                ((buildRelationSetCoreFuel (fuel+1) right).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel signature (fuel+1) right).accepting).image
+                      (compileTypeFuel (fuel+1) right).accepting).image
                   (fun entry =>
                     (entry.1.reannotate alphabet,
                       TypeAutomatonState.survivor 1 entry.2))) =
             insert (PactType.skip alphabet, TypeAutomatonState.final)
-              (((Finset.product (buildRelationSetCoreFuel signature fuel left)
-                  (buildRelationSetCoreFuel signature fuel right)).filter fun entry =>
-                    ParallelReachable signature alphabet left.alphabet
+              (((Finset.product (buildRelationSetCoreFuel fuel left)
+                  (buildRelationSetCoreFuel fuel right)).filter fun entry =>
+                    ParallelReachable alphabet left.alphabet
                       right.alphabet interface
-                      (compileTypeFuel signature fuel left)
-                      (compileTypeFuel signature fuel right)
-                      (compiledChildFutureFuel signature fuel left)
-                      (compiledChildFutureFuel signature fuel right)
+                      (compileTypeFuel fuel left)
+                      (compileTypeFuel fuel right)
+                      (compiledChildFutureFuel fuel left)
+                      (compiledChildFutureFuel fuel right)
                       (.pair entry.1.2 entry.2.2)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
-                ((buildRelationSetCoreFuel signature fuel left).filter
+                ((buildRelationSetCoreFuel fuel left).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel signature fuel left).accepting).image
+                      (compileTypeFuel fuel left).accepting).image
                   (fun entry =>
                     (entry.1.reannotate alphabet,
                       TypeAutomatonState.survivor 0 entry.2)) ∪
-                ((buildRelationSetCoreFuel signature fuel right).filter
+                ((buildRelationSetCoreFuel fuel right).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel signature fuel right).accepting).image
+                      (compileTypeFuel fuel right).accepting).image
                   (fun entry =>
                     (entry.1.reannotate alphabet,
                       TypeAutomatonState.survivor 1 entry.2)))
           simp only [compiledChildFutureFuel,
             Nat.min_eq_right hLeft, Nat.min_eq_right (Nat.le.step hLeft),
             Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight)]
-          rw [ih signature left hLeft, ih signature right hRight, hCompileLeft, hCompileRight]
+          rw [ih left hLeft, ih right hRight, hCompileLeft, hCompileRight]
       | recur alphabet name body =>
           have hBody : typeCompilationFuel body ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           change insert (PactType.recur alphabet name body,
               TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature (fuel+1) body).image
+              ((buildRelationSetCoreFuel (fuel+1) body).image
                 (fun entry =>
                   (entry.1.replaceVar name (.recur alphabet name body),
                     TypeAutomatonState.child 0 entry.2))) =
             insert (PactType.recur alphabet name body,
               TypeAutomatonState.root)
-              ((buildRelationSetCoreFuel signature fuel body).image
+              ((buildRelationSetCoreFuel fuel body).image
                 (fun entry =>
                   (entry.1.replaceVar name (.recur alphabet name body),
                     TypeAutomatonState.child 0 entry.2)))
-          rw [ih signature body hBody]
+          rw [ih body hBody]
       | xoffer alphabet elseType branches =>
           have hElse : typeCompilationFuel elseType ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
@@ -715,19 +715,19 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
           constructor
           · rintro (h | ⟨a, ha, h⟩ | ⟨item, hItem, a, ha, hEq⟩)
             · exact Or.inl h
-            · have ha' : a ∈ buildRelationSetCoreFuel signature fuel elseType :=
-                ih signature elseType hElse ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel fuel elseType :=
+                ih elseType hElse ▸ ha
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
-            · have ha' : a ∈ buildRelationSetCoreFuel signature fuel item.1.2 :=
-                ih signature item.1.2 (hItemFuel item hItem) ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel fuel item.1.2 :=
+                ih item.1.2 (hItemFuel item hItem) ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
           · rintro (h | ⟨a, ha, h⟩ | ⟨item, hItem, a, ha, hEq⟩)
             · exact Or.inl h
-            · have ha' : a ∈ buildRelationSetCoreFuel signature (fuel + 1) elseType :=
-                (ih signature elseType hElse).symm ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel (fuel + 1) elseType :=
+                (ih elseType hElse).symm ▸ ha
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
-            · have ha' : a ∈ buildRelationSetCoreFuel signature (fuel + 1) item.1.2 :=
-                (ih signature item.1.2 (hItemFuel item hItem)).symm ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel (fuel + 1) item.1.2 :=
+                (ih item.1.2 (hItemFuel item hItem)).symm ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
       | offer alphabet elseType branches =>
           have hElse : typeCompilationFuel elseType ≤ fuel := by
@@ -745,54 +745,54 @@ private theorem buildRelationSetCoreFuel_succ_stable (signature : TypeAlphabet) 
           constructor
           · rintro (h | ⟨a, ha, h⟩ | ⟨item, hItem, a, ha, hEq⟩)
             · exact Or.inl h
-            · have ha' : a ∈ buildRelationSetCoreFuel signature fuel elseType :=
-                ih signature elseType hElse ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel fuel elseType :=
+                ih elseType hElse ▸ ha
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
             · have ha' : a ∈ buildRelationSetCoreFuel
-                  signature fuel
+                  fuel
                   (parallelTypeBranchesSelecting alphabet item.1 branches) :=
-                ih _ _ (hBranchesFuel item.1) ▸ ha
+                ih _ (hBranchesFuel item.1) ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
           · rintro (h | ⟨a, ha, h⟩ | ⟨item, hItem, a, ha, hEq⟩)
             · exact Or.inl h
-            · have ha' : a ∈ buildRelationSetCoreFuel signature (fuel + 1) elseType :=
-                (ih signature elseType hElse).symm ▸ ha
+            · have ha' : a ∈ buildRelationSetCoreFuel (fuel + 1) elseType :=
+                (ih elseType hElse).symm ▸ ha
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
             · have ha' : a ∈ buildRelationSetCoreFuel
-                  signature (fuel + 1)
+                  (fuel + 1)
                   (parallelTypeBranchesSelecting alphabet item.1 branches) :=
-                (ih _ _ (hBranchesFuel item.1)).symm ▸ ha
+                (ih _ (hBranchesFuel item.1)).symm ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
 
 /-- Any two sufficient budgets produce the same relation set. -/
 private theorem buildRelationSetCoreFuel_add_stable
-    (signature : TypeAlphabet) (processType : PactType)
+     (processType : PactType)
     (fuel extra : Nat) (hFuel : typeCompilationFuel processType ≤ fuel) :
-    buildRelationSetCoreFuel signature (fuel + extra) processType =
-      buildRelationSetCoreFuel signature fuel processType := by
+    buildRelationSetCoreFuel (fuel + extra) processType =
+      buildRelationSetCoreFuel fuel processType := by
   induction extra with
   | zero => simp
   | succ extra ih =>
       rw [Nat.add_succ,
-        buildRelationSetCoreFuel_succ_stable signature (fuel + extra) processType
+        buildRelationSetCoreFuel_succ_stable (fuel + extra) processType
           (by omega),
         ih]
 
 /-- Reconciles any two sufficient fuel values against the same `processType`. -/
 theorem buildRelationSetCoreFuel_eq_of_sufficient
-    (signature : TypeAlphabet) (processType : PactType)
+     (processType : PactType)
     {leftFuel rightFuel : Nat}
     (hLeft : TypeCompilationFuelSufficient processType leftFuel)
     (hRight : TypeCompilationFuelSufficient processType rightFuel) :
-    buildRelationSetCoreFuel signature leftFuel processType =
-      buildRelationSetCoreFuel signature rightFuel processType := by
+    buildRelationSetCoreFuel leftFuel processType =
+      buildRelationSetCoreFuel rightFuel processType := by
   by_cases hOrder : leftFuel ≤ rightFuel
   · obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hOrder
-    exact (buildRelationSetCoreFuel_add_stable signature processType leftFuel extra
+    exact (buildRelationSetCoreFuel_add_stable processType leftFuel extra
       hLeft).symm
   · have hReverse : rightFuel ≤ leftFuel := by omega
     obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
-    exact buildRelationSetCoreFuel_add_stable signature processType rightFuel extra hRight
+    exact buildRelationSetCoreFuel_add_stable processType rightFuel extra hRight
 
 private theorem mem_map_zipIdx_cases
     {Item Mapped : Type} (items : List Item) (mapEntry : Item → Mapped)
@@ -815,13 +815,13 @@ further edge is sourced there and it is not a product state either, so
 `ofStage`'s value there is `∅` regardless of what (if anything) it
 represents. Replaces the old (deleted) `relationSuccessors_mem_cases` for the
 new, provenance-directed relation. -/
-theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
+theorem buildRelationSetCoreFuel_edge_target_mem  :
     ∀ fuel ty, TypeCompilationFuelSufficient ty fuel →
-      ∀ edge ∈ (compileTypeFuel signature fuel ty).edges,
-      (∃ residual, (residual, edge.target) ∈ buildRelationSetCoreFuel signature fuel ty) ∨
+      ∀ edge ∈ (compileTypeFuel fuel ty).edges,
+      (∃ residual, (residual, edge.target) ∈ buildRelationSetCoreFuel fuel ty) ∨
       (∃ name, edge.label = AutomatonConstructionLabel.variable name) := by
   intro fuel
-  induction fuel generalizing signature with
+  induction fuel with
   | zero =>
       intro ty hFuel edge hEdge
       exact (Nat.not_lt_zero _ (TypeCompilationFuelSufficient.positive hFuel)).elim
@@ -874,7 +874,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             Finset.mem_insert, Finset.mem_singleton] at hEdge
           rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
             ⟨environment, -, hEq | hEq⟩
-          · rcases ih signature left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -882,7 +882,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 Finset.mem_insert, Finset.mem_union, Finset.mem_image]
               exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
             · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          · rcases ih signature right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -895,15 +895,15 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             subst hEq
             simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
             exact Or.inr (Or.inl (Finset.mem_image.mpr
-              ⟨(left, (compileTypeFuel signature fuel left).initial),
-                buildRelationSetCoreFuel_initial_mem signature fuel left hLeft, rfl⟩))
+              ⟨(left, (compileTypeFuel fuel left).initial),
+                buildRelationSetCoreFuel_initial_mem fuel left hLeft, rfl⟩))
           · left
             refine ⟨right, ?_⟩
             subst hEq
             simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
             exact Or.inr (Or.inr (Finset.mem_image.mpr
-              ⟨(right, (compileTypeFuel signature fuel right).initial),
-                buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩))
+              ⟨(right, (compileTypeFuel fuel right).initial),
+                buildRelationSetCoreFuel_initial_mem fuel right hRight, rfl⟩))
       | fairChoice alphabet bid left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
@@ -914,7 +914,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             Finset.mem_insert, Finset.mem_singleton] at hEdge
           rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
             ⟨environment, -, hEq | hEq⟩
-          · rcases ih signature left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -922,7 +922,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 Finset.mem_insert, Finset.mem_union, Finset.mem_image]
               exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
             · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          · rcases ih signature right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -935,15 +935,15 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             subst hEq
             simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
             exact Or.inr (Or.inl (Finset.mem_image.mpr
-              ⟨(left, (compileTypeFuel signature fuel left).initial),
-                buildRelationSetCoreFuel_initial_mem signature fuel left hLeft, rfl⟩))
+              ⟨(left, (compileTypeFuel fuel left).initial),
+                buildRelationSetCoreFuel_initial_mem fuel left hLeft, rfl⟩))
           · left
             refine ⟨right, ?_⟩
             subst hEq
             simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union]
             exact Or.inr (Or.inr (Finset.mem_image.mpr
-              ⟨(right, (compileTypeFuel signature fuel right).initial),
-                buildRelationSetCoreFuel_initial_mem signature fuel right hRight, rfl⟩))
+              ⟨(right, (compileTypeFuel fuel right).initial),
+                buildRelationSetCoreFuel_initial_mem fuel right hRight, rfl⟩))
       | seq alphabet left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -958,7 +958,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
           rcases hEdge with (hLeftEdge | hRightEdge) | hRedirect
           · obtain ⟨childEdge, ⟨hChildMem, hNotAccepting⟩, rfl⟩ :=
               hLeftEdge
-            rcases ih signature left hLeft childEdge hChildMem with
+            rcases ih left hLeft childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨.seq alphabet residual right, ?_⟩
@@ -973,7 +973,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               exact ⟨markerName, by
                 simpa [sequenceKeptLeftEdge] using hLabel⟩
           · obtain ⟨childEdge, hChildMem, rfl⟩ := hRightEdge
-            rcases ih signature right hRight childEdge hChildMem with
+            rcases ih right hRight childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -989,8 +989,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             simp only [sequenceRedirectEdge, childState,
               buildRelationSetCoreFuel, Finset.mem_union, Finset.mem_image]
             exact Or.inr ⟨(right,
-              (compileTypeFuel signature fuel right).initial),
-              buildRelationSetCoreFuel_initial_mem signature fuel right hRight,
+              (compileTypeFuel fuel right).initial),
+              buildRelationSetCoreFuel_initial_mem fuel right hRight,
               rfl⟩
       | recur alphabet name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
@@ -1003,8 +1003,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             subst hEq
             simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert,
               Finset.mem_image]
-            exact Or.inr ⟨(body, (compileTypeFuel signature fuel body).initial),
-              buildRelationSetCoreFuel_initial_mem signature fuel body hBody, rfl⟩
+            exact Or.inr ⟨(body, (compileTypeFuel fuel body).initial),
+              buildRelationSetCoreFuel_initial_mem fuel body hBody, rfl⟩
           · by_cases hMarker : childEdge.label = AutomatonConstructionLabel.variable name
             · left
               refine ⟨body.replaceVar name (.recur alphabet name body), ?_⟩
@@ -1012,10 +1012,10 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               rw [if_pos hMarker]
               simp only [childState, buildRelationSetCoreFuel, Finset.mem_insert,
                 Finset.mem_image]
-              exact Or.inr ⟨(body, (compileTypeFuel signature fuel body).initial),
-                buildRelationSetCoreFuel_initial_mem signature fuel body hBody, rfl⟩
+              exact Or.inr ⟨(body, (compileTypeFuel fuel body).initial),
+                buildRelationSetCoreFuel_initial_mem fuel body hBody, rfl⟩
             · rw [if_neg hMarker] at hEq
-              rcases ih signature body hBody childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name', hLabel⟩
+              rcases ih body hBody childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name', hLabel⟩
               · left
                 refine ⟨residual.replaceVar name (.recur alphabet name body), ?_⟩
                 subst hEq
@@ -1051,8 +1051,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               ⟨environment, _, rfl⟩
           · let rawEdge : PendingAutomatonEdge :=
                 let bothAccept :=
-                  leftEdge.target ∈ (compileTypeFuel signature fuel left).accepting ∧
-                    rightEdge.target ∈ (compileTypeFuel signature fuel right).accepting
+                  leftEdge.target ∈ (compileTypeFuel fuel left).accepting ∧
+                    rightEdge.target ∈ (compileTypeFuel fuel right).accepting
                 let target : TypeAutomatonState :=
                   if bothAccept then .final
                   else .pair leftEdge.target rightEdge.target
@@ -1067,13 +1067,13 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                   current := current
                   future := parallelFutureSpec label target current
                   target := target }
-            have hRawEdge : rawEdge ∈ parallelRawTransitionEdges signature
+            have hRawEdge : rawEdge ∈ parallelRawTransitionEdges
                 left.alphabet right.alphabet interface
-                (compileTypeFuel signature fuel left)
-                (compileTypeFuel signature fuel right)
-                (computeFutureOfFuel signature
+                (compileTypeFuel fuel left)
+                (compileTypeFuel fuel right)
+                (computeFutureOfFuel
                   (min fuel (typeCompilationFuel left)) left)
-                (computeFutureOfFuel signature
+                (computeFutureOfFuel
                   (min fuel (typeCompilationFuel right)) right) := by
               simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
                 Finset.mem_image, Finset.mem_filter]
@@ -1091,18 +1091,18 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hLeftTargetEq, ← hRightTargetEq] at hRawTargetReachable
             rw [← hLeftEq, ← hRightEq]
-            rcases ih signature left hLeft leftRaw hLeftRaw with
+            rcases ih left hLeft leftRaw hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ |
                 ⟨leftMarker, hLeftLabel⟩
-            · rcases ih signature right hRight rightRaw hRightRaw with
+            · rcases ih right hRight rightRaw hRightRaw with
                   ⟨rightResidual, hRightResidual⟩ |
                   ⟨rightMarker, hRightLabel⟩
               · left
                 by_cases hAccept :
                     leftRaw.target ∈
-                        (compileTypeFuel signature fuel left).accepting ∧
+                        (compileTypeFuel fuel left).accepting ∧
                       rightRaw.target ∈
-                        (compileTypeFuel signature fuel right).accepting
+                        (compileTypeFuel fuel right).accepting
                 · refine ⟨.skip alphabet, ?_⟩
                   simp [hAccept, buildRelationSetCoreFuel]
                 · refine ⟨.par alphabet leftResidual rightResidual interface, ?_⟩
@@ -1114,9 +1114,9 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                   refine Finset.mem_filter.mpr ⟨Finset.mem_product.mpr
                     ⟨hLeftResidual, hRightResidual⟩, ?_⟩
                   have hAcceptEdge : ¬ (leftEdge.target ∈
-                      (compileTypeFuel signature fuel left).accepting ∧
+                      (compileTypeFuel fuel left).accepting ∧
                     rightEdge.target ∈
-                      (compileTypeFuel signature fuel right).accepting) := by
+                      (compileTypeFuel fuel right).accepting) := by
                     rw [← hLeftTargetEq, ← hRightTargetEq]; exact hAccept
                   simpa only [rawEdge, if_neg hAcceptEdge, hLeftTargetEq,
                     hRightTargetEq] using hRawTargetReachable
@@ -1139,7 +1139,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             have hTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hRightEq]
-            rcases ih signature right hRight rightRaw hRightRaw with
+            rcases ih right hRight rightRaw hRightRaw with
                 ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
             · left
               refine ⟨rightResidual.reannotate alphabet, ?_⟩
@@ -1155,7 +1155,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             have hTargetEq : leftRaw.target = leftEdge.target :=
               congrArg AutomatonFragmentEdge.target hLeftEq
             rw [← hLeftEq]
-            rcases ih signature left hLeft leftRaw hLeftRaw with
+            rcases ih left hLeft leftRaw hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
             · left
               refine ⟨leftResidual.reannotate alphabet, ?_⟩
@@ -1172,7 +1172,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             have hTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hRightEq]
-            rcases ih signature right hRight rightRaw hRightRaw with
+            rcases ih right hRight rightRaw hRightRaw with
                 ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
             · left
               refine ⟨rightResidual.reannotate alphabet, ?_⟩
@@ -1188,7 +1188,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             have hTargetEq : leftRaw.target = leftEdge.target :=
               congrArg AutomatonFragmentEdge.target hLeftEq
             rw [← hLeftEq]
-            rcases ih signature left hLeft leftRaw hLeftRaw with
+            rcases ih left hLeft leftRaw hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
             · left
               refine ⟨leftResidual.reannotate alphabet, ?_⟩
@@ -1202,7 +1202,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
           · left
             refine ⟨.skip alphabet, ?_⟩
             change (.skip alphabet, .final) ∈
-              buildRelationSetCoreFuel signature (fuel + 1)
+              buildRelationSetCoreFuel (fuel + 1)
                 (.par alphabet left right interface)
             simp [buildRelationSetCoreFuel]
       | xoffer alphabet elseType branches =>
@@ -1224,7 +1224,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 hResolvedEdge)
           · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
             obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
-            rcases ih signature elseType hElse childEdge hChildMem with
+            rcases ih elseType hElse childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -1245,18 +1245,18 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               obtain ⟨branch, hBranchIndexed, hMappedEq⟩ :=
                 mem_map_zipIdx_cases branches
                   (fun branch =>
-                    (branch.1, compileTypeFuel signature fuel branch.2))
+                    (branch.1, compileTypeFuel fuel branch.2))
                   hIndexed
               have hBranchMem : branch ∈ branches := by
                 exact List.mem_of_getElem?
                   (List.mk_mem_zipIdx_iff_getElem?.mp hBranchIndexed)
               have hAutomatonEq :
-                  compileTypeFuel signature fuel branch.2 = indexed.1.2 :=
+                  compileTypeFuel fuel branch.2 = indexed.1.2 :=
                 congrArg Prod.snd hMappedEq
               have hChildMem' : childEdge ∈
-                  (compileTypeFuel signature fuel branch.2).edges := by
+                  (compileTypeFuel fuel branch.2).edges := by
                 simpa [hAutomatonEq] using hChildMem
-              rcases ih signature branch.2 (hBranches branch hBranchMem)
+              rcases ih branch.2 (hBranches branch hBranchMem)
                   childEdge hChildMem' with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
               · left
@@ -1282,14 +1282,14 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               obtain ⟨branch, hBranchIndexed, hMappedEq⟩ :=
                 mem_map_zipIdx_cases branches
                   (fun branch =>
-                    (branch.1, compileTypeFuel signature fuel branch.2))
+                    (branch.1, compileTypeFuel fuel branch.2))
                   hIndexed
               have hBranchMem : branch ∈ branches := by
                 exact List.mem_of_getElem?
                   (List.mk_mem_zipIdx_iff_getElem?.mp hBranchIndexed)
               have hInitial :=
                 buildRelationSetCoreFuel_initial_mem
-                  signature
+                 
                   fuel branch.2 (hBranches branch hBranchMem)
               left
               refine ⟨branch.2, ?_⟩
@@ -1301,10 +1301,10 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               refine Or.inr ⟨(branch, indexed.2), hBranchIndexed, ?_⟩
               apply Finset.mem_image.mpr
               refine ⟨(branch.2,
-                (compileTypeFuel signature fuel branch.2).initial),
+                (compileTypeFuel fuel branch.2).initial),
                 hInitial, ?_⟩
               have hAutomatonEq :
-                  compileTypeFuel signature fuel branch.2 = indexed.1.2 :=
+                  compileTypeFuel fuel branch.2 = indexed.1.2 :=
                 congrArg Prod.snd hMappedEq
               have hInitialEq := congrArg
                 (fun fragment : AutomatonFragment => fragment.initial)
@@ -1324,8 +1324,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             simp only [childState, buildRelationSetCoreFuel,
               Finset.mem_insert, Finset.mem_union, Finset.mem_image]
             exact Or.inr (Or.inl ⟨(elseType,
-              (compileTypeFuel signature fuel elseType).initial),
-              buildRelationSetCoreFuel_initial_mem signature fuel elseType hElse,
+              (compileTypeFuel fuel elseType).initial),
+              buildRelationSetCoreFuel_initial_mem fuel elseType hElse,
               rfl⟩)
       | offer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
@@ -1347,7 +1347,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 hResolvedEdge)
           · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
             obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
-            rcases ih signature elseType hElse childEdge hChildMem with
+            rcases ih elseType hElse childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -1369,7 +1369,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 mem_map_zipIdx_cases branches
                   (fun selected =>
                     (selected.1, compileTypeFuel
-                      signature fuel
+                      fuel
                       (parallelTypeBranchesSelecting alphabet selected branches)))
                   hIndexed
               have hSelectedMem : selected ∈ branches := by
@@ -1378,12 +1378,12 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               let selectedType :=
                 parallelTypeBranchesSelecting alphabet selected branches
               have hAutomatonEq :
-                  compileTypeFuel signature fuel selectedType = indexed.1.2 :=
+                  compileTypeFuel fuel selectedType = indexed.1.2 :=
                 congrArg Prod.snd hMappedEq
               have hChildMem' : childEdge ∈
-                  (compileTypeFuel signature fuel selectedType).edges := by
+                  (compileTypeFuel fuel selectedType).edges := by
                 simpa [hAutomatonEq] using hChildMem
-              rcases ih signature selectedType (hSelected selected hSelectedMem)
+              rcases ih selectedType (hSelected selected hSelectedMem)
                   childEdge hChildMem' with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
               · left
@@ -1410,7 +1410,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 mem_map_zipIdx_cases branches
                   (fun selected =>
                     (selected.1, compileTypeFuel
-                      signature fuel
+                      fuel
                       (parallelTypeBranchesSelecting alphabet selected branches)))
                   hIndexed
               have hSelectedMem : selected ∈ branches := by
@@ -1420,7 +1420,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
                 parallelTypeBranchesSelecting alphabet selected branches
               have hInitial :=
                 buildRelationSetCoreFuel_initial_mem
-                  signature
+                 
                   fuel selectedType (hSelected selected hSelectedMem)
               left
               refine ⟨selectedType, ?_⟩
@@ -1432,10 +1432,10 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               refine Or.inr ⟨(selected, indexed.2), hSelectedIndexed, ?_⟩
               apply Finset.mem_image.mpr
               refine ⟨(selectedType,
-                (compileTypeFuel signature fuel selectedType).initial),
+                (compileTypeFuel fuel selectedType).initial),
                 hInitial, ?_⟩
               have hAutomatonEq :
-                  compileTypeFuel signature fuel selectedType = indexed.1.2 :=
+                  compileTypeFuel fuel selectedType = indexed.1.2 :=
                 congrArg Prod.snd hMappedEq
               have hInitialEq := congrArg
                 (fun fragment : AutomatonFragment => fragment.initial)
@@ -1455,8 +1455,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
             simp only [childState, buildRelationSetCoreFuel,
               Finset.mem_insert, Finset.mem_union, Finset.mem_image]
             exact Or.inr (Or.inl ⟨(elseType,
-              (compileTypeFuel signature fuel elseType).initial),
-              buildRelationSetCoreFuel_initial_mem signature fuel elseType hElse,
+              (compileTypeFuel fuel elseType).initial),
+              buildRelationSetCoreFuel_initial_mem fuel elseType hElse,
               rfl⟩)
 
 /-- Defines relation membership as occurrence of the residual/state pair in the relation set. -/
@@ -1465,38 +1465,38 @@ def relationMembership
     (processType : PactType) (state : TypeAutomatonState) : Prop :=
   (processType, state) ∈ relation_set
 
-/-- The generated correspondence relation for `ty`, against the signature
+/-- The generated correspondence relation for `ty`, against the
 `auto` was compiled from. -/
 def buildRelationSet (ty : PactType) (auto : TypeAutomaton) :
     Finset (PactType × TypeAutomatonState) :=
-  buildRelationSetCore auto.signature ty
+  buildRelationSetCore ty
 
 /-- The one-step obligation shared by every constructor case of the
 type--automaton correspondence proof.  It lives with the relation core so
 individual constructor cases can be checked in separate modules. -/
 def StepIffStatement
-    (signature : TypeAlphabet) (processType : PactType) : Prop :=
+     (processType : PactType) : Prop :=
   ∀ {residual residual' : PactType} {state : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
     relationMembership
-      (buildRelationSet processType (compileType signature processType))
+      (buildRelationSet processType (compileType processType))
       residual state →
     ({ environment := env, label := label, offers := offers } :
-        TypeAutomatonSymbol) ∈ (compileType signature processType).alphabet →
+        TypeAutomatonSymbol) ∈ (compileType processType).alphabet →
     (DecoratedTypeTransition env residual label offers residual' ↔
       ∃ state',
-        (compileType signature processType).HasEdge state env label offers
+        (compileType processType).HasEdge state env label offers
           state' ∧
         relationMembership
-          (buildRelationSet processType (compileType signature processType))
+          (buildRelationSet processType (compileType processType))
           residual' state')
 
 /-- The generated relation contains its initial residual/state seed pair. -/
 theorem buildRelationSet_initial (ty : PactType) (auto : TypeAutomaton)
-    (hAuto : auto = compileType auto.signature ty := by rfl) :
+    (hAuto : auto = compileType ty := by rfl) :
     relationMembership (buildRelationSet ty auto) ty auto.initial := by
   unfold relationMembership buildRelationSet
   rw [hAuto]
-  exact buildRelationSetCore_initial_mem auto.signature ty
+  exact buildRelationSetCore_initial_mem ty
 
 end

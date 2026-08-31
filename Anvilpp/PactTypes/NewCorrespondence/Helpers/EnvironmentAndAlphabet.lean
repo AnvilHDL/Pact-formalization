@@ -8,27 +8,15 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
-@[simp] theorem transitionAlphabetFor_mk_mem_iff
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
-    (env : TypeEnvironment) (label : TypeLabel)
-    (offers : TypeOfferSummary) :
-    TypeAutomatonSymbol.mk env label offers ∈
-        signature.transitionAlphabetFor alphabet ↔
-      env ∈ signature.localEnvironmentsFor alphabet ∧
-      label ∈ signature.localLabelsFor alphabet ∧
-      offers ∈ signature.localOfferSummariesFor alphabet := by
-  classical
-  simp [TypeAlphabet.transitionAlphabetFor]
-
-@[simp] theorem localOfferSummariesFor_mk_mem_iff
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+@[simp] theorem PactTypeAlphabet.mem_localOfferSummaries_iff
+    (alphabet : PactTypeAlphabet)
     (current future : Finset BareMessage) :
     TypeOfferSummary.mk current future ∈
-        signature.localOfferSummariesFor alphabet ↔
-      current ⊆ signature.localActionsFor alphabet ∧
-      future ⊆ signature.localActionsFor alphabet := by
+        alphabet.localOfferSummaries ↔
+      current ⊆ alphabet.actions ∧
+      future ⊆ alphabet.actions := by
   classical
-  simp [TypeAlphabet.localOfferSummariesFor]
+  simp [PactTypeAlphabet.localOfferSummaries]
 
 /- Decorated type transitions are intentionally not target-deterministic.  For
 example, an unresolved choice may silently select either branch while exposing
@@ -43,7 +31,7 @@ lemma relationMembership_functional
     (hRelated' : relationMembership (buildRelationSet ty auto) residual' state) :
     residual = residual' := by
   unfold relationMembership buildRelationSet at hRelated hRelated'
-  exact buildRelationSetCore_functional auto.signature ty hRelated hRelated'
+  exact buildRelationSetCore_functional ty hRelated hRelated'
 
 /-- Proves a step's future offer is contained in the target menu together with its current offer. -/
 theorem typeOffers_future_subset_target_union_current
@@ -174,37 +162,37 @@ theorem typeOffers_future_subset_target_union_current
       simp
 
 theorem transitionAlphabetFor_change_future_of_subset_union
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (processType : PactType)
     {env : TypeEnvironment} {label : TypeLabel}
     {current future future' : Finset BareMessage}
     (hSymbol :
       TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabetFor alphabet)
+        processType.transitionAlphabet)
     (hFuture' : future' ⊆ future ∪ current) :
     TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future') ∈
-      signature.transitionAlphabetFor alphabet := by
-  rw [transitionAlphabetFor_mk_mem_iff] at hSymbol ⊢
+      processType.transitionAlphabet := by
+  rw [PactType.mem_transitionAlphabet_iff] at hSymbol ⊢
   refine ⟨hSymbol.1, hSymbol.2.1, ?_⟩
-  rw [localOfferSummariesFor_mk_mem_iff]
-  rw [localOfferSummariesFor_mk_mem_iff] at hSymbol
+  rw [PactTypeAlphabet.mem_localOfferSummaries_iff]
+  rw [PactTypeAlphabet.mem_localOfferSummaries_iff] at hSymbol
   exact ⟨hSymbol.2.2.1, hFuture'.trans
     (Finset.union_subset hSymbol.2.2.2 hSymbol.2.2.1)⟩
 
 theorem transitionAlphabetFor_of_typeOffers_target_subset
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (processType : PactType)
     {env : TypeEnvironment} {source target : PactType}
     {label : TypeLabel} {current parentFuture childFuture : Finset BareMessage}
     (hSymbol :
       TypeAutomatonSymbol.mk env label
         (TypeOfferSummary.mk current parentFuture) ∈
-          signature.transitionAlphabetFor alphabet)
+          processType.transitionAlphabet)
     (hOffers : TypeOffers env source label target current childFuture)
     (hTarget :
       typeFutureOffers target ⊆ parentFuture ∪ current) :
     TypeAutomatonSymbol.mk env label
       (TypeOfferSummary.mk current childFuture) ∈
-        signature.transitionAlphabetFor alphabet := by
-  apply transitionAlphabetFor_change_future_of_subset_union signature alphabet
+        processType.transitionAlphabet := by
+  apply transitionAlphabetFor_change_future_of_subset_union processType
     hSymbol
   intro action hAction
   have hStepFuture :=

@@ -1,3 +1,4 @@
+import Anvilpp.PactTypes.Syntax.PactTypeRegularity
 import Anvilpp.PactTypes.Syntax.TypeTransitionSystem
 
 /-!
@@ -10,86 +11,33 @@ noncomputable section
 
 /-! ## Constructor-based finite automata -/
 
-/--
-The observation pool one type automaton is compiled against.  It holds only
-what is fixed once at the start of compilation and never changes: the
-interfaces that may be resolved, and the progress and fair-choice identifiers
-that may be observed.  Every action-indexed set is read off the type's own
-alphabet instead.
--/
-structure TypeAlphabet : Type where
-  interface : Interface
-  progress : Finset ProcId
-  fair : Finset BranchId
-  deriving DecidableEq
+namespace PactTypeAlphabet
 
-namespace TypeAlphabet
+  /-- Environment polarities complementary to the actions a type declares. -/
+  def localEnvironmentActions (alphabet : PactTypeAlphabet) : Finset BareMessage :=
+    alphabet.actions.image typeNeed
 
-  /-- Both polarities of every fixed internal/interface message. -/
-  def interfaceActions (alphabet : TypeAlphabet) : Finset BareMessage :=
-    alphabet.interface.biUnion fun msg => {(msg, .send), (msg, .recv)}
-
-  /-- Exactly the actions one fixed type alphabet declares.  The signature is
-  carried only so the `For` family reads uniformly; it never narrows the set,
-  because a type owns every action it declares. -/
-  def localActionsFor (_signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset BareMessage :=
-    alphabet.actions
-
-  /-- Environment actions visible to a type with fixed alphabet `alphabet`. -/
-  def localEnvironmentActionsFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset BareMessage :=
-    (signature.localActionsFor alphabet).image typeNeed
-
-  /-- Well-formed environments over one type's fixed action alphabet. -/
-  def localEnvironmentsFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset TypeEnvironment :=
+  /-- Well-formed environments over the actions a type declares. -/
+  def localEnvironments (alphabet : PactTypeAlphabet) : Finset TypeEnvironment :=
     {TypeEnvironment.tock} ∪
-      (signature.localEnvironmentActionsFor alphabet).powerset.biUnion
-        fun immediate =>
-          (signature.localEnvironmentActionsFor alphabet \ immediate).powerset.image
-            fun future =>
-              { immediate := immediate, future := future, clock := false }
+      alphabet.localEnvironmentActions.powerset.biUnion fun immediate =>
+        (alphabet.localEnvironmentActions \ immediate).powerset.image fun future =>
+          { immediate := immediate, future := future, clock := false }
 
-  /-- Offer summaries over one type's fixed action alphabet. -/
-  def localOfferSummariesFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset TypeOfferSummary :=
-    (signature.localActionsFor alphabet).powerset.biUnion fun current =>
-      (signature.localActionsFor alphabet).powerset.image fun future =>
+  /-- Offer summaries over the actions a type declares. -/
+  def localOfferSummaries (alphabet : PactTypeAlphabet) : Finset TypeOfferSummary :=
+    alphabet.actions.powerset.biUnion fun current =>
+      alphabet.actions.powerset.image fun future =>
         { current := current, future := future }
-
-  /-- Actions a type may still name in a label: the ones it declares, plus the
-  interface actions an enclosing parallel node has yet to hide. -/
-  def localActionsWithInterfaceFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset BareMessage :=
-    signature.localActionsFor alphabet ∪ signature.interfaceActions
-
-  /-- Observations a type may emit: the actions it may name, plus the resolved
-  observations and identifiers the pool fixes. -/
-  def localObservationsFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset TypeObservation :=
-    (signature.localActionsWithInterfaceFor alphabet).image
-        (fun action => TypeObservation.message action.1 action.2) ∪
-      signature.interface.image TypeObservation.resolved ∪
-      signature.progress.image TypeObservation.progress ∪
-      signature.fair.biUnion (fun bid =>
-        {TypeObservation.fair bid false, TypeObservation.fair bid true})
-
-  /-- `Lab_τ = 2^(Label(τ)) ∪ {#}`; the empty subset is epsilon. -/
-  def localLabelsFor (signature : TypeAlphabet)
-      (alphabet : PactTypeAlphabet) : Finset TypeLabel :=
-    (signature.localObservationsFor alphabet).powerset.image TypeLabel.actions ∪
-      {TypeLabel.tock}
 
   /-- `TypeEnvironment.tock` is the only clocked environment over one type's
   alphabet: every other member is built with `clock := false`. -/
-  theorem eq_tock_of_mem_localEnvironmentsFor_of_clock
-      {signature : TypeAlphabet} {alphabet : PactTypeAlphabet}
-      {environment : TypeEnvironment}
-      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet)
+  theorem eq_tock_of_mem_localEnvironments_of_clock
+      {alphabet : PactTypeAlphabet} {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.localEnvironments)
       (hClock : environment.clock = true) :
       environment = TypeEnvironment.tock := by
-    simp only [localEnvironmentsFor, Finset.mem_union, Finset.mem_singleton,
+    simp only [localEnvironments, Finset.mem_union, Finset.mem_singleton,
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
       at hEnvironment
     rcases hEnvironment with hTock | ⟨immediate, _, future, _, rfl⟩
@@ -97,21 +45,20 @@ namespace TypeAlphabet
     · exact absurd hClock (by simp)
 
   /-- A clocked environment over one type's alphabet offers nothing immediately. -/
-  theorem immediate_eq_empty_of_mem_localEnvironmentsFor_of_clock
-      {signature : TypeAlphabet} {alphabet : PactTypeAlphabet}
-      {environment : TypeEnvironment}
-      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet)
+  theorem immediate_eq_empty_of_mem_localEnvironments_of_clock
+      {alphabet : PactTypeAlphabet} {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.localEnvironments)
       (hClock : environment.clock = true) :
       environment.immediate = ∅ := by
-    rw [eq_tock_of_mem_localEnvironmentsFor_of_clock hEnvironment hClock]
+    rw [eq_tock_of_mem_localEnvironments_of_clock hEnvironment hClock]
     rfl
 
   /-- Environments over one type's alphabet are well formed. -/
-  theorem environmentFor_wellFormed {signature : TypeAlphabet}
-      {alphabet : PactTypeAlphabet} {environment : TypeEnvironment}
-      (hEnvironment : environment ∈ signature.localEnvironmentsFor alphabet) :
+  theorem environment_wellFormed {alphabet : PactTypeAlphabet}
+      {environment : TypeEnvironment}
+      (hEnvironment : environment ∈ alphabet.localEnvironments) :
       environment.WellFormed alphabet := by
-    simp only [localEnvironmentsFor, Finset.mem_union, Finset.mem_singleton,
+    simp only [localEnvironments, Finset.mem_union, Finset.mem_singleton,
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
       at hEnvironment
     rcases hEnvironment with rfl | ⟨immediate, hImmediateSub, future, hFuture, rfl⟩
@@ -126,15 +73,34 @@ namespace TypeAlphabet
       simp only [Finset.mem_sdiff] at hAvailable
       exact hAvailable.2 hImmediate
 
-end TypeAlphabet
+end PactTypeAlphabet
 
-/-- The observation pool a type is compiled against, read off the type itself:
-the interfaces it synchronizes on, and the progress and fair-choice identifiers
-its syntax mentions. -/
-def PactType.observationPool (processType : PactType) : TypeAlphabet :=
-  { interface := PactType.ParallelInterfaces processType
-    progress := PactType.ProgressIds processType
-    fair := PactType.FairChoiceIds processType }
+namespace PactType
+
+  /-- Both polarities of every message a type synchronizes on. -/
+  def interfaceActions (processType : PactType) : Finset BareMessage :=
+    (PactType.ParallelInterfaces processType).biUnion fun msg =>
+      {(msg, .send), (msg, .recv)}
+
+  /-- Actions a type may name in a label: the ones it declares, plus the
+  interface actions an enclosing parallel node has yet to hide. -/
+  def localActionsWithInterface (processType : PactType) : Finset BareMessage :=
+    processType.alphabet.actions ∪ processType.interfaceActions
+
+  /-- Observations a type may emit, all read off its own syntax. -/
+  def observations (processType : PactType) : Finset TypeObservation :=
+    processType.localActionsWithInterface.image
+        (fun action => TypeObservation.message action.1 action.2) ∪
+      (PactType.ParallelInterfaces processType).image TypeObservation.resolved ∪
+      (PactType.ProgressIds processType).image TypeObservation.progress ∪
+      (PactType.FairChoiceIds processType).biUnion (fun bid =>
+        {TypeObservation.fair bid false, TypeObservation.fair bid true})
+
+  /-- `Lab_τ = 2^(Label(τ)) ∪ {#}`; the empty subset is epsilon. -/
+  def labels (processType : PactType) : Finset TypeLabel :=
+    processType.observations.powerset.image TypeLabel.actions ∪ {TypeLabel.tock}
+
+end PactType
 
 /-- One letter of the decorated transition alphabet `Σ_τ`. -/
 structure TypeAutomatonSymbol : Type where
@@ -143,17 +109,26 @@ structure TypeAutomatonSymbol : Type where
   offers : TypeOfferSummary
   deriving DecidableEq
 
-/-- The public transition alphabet of one fixed type alphabet.  Every component
-is read off this type: its environments and offers from the actions it owns, and
-its labels from those same actions together with the resolved observations and
-identifiers the pool fixes once at the start of compilation. -/
-def TypeAlphabet.transitionAlphabetFor
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) :
+/-- `Σ_τ`, read entirely off the type: environments and offers from the actions
+it declares, labels from those actions together with the interfaces it resolves
+and the identifiers its syntax mentions. -/
+def PactType.transitionAlphabet (processType : PactType) :
     Finset TypeAutomatonSymbol :=
-  (signature.localEnvironmentsFor alphabet).biUnion fun environment =>
-    (signature.localLabelsFor alphabet).biUnion fun label =>
-      (signature.localOfferSummariesFor alphabet).image fun offers =>
+  processType.alphabet.localEnvironments.biUnion fun environment =>
+    processType.labels.biUnion fun label =>
+      processType.alphabet.localOfferSummaries.image fun offers =>
         { environment := environment, label := label, offers := offers }
+
+@[simp] theorem PactType.mem_transitionAlphabet_iff
+    (processType : PactType) (environment : TypeEnvironment)
+    (label : TypeLabel) (offers : TypeOfferSummary) :
+    TypeAutomatonSymbol.mk environment label offers ∈
+        processType.transitionAlphabet ↔
+      environment ∈ processType.alphabet.localEnvironments ∧
+      label ∈ processType.labels ∧
+      offers ∈ processType.alphabet.localOfferSummaries := by
+  classical
+  simp [PactType.transitionAlphabet]
 
 end
 

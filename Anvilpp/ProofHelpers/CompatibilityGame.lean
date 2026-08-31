@@ -151,12 +151,12 @@ def objectiveRabinPairs (automaton : TypeAutomaton) (initial : PactType)
 
 /-- The honesty-aware compatibility game `hat(G)_{I,T}` for a fixed compiled
 automaton. -/
-def compatibilityGame (signature : TypeAlphabet) (initial : PactType)
+def compatibilityGame  (initial : PactType)
     (progress : Finset ProcId) : RabinGame where
   Vertex := CompatibilityVertex
-  initial := .choice (compileType signature initial).initial .star
+  initial := .choice (compileType initial).initial .star
   isPlayerZero := CompatibilityVertex.isPlayerZero
-  edge := compatibilityEdge (compileType signature initial) initial.alphabet
+  edge := compatibilityEdge (compileType initial) initial.alphabet
   rabinPairs := by
     sorry -- TODO(redevelopment): needs the play/log correspondence from
     -- `objectiveRabinPairs`.
@@ -164,9 +164,9 @@ def compatibilityGame (signature : TypeAlphabet) (initial : PactType)
 /-- Definition 4.5/`pactcompat.typ`: the compatibility query for a fixed
 composition `initial` (itself an already-`||_I`-composed `PactType`) and
 progress set. -/
-def TypeCompatible (signature : TypeAlphabet) (initial : PactType)
+def TypeCompatible  (initial : PactType)
     (progress : Finset ProcId) : Prop :=
-  let game := compatibilityGame signature initial progress
+  let game := compatibilityGame initial progress
   game.initial ∈ game.WinRegion
 
 end

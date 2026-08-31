@@ -8,12 +8,12 @@ open Classical
 open Pact.NewCorrespondence
 
 lemma relationMembership_var_cases
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (name : String)
+     (alphabet : PactTypeAlphabet) (name : String)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
         (buildRelationSet (.var alphabet name)
-          (compileType signature (.var alphabet name)))
+          (compileType (.var alphabet name)))
         residual state) :
     residual = .var alphabet name ∧ state = TypeAutomatonState.root := by
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated

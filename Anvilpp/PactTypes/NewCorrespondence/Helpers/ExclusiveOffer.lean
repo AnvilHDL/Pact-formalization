@@ -8,12 +8,12 @@ open Classical
 open Pact.NewCorrespondence
 
 theorem buildExclusiveOfferAutomaton_outgoing_else
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature alphabet branches
+    let offer := buildExclusiveOfferAutomaton alphabet branches
       elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ elseAutomaton.edges,
@@ -61,14 +61,14 @@ theorem buildExclusiveOfferAutomaton_outgoing_else
 
 /-- Characterizes a public exclusive-offer edge leaving a tagged branch-`i`-child state as a copy of that branch's own outgoing edge. -/
 theorem buildExclusiveOfferAutomaton_outgoing_branch
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
     (hBranch : branchAutomata[i]? = some (action, automaton))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildExclusiveOfferAutomaton signature alphabet branches
+    let offer := buildExclusiveOfferAutomaton alphabet branches
       elseAutomaton branchAutomata
     edge ∈ offer.edges ∧ edge.source = .child (i + 1) state ↔
       ∃ childEdge ∈ automaton.edges,
@@ -132,13 +132,13 @@ theorem buildExclusiveOfferAutomaton_outgoing_branch
 
 /-- Relates a branch found by index after mapping compiled fragments in to the same branch found by index in the original list. -/
 theorem branches_map_getElem?_eq_some_iff
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+     (branches : List (BareMessage × PactType))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment) :
     (branches.map fun branch =>
-        (branch.1, compileTypeFuel signature (typeCompilationFuel branch.2)
+        (branch.1, compileTypeFuel (typeCompilationFuel branch.2)
           branch.2))[i]? = some (action, automaton) ↔
       ∃ branchType, branches[i]? = some (action, branchType) ∧
-        compileTypeFuel signature (typeCompilationFuel branchType) branchType =
+        compileTypeFuel (typeCompilationFuel branchType) branchType =
           automaton := by
   rw [List.getElem?_map, Option.map_eq_some_iff]
   constructor

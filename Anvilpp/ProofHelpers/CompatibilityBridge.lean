@@ -34,11 +34,11 @@ def compatibilityPlayLog
 
 /-- Helper Lemma H18: the objective monitor recognizes exactly `Ω_T`. -/
 lemma helper_h18_objective_monitor
-    (signature : TypeAlphabet) (initial : PactType) (progress : Finset ProcId)
+     (initial : PactType) (progress : Finset ProcId)
     (play : ℕ → CompatibilityVertex) :
-    RabinGame.Accepts (compatibilityGame signature initial progress) play ↔
+    RabinGame.Accepts (compatibilityGame initial progress) play ↔
       TypeWinningObjective initial progress
-        (compatibilityPlayLog (compileType signature initial) play) := by
+        (compatibilityPlayLog (compileType initial) play) := by
   sorry -- TODO(section7): unfold the Rabin monitor and play log.
 
 /-- Helper Lemma H19: readiness matches outgoing automaton edges. -/
@@ -54,7 +54,7 @@ lemma helper_h19_readiness_matches_automaton_readiness
 /-- Helper Lemma H20: semantic strategy prefixes and compatibility-game plays
 can be matched. -/
 lemma helper_h20_matching_represented_prefixes_and_plays
-    (signature : TypeAlphabet) (initial : PactType) (progress : Finset ProcId)
+     (initial : PactType) (progress : Finset ProcId)
     (strategy : TypeStrategy) :
     ∃ gameStrategy : CompatibilityVertex → CompatibilityVertex, True := by
   sorry -- TODO(section7): construct the Player-0 strategy from `strategy`.

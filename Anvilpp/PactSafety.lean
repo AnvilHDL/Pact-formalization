@@ -159,13 +159,13 @@ is `sorry` pending the supporting `Correspondence/*` development, which is
 mid-redevelopment against the doc-accurate `computeFutureOf` automaton
 construction. -/
 theorem type_automaton_correspondence
-    {signature : TypeAlphabet} {processType : PactType}
-    (hAdmissible : AdmissibleType signature processType) :
+     {processType : PactType}
+    (hAdmissible : AdmissibleType processType) :
     Nonempty
       (TypeAutomatonCorrespondence processType
-        (compileType signature processType)) := by
+        (compileType processType)) := by
   -- The automaton
-  let typeAutomaton := compileType signature processType
+  let typeAutomaton := compileType processType
   -- The relation set
   let relation_set : Finset (PactType × TypeAutomatonState) :=
     buildRelationSet processType typeAutomaton
@@ -178,36 +178,36 @@ theorem type_automaton_correspondence
       initial_mem := by
         have hInitialRelated :
             relationMembership
-              (buildRelationSet processType (compileType signature processType))
-              processType (compileType signature processType).initial := by
+              (buildRelationSet processType (compileType processType))
+              processType (compileType processType).initial := by
           simpa using
             buildRelationSet_initial processType
-              (compileType signature processType)
+              (compileType processType)
         simpa [typeAutomaton] using
-          helper_h12_compiled_state_shape signature hInitialRelated
+          helper_h12_compiled_state_shape hInitialRelated
       stepIff := by
         intro residual residual' state env label offers hRelated hSymbol
         -- Now prove step correspondence by the Lemma 4.5 constructor induction.
         simpa [relation_set, typeAutomaton] using
-          correspondence_stepIff signature processType hAdmissible hRelated hSymbol
+          correspondence_stepIff processType hAdmissible hRelated hSymbol
     }⟩
 
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes
 simulate into the type automaton. -/
 theorem process_automaton_correspondence
-    {signature : TypeAlphabet} {process : Proc} {processType : PactType}
-    (hAdmissible : AdmissibleType signature processType)
+     {process : Proc} {processType : PactType}
+    (hAdmissible : AdmissibleType processType)
     (hConforms : Conforms process processType) :
     Nonempty
       (ProcessAutomatonCorrespondence
-        process processType (compileType signature processType)) := by
+        process processType (compileType processType)) := by
   sorry
 
 /-- Theorem 4.2, "Correctness of the game reduction": the honesty-aware
 Rabin game exactly captures semantic compatibility. -/
 theorem game_reduction_correctness
-    {signature : TypeAlphabet} (initial : PactType) (progress : Finset ProcId) :
-    TypeCompatible signature initial progress ↔
+     (initial : PactType) (progress : Finset ProcId) :
+    TypeCompatible initial progress ↔
       SemanticTypeCompatible initial progress := by
   sorry
 
@@ -215,10 +215,10 @@ theorem game_reduction_correctness
 theorem): conformance of the fixed process composition plus compatibility of
 the matching type composition implies communication safety of the processes. -/
 theorem type_compatibility_soundness
-    {signature : TypeAlphabet} {process : Proc} {processType : PactType}
+     {process : Proc} {processType : PactType}
     {progress : Finset ProcId}
     (hConforms : Conforms process processType)
-    (hCompatible : TypeCompatible signature processType progress) :
+    (hCompatible : TypeCompatible processType progress) :
     ProcessCompatible process progress := by
   sorry
 
@@ -226,47 +226,47 @@ theorem type_compatibility_soundness
 monitored game with `N` vertices, `M` edges, and `K = 1+2|cal(Eta)(Θ_0)|`
 Rabin pairs, compatibility is decidable in `Õ(MN(K!)^{1+o(1)})` time. -/
 theorem type_compatibility_decidable_and_efficient
-    (signature : TypeAlphabet) (processType : PactType) (progress : Finset ProcId) :
+     (processType : PactType) (progress : Finset ProcId) :
     (∃ answer : Bool,
-      answer = true ↔ TypeCompatible signature processType progress) ∧
-    CompatibilityGameComplexityBound signature processType progress := by
+      answer = true ↔ TypeCompatible processType progress) ∧
+    CompatibilityGameComplexityBound processType progress := by
   sorry
 
 /-! ## Optimality of inferred types -/
 
 /-- Lemma 4.7, "Compatibility is monotone under type refinement". -/
 theorem compatibility_monotone_under_refinement
-    {signature : TypeAlphabet} {precise abstract : List PactType}
+     {precise abstract : List PactType}
     {interfaces : List Interface} {progress : Finset ProcId}
     (hRefines : ComponentwiseRefines precise abstract)
-    (hCompatible : TypeTupleCompatible signature abstract interfaces progress) :
-    TypeTupleCompatible signature precise interfaces progress := by
+    (hCompatible : TypeTupleCompatible abstract interfaces progress) :
+    TypeTupleCompatible precise interfaces progress := by
   sorry
 
 /-- Theorem 4.5, "Optimality of inferred types". -/
 theorem inferred_types_optimal
-    (signature : TypeAlphabet) (processes : List Proc) (interfaces : List Interface)
+     (processes : List Proc) (interfaces : List Interface)
     (progress : Finset ProcId) :
-    TypeTupleCompatible signature (processes.map inferProcess) interfaces progress ↔
+    TypeTupleCompatible (processes.map inferProcess) interfaces progress ↔
       ∃ claimedTypes,
         List.Forall₂
           (fun process claimed => DataObliviousChecks process claimed)
           processes claimedTypes ∧
-        TypeTupleCompatible signature claimedTypes interfaces progress := by
+        TypeTupleCompatible claimedTypes interfaces progress := by
   sorry
 
 /-- Corollary 4.1, "Failure rules out data-oblivious proofs". -/
 theorem inferred_failure_rules_out_data_oblivious_proofs
-    {signature : TypeAlphabet} {processes : List Proc} {interfaces : List Interface}
+     {processes : List Proc} {interfaces : List Interface}
     {progress : Finset ProcId}
     (hFailure :
-      ¬ TypeTupleCompatible signature (processes.map inferProcess) interfaces
+      ¬ TypeTupleCompatible (processes.map inferProcess) interfaces
         progress) :
     ¬ ∃ claimedTypes,
         List.Forall₂
           (fun process claimed => DataObliviousChecks process claimed)
           processes claimedTypes ∧
-        TypeTupleCompatible signature claimedTypes interfaces progress := by
+        TypeTupleCompatible claimedTypes interfaces progress := by
   sorry
 
 end

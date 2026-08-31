@@ -37,12 +37,12 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.InterfaceScoped processType
 
 /-- Types admitted by the canonical construction.  Nothing is checked against
-the signature any more: the signature holds only the resolved observations and
+the any more: the holds only the resolved observations and
 identifiers fixed at the start of compilation, and every action-indexed set is
 read off the type's own alphabet.  What admissibility adds is linearity of the
 progress and fair-choice identifiers, which is what lets a label name the
 subterm that emitted it. -/
-def AdmissibleType (_signature : TypeAlphabet) (processType : PactType) : Prop :=
+def AdmissibleType (processType : PactType) : Prop :=
   processType.AlphabetWellFormed ∧
     PactType.ProgressLinear processType ∧
     PactType.FairChoiceLinear processType ∧
@@ -81,15 +81,15 @@ def RunsInProductTime {α : Type} (relation : α → α → Bool) : Prop := by
 
 /-- A decision procedure packaged as a Lean `Decidable` instance. -/
 noncomputable def typeCompatibilityDecidable
-    (signature : TypeAlphabet) (processType : PactType) (progress : Finset ProcId) :
-    Decidable (TypeCompatible signature processType progress) := by
+     (processType : PactType) (progress : Finset ProcId) :
+    Decidable (TypeCompatible processType progress) := by
   sorry
 
 /-- The monitored Rabin-game complexity bound from Theorem 4.4:
 `O(M N (K!)^{1+o(1)})` for `N` vertices, `M` edges, and
 `K = 1 + 2|cal(Eta)(Θ_0)|` Rabin pairs. -/
 def CompatibilityGameComplexityBound
-    (signature : TypeAlphabet) (processType : PactType) (progress : Finset ProcId) :
+     (processType : PactType) (progress : Finset ProcId) :
     Prop := by
   sorry
 

@@ -1482,10 +1482,10 @@ theorem parallelTypeBranchesSelecting_alphabet_wellFormed
 of the source type.  The proof follows the structural relation clauses; the
 fuel measure is needed for generated conjunctive-offer children. -/
 theorem relationMembership_alphabet_eq
-    (signature : TypeAlphabet) :
+     :
     ∀ (source residual : PactType) (state : TypeAutomatonState),
       source.AlphabetCoherent →
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.alphabet = source.alphabet := by
   intro source
@@ -1495,30 +1495,30 @@ theorem relationMembership_alphabet_eq
       intro residual state hCoherent hRelated
       cases source with
       | skip alphabet =>
-          rw [(relationMembership_skip_cases signature alphabet hRelated).1]
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
       | message alphabet msg dir =>
-          rcases relationMembership_message_cases signature alphabet msg dir
+          rcases relationMembership_message_cases alphabet msg dir
               hRelated with hRoot | hFinal
           · rw [hRoot.1]
           · rw [hFinal.1]
             simp [PactType.alphabet]
       | tock alphabet =>
-          rcases relationMembership_tock_cases signature alphabet hRelated with
+          rcases relationMembership_tock_cases alphabet hRelated with
             hRoot | hFinal
           · rw [hRoot.1]
           · rw [hFinal.1]
             simp [PactType.alphabet]
       | progress alphabet pid =>
-          rcases relationMembership_progress_cases signature alphabet pid
+          rcases relationMembership_progress_cases alphabet pid
               hRelated with hRoot | hFinal
           · rw [hRoot.1]
           · rw [hFinal.1]
             simp [PactType.alphabet]
       | var alphabet name =>
-          rw [(relationMembership_var_cases signature alphabet name hRelated).1]
+          rw [(relationMembership_var_cases alphabet name hRelated).1]
       | choice alphabet left right =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_choice_cases signature alphabet left right
+          rcases relationMembership_choice_cases alphabet left right
               hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1538,7 +1538,7 @@ theorem relationMembership_alphabet_eq
               hCoherent.2.2.2 hRightRelated).trans hCoherent.2.1
       | fairChoice alphabet bid left right =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_fairChoice_cases signature alphabet bid left
+          rcases relationMembership_fairChoice_cases alphabet bid left
               right hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1558,7 +1558,7 @@ theorem relationMembership_alphabet_eq
               hCoherent.2.2.2 hRightRelated).trans hCoherent.2.1
       | seq alphabet left right =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_seq_cases signature alphabet left right
+          rcases relationMembership_seq_cases alphabet left right
               hRelated with hLeft | hRight
           · rcases hLeft with ⟨q, leftResidual, hEntry, _, _⟩
             injection hEntry with hResidual _
@@ -1572,7 +1572,7 @@ theorem relationMembership_alphabet_eq
             exact (ih (typeCompilationFuel right) hRightFuel right rfl residual q
               hCoherent.2.2.2 hRightRelated).trans hCoherent.2.1
       | par alphabet left right interface =>
-          rcases relationMembership_par_cases signature alphabet left right
+          rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, _, _, _⟩
@@ -1592,7 +1592,7 @@ theorem relationMembership_alphabet_eq
             simp [PactType.alphabet]
       | recur alphabet name body =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_recur_cases signature alphabet name body
+          rcases relationMembership_recur_cases alphabet name body
               hRelated with hRoot | hBody
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1614,7 +1614,7 @@ theorem relationMembership_alphabet_eq
               name hReplacement).trans (hBodyAlphabet.trans hCoherent.1)
       | xoffer alphabet elseType branches =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_xoffer_cases signature alphabet elseType
+          rcases relationMembership_xoffer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hBranch
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1644,7 +1644,7 @@ theorem relationMembership_alphabet_eq
                 hBranchCoherent.1
       | offer alphabet elseType branches =>
           simp only [PactType.AlphabetCoherent] at hCoherent
-          rcases relationMembership_offer_cases signature alphabet elseType
+          rcases relationMembership_offer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hSelected
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1855,12 +1855,12 @@ theorem tailRecursive_of_mem_branches
 /-- The residual of a compiled state keeps every tail-occurrence judgement of
 its source.  The statement is parametric in the tail parameter because a
 sequence's left child and a parallel's children carry the constant `False`. -/
-theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
+theorem relationMembership_tailOccurrences  :
     ∀ (source residual : PactType) (state : TypeAutomatonState)
       (name : String) (tail : Prop),
       source.TailRecursive →
       source.TailOccurrences name tail →
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.TailOccurrences name tail := by
   intro source
@@ -1870,32 +1870,32 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
       intro residual state name tail hTailRec hTail hRelated
       cases source with
       | skip alphabet =>
-          rw [(relationMembership_skip_cases signature alphabet hRelated).1]
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
           exact hTail
       | message alphabet msg dir =>
-          rcases relationMembership_message_cases signature alphabet msg dir
+          rcases relationMembership_message_cases alphabet msg dir
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hTail
           · rw [hFinal.1]; simp [PactType.TailOccurrences]
       | tock alphabet =>
-          rcases relationMembership_tock_cases signature alphabet hRelated with
+          rcases relationMembership_tock_cases alphabet hRelated with
             hRoot | hFinal
           · rw [hRoot.1]; exact hTail
           · rw [hFinal.1]; simp [PactType.TailOccurrences]
       | progress alphabet pid =>
-          rcases relationMembership_progress_cases signature alphabet pid
+          rcases relationMembership_progress_cases alphabet pid
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hTail
           · rw [hFinal.1]; simp [PactType.TailOccurrences]
       | var alphabet other =>
-          rw [(relationMembership_var_cases signature alphabet other hRelated).1]
+          rw [(relationMembership_var_cases alphabet other hRelated).1]
           exact hTail
       | choice alphabet left right =>
           simp only [PactType.TailRecursive] at hTailRec
           have hFields : left.TailOccurrences name tail ∧
               right.TailOccurrences name tail := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_choice_cases signature alphabet left right
+          rcases relationMembership_choice_cases alphabet left right
               hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1915,7 +1915,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
           have hFields : left.TailOccurrences name tail ∧
               right.TailOccurrences name tail := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_fairChoice_cases signature alphabet bid left
+          rcases relationMembership_fairChoice_cases alphabet bid left
               right hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -1935,7 +1935,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
           have hFields : left.TailOccurrences name False ∧
               right.TailOccurrences name tail := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_seq_cases signature alphabet left right
+          rcases relationMembership_seq_cases alphabet left right
               hRelated with hLeft | hRight
           · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
             injection hEntry with hResidual _
@@ -1956,7 +1956,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
           have hFields : left.TailOccurrences name False ∧
               right.TailOccurrences name False := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_par_cases signature alphabet left right
+          rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
@@ -1994,7 +1994,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
             simp [PactType.TailOccurrences]
       | recur alphabet binder body =>
           simp only [PactType.TailRecursive] at hTailRec
-          rcases relationMembership_recur_cases signature alphabet binder body
+          rcases relationMembership_recur_cases alphabet binder body
               hRelated with hRoot | hBody
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2024,7 +2024,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
           have hFields : elseType.TailOccurrences name tail ∧
               PactType.TailBranchOccurrences name tail branches := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_xoffer_cases signature alphabet elseType
+          rcases relationMembership_xoffer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hBranch
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2056,7 +2056,7 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
           have hFields : elseType.TailOccurrences name tail ∧
               PactType.TailBranchOccurrences name False branches := by
             simpa only [PactType.TailOccurrences] using hTail
-          rcases relationMembership_offer_cases signature alphabet elseType
+          rcases relationMembership_offer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hSelected
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2091,11 +2091,11 @@ theorem relationMembership_tailOccurrences (signature : TypeAlphabet) :
 /-- Every residual represented by a compiled state is itself tail-recursive.
 Tail-closedness supplies the side condition that the recursion backedge
 substituted at a `recur` node has all its own variables in tail position. -/
-theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
+theorem relationMembership_tailRecursive  :
     ∀ (source residual : PactType) (state : TypeAutomatonState),
       source.TailRecursive →
       source.TailClosed →
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.TailRecursive ∧ residual.TailClosed := by
   intro source
@@ -2107,33 +2107,33 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
       -- which `relationMembership_tailOccurrences` supplies name by name.
       have hResidualClosed : ∀ (r : PactType) (s : TypeAutomatonState),
           relationMembership
-            (buildRelationSet source (compileType signature source)) r s →
+            (buildRelationSet source (compileType source)) r s →
           r.TailClosed := by
         intro r s hr other
-        exact relationMembership_tailOccurrences signature source r s other True
+        exact relationMembership_tailOccurrences source r s other True
           hTailRec (hClosed other) hr
       refine ⟨?_, hResidualClosed residual state hRelated⟩
       cases source with
       | skip alphabet =>
-          rw [(relationMembership_skip_cases signature alphabet hRelated).1]
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
           exact hTailRec
       | message alphabet msg dir =>
-          rcases relationMembership_message_cases signature alphabet msg dir
+          rcases relationMembership_message_cases alphabet msg dir
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hTailRec
           · rw [hFinal.1]; simp [PactType.TailRecursive]
       | tock alphabet =>
-          rcases relationMembership_tock_cases signature alphabet hRelated with
+          rcases relationMembership_tock_cases alphabet hRelated with
             hRoot | hFinal
           · rw [hRoot.1]; exact hTailRec
           · rw [hFinal.1]; simp [PactType.TailRecursive]
       | progress alphabet pid =>
-          rcases relationMembership_progress_cases signature alphabet pid
+          rcases relationMembership_progress_cases alphabet pid
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hTailRec
           · rw [hFinal.1]; simp [PactType.TailRecursive]
       | var alphabet other =>
-          rw [(relationMembership_var_cases signature alphabet other hRelated).1]
+          rw [(relationMembership_var_cases alphabet other hRelated).1]
           exact hTailRec
       | choice alphabet left right =>
           simp only [PactType.TailRecursive] at hTailRec
@@ -2142,7 +2142,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
             simpa only [PactType.TailOccurrences] using hClosed other
           have hClosedFields : left.TailClosed ∧ right.TailClosed :=
             ⟨fun other => (hSplit other).1, fun other => (hSplit other).2⟩
-          rcases relationMembership_choice_cases signature alphabet left right
+          rcases relationMembership_choice_cases alphabet left right
               hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2164,7 +2164,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
             simpa only [PactType.TailOccurrences] using hClosed other
           have hClosedFields : left.TailClosed ∧ right.TailClosed :=
             ⟨fun other => (hSplit other).1, fun other => (hSplit other).2⟩
-          rcases relationMembership_fairChoice_cases signature alphabet bid left
+          rcases relationMembership_fairChoice_cases alphabet bid left
               right hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2189,7 +2189,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
               (hSplit other).1
           have hClosedRight : right.TailClosed := fun other =>
             (hSplit other).2
-          rcases relationMembership_seq_cases signature alphabet left right
+          rcases relationMembership_seq_cases alphabet left right
               hRelated with hLeft | hRight
           · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
             injection hEntry with hResidual _
@@ -2215,7 +2215,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
               (hSplit other).1,
               fun other => PactType.tailOccurrences_mono other False.elim right
                 (hSplit other).2⟩
-          rcases relationMembership_par_cases signature alphabet left right
+          rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
@@ -2251,7 +2251,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
             simp [PactType.TailRecursive]
       | recur alphabet binder body =>
           simp only [PactType.TailRecursive] at hTailRec
-          rcases relationMembership_recur_cases signature alphabet binder body
+          rcases relationMembership_recur_cases alphabet binder body
               hRelated with hRoot | hBody
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2272,7 +2272,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
                 hTailRec.2 hBodyClosed hBodyRelated).1
             have hBodyResidualBinder :
                 bodyResidual.TailOccurrences binder True :=
-              relationMembership_tailOccurrences signature body
+              relationMembership_tailOccurrences body
                 bodyResidual q binder True hTailRec.2 hTailRec.1 hBodyRelated
             exact PactType.tailRecursive_replaceVar binder
               (by simpa only [PactType.TailRecursive] using hTailRec) hClosed
@@ -2285,7 +2285,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
               simpa only [PactType.TailOccurrences] using hClosed other
           have hClosedElse : elseType.TailClosed := fun other =>
             (hSplit other).1
-          rcases relationMembership_xoffer_cases signature alphabet elseType
+          rcases relationMembership_xoffer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hBranch
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2325,7 +2325,7 @@ theorem relationMembership_tailRecursive (signature : TypeAlphabet) :
               branch.2.TailOccurrences other False := fun other _ hBranch =>
             PactType.tailOccurrences_of_mem_branches other False
               (hSplit other).2 hBranch
-          rcases relationMembership_offer_cases signature alphabet elseType
+          rcases relationMembership_offer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hSelected
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2718,12 +2718,12 @@ whenever the source type is.  Tail recursion is needed because a recursion
 variable below a `.par` would be substituted with a type carrying the wrong
 alphabet. -/
 theorem relationMembership_alphabetWellFormed
-    (signature : TypeAlphabet) (hCommitted : CommittedOfferAlphabetWellFormed) :
+     (hCommitted : CommittedOfferAlphabetWellFormed) :
     ∀ (source residual : PactType) (state : TypeAutomatonState),
       source.AlphabetWellFormed →
       source.TailRecursive →
       source.OfferBranchesDisjoint →
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.AlphabetWellFormed := by
   intro source
@@ -2734,36 +2734,36 @@ theorem relationMembership_alphabetWellFormed
       have hCoherent := PactType.alphabetCoherent_of_wellFormed source hWF
       cases source with
       | skip alphabet =>
-          rw [(relationMembership_skip_cases signature alphabet hRelated).1]
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
           exact hWF
       | message alphabet msg dir =>
-          rcases relationMembership_message_cases signature alphabet msg dir
+          rcases relationMembership_message_cases alphabet msg dir
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hWF
           · rw [hFinal.1]
             simp only [PactType.AlphabetWellFormed] at hWF ⊢
             exact hWF.1
       | tock alphabet =>
-          rcases relationMembership_tock_cases signature alphabet hRelated with
+          rcases relationMembership_tock_cases alphabet hRelated with
             hRoot | hFinal
           · rw [hRoot.1]; exact hWF
           · rw [hFinal.1]
             simpa [PactType.AlphabetWellFormed] using hWF
       | progress alphabet pid =>
-          rcases relationMembership_progress_cases signature alphabet pid
+          rcases relationMembership_progress_cases alphabet pid
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hWF
           · rw [hFinal.1]
             simp only [PactType.AlphabetWellFormed] at hWF ⊢
             exact hWF.1
       | var alphabet name =>
-          rw [(relationMembership_var_cases signature alphabet name hRelated).1]
+          rw [(relationMembership_var_cases alphabet name hRelated).1]
           exact hWF
       | choice alphabet left right =>
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_choice_cases signature alphabet left right
+          rcases relationMembership_choice_cases alphabet left right
               hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2782,7 +2782,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_fairChoice_cases signature alphabet bid left
+          rcases relationMembership_fairChoice_cases alphabet bid left
               right hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2801,7 +2801,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_seq_cases signature alphabet left right
+          rcases relationMembership_seq_cases alphabet left right
               hRelated with hLeft | hRight
           · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
             injection hEntry with hResidual _
@@ -2811,7 +2811,7 @@ theorem relationMembership_alphabetWellFormed
             have hLeftResidualWF := ih (typeCompilationFuel left) hLeftFuel left
               rfl leftResidual q hWF.2.2.2.1 hTailRec.1 hDisjoint.1 hLeftRelated
             have hLeftResidualAlphabet :=
-              relationMembership_alphabet_eq signature left leftResidual q
+              relationMembership_alphabet_eq left leftResidual q
                 (PactType.alphabetCoherent_of_wellFormed left hWF.2.2.2.1)
                 hLeftRelated
             simp only [PactType.AlphabetWellFormed]
@@ -2826,7 +2826,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_par_cases signature alphabet left right
+          rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
@@ -2836,11 +2836,11 @@ theorem relationMembership_alphabetWellFormed
               rw [← hFuel]; simp only [typeCompilationFuel]; omega
             have hRightFuel : typeCompilationFuel right < n := by
               rw [← hFuel]; simp only [typeCompilationFuel]; omega
-            have hLeftAlphabet := relationMembership_alphabet_eq signature left
+            have hLeftAlphabet := relationMembership_alphabet_eq left
               leftResidual q1
               (PactType.alphabetCoherent_of_wellFormed left hWF.2.2.1)
               hLeftRelated
-            have hRightAlphabet := relationMembership_alphabet_eq signature right
+            have hRightAlphabet := relationMembership_alphabet_eq right
               rightResidual q2
               (PactType.alphabetCoherent_of_wellFormed right hWF.2.2.2)
               hRightRelated
@@ -2863,7 +2863,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_recur_cases signature alphabet name body
+          rcases relationMembership_recur_cases alphabet name body
               hRelated with hRoot | hBody
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2876,12 +2876,12 @@ theorem relationMembership_alphabetWellFormed
             have hBodyResidualWF := ih (typeCompilationFuel body) hBodyFuel body
               rfl bodyResidual q hWF.2.2 hTailRec.2 hDisjoint hBodyRelated
             have hBodyResidualAlphabet :=
-              relationMembership_alphabet_eq signature body bodyResidual q
+              relationMembership_alphabet_eq body bodyResidual q
                 (PactType.alphabetCoherent_of_wellFormed body hWF.2.2)
                 hBodyRelated
             have hBodyResidualTail :
                 bodyResidual.TailOccurrences name True :=
-              relationMembership_tailOccurrences signature body bodyResidual q
+              relationMembership_tailOccurrences body bodyResidual q
                 name True hTailRec.2 hTailRec.1 hBodyRelated
             refine PactType.replaceVar_alphabetWellFormed name ?_ bodyResidual
               hBodyResidualWF ?_ hBodyResidualTail
@@ -2893,7 +2893,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_xoffer_cases signature alphabet elseType
+          rcases relationMembership_xoffer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hBranch
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2927,7 +2927,7 @@ theorem relationMembership_alphabetWellFormed
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_offer_cases signature alphabet elseType
+          rcases relationMembership_offer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hSelected
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -2963,11 +2963,11 @@ theorem relationMembership_alphabetWellFormed
 disjointness.  Tail recursion is what makes the unfolding case go through: the
 recursion variable occurs only in tail positions, where substitution cannot
 grow a conjunctive offer's branch declarations. -/
-theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
+theorem relationMembership_offerBranchesDisjoint  :
     ∀ (source residual : PactType) (state : TypeAutomatonState),
       source.TailRecursive →
       source.OfferBranchesDisjoint →
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.OfferBranchesDisjoint := by
   intro source
@@ -2977,30 +2977,30 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       intro residual state hTailRec hDisjoint hRelated
       cases source with
       | skip alphabet =>
-          rw [(relationMembership_skip_cases signature alphabet hRelated).1]
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
           exact hDisjoint
       | message alphabet msg dir =>
-          rcases relationMembership_message_cases signature alphabet msg dir
+          rcases relationMembership_message_cases alphabet msg dir
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hDisjoint
           · rw [hFinal.1]; simp [PactType.OfferBranchesDisjoint]
       | tock alphabet =>
-          rcases relationMembership_tock_cases signature alphabet hRelated with
+          rcases relationMembership_tock_cases alphabet hRelated with
             hRoot | hFinal
           · rw [hRoot.1]; exact hDisjoint
           · rw [hFinal.1]; simp [PactType.OfferBranchesDisjoint]
       | progress alphabet pid =>
-          rcases relationMembership_progress_cases signature alphabet pid
+          rcases relationMembership_progress_cases alphabet pid
               hRelated with hRoot | hFinal
           · rw [hRoot.1]; exact hDisjoint
           · rw [hFinal.1]; simp [PactType.OfferBranchesDisjoint]
       | var alphabet name =>
-          rw [(relationMembership_var_cases signature alphabet name hRelated).1]
+          rw [(relationMembership_var_cases alphabet name hRelated).1]
           exact hDisjoint
       | choice alphabet left right =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_choice_cases signature alphabet left right
+          rcases relationMembership_choice_cases alphabet left right
               hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -3018,7 +3018,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | fairChoice alphabet bid left right =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_fairChoice_cases signature alphabet bid left
+          rcases relationMembership_fairChoice_cases alphabet bid left
               right hRelated with hRoot | hLeft | hRight
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -3036,7 +3036,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | seq alphabet left right =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_seq_cases signature alphabet left right
+          rcases relationMembership_seq_cases alphabet left right
               hRelated with hLeft | hRight
           · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
             injection hEntry with hResidual _
@@ -3054,7 +3054,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | par alphabet left right interface =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_par_cases signature alphabet left right
+          rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
               hEntry, hLeftRelated, hRightRelated, _⟩
@@ -3091,7 +3091,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | recur alphabet name body =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_recur_cases signature alphabet name body
+          rcases relationMembership_recur_cases alphabet name body
               hRelated with hRoot | hBody
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -3108,7 +3108,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
               body rfl bodyResidual q hTailRec.2 hDisjoint hBodyRelated
             have hBodyResidualTail :
                 bodyResidual.TailOccurrences name True :=
-              relationMembership_tailOccurrences signature body bodyResidual q
+              relationMembership_tailOccurrences body bodyResidual q
                 name True hTailRec.2 hTailRec.1 hBodyRelated
             exact PactType.replaceVar_offerBranchesDisjoint name
               (by simpa only [PactType.OfferBranchesDisjoint] using hDisjoint)
@@ -3116,7 +3116,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | xoffer alphabet elseType branches =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_xoffer_cases signature alphabet elseType
+          rcases relationMembership_xoffer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hBranch
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -3144,7 +3144,7 @@ theorem relationMembership_offerBranchesDisjoint (signature : TypeAlphabet) :
       | offer alphabet elseType branches =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
-          rcases relationMembership_offer_cases signature alphabet elseType
+          rcases relationMembership_offer_cases alphabet elseType
               branches hRelated with hRoot | hElse | hSelected
           · injection hRoot with hResidual _
             rw [hResidual]
@@ -3184,20 +3184,20 @@ def PactType.ResidualInvariant (processType : PactType) : Prop :=
 
 /-- Every residual represented by a compiled state satisfies the residual
 invariant whenever the source does. -/
-theorem relationMembership_residualInvariant (signature : TypeAlphabet)
+theorem relationMembership_residualInvariant
     (source residual : PactType) (state : TypeAutomatonState)
     (hSource : source.ResidualInvariant)
     (hRelated :
-      relationMembership (buildRelationSet source (compileType signature source))
+      relationMembership (buildRelationSet source (compileType source))
         residual state) :
     residual.ResidualInvariant :=
-  have hTail := relationMembership_tailRecursive signature source residual state
+  have hTail := relationMembership_tailRecursive source residual state
     hSource.2.1 hSource.2.2.1 hRelated
-  ⟨relationMembership_alphabetWellFormed signature
+  ⟨relationMembership_alphabetWellFormed
       committedOfferAlphabetWellFormed_holds source residual state hSource.1
       hSource.2.1 hSource.2.2.2 hRelated,
     hTail.1, hTail.2,
-    relationMembership_offerBranchesDisjoint signature source residual state
+    relationMembership_offerBranchesDisjoint source residual state
       hSource.2.1 hSource.2.2.2 hRelated⟩
 
 /-- A semantic type step keeps its target alphabet-well-formed.  Tail

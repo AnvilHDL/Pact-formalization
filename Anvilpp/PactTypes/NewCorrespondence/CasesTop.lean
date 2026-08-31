@@ -196,11 +196,11 @@ be closed relative to `bound`, not `[]`, so the induction can hand a `recur`
 body the wider bound list `name :: bound` at that one constructor instead of
 demanding the impossible `AllVariablesBound [] body`. -/
 private theorem correspondence_stepIff_aux
-    (signature : TypeAlphabet) (bound : List String) (processType : PactType)
+     (bound : List String) (processType : PactType)
     (hAlphabetWF : processType.AlphabetWellFormed)
     (hRegular : ClosedGuardedRegularWith bound processType)
     (hTailClosed : processType.TailClosed) :
-    StepIffStatement signature processType := by
+    StepIffStatement processType := by
   have hTailRecursive : processType.TailRecursive := hRegular.2.2.2.1
   induction hSize : sizeOf processType using Nat.strong_induction_on
       generalizing processType bound hAlphabetWF hTailRecursive
@@ -209,18 +209,18 @@ private theorem correspondence_stepIff_aux
       cases processType with
       | message alphabet msg dir =>
           intro residual residual' state env label offers hRelated hSymbol
-          exact correspondence_message_stepIff signature alphabet msg dir
+          exact correspondence_message_stepIff alphabet msg dir
             hRelated hSymbol
       | progress alphabet pid =>
           intro residual residual' state env label offers hRelated hSymbol
-          exact correspondence_progress_stepIff signature alphabet pid
+          exact correspondence_progress_stepIff alphabet pid
             hRelated hSymbol
       | tock alphabet =>
           intro residual residual' state env label offers hRelated hSymbol
-          exact correspondence_tock_stepIff signature alphabet hRelated hSymbol
+          exact correspondence_tock_stepIff alphabet hRelated hSymbol
       | skip alphabet =>
           intro residual residual' state env label offers hRelated hSymbol
-          exact correspondence_skip_stepIff signature alphabet hRelated hSymbol
+          exact correspondence_skip_stepIff alphabet hRelated hSymbol
       | choice alphabet left right =>
           intro residual residual' state env label offers hRelated hSymbol
           simp only [PactType.AlphabetWellFormed] at hAlphabetWF
@@ -238,7 +238,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hLeftIH : StepIffStatement signature left := by
+          have hLeftIH : StepIffStatement left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf left) hLeftSize bound left
@@ -248,7 +248,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
               hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
-          have hRightIH : StepIffStatement signature right := by
+          have hRightIH : StepIffStatement right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize bound right
@@ -258,7 +258,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
               hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
-          exact correspondence_choice_stepIff signature alphabet left right
+          exact correspondence_choice_stepIff alphabet left right
             hAlphabetWF.2.1 hAlphabetWF.2.2.1 hLeftIH hRightIH hRelated
             hSymbol
       | seq alphabet first second =>
@@ -279,7 +279,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hFirstIH : StepIffStatement signature first := by
+          have hFirstIH : StepIffStatement first := by
             have hFirstSize : sizeOf first < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf first) hFirstSize bound first
@@ -289,7 +289,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
               hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
-          have hSecondIH : StepIffStatement signature second := by
+          have hSecondIH : StepIffStatement second := by
             have hSecondSize : sizeOf second < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf second) hSecondSize bound second
@@ -299,7 +299,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
               hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
-          exact correspondence_seq_stepIff signature alphabet first second
+          exact correspondence_seq_stepIff alphabet first second
             hAlphabetWF.2.1 hAlphabetWF.2.2.1 hFirstIH hSecondIH hRelated
             hSymbol
       | par alphabet left right interface =>
@@ -324,7 +324,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hLeftIH : StepIffStatement signature left := by
+          have hLeftIH : StepIffStatement left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf left) hLeftSize bound left
@@ -334,7 +334,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.2.1, hRegular.2.2.2.2.2.2.2.1.2.1,
                 hRegular.2.2.2.2.2.2.2.2.2.1⟩
               hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
-          have hRightIH : StepIffStatement signature right := by
+          have hRightIH : StepIffStatement right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize bound right
@@ -344,7 +344,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.2.2, hRegular.2.2.2.2.2.2.2.1.2.2,
                 hRegular.2.2.2.2.2.2.2.2.2.2⟩
               hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
-          exact correspondence_par_stepIff signature alphabet left right interface
+          exact correspondence_par_stepIff alphabet left right interface
             hAlphabetWF.2.1.parent_eq hAlphabetWF.2.1
             hRegular.2.2.2.2.2.1.2.1
             ⟨hAlphabetWF.2.2.1, hTailRecursive.1, hClosedFields.1,
@@ -357,7 +357,7 @@ private theorem correspondence_stepIff_aux
             hRightIH hRelated hSymbol
       | var alphabet id =>
           intro residual residual' state env label offers hRelated hSymbol
-          exact correspondence_var_stepIff signature alphabet id hRelated hSymbol
+          exact correspondence_var_stepIff alphabet id hRelated hSymbol
       | recur alphabet id body =>
           intro residual residual' state env label offers hRelated hSymbol
           -- `AdmissibleType`/`ClosedGuardedRegular` fix the bound-name list
@@ -371,7 +371,7 @@ private theorem correspondence_stepIff_aux
           -- replacement is available from this file alone.  Pre-existing,
           -- separate proof debt from the `ih`-arity fix this session made,
           -- left as `sorry` pending a bound-generic `Cases/Recursion.lean`.
-          have hWholeAdmissible : AdmissibleType signature (.recur alphabet id body) := by
+          have hWholeAdmissible : AdmissibleType (.recur alphabet id body) := by
             rcases bound with _ | ⟨head, tail⟩
             · exact ⟨hAlphabetWF, hRegular⟩
             · sorry
@@ -389,7 +389,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hBodyIH : StepIffStatement signature body := by
+          have hBodyIH : StepIffStatement body := by
             have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf body) hBodySize (id :: bound) body
@@ -400,14 +400,14 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.2.2⟩
               hBodyClosed hTailRecursive.2 rfl hRelated hSymbol
           have hBodyForward :
-              RecursionBodyForwardObligation signature alphabet id body :=
-            recursion_body_forward_obligation signature alphabet id body
+              RecursionBodyForwardObligation alphabet id body :=
+            recursion_body_forward_obligation alphabet id body
               hAlphabetWF.2.1 hTailRecursive.1 hWholeAdmissible hBodyIH
           have hBodyBackward :
-              RecursionBodyBackwardObligation signature alphabet id body :=
-            recursion_body_backward_obligation signature alphabet id body
+              RecursionBodyBackwardObligation alphabet id body :=
+            recursion_body_backward_obligation alphabet id body
               hAlphabetWF.2.1 hTailRecursive.1 hWholeAdmissible hBodyIH
-          exact correspondence_recur_stepIff signature alphabet id body
+          exact correspondence_recur_stepIff alphabet id body
             hAlphabetWF.2.1 hTailRecursive.1 hWholeAdmissible hBodyIH
             hBodyForward hBodyBackward
             hRelated hSymbol
@@ -428,7 +428,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hLeftIH : StepIffStatement signature left := by
+          have hLeftIH : StepIffStatement left := by
             have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf left) hLeftSize bound left
@@ -438,7 +438,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.1, hRegular.2.2.2.2.2.2.2.1.1,
                 hRegular.2.2.2.2.2.2.2.2.1⟩
               hClosedFields.1 hTailRecursive.1 rfl hRelated hSymbol
-          have hRightIH : StepIffStatement signature right := by
+          have hRightIH : StepIffStatement right := by
             have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf right) hRightSize bound right
@@ -448,7 +448,7 @@ private theorem correspondence_stepIff_aux
                 hRegular.2.2.2.2.2.2.1.2, hRegular.2.2.2.2.2.2.2.1.2,
                 hRegular.2.2.2.2.2.2.2.2.2⟩
               hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
-          exact correspondence_fairChoice_stepIff signature alphabet id left right
+          exact correspondence_fairChoice_stepIff alphabet id left right
             hAlphabetWF.2.2.1 hAlphabetWF.2.2.2.1 hLeftIH hRightIH hRelated
             hSymbol
       | xoffer alphabet elseType branches =>
@@ -470,7 +470,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hElseIH : StepIffStatement signature elseType := by
+          have hElseIH : StepIffStatement elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf elseType) hElseSize bound elseType
@@ -482,7 +482,7 @@ private theorem correspondence_stepIff_aux
               hClosedElse hTailRecursive.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
-                StepIffStatement signature branchType := by
+                StepIffStatement branchType := by
             intro action branchType hMember
             have hBranchSize : sizeOf branchType < n := by
               have hEntry : sizeOf (action, branchType) < sizeOf branches :=
@@ -531,7 +531,7 @@ private theorem correspondence_stepIff_aux
                 hBranchSameCycle, hBranchMsgOwnership, hBranchProgressOwnership,
                 hBranchFairChoiceOwnership, hBranchInterfaceScoped⟩
               hBranchTailClosed hBranchTailRecursive rfl hRelated hSymbol
-          exact correspondence_xoffer_stepIff signature alphabet elseType branches
+          exact correspondence_xoffer_stepIff alphabet elseType branches
             hAlphabetWF.2.1
             (fun action branchType hMember =>
               PactType.branch_alphabet_eq_of_mem hAlphabetWF.2.2.2 hMember)
@@ -565,7 +565,7 @@ private theorem correspondence_stepIff_aux
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             PactType.InterfaceScoped] at hRegular
-          have hElseIH : StepIffStatement signature elseType := by
+          have hElseIH : StepIffStatement elseType := by
             have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
             intro residual residual' state env label offers hRelated hSymbol
             exact ih (sizeOf elseType) hElseSize bound elseType
@@ -577,7 +577,7 @@ private theorem correspondence_stepIff_aux
               hClosedElse hTailRecursive.1 rfl hRelated hSymbol
           have hBranchesIH :
               ∀ action branchType, (action, branchType) ∈ branches →
-                StepIffStatement signature branchType := by
+                StepIffStatement branchType := by
             intro action branchType hMember
             have hBranchSize : sizeOf branchType < n := by
               have hEntry : sizeOf (action, branchType) < sizeOf branches :=
@@ -650,18 +650,18 @@ private theorem correspondence_stepIff_aux
                   hRegular.2.2.2.2.2.2.1.2 hMember)
                 (parallelFairChoiceOwnershipBranches_of_mem
                   hRegular.2.2.2.2.2.2.2.1.2 hMember)⟩
-          exact correspondence_offer_stepIff signature alphabet elseType branches
+          exact correspondence_offer_stepIff alphabet elseType branches
             hAlphabetWF.1 hAlphabetWF.2.2.2 hPairwise hBranchRegular
             hAlphabetWF.2.1 hElseIH (fun action branchType hMember _ => by sorry)
             hRelated hSymbol
 
 /-- Step correspondence for all constructors, arranged as the Lemma 4.5 induction. -/
 theorem correspondence_stepIff
-    (signature : TypeAlphabet) (processType : PactType)
-    (hAdmissible : AdmissibleType signature processType) :
-    StepIffStatement signature processType := by
+     (processType : PactType)
+    (hAdmissible : AdmissibleType processType) :
+    StepIffStatement processType := by
   rcases hAdmissible with ⟨hAlphabetWF, _, _, hRegular⟩
-  exact correspondence_stepIff_aux signature [] processType
+  exact correspondence_stepIff_aux [] processType
     hAlphabetWF
     (closedGuardedRegularWith_of_closedGuardedRegular hRegular)
     (PactType.tailClosed_of_allVariablesBound_nil hRegular.1)

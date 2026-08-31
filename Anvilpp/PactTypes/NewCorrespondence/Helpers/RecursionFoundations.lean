@@ -11,17 +11,17 @@ open Pact.NewCorrespondence
 /-- Lift a body relation pair through the recursion substitution and child
 state tag. -/
 lemma relationMembership_recur_child
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (name : String) (body residual : PactType)
     {state : TypeAutomatonState}
     (hRelated : relationMembership
-      (buildRelationSet body (compileType signature body)) residual state) :
+      (buildRelationSet body (compileType body)) residual state) :
     relationMembership
       (buildRelationSet (.recur alphabet name body)
-        (compileType signature (.recur alphabet name body)))
+        (compileType (.recur alphabet name body)))
       (residual.replaceVar name (.recur alphabet name body)) (.child 0 state) := by
   show (residual.replaceVar name (.recur alphabet name body), .child 0 state) ∈
-    buildRelationSetCoreFuel signature
+    buildRelationSetCoreFuel
       (typeCompilationFuel (.recur alphabet name body))
       (.recur alphabet name body)
   have hFuelEq : typeCompilationFuel (.recur alphabet name body) =
@@ -34,32 +34,32 @@ lemma relationMembership_recur_child
   exact Or.inr ⟨(residual, state), hRelated, rfl, rfl⟩
 
 def recurRelationShape
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
     (entry : PactType × TypeAutomatonState) : Prop :=
   entry = (.recur alphabet name body, TypeAutomatonState.root) ∨
     (∃ q residual,
       entry =
         (residual.replaceVar name (.recur alphabet name body), .child 0 q) ∧
-      relationMembership (buildRelationSet body (compileType signature body))
+      relationMembership (buildRelationSet body (compileType body))
         residual q)
 
 /-- Proves every related recursion pair has the recursion shape. -/
 lemma relationMembership_recur_cases
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
     {residual : PactType} {state : TypeAutomatonState}
     (hRelated :
       relationMembership
         (buildRelationSet (.recur alphabet name body)
-          (compileType signature (.recur alphabet name body)))
+          (compileType (.recur alphabet name body)))
         residual state) :
-    recurRelationShape signature alphabet name body (residual, state) := by
+    recurRelationShape alphabet name body (residual, state) := by
   have hFuelEq : typeCompilationFuel (.recur alphabet name body) =
       typeCompilationFuel body + 1 := by
     simp only [typeCompilationFuel]; omega
   have hMem : (residual, state) ∈
-      buildRelationSetCoreFuel signature
+      buildRelationSetCoreFuel
         (typeCompilationFuel (.recur alphabet name body))
         (.recur alphabet name body) := hRelated
   rw [hFuelEq] at hMem
@@ -69,7 +69,7 @@ lemma relationMembership_recur_cases
       ⟨entry, hEntry, hResidual, hState⟩
   · exact Or.inl (Prod.ext hResidual hState)
   · have hBodyRelated : relationMembership
-        (buildRelationSet body (compileType signature body))
+        (buildRelationSet body (compileType body))
         entry.1 entry.2 := hEntry
     exact Or.inr ⟨entry.2, entry.1,
       Prod.ext hResidual.symm hState.symm, hBodyRelated⟩
@@ -108,22 +108,22 @@ non-marker edge from the marker/backedge edge, then prove the arbitrary-body
 marker case by induction using `body.TailOccurrences name True`, reducing the
 base case to this lemma. -/
 theorem compileTypeFuel_var_marker_represents_var
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (name : String)
+     (alphabet : PactTypeAlphabet) (name : String)
     {q : TypeAutomatonState} {residual : PactType}
     (hMem :
       relationMembership
         (buildRelationSet (.var alphabet name)
-          (compileType signature (.var alphabet name)))
+          (compileType (.var alphabet name)))
         residual q)
     {bodyEdge : PendingAutomatonEdge}
     (_hBodyEdge : bodyEdge ∈
-      (compileTypeFuel signature (typeCompilationFuel (.var alphabet name))
+      (compileTypeFuel (typeCompilationFuel (.var alphabet name))
         (.var alphabet name)).edges)
     (_hSource : bodyEdge.source = q)
     (_hMarkerLabel : bodyEdge.label = .variable name) :
     residual = .var residual.alphabet name := by
   have hRelated : (residual, q) ∈
-      buildRelationSetCoreFuel signature (typeCompilationFuel (.var alphabet name))
+      buildRelationSetCoreFuel (typeCompilationFuel (.var alphabet name))
         (.var alphabet name) := hMem
   simp only [typeCompilationFuel, buildRelationSetCoreFuel,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated
@@ -140,31 +140,31 @@ future menu at the tagged recursion state is the future menu of the substituted
 residual.  Copied non-marker edges and marker/backedge edges should both
 normalize their future fields through this relation-aware statement. -/
 theorem computeFutureOf_recursion_child_related
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
     {state : TypeAutomatonState} {residual : PactType}
     (hRelated :
-      relationMembership (buildRelationSet body (compileType signature body))
+      relationMembership (buildRelationSet body (compileType body))
         residual state) :
-    computeFutureOf signature (.recur alphabet name body) (.child 0 state) =
+    computeFutureOf (.recur alphabet name body) (.child 0 state) =
       typeFutureOffers
         (residual.replaceVar name (.recur alphabet name body)) := by
-  exact helper_h15_future_offers_agree signature
-    (relationMembership_recur_child signature alphabet name body residual
+  exact helper_h15_future_offers_agree
+    (relationMembership_recur_child alphabet name body residual
       hRelated)
 
 /-- Proves H15's future agreement for a recursion-tagged state, substituted for the open variable. -/
 lemma helper_h15_recursion_future_offers_agree
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+     (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
     {residual : PactType} {q : TypeAutomatonState}
     (hRelated :
-      relationMembership (buildRelationSet body (compileType signature body))
+      relationMembership (buildRelationSet body (compileType body))
         residual q) :
-    computeFutureOf signature (.recur alphabet name body) (.child 0 q) =
+    computeFutureOf (.recur alphabet name body) (.child 0 q) =
       typeFutureOffers
         (residual.replaceVar name (.recur alphabet name body)) := by
-  exact computeFutureOf_recursion_child_related signature alphabet name body
+  exact computeFutureOf_recursion_child_related alphabet name body
     hRelated
 
 
