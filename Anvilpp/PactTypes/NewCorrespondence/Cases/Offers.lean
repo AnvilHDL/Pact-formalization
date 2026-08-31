@@ -7,6 +7,22 @@ open Pact.NewCorrespondence
 
 noncomputable section
 
+/-- A branch's own actions stay clear of every later branch's, so a head
+singleton and the product generated from the rest own disjoint actions. -/
+private theorem headBranch_messageActions_disjoint
+    {branch : BareMessage × PactType} {rest : List (BareMessage × PactType)}
+    (hDisjoint : ∀ other ∈ rest, BranchDeclarationsDisjoint branch other) :
+    Disjoint ({branch.1} ∪ PactType.MessageActions branch.2)
+      (PactType.BranchMessageActions rest) := by
+  induction rest with
+  | nil => simp [PactType.BranchMessageActions]
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      rw [PactType.BranchMessageActions.eq_def]
+      exact Finset.disjoint_union_right.mpr
+        ⟨(hDisjoint (headAction, headType) (by simp)).1,
+          ih (fun other hOther => hDisjoint other (by simp [hOther]))⟩
+
 /-- Step correspondence for the worker that partitions an offer alphabet over
 its generated singleton components. -/
 theorem correspondence_parallelTypeBranchesWithin_stepIff
@@ -130,6 +146,12 @@ theorem correspondence_parallelTypeBranchesWithin_stepIff
                   using PactTypeAlphabet.mergeHidden_branchPart_remove_empty
                     alphabet (action, processType))
               (by simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt] using hCompatible)
+              (by
+                rw [parallelTypeBranchesWithin_messageActions]
+                simpa [singletonTypeXOfferAt, PactType.MessageActions,
+                  PactType.BranchMessageActions] using
+                  headBranch_messageActions_disjoint
+                    (branch := (action, processType)) hHeadDisjoint)
               ⟨hLeftWF,
                 singletonTypeXOfferAt_tailRecursive leftAlphabet
                   (action, processType) hHeadWF.2.1,
@@ -311,6 +333,11 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                 (by
                   simpa [leftAlphabet, rightAlphabet, selectedTypeBranchAt]
                     using hCompatible)
+                (by
+                  rw [parallelTypeBranchesWithin_messageActions]
+                  simpa [selectedTypeBranchAt, PactType.MessageActions] using
+                    headBranch_messageActions_disjoint
+                      (branch := (action, processType)) hHeadDisjoint)
                 ⟨hLeftWF,
                   selectedTypeBranchAt_tailRecursive leftAlphabet
                     (action, processType) hHeadWF.2.1,
@@ -400,6 +427,13 @@ theorem correspondence_parallelTypeBranchesSelectingWithin_stepIff
                 (by
                   simpa [leftAlphabet, rightAlphabet, singletonTypeXOfferAt]
                     using hCompatible)
+                (by
+                  rw [(parallelTypeBranchesSelectingWithin_ownershipData
+                    rightAlphabet selected (next :: tail)).2.1]
+                  simpa [singletonTypeXOfferAt, PactType.MessageActions,
+                    PactType.BranchMessageActions] using
+                    headBranch_messageActions_disjoint
+                      (branch := (action, processType)) hHeadDisjoint)
                 ⟨hLeftWF,
                   singletonTypeXOfferAt_tailRecursive leftAlphabet
                     (action, processType) hHeadWF.2.1,

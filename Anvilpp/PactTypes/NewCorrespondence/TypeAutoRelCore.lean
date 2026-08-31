@@ -1012,11 +1012,11 @@ theorem buildRelationSetCoreFuel_edge_target_mem (signature : TypeAlphabet) :
               ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
                   ⟨hRightEdge, hSync⟩, rfl⟩ |
                 ⟨leftState, -, rightEdge,
-                  ⟨hRightEdge, -, hRightNotAcc, -⟩, rfl⟩⟩ |
+                  ⟨hRightEdge, hRightNotAcc, -⟩, rfl⟩⟩ |
                 ⟨rightState, -, leftEdge,
-                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, rfl⟩⟩ |
-                ⟨rightEdge, ⟨hRightEdge, -, hRightNotAcc, -⟩, rfl⟩⟩ |
-                ⟨leftEdge, ⟨hLeftEdge, -, hLeftNotAcc, -⟩, rfl⟩, hReachable⟩ |
+                  ⟨hLeftEdge, hLeftNotAcc, -⟩, rfl⟩⟩ |
+                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc, -⟩, rfl⟩⟩ |
+                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc, -⟩, rfl⟩, hReachable⟩ |
               ⟨environment, _, rfl⟩
           · let rawEdge : PendingAutomatonEdge :=
                 let bothAccept :=

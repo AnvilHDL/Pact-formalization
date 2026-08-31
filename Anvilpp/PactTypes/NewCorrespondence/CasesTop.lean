@@ -375,6 +375,7 @@ private theorem correspondence_stepIff_aux
               hClosedFields.2 hTailRecursive.2 rfl hRelated hSymbol
           exact correspondence_par_stepIff signature alphabet left right interface
             hSupports.1 hAlphabetWF.2.1.parent_eq hAlphabetWF.2.1
+            hRegular.2.2.2.2.2.1.2.1
             ⟨hAlphabetWF.2.2.1, hTailRecursive.1, hClosedFields.1,
               offerBranchesDisjoint_of_ownership left hRegular.2.2.2.2.2.1.2.2.1
                 hRegular.2.2.2.2.2.2.1.2.1 hRegular.2.2.2.2.2.2.2.1.2.1⟩

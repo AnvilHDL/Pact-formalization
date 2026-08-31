@@ -3184,6 +3184,522 @@ theorem firing_environment_mem_localEnvironmentsFor
   refine Or.inr ⟨{(msg, dir.invert)}, Finset.singleton_subset_iff.mpr hMem, ∅,
     Finset.empty_subset _, rfl⟩
 
+/-- Generic: tag-transparency of one non-clock step, from an `outgoing`
+characterization of the parent's edges at a tagged child state. -/
+theorem automatonNonClockStep_of_outgoing_childPendingEdge
+    (parent child : AutomatonFragment) (index : Nat)
+    (hOutgoing : ∀ (state : TypeAutomatonState) (edge : PendingAutomatonEdge),
+      (edge ∈ parent.edges ∧ edge.source = childState index state) ↔
+        ∃ childEdge ∈ child.edges,
+          childEdge.source = state ∧ edge = childPendingEdge index childEdge)
+    (state target : TypeAutomatonState) :
+    AutomatonNonClockStep parent (childState index state) target ↔
+      ∃ q', target = childState index q' ∧ AutomatonNonClockStep child state q' := by
+  constructor
+  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
+    obtain ⟨childEdge, hChildEdge, hChildSource, hEdgeEq⟩ :=
+      (hOutgoing state edge).mp ⟨hEdgeMem, hSource⟩
+    refine ⟨childEdge.target, ?_, childEdge, hChildEdge, hChildSource, rfl, ?_⟩
+    · rw [← hTarget, hEdgeEq]; simp [childPendingEdge, childState]
+    · simpa [hEdgeEq, childPendingEdge] using hNotTock
+  · rintro ⟨q', hTargetEq, childEdge, hChildEdge, hChildSource, hChildTarget,
+      hChildNotTock⟩
+    have hOut := (hOutgoing state (childPendingEdge index childEdge)).mpr
+      ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    exact ⟨childPendingEdge index childEdge, hOut.1, hOut.2,
+      by rw [hTargetEq]; simp [childPendingEdge, childState, hChildTarget],
+      by simpa [childPendingEdge] using hChildNotTock⟩
+
+/-- An exclusive offer's tagged-else outgoing edges are exactly the else
+fragment's own edges, tagged. -/
+theorem exclusiveOffer_outgoing_else
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
+    (edge ∈ (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata).edges ∧
+      edge.source = childState 0 state) ↔
+      ∃ childEdge ∈ elseAutomaton.edges,
+        childEdge.source = state ∧ edge = childPendingEdge 0 childEdge := by
+  classical
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+      childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
+    rcases hEdge with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+    · rcases hElse with ⟨childEdge, hChildEdge, hEdgeEq⟩
+      have hChildSource := hSource
+      rw [← hEdgeEq] at hChildSource
+      simp [childPendingEdge, childState] at hChildSource
+      exact ⟨childEdge, hChildEdge, hChildSource, hEdgeEq.symm⟩
+    · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+      rcases hIndexed with hEmpty | ⟨indexed, _hIndexed, hChild⟩
+      · simp at hEmpty
+      · simp only [childPendingEdges, Finset.mem_image] at hChild
+        rcases hChild with ⟨childEdge, _hChildEdge, hEdgeEq⟩
+        rw [← hEdgeEq] at hSource
+        simp [childPendingEdge, childState] at hSource
+    · rw [mem_foldl_union_iff] at hBranch
+      rcases hBranch with hEmpty | ⟨indexed, _hIndexed, hRoot⟩
+      · simp at hEmpty
+      · simp only [Finset.mem_image, Finset.mem_filter] at hRoot
+        rcases hRoot with ⟨environment, _hEnvironment, hEdgeEq⟩
+        rw [← hEdgeEq] at hSource
+        simp [childState] at hSource
+    · simp only [Finset.mem_filter] at hWait
+      rcases hWait with ⟨environment, _hEnvironment, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childState] at hSource
+    · simp only [Finset.mem_filter] at hResolved
+      rcases hResolved with ⟨environment, _hEnvironment, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childState] at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        childPendingEdges, Finset.mem_union, Finset.mem_image]
+      exact Or.inl (Or.inl (Or.inl (Or.inl ⟨childEdge, hChildEdge, rfl⟩)))
+    · simp [childPendingEdge, childState, hChildSource]
+
+/-- An exclusive offer's tagged-branch outgoing edges are exactly that
+branch fragment's own edges, tagged. -/
+theorem exclusiveOffer_outgoing_branch
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (hBranch : branchAutomata[i]? = some (action, automaton))
+    (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
+    (edge ∈ (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata).edges ∧
+      edge.source = childState (i + 1) state) ↔
+      ∃ childEdge ∈ automaton.edges,
+        childEdge.source = state ∧ edge = childPendingEdge (i + 1) childEdge := by
+  classical
+  constructor
+  · rintro ⟨hEdge, hSource⟩
+    simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+      childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
+    rcases hEdge with ((((hElse | hIndexed) | hBranchEdges) | hWait) | hResolved)
+    · rcases hElse with ⟨childEdge, _hChildEdge, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childPendingEdge, childState] at hSource
+    · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+      rcases hIndexed with hEmpty | ⟨indexed, hIndexedMem, hChild⟩
+      · simp at hEmpty
+      · simp only [childPendingEdges, Finset.mem_image] at hChild
+        rcases hChild with ⟨childEdge, hChildEdge, hEdgeEq⟩
+        have hChildSource := hSource
+        rw [← hEdgeEq] at hChildSource
+        simp [childPendingEdge, childState] at hChildSource
+        rcases hChildSource with ⟨hIndexEq, hSourceEq⟩
+        have hIndexedGet := List.mk_mem_zipIdx_iff_getElem?.mp hIndexedMem
+        have hEntryEq : indexed.1 = (action, automaton) := by
+          have hGet : branchAutomata[i]? = some indexed.1 := by
+            simpa [hIndexEq] using hIndexedGet
+          rw [hBranch] at hGet
+          exact (Option.some.inj hGet).symm
+        have hAutomatonEq : indexed.1.2 = automaton := congrArg Prod.snd hEntryEq
+        have hEdgeEq' : edge = childPendingEdge (i + 1) childEdge := by
+          simpa [hIndexEq] using hEdgeEq.symm
+        exact ⟨childEdge, by simpa [hAutomatonEq] using hChildEdge,
+          hSourceEq, hEdgeEq'⟩
+    · rw [mem_foldl_union_iff] at hBranchEdges
+      rcases hBranchEdges with hEmpty | ⟨indexed, _hIndexed, hRoot⟩
+      · simp at hEmpty
+      · simp only [Finset.mem_image, Finset.mem_filter] at hRoot
+        rcases hRoot with ⟨environment, _hEnvironment, hEdgeEq⟩
+        rw [← hEdgeEq] at hSource
+        simp [childState] at hSource
+    · simp only [Finset.mem_filter] at hWait
+      rcases hWait with ⟨environment, _hEnvironment, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childState] at hSource
+    · simp only [Finset.mem_filter] at hResolved
+      rcases hResolved with ⟨environment, _hEnvironment, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childState] at hSource
+  · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+    constructor
+    · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        childPendingEdges, Finset.mem_union, Finset.mem_image]
+      refine Or.inl (Or.inl (Or.inl (Or.inr ?_)))
+      rw [indexedFragmentEdges, mem_foldl_union_iff]
+      exact Or.inr ⟨((action, automaton), i),
+        List.mk_mem_zipIdx_iff_getElem?.mpr hBranch,
+        Finset.mem_image.mpr ⟨childEdge, hChildEdge, rfl⟩⟩
+    · simp [childPendingEdge, childState, hChildSource]
+
+/-- Tagged-else acceptance in an exclusive offer is the else fragment's own. -/
+theorem buildExclusiveOfferAutomaton_child0_accepting_iff
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (q : TypeAutomatonState) :
+    childState 0 q ∈ (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata).accepting ↔
+      q ∈ elseAutomaton.accepting := by
+  classical
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union, childAccepting, Finset.mem_image, childState,
+    indexedFragmentAccepting, mem_foldl_union_iff, Finset.notMem_empty, false_or]
+  constructor
+  · rintro (⟨q', hq', hEq⟩ | ⟨indexed, -, q', -, hEq⟩)
+    · injection hEq with _ hEq'; exact hEq' ▸ hq'
+    · exact nomatch hEq
+  · intro hq; exact Or.inl ⟨q, hq, rfl⟩
+
+/-- Tagged-branch acceptance in an exclusive offer is that branch's own. -/
+theorem buildExclusiveOfferAutomaton_branch_accepting_iff
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (hBranch : branchAutomata[i]? = some (action, automaton))
+    (q : TypeAutomatonState) :
+    childState (i + 1) q ∈ (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata).accepting ↔
+      q ∈ automaton.accepting := by
+  classical
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union, childAccepting, Finset.mem_image, childState,
+    indexedFragmentAccepting, mem_foldl_union_iff, Finset.notMem_empty, false_or]
+  constructor
+  · rintro (⟨q', hq', hEq⟩ | ⟨indexed, hIndexed, q', hq', hEq⟩)
+    · exact nomatch hEq
+    · injection hEq with hIdx hQ
+      have hIdxEq : indexed.2 = i := by omega
+      have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
+      rw [hIdxEq, hBranch] at hGet
+      have hEntry : indexed.1 = (action, automaton) := (Option.some.inj hGet).symm
+      rw [hEntry] at hq'
+      exact hQ ▸ hq'
+  · intro hq
+    exact Or.inr ⟨((action, automaton), i),
+      List.mk_mem_zipIdx_iff_getElem?.mpr hBranch, q, hq, rfl⟩
+
+/-- The exclusive offer's fresh root is never accepting. -/
+theorem buildExclusiveOfferAutomaton_root_not_accepting
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment)) :
+    TypeAutomatonState.root ∉ (buildExclusiveOfferAutomaton signature alphabet
+      branches elseAutomaton branchAutomata).accepting := by
+  classical
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union, childAccepting, Finset.mem_image, childState,
+    indexedFragmentAccepting, mem_foldl_union_iff, Finset.notMem_empty, false_or]
+  rintro (⟨q, -, hEq⟩ | ⟨indexed, -, q, -, hEq⟩) <;> exact nomatch hEq
+
+/-- The exclusive offer's root steps back to itself (wait) or into the else
+or one branch entry. -/
+theorem automatonNonClockStep_root_exclusiveOffer
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    {target : TypeAutomatonState}
+    (hStep : AutomatonNonClockStep (buildExclusiveOfferAutomaton signature alphabet
+      branches elseAutomaton branchAutomata) TypeAutomatonState.root target) :
+    target = TypeAutomatonState.root ∨
+    target = childState 0 elseAutomaton.initial ∨
+    ∃ i action automaton, branchAutomata[i]? = some (action, automaton) ∧
+      target = childState (i + 1) automaton.initial := by
+  classical
+  obtain ⟨edge, hEdge, hSource, hTarget, -⟩ := hStep
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
+  rcases hEdge with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
+  · rcases hElse with ⟨childEdge, -, hEdgeEq⟩
+    rw [← hEdgeEq] at hSource
+    simp [childPendingEdge, childState] at hSource
+  · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+    rcases hIndexed with hEmpty | ⟨indexed, -, hChild⟩
+    · simp at hEmpty
+    · simp only [childPendingEdges, Finset.mem_image] at hChild
+      rcases hChild with ⟨childEdge, -, hEdgeEq⟩
+      rw [← hEdgeEq] at hSource
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, hIndexedMem, hRoot⟩
+    · simp at hEmpty
+    · simp only [Finset.mem_image, Finset.mem_filter] at hRoot
+      rcases hRoot with ⟨environment, -, hEdgeEq⟩
+      refine Or.inr (Or.inr ⟨indexed.2, indexed.1.1, indexed.1.2,
+        List.mk_mem_zipIdx_iff_getElem?.mp hIndexedMem, ?_⟩)
+      rw [← hTarget, ← hEdgeEq]
+  · simp only [Finset.mem_filter] at hWait
+    rcases hWait with ⟨environment, -, hEdgeEq⟩
+    exact Or.inl (by rw [← hTarget, ← hEdgeEq])
+  · simp only [Finset.mem_filter] at hResolved
+    rcases hResolved with ⟨environment, -, hEdgeEq⟩
+    exact Or.inr (Or.inl (by rw [← hTarget, ← hEdgeEq]))
+
+/-- The empty environment always realizes the exclusive offer's else edge. -/
+theorem automatonNonClockStep_root_exclusiveOffer_else
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet)
+    (hBranchActions : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    AutomatonNonClockStep (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata) TypeAutomatonState.root
+      (childState 0 elseAutomaton.initial) := by
+  classical
+  set edge : PendingAutomatonEdge :=
+    { source := TypeAutomatonState.root, environment := TypeEnvironment.empty,
+      label := .visible TypeLabel.silent, current := ∅,
+      future := FutureSpec.at (childState 0 elseAutomaton.initial) ∅,
+      target := childState 0 elseAutomaton.initial } with hEdgeDef
+  refine ⟨edge, ?_, rfl, rfl, ?_⟩
+  · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+      Finset.mem_union, Finset.mem_image, Finset.mem_filter]
+    exact Or.inr ⟨TypeEnvironment.empty,
+      ⟨hEnvMem, rfl, by simp [TypeEnvironment.empty], by simp [TypeEnvironment.empty],
+        hBranchActions⟩, hEdgeDef.symm⟩
+  · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
+      TypeLabel.silent]
+
+/-- The environment needing exactly `action` realizes that branch's fire edge. -/
+theorem automatonNonClockStep_root_exclusiveOffer_branch
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (hBranch : branchAutomata[i]? = some (action, automaton))
+    (hEnvMem : ({ immediate := {typeNeed action}, future := ∅, clock := false } :
+      TypeEnvironment) ∈ signature.localEnvironmentsFor alphabet)
+    (hBranchActions : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    AutomatonNonClockStep (buildExclusiveOfferAutomaton signature alphabet branches
+        elseAutomaton branchAutomata) TypeAutomatonState.root
+      (childState (i + 1) automaton.initial) := by
+  classical
+  set env : TypeEnvironment :=
+    { immediate := {typeNeed action}, future := ∅, clock := false } with hEnvDef
+  set edge : PendingAutomatonEdge :=
+    { source := TypeAutomatonState.root, environment := env,
+      label := .visible (TypeLabel.message action.1 action.2),
+      current := {action},
+      future := FutureSpec.at (childState (i + 1) automaton.initial) ∅,
+      target := childState (i + 1) automaton.initial } with hEdgeDef
+  refine ⟨edge, ?_, rfl, rfl, ?_⟩
+  · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+      Finset.mem_union]
+    refine Or.inl (Or.inl (Or.inr ?_))
+    rw [mem_foldl_union_iff]
+    refine Or.inr ⟨((action, automaton), i),
+      List.mk_mem_zipIdx_iff_getElem?.mpr hBranch, ?_⟩
+    simp only [Finset.mem_image, Finset.mem_filter]
+    exact ⟨env, ⟨hEnvMem, by simp [hEnvDef], by simp [hEnvDef], hBranchActions⟩,
+      hEdgeDef.symm⟩
+  · simp [hEdgeDef, AutomatonConstructionLabel.semantic, TypeLabel.isTock,
+      TypeLabel.message]
+
+/-- Root reachability for an exclusive offer: the wait edges self-loop, the
+root is never accepting, and every escape lands at the else entry or a branch
+entry — each realized by a witness environment. -/
+theorem automatonSameCycleReachesAccepting_root_exclusiveOffer
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hEnvMem : TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet)
+    (hBranchActions : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions)
+    (hFiringEnv : ∀ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+      branchAutomata[i]? = some (action, automaton) →
+      ({ immediate := {typeNeed action}, future := ∅, clock := false } :
+        TypeEnvironment) ∈ signature.localEnvironmentsFor alphabet) :
+    AutomatonSameCycleReachesAccepting (buildExclusiveOfferAutomaton signature alphabet
+        branches elseAutomaton branchAutomata) TypeAutomatonState.root ↔
+      AutomatonSameCycleReachesAccepting (buildExclusiveOfferAutomaton signature alphabet
+        branches elseAutomaton branchAutomata) (childState 0 elseAutomaton.initial) ∨
+      ∃ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+        branchAutomata[i]? = some (action, automaton) ∧
+        AutomatonSameCycleReachesAccepting (buildExclusiveOfferAutomaton signature
+          alphabet branches elseAutomaton branchAutomata)
+          (childState (i + 1) automaton.initial) := by
+  classical
+  set offer := buildExclusiveOfferAutomaton signature alphabet branches
+    elseAutomaton branchAutomata with hOfferDef
+  constructor
+  · rintro ⟨finalState, hReach, hFinal⟩
+    have hAux : ∀ reached,
+        Relation.ReflTransGen (AutomatonNonClockStep offer) TypeAutomatonState.root reached →
+        reached = TypeAutomatonState.root ∨
+        Relation.ReflTransGen (AutomatonNonClockStep offer)
+          (childState 0 elseAutomaton.initial) reached ∨
+        ∃ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+          branchAutomata[i]? = some (action, automaton) ∧
+          Relation.ReflTransGen (AutomatonNonClockStep offer)
+            (childState (i + 1) automaton.initial) reached := by
+      intro reached hR
+      induction hR with
+      | refl => exact Or.inl rfl
+      | tail _ hStep ih =>
+          rcases ih with hRoot | hElse | ⟨i, action, automaton, hGet, hPath⟩
+          · rw [hRoot] at hStep
+            rcases automatonNonClockStep_root_exclusiveOffer signature alphabet branches
+                elseAutomaton branchAutomata hStep with h | h | ⟨i, action, automaton, hGet, h⟩
+            · exact Or.inl h
+            · exact Or.inr (Or.inl (by rw [h]))
+            · exact Or.inr (Or.inr ⟨i, action, automaton, hGet, by rw [h]⟩)
+          · exact Or.inr (Or.inl (hElse.tail hStep))
+          · exact Or.inr (Or.inr ⟨i, action, automaton, hGet, hPath.tail hStep⟩)
+    rcases hAux finalState hReach with hRoot | hElse | ⟨i, action, automaton, hGet, hPath⟩
+    · exfalso
+      rw [hRoot] at hFinal
+      exact absurd hFinal (buildExclusiveOfferAutomaton_root_not_accepting signature
+        alphabet branches elseAutomaton branchAutomata)
+    · exact Or.inl ⟨finalState, hElse, hFinal⟩
+    · exact Or.inr ⟨i, action, automaton, hGet, finalState, hPath, hFinal⟩
+  · rintro (⟨finalState, hReach, hFinal⟩ |
+      ⟨i, action, automaton, hGet, finalState, hReach, hFinal⟩)
+    · exact ⟨finalState, Relation.ReflTransGen.head
+        (automatonNonClockStep_root_exclusiveOffer_else signature alphabet branches
+          elseAutomaton branchAutomata hEnvMem hBranchActions) hReach, hFinal⟩
+    · exact ⟨finalState, Relation.ReflTransGen.head
+        (automatonNonClockStep_root_exclusiveOffer_branch signature alphabet branches
+          elseAutomaton branchAutomata i action automaton hGet
+          (hFiringEnv i action automaton hGet) hBranchActions) hReach, hFinal⟩
+
+/-- Per-branch projection of `TypeAlphabet.SupportsBranches`. -/
+private theorem branchType_supports_of_mem
+    (signature : TypeAlphabet) {branches : List (BareMessage × PactType)}
+    (hBranches : signature.SupportsBranches branches)
+    {branch : BareMessage × PactType} (hMem : branch ∈ branches) :
+    signature.Supports branch.2 := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      have hAll : (headAction ∈ signature.boundary ∨
+            headAction.1 ∈ signature.interface) ∧
+          signature.Supports headType ∧ signature.SupportsBranches rest := by
+        simpa only [TypeAlphabet.SupportsBranches] using hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hAll.2.1
+      · exact ih hAll.2.2 hMemRest
+
+/-- Per-branch projection of `PactType.BranchesAlphabetWellFormed`. -/
+private theorem branchType_alphabetWellFormed_of_mem
+    {alphabet : PactTypeAlphabet} {branches : List (BareMessage × PactType)}
+    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
+    {branch : BareMessage × PactType} (hMem : branch ∈ branches) :
+    branch.2.AlphabetWellFormed ∧ branch.1 ∈ alphabet.actions := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact ⟨hBranches.2.2.1, hBranches.1⟩
+      · exact ih hBranches.2.2.2 hMemRest
+
+/-- Per-branch projection of `PactType.ClockGuardedBranches`. -/
+private theorem branchType_clockGuarded_of_mem
+    {branches : List (BareMessage × PactType)}
+    (hBranches : PactType.ClockGuardedBranches branches)
+    {branch : BareMessage × PactType} (hMem : branch ∈ branches) :
+    branch.2.ClockGuarded := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.ClockGuardedBranches] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hBranches.1
+      · exact ih hBranches.2 hMemRest
+
+/-- Per-branch projection of `PactType.TailRecursiveBranches`. -/
+private theorem branchType_tailRecursive_of_mem
+    {branches : List (BareMessage × PactType)}
+    (hBranches : PactType.TailRecursiveBranches branches)
+    {branch : BareMessage × PactType} (hMem : branch ∈ branches) :
+    branch.2.TailRecursive := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.TailRecursiveBranches] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hMemRest
+      · cases hEq; exact hBranches.1
+      · exact ih hBranches.2 hMemRest
+
+/-- A branch continuation is a strict subterm of the offer that carries it. -/
+private theorem sizeOf_branchType_lt_branches
+    {branches : List (BareMessage × PactType)}
+    {branch : BareMessage × PactType} (hMem : branch ∈ branches) :
+    sizeOf branch.2 < sizeOf branches := by
+  have h1 : sizeOf branch < sizeOf branches := List.sizeOf_lt_of_mem hMem
+  have h2 : sizeOf branch.2 < sizeOf branch := by
+    rcases branch with ⟨action, branchType⟩; simp_wf; omega
+  omega
+
+/-- Shape of a related pair for `.xoffer elseType branches`: the fresh root,
+a tagged else state, or a tagged branch state. -/
+theorem helper_h12_xoffer_shape
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    {residual : PactType} {state : TypeAutomatonState}
+    (hRelated :
+      relationMembership
+        (buildRelationSet (.xoffer alphabet elseType branches)
+          (compileType signature (.xoffer alphabet elseType branches)))
+        residual state) :
+    (residual = .xoffer alphabet elseType branches ∧
+      state = TypeAutomatonState.root) ∨
+    (∃ q, state = .child 0 q ∧
+      relationMembership (buildRelationSet elseType (compileType signature elseType))
+        residual q) ∨
+    (∃ (i : Nat) (action : BareMessage) (branchType : PactType)
+        (q : TypeAutomatonState),
+      branches[i]? = some (action, branchType) ∧ state = .child (i + 1) q ∧
+      relationMembership (buildRelationSet branchType
+        (compileType signature branchType)) residual q) := by
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
+      max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel signature
+        (typeCompilationFuel (.xoffer alphabet elseType branches))
+        (.xoffer alphabet elseType branches) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
+    mem_foldl_union_iff, Finset.notMem_empty, false_or, Finset.mem_image,
+    Prod.mk.injEq] at hMem
+  rcases hMem with ⟨hR, hS⟩ | ⟨a, ha, hR, hS⟩ | ⟨item, hItem, a, ha, hR, hS⟩
+  · exact Or.inl ⟨hR, hS⟩
+  · refine Or.inr (Or.inl ⟨a.2, hS.symm, ?_⟩)
+    show (residual, a.2) ∈
+      buildRelationSetCoreFuel signature (typeCompilationFuel elseType) elseType
+    rw [← buildRelationSetCoreFuel_eq_of_sufficient signature elseType
+      (le_max_left _ _) le_rfl, ← hR]
+    exact ha
+  · have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
+    have hMemBranches : item.1 ∈ branches := List.mem_of_getElem? hGet
+    have hItemFuel : typeCompilationFuel item.1.2 ≤
+        max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) :=
+      le_trans (typeCompilationFuel_le_typeBranchCompilationFuel branches item.1
+        hMemBranches) (le_max_right _ _)
+    refine Or.inr (Or.inr ⟨item.2, item.1.1, item.1.2, a.2, hGet, hS.symm, ?_⟩)
+    show (residual, a.2) ∈
+      buildRelationSetCoreFuel signature (typeCompilationFuel item.1.2) item.1.2
+    rw [← buildRelationSetCoreFuel_eq_of_sufficient signature item.1.2 hItemFuel
+      le_rfl, ← hR]
+    exact ha
+
 /-- Helper Lemma H14: same-cycle completion. Needs `signature.Supports
 processType` (unlike H12/H13, which hold unconditionally), because the
 choice, sequence and parallel cases recurse into subterms and the induction
@@ -3620,7 +4136,159 @@ theorem helper_h14_same_cycle_completion
             hTRRight hRightRelated rfl)
     | par alphabet left right interface => sorry
     | recur alphabet name body => sorry
-    | xoffer alphabet elseType branches => sorry
+    | xoffer alphabet elseType branches =>
+        have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+        have hBranchSize : ∀ branch ∈ branches, sizeOf branch.2 < n := by
+          intro branch hMem
+          have hLt := sizeOf_branchType_lt_branches hMem
+          rw [← hSize]; simp_wf; omega
+        simp only [PactType.AlphabetWellFormed] at hAlphabet
+        obtain ⟨-, -, hAWElse, hAWBranches⟩ := hAlphabet
+        simp only [PactType.ClockGuarded] at hClockGuarded
+        obtain ⟨hCGElse, hCGBranches⟩ := hClockGuarded
+        simp only [PactType.TailRecursive] at hTailRecursive
+        obtain ⟨hTRElse, hTRBranches⟩ := hTailRecursive
+        simp only [TypeAlphabet.Supports] at hSupports
+        obtain ⟨hSupElse, hSupBranches⟩ := hSupports
+        have hBranchActions : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions := fun b hb =>
+          (branchType_alphabetWellFormed_of_mem hAWBranches hb).2
+        have hEmptyLocal : TypeEnvironment.empty ∈ signature.localEnvironmentsFor alphabet := by
+          simp only [TypeAlphabet.localEnvironmentsFor, Finset.mem_union,
+            Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
+          exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+        have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
+            max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches) + 1 := by
+          simp only [typeCompilationFuel]; omega
+        set elseAuto := compileTypeFuel signature (typeCompilationFuel elseType) elseType
+          with hElseAutoDef
+        set branchAutos := branches.map (fun branch =>
+          (branch.1, compileTypeFuel signature (typeCompilationFuel branch.2) branch.2))
+          with hBranchAutosDef
+        have hWhole :
+            compileTypeFuel signature
+              (typeCompilationFuel (.xoffer alphabet elseType branches))
+              (.xoffer alphabet elseType branches) =
+              buildExclusiveOfferAutomaton signature alphabet branches elseAuto branchAutos := by
+          rw [hFuelEq, compileTypeFuel.eq_def]
+          show buildExclusiveOfferAutomaton signature alphabet branches
+              (compileTypeFuel signature (max (typeCompilationFuel elseType)
+                (typeBranchCompilationFuel branches)) elseType)
+              (branches.map fun branch => (branch.1, compileTypeFuel signature
+                (max (typeCompilationFuel elseType) (typeBranchCompilationFuel branches))
+                branch.2)) = _
+          rw [hElseAutoDef, hBranchAutosDef,
+            compileTypeFuel_eq_of_sufficient signature elseType (le_max_left _ _) le_rfl]
+          congr 1
+          apply List.map_congr_left
+          intro branch hBranch
+          congr 1
+          exact compileTypeFuel_eq_of_sufficient signature branch.2
+            (le_trans (typeCompilationFuel_le_typeBranchCompilationFuel branches branch hBranch)
+              (le_max_right _ _)) le_rfl
+        have hMapGet : ∀ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+            branchAutos[i]? = some (action, automaton) →
+            ∃ branchType, branches[i]? = some (action, branchType) ∧
+              automaton = compileTypeFuel signature (typeCompilationFuel branchType) branchType := by
+          intro i action automaton hGet
+          rw [hBranchAutosDef, List.getElem?_map] at hGet
+          cases hb : branches[i]? with
+          | none => rw [hb] at hGet; exact absurd hGet (by simp)
+          | some b =>
+              rw [hb] at hGet
+              simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hGet
+              exact ⟨b.2, by rw [← hGet.1], hGet.2.symm⟩
+        have hMapGetRev : ∀ (i : Nat) (branch : BareMessage × PactType),
+            branches[i]? = some branch →
+            branchAutos[i]? = some (branch.1,
+              compileTypeFuel signature (typeCompilationFuel branch.2) branch.2) := by
+          intro i branch hGet
+          rw [hBranchAutosDef, List.getElem?_map, hGet]
+          rfl
+        have hFiringEnv : ∀ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+            branchAutos[i]? = some (action, automaton) →
+            ({ immediate := {typeNeed action}, future := ∅, clock := false } : TypeEnvironment)
+              ∈ signature.localEnvironmentsFor alphabet := by
+          intro i action automaton hGet
+          obtain ⟨branchType, hBranchGet, -⟩ := hMapGet i action automaton hGet
+          have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hBranchGet
+          have hAction : action ∈ alphabet.actions := hBranchActions _ hMem
+          simpa [typeNeed] using
+            firing_environment_mem_localEnvironmentsFor signature alphabet action.1 action.2
+              (by simpa using hAction)
+        rw [hWhole]
+        have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
+          (buildExclusiveOfferAutomaton signature alphabet branches elseAuto branchAutos)
+          elseAuto 0
+          (fun q target => automatonNonClockStep_of_outgoing_childPendingEdge _ _ 0
+            (exclusiveOffer_outgoing_else signature alphabet branches elseAuto branchAutos)
+            q target)
+          (buildExclusiveOfferAutomaton_child0_accepting_iff signature alphabet branches
+            elseAuto branchAutos)
+        have hTagBranch : ∀ (i : Nat) (action : BareMessage) (automaton : AutomatonFragment),
+            branchAutos[i]? = some (action, automaton) → ∀ q,
+            (AutomatonSameCycleReachesAccepting (buildExclusiveOfferAutomaton signature alphabet
+              branches elseAuto branchAutos) (childState (i + 1) q) ↔
+              AutomatonSameCycleReachesAccepting automaton q) := by
+          intro i action automaton hGet
+          exact automatonSameCycleReachesAccepting_of_child_tag _ automaton (i + 1)
+            (fun q target => automatonNonClockStep_of_outgoing_childPendingEdge _ _ (i + 1)
+              (exclusiveOffer_outgoing_branch signature alphabet branches elseAuto branchAutos
+                i action automaton hGet) q target)
+            (buildExclusiveOfferAutomaton_branch_accepting_iff signature alphabet branches
+              elseAuto branchAutos i action automaton hGet)
+        rcases helper_h12_xoffer_shape signature alphabet elseType branches hRelated with
+          ⟨hResidualEq, hStateEq⟩ | ⟨q, hStateEq, hElseRelated⟩ |
+          ⟨i, action, branchType, q, hGet, hStateEq, hBranchRelated⟩
+        · subst hResidualEq; subst hStateEq
+          rw [typeSameCycleCanComplete_xoffer_iff alphabet elseType branches hBranchActions,
+            automatonSameCycleReachesAccepting_root_exclusiveOffer signature alphabet branches
+              elseAuto branchAutos hEmptyLocal hBranchActions hFiringEnv]
+          have hIHElse := ih (sizeOf elseType) hElseSize hSupElse hAWElse hCGElse hTRElse
+            (buildRelationSet_initial elseType (compileType signature elseType)) rfl
+          simp only [compileType] at hIHElse
+          rw [← hElseAutoDef] at hIHElse
+          rw [hTag0 elseAuto.initial, hIHElse]
+          constructor
+          · rintro (hElse | ⟨i, action, automaton, hGet, hReach⟩)
+            · exact Or.inl hElse
+            · obtain ⟨branchType, hBranchGet, hAutoEq⟩ := hMapGet i action automaton hGet
+              have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hBranchGet
+              subst hAutoEq
+              refine Or.inr ⟨(action, branchType), hMem, ?_⟩
+              have hIHBranch := ih (sizeOf branchType) (hBranchSize _ hMem)
+                (branchType_supports_of_mem signature hSupBranches hMem)
+                (branchType_alphabetWellFormed_of_mem hAWBranches hMem).1
+                (branchType_clockGuarded_of_mem hCGBranches hMem)
+                (branchType_tailRecursive_of_mem hTRBranches hMem)
+                (buildRelationSet_initial branchType (compileType signature branchType)) rfl
+              simp only [compileType] at hIHBranch
+              exact hIHBranch.mp ((hTagBranch i action _ hGet _).mp hReach)
+          · rintro (hElse | ⟨entry, hMem, hEntry⟩)
+            · exact Or.inl hElse
+            · obtain ⟨i, hBranchGet⟩ := List.mem_iff_getElem?.mp hMem
+              refine Or.inr ⟨i, entry.1,
+                compileTypeFuel signature (typeCompilationFuel entry.2) entry.2,
+                hMapGetRev i entry hBranchGet, ?_⟩
+              have hIHBranch := ih (sizeOf entry.2) (hBranchSize _ hMem)
+                (branchType_supports_of_mem signature hSupBranches hMem)
+                (branchType_alphabetWellFormed_of_mem hAWBranches hMem).1
+                (branchType_clockGuarded_of_mem hCGBranches hMem)
+                (branchType_tailRecursive_of_mem hTRBranches hMem)
+                (buildRelationSet_initial entry.2 (compileType signature entry.2)) rfl
+              simp only [compileType] at hIHBranch
+              exact (hTagBranch i entry.1 _ (hMapGetRev i entry hBranchGet) _).mpr
+                (hIHBranch.mpr hEntry)
+        · subst hStateEq
+          exact (hTag0 q).trans (ih (sizeOf elseType) hElseSize hSupElse hAWElse hCGElse
+            hTRElse hElseRelated rfl)
+        · subst hStateEq
+          have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hGet
+          refine ((hTagBranch i action _ (hMapGetRev i (action, branchType) hGet) q).trans
+            (ih (sizeOf branchType) (hBranchSize _ hMem)
+              (branchType_supports_of_mem signature hSupBranches hMem)
+              (branchType_alphabetWellFormed_of_mem hAWBranches hMem).1
+              (branchType_clockGuarded_of_mem hCGBranches hMem)
+              (branchType_tailRecursive_of_mem hTRBranches hMem) hBranchRelated rfl))
     | offer alphabet elseType branches => sorry
 
 /-- Helper Lemma H15, resolved-edge form: a resolved constructor edge carries

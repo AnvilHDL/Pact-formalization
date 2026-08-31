@@ -16,6 +16,9 @@ theorem correspondence_par_stepIff
       PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
     (hParallelCompatible : PactTypeAlphabet.ParallelCompatible alphabet
       left.alphabet right.alphabet interface)
+    -- `ParallelMessageOwnership`'s action clause for this node.
+    (hMessageDisjoint :
+      Disjoint (PactType.MessageActions left) (PactType.MessageActions right))
     (hLeftResidual : left.ResidualInvariant)
     (hRightResidual : right.ResidualInvariant)
     (hAlphabetCoherent :
@@ -137,7 +140,10 @@ theorem correspondence_par_stepIff
             rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
               interface q1 q2 (.pair q1' q2') env label
               (TypeOfferSummary.mk current future)
-              (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
+              (hParallelCompatible := hParallelCompatible)
+              (hMessageDisjoint := hMessageDisjoint)
+              (hLeftStepIff := hLeftIH) (hRightStepIff := hRightIH)
+              (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
             refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
@@ -239,7 +245,10 @@ theorem correspondence_par_stepIff
             rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
               interface q1 q2 TypeAutomatonState.final env label
               (TypeOfferSummary.mk current future)
-              (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
+              (hParallelCompatible := hParallelCompatible)
+              (hMessageDisjoint := hMessageDisjoint)
+              (hLeftStepIff := hLeftIH) (hRightStepIff := hRightIH)
+              (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
             refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
@@ -312,7 +321,10 @@ theorem correspondence_par_stepIff
             rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
               interface q1 q2 TypeAutomatonState.final env label
               (TypeOfferSummary.mk current future)
-              (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
+              (hParallelCompatible := hParallelCompatible)
+              (hMessageDisjoint := hMessageDisjoint)
+              (hLeftStepIff := hLeftIH) (hRightStepIff := hRightIH)
+              (hSymbol := hSignatureSymbol)
               (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)]
             refine Or.inl ⟨leftEnv, rightEnv, leftLabel, rightLabel,
               TypeOfferSummary.mk leftCurrent leftFuture,
@@ -331,25 +343,28 @@ theorem correspondence_par_stepIff
           exact relationMembership_par_final signature alphabet left right interface
       -- Survivor steps leave a single child re-stamped with the parent alphabet;
       -- the sibling is already `skip` at the source, so its state is accepting.
-      -- The label and offers now line up with the survivor edge, and H13 turns
-      -- the `skip` sibling into the accepting state the edge needs.  What is
-      -- still missing is purely automaton-side: the survivor edge carries the
-      -- product environment unprojected, so `parallelComponentEdgeAllowed`
-      -- demands the parent symbol be legal for the CHILD alphabet, and
-      -- `q1 ∈ states` for the finished sibling.  Neither transports from the
-      -- parent symbol, since `mergeHidden` keeps the other side's actions.
+      -- H13 turns the `skip` sibling into the accepting state the edge needs,
+      -- and the survivor edge family no longer gates on the child alphabet.
+      -- What blocks the case is the child IH: reaching a compiled child edge
+      -- at all needs the symbol in `(compileType signature child).alphabet`,
+      -- while the semantic rule hands the survivor the parent environment
+      -- unprojected and `mergeHidden` keeps the finished side's actions.  Also
+      -- open: `q1 ∈ states` for the finished sibling.
       | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- OPEN: parent symbol does not transport to the child alphabet
+          sorry -- OPEN: parent environment does not reach the child alphabet
       | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- OPEN: parent symbol does not transport to the child alphabet
+          sorry -- OPEN: parent environment does not reach the child alphabet
       | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- OPEN: parent symbol does not transport to the child alphabet
+          sorry -- OPEN: parent environment does not reach the child alphabet
       | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ =>
-          sorry -- OPEN: parent symbol does not transport to the child alphabet
+          sorry -- OPEN: parent environment does not reach the child alphabet
     · rintro ⟨state', hEdge, hTargetRelated⟩
       rw [buildParallelAutomaton_pair_hasEdge_iff signature alphabet left right
         interface q1 q2 state' env label (TypeOfferSummary.mk current future)
-        (hParallelCompatible := hParallelCompatible) (hSymbol := hSignatureSymbol)
+        (hParallelCompatible := hParallelCompatible)
+        (hMessageDisjoint := hMessageDisjoint)
+        (hLeftStepIff := hLeftIH) (hRightStepIff := hRightIH)
+        (hSymbol := hSignatureSymbol)
         (hChildLeftRelated := hLeftRelated) (hChildRightRelated := hRightRelated)] at hEdge
       -- survivor edge: one component already rests at an accepting state.
       rcases hEdge with hEdge | hSurvivorEdge

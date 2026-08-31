@@ -60,10 +60,10 @@ def parallelRawTransitionEdges (signature : TypeAlphabet)
           target := target }
 
 /-- The unpartnered edges of a product state whose left component has already
-reached an accepting state.  The surviving right component steps alone, and
-the interface must be empty on both its offer fields. -/
-def parallelLeftCompleteEdges (signature : TypeAlphabet)
-    (rightAlphabet : PactTypeAlphabet) (interface : Interface)
+reached an accepting state.  The surviving right component steps alone, so
+there is nothing left to synchronize with: only the interface has to be empty
+on both its offer fields. -/
+def parallelLeftCompleteEdges (interface : Interface)
     (left right : AutomatonFragment)
     (rightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -71,7 +71,6 @@ def parallelLeftCompleteEdges (signature : TypeAlphabet)
   exact
     ((left.accepting ∩ left.states).biUnion fun leftState =>
       ((resolveAutomatonEdgesWith right rightFuture).filter fun rightEdge =>
-        parallelComponentEdgeAllowed signature rightAlphabet rightEdge ∧
           rightEdge.target ∉ right.accepting ∧
           restrictTypeOffers interface rightEdge.current = ∅ ∧
           restrictTypeOffers interface rightEdge.future = ∅).image
@@ -86,8 +85,7 @@ def parallelLeftCompleteEdges (signature : TypeAlphabet)
 
 /-- The mirror of `parallelLeftCompleteEdges` for a completed right
 component. -/
-def parallelRightCompleteEdges (signature : TypeAlphabet)
-    (leftAlphabet : PactTypeAlphabet) (interface : Interface)
+def parallelRightCompleteEdges (interface : Interface)
     (left right : AutomatonFragment)
     (leftFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -95,7 +93,6 @@ def parallelRightCompleteEdges (signature : TypeAlphabet)
   exact
     ((right.accepting ∩ right.states).biUnion fun rightState =>
       ((resolveAutomatonEdgesWith left leftFuture).filter fun leftEdge =>
-        parallelComponentEdgeAllowed signature leftAlphabet leftEdge ∧
           leftEdge.target ∉ left.accepting ∧
           restrictTypeOffers interface leftEdge.current = ∅ ∧
           restrictTypeOffers interface leftEdge.future = ∅).image
@@ -110,15 +107,13 @@ def parallelRightCompleteEdges (signature : TypeAlphabet)
 
 /-- The continuation of `parallelLeftCompleteEdges` inside the survivor
 region: the surviving right component keeps stepping from `survivor 1`. -/
-def parallelLeftCompleteSurvivorEdges (signature : TypeAlphabet)
-    (rightAlphabet : PactTypeAlphabet) (interface : Interface)
+def parallelLeftCompleteSurvivorEdges (interface : Interface)
     (right : AutomatonFragment)
     (rightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
   classical
   exact
     ((resolveAutomatonEdgesWith right rightFuture).filter fun rightEdge =>
-      parallelComponentEdgeAllowed signature rightAlphabet rightEdge ∧
         rightEdge.target ∉ right.accepting ∧
         restrictTypeOffers interface rightEdge.current = ∅ ∧
         restrictTypeOffers interface rightEdge.future = ∅).image
@@ -133,15 +128,13 @@ def parallelLeftCompleteSurvivorEdges (signature : TypeAlphabet)
 
 /-- The mirror of `parallelLeftCompleteSurvivorEdges` for a surviving left
 component, stepping from `survivor 0`. -/
-def parallelRightCompleteSurvivorEdges (signature : TypeAlphabet)
-    (leftAlphabet : PactTypeAlphabet) (interface : Interface)
+def parallelRightCompleteSurvivorEdges (interface : Interface)
     (left : AutomatonFragment)
     (leftFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
   classical
   exact
     ((resolveAutomatonEdgesWith left leftFuture).filter fun leftEdge =>
-      parallelComponentEdgeAllowed signature leftAlphabet leftEdge ∧
         leftEdge.target ∉ left.accepting ∧
         restrictTypeOffers interface leftEdge.current = ∅ ∧
         restrictTypeOffers interface leftEdge.future = ∅).image
@@ -177,14 +170,10 @@ def ParallelRawStep (signature : TypeAlphabet)
   ∃ edge ∈ parallelRawTransitionEdges signature leftAlphabet rightAlphabet
       interface left right
       leftFuture rightFuture ∪
-      parallelLeftCompleteEdges signature rightAlphabet interface left right
-        rightFuture ∪
-      parallelRightCompleteEdges signature leftAlphabet interface left right
-        leftFuture ∪
-      parallelLeftCompleteSurvivorEdges signature rightAlphabet interface right
-        rightFuture ∪
-      parallelRightCompleteSurvivorEdges signature leftAlphabet interface left
-        leftFuture ∪
+      parallelLeftCompleteEdges interface left right rightFuture ∪
+      parallelRightCompleteEdges interface left right leftFuture ∪
+      parallelLeftCompleteSurvivorEdges interface right rightFuture ∪
+      parallelRightCompleteSurvivorEdges interface left leftFuture ∪
       parallelDoneEdges signature parentAlphabet,
     edge.source = source ∧ edge.target = target
 
@@ -280,14 +269,11 @@ def buildParallelAutomaton (signature : TypeAlphabet)
     (parallelRawTransitionEdges signature leftAlphabet rightAlphabet interface
       left right
       leftFuture rightFuture ∪
-      parallelLeftCompleteEdges signature rightAlphabet interface left right
-        rightFuture ∪
-      parallelRightCompleteEdges signature leftAlphabet interface left right
-        leftFuture ∪
-      parallelLeftCompleteSurvivorEdges signature rightAlphabet interface right
-        rightFuture ∪
-      parallelRightCompleteSurvivorEdges signature leftAlphabet interface left
-        leftFuture).filter fun edge =>
+      parallelLeftCompleteEdges interface left right rightFuture ∪
+      parallelRightCompleteEdges interface left right leftFuture ∪
+      parallelLeftCompleteSurvivorEdges interface right rightFuture ∪
+      parallelRightCompleteSurvivorEdges interface left leftFuture).filter
+      fun edge =>
       ParallelReachable signature parentAlphabet leftAlphabet rightAlphabet
         interface left right
         leftFuture rightFuture edge.source
