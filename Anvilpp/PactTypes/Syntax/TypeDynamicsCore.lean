@@ -10,10 +10,6 @@ noncomputable section
 
 /-! ## Type dynamics and semantic correspondence -/
 
-/-- The complementary environment action needed to fire a type action. -/
-def typeNeed (action : BareMessage) : BareMessage :=
-  (action.1, action.2.invert)
-
 def typeBranchNeeds (branches : List (BareMessage × PactType)) :
     Finset BareMessage :=
   (branches.map fun branch => typeNeed branch.1).toFinset
@@ -36,65 +32,12 @@ namespace PactTypeAlphabet
   def branchPart (parent : PactTypeAlphabet)
       (branch : BareMessage × PactType) : PactTypeAlphabet :=
     { actions := parent.actions ∩
-        ({branch.1} ∪ PactType.MessageActions branch.2)
-      progress := parent.progress ∩ PactType.ProgressIds branch.2
-      fair := parent.fair ∩ PactType.FairChoiceIds branch.2 }
+        ({branch.1} ∪ PactType.MessageActions branch.2) }
 
   /-- The declarations left after assigning one component of an internal
   parallel product. -/
   def remove (parent assigned : PactTypeAlphabet) : PactTypeAlphabet :=
-    { actions := parent.actions \ assigned.actions
-      progress := parent.progress \ assigned.progress
-      fair := parent.fair \ assigned.fair }
-
-  /-- Assigning one branch its part and the tail the remainder reconstructs
-  the enclosing alphabet.  The generated product has an empty interface, so
-  no action is hidden at this internal parallel node. -/
-  theorem mergeHidden_branchPart_remove_empty
-      (parent : PactTypeAlphabet) (branch : BareMessage × PactType) :
-      parent = mergeHidden (branchPart parent branch)
-        (remove parent (branchPart parent branch)) ∅ := by
-    rcases parent with ⟨actions, progress, fair⟩
-    simp [mergeHidden, branchPart, remove]
-    constructor
-    · calc
-        actions = actions \ (insert branch.1 branch.2.MessageActions) ∪
-            actions ∩ (insert branch.1 branch.2.MessageActions) :=
-          (Finset.sdiff_union_inter actions
-            (insert branch.1 branch.2.MessageActions)).symm
-        _ = actions ∩ (insert branch.1 branch.2.MessageActions) ∪
-            actions \ (insert branch.1 branch.2.MessageActions) :=
-          Finset.union_comm _ _
-    constructor
-    · calc
-        progress = progress \ branch.2.ProgressIds ∪
-            progress ∩ branch.2.ProgressIds :=
-          (Finset.sdiff_union_inter progress branch.2.ProgressIds).symm
-        _ = progress ∩ branch.2.ProgressIds ∪
-            progress \ branch.2.ProgressIds := Finset.union_comm _ _
-    · calc
-        fair = fair \ branch.2.FairChoiceIds ∪
-            fair ∩ branch.2.FairChoiceIds :=
-          (Finset.sdiff_union_inter fair branch.2.FairChoiceIds).symm
-        _ = fair ∩ branch.2.FairChoiceIds ∪
-            fair \ branch.2.FairChoiceIds := Finset.union_comm _ _
-
-  /-- Splitting `parent` into one branch's part and the remainder gives two
-  parallel-compatible alphabets, with the empty interface (no synchronization
-  at this internal, compiler-generated parallel node). -/
-  theorem branchPart_remove_parallelCompatible
-      (parent : PactTypeAlphabet) (branch : BareMessage × PactType) :
-      ParallelCompatible parent (branchPart parent branch)
-        (remove parent (branchPart parent branch)) ∅ := by
-    exact
-      { parent_eq := mergeHidden_branchPart_remove_empty parent branch
-        complementary := by simp [ComplementaryOn]
-        progress_disjoint := by
-          simp only [branchPart, remove]
-          exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp)
-        fair_disjoint := by
-          simp only [branchPart, remove]
-          exact (Finset.disjoint_sdiff_inter _ _).symm.mono_right (by simp) }
+    { actions := parent.actions \ assigned.actions }
 
   /-- Project a new parallel boundary alphabet to one of the old children.
   Interface actions remain local to the child even though they are hidden at
@@ -102,9 +45,7 @@ namespace PactTypeAlphabet
   def projectParallelChild (parent child : PactTypeAlphabet)
       (interface : Interface) : PactTypeAlphabet :=
     { actions := child.actions.filter fun action =>
-        action.1 ∈ interface ∨ action ∈ parent.actions
-      progress := child.progress ∩ parent.progress
-      fair := child.fair ∩ parent.fair }
+        action.1 ∈ interface ∨ action ∈ parent.actions }
 
   /-- Project a new parallel alphabet to the left child.  The left child keeps
   its own projection, and additionally absorbs the declarations that are new to
@@ -115,9 +56,7 @@ namespace PactTypeAlphabet
     let rightPart := projectParallelChild parent right interface
     { actions :=
         (projectParallelChild parent left interface).actions ∪
-          (parent.actions \ rightPart.actions)
-      progress := parent.progress \ rightPart.progress
-      fair := parent.fair \ rightPart.fair }
+          (parent.actions \ rightPart.actions) }
 
 end PactTypeAlphabet
 
@@ -227,23 +166,25 @@ def parallelType (left right : PactType) (interface : Interface) : PactType :=
     left right interface
 
 /- The worker partitions `alphabet` from left to right.  Each non-final branch
-receives exactly the declarations it uses.  The final branch receives the
-remainder, so the product retains the enclosing offer's fixed alphabet. -/
+receives its own declared alphabet.  The final branch receives the remainder,
+so the product retains the enclosing offer's fixed alphabet. -/
 def parallelTypeBranchesWithin (alphabet : PactTypeAlphabet) :
     List (BareMessage × PactType) → PactType
   | [] => .skip alphabet
   | [branch] => singletonTypeXOfferAt alphabet branch
   | branch :: rest =>
-      let leftAlphabet := alphabet.branchPart branch
-      let rightAlphabet := alphabet.remove leftAlphabet
+      let leftAlphabet := branch.2.alphabet
+      let rightAlphabet : PactTypeAlphabet :=
+        { actions := PactType.branchAlphabetActions rest }
       .par alphabet (singletonTypeXOfferAt leftAlphabet branch)
         (parallelTypeBranchesWithin rightAlphabet rest) ∅
 
 /-- Rewrite a conjunctive type offer into parallel singleton exclusive offers
 whose component alphabets partition the enclosing offer alphabet. -/
-def parallelTypeBranches : List (BareMessage × PactType) → PactType
+def parallelTypeBranches (alphabet : PactTypeAlphabet) :
+    List (BareMessage × PactType) → PactType
   | [] => .skip PactTypeAlphabet.empty
-  | branch :: rest => parallelTypeBranchesWithin branch.2.alphabet (branch :: rest)
+  | branch :: rest => parallelTypeBranchesWithin alphabet (branch :: rest)
 
 /-- Post-process the singleton-`xoffer` product after `selected` witnesses that
 the conjunctive offer fired.  Exactly that singleton loses its synthetic
@@ -257,8 +198,9 @@ def parallelTypeBranchesSelectingWithin (alphabet : PactTypeAlphabet)
       if branch = selected then selectedTypeBranchAt alphabet branch
       else singletonTypeXOfferAt alphabet branch
   | branch :: rest =>
-      let leftAlphabet := alphabet.branchPart branch
-      let rightAlphabet := alphabet.remove leftAlphabet
+      let leftAlphabet := branch.2.alphabet
+      let rightAlphabet : PactTypeAlphabet :=
+        { actions := PactType.branchAlphabetActions rest }
       if branch = selected then
         .par alphabet (selectedTypeBranchAt leftAlphabet branch)
           (parallelTypeBranchesWithin rightAlphabet rest) ∅
@@ -266,74 +208,47 @@ def parallelTypeBranchesSelectingWithin (alphabet : PactTypeAlphabet)
         .par alphabet (singletonTypeXOfferAt leftAlphabet branch)
           (parallelTypeBranchesSelectingWithin rightAlphabet selected rest) ∅
 
-def parallelTypeBranchesSelecting
+def parallelTypeBranchesSelecting (alphabet : PactTypeAlphabet)
     (selected : BareMessage × PactType) :
     List (BareMessage × PactType) → PactType
   | [] => .skip PactTypeAlphabet.empty
   | branch :: rest =>
-      parallelTypeBranchesSelectingWithin branch.2.alphabet selected
-        (branch :: rest)
+      parallelTypeBranchesSelectingWithin alphabet selected (branch :: rest)
 
 @[simp] theorem parallelTypeBranchesSelecting_singleton_self
-    (branch : BareMessage × PactType) :
-    parallelTypeBranchesSelecting branch [branch] =
-      selectedTypeBranch branch := by
-  simp [parallelTypeBranchesSelecting, parallelTypeBranchesSelectingWithin,
-    selectedTypeBranch]
+    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType) :
+    parallelTypeBranchesSelecting alphabet branch [branch] =
+      selectedTypeBranchAt alphabet branch := by
+  simp [parallelTypeBranchesSelecting, parallelTypeBranchesSelectingWithin]
 
 theorem parallelTypeBranches_alphabet_eq_of_nonempty
     {alphabet : PactTypeAlphabet} :
     ∀ {branches : List (BareMessage × PactType)},
       branches ≠ [] →
-      PactType.BranchesAlphabetWellFormed alphabet branches →
-      (parallelTypeBranches branches).alphabet = alphabet
-  | [], hNonempty, _ => False.elim (hNonempty rfl)
-  | [branch], _, hBranches => by
-      rcases branch with ⟨action, processType⟩
-      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      (parallelTypeBranches alphabet branches).alphabet = alphabet
+  | [], hNonempty => False.elim (hNonempty rfl)
+  | [branch], _ => by
       simp [parallelTypeBranches, parallelTypeBranchesWithin,
         singletonTypeXOfferAt, PactType.alphabet]
-      exact hBranches.2.1
-  | branch :: next :: rest, _, hBranches => by
-      rcases branch with ⟨action, processType⟩
-      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
-      change processType.alphabet = alphabet
-      exact hBranches.2.1
+  | _ :: _ :: _, _ => rfl
 
 theorem parallelTypeBranchesSelecting_alphabet_eq_of_mem
     {alphabet : PactTypeAlphabet} {selected : BareMessage × PactType} :
     ∀ {branches : List (BareMessage × PactType)},
       selected ∈ branches →
-      PactType.BranchesAlphabetWellFormed alphabet branches →
-      (parallelTypeBranchesSelecting selected branches).alphabet = alphabet
-  | [], hMem, _ => by
+      (parallelTypeBranchesSelecting alphabet selected branches).alphabet =
+        alphabet
+  | [], hMem => by
       cases hMem
-  | [branch], hMem, hBranches => by
-      have hSelected : selected = branch := by simpa using hMem
-      subst selected
-      rcases branch with ⟨action, processType⟩
-      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
-      simpa [parallelTypeBranchesSelecting,
-        parallelTypeBranchesSelectingWithin, selectedTypeBranchAt,
-        PactType.alphabet] using hBranches.2.1
-  | branch :: next :: rest, hMem, hBranches => by
-      by_cases hSelected : branch = selected
-      · subst selected
-        rcases branch with ⟨action, processType⟩
-        simp only [PactType.BranchesAlphabetWellFormed] at hBranches
-        simpa [parallelTypeBranchesSelecting,
-          parallelTypeBranchesSelectingWithin, PactType.alphabet] using
-            hBranches.2.1
-      · have hMemTail : selected ∈ next :: rest := by
-          simp only [List.mem_cons] at hMem
-          rcases hMem with hHead | hTail
-          · exact False.elim (hSelected hHead.symm)
-          · simpa [List.mem_cons] using hTail
-        rcases branch with ⟨action, processType⟩
-        simp only [PactType.BranchesAlphabetWellFormed] at hBranches
-        simpa [parallelTypeBranchesSelecting,
-          parallelTypeBranchesSelectingWithin, PactType.alphabet, hSelected]
-          using hBranches.2.1
+  | [branch], _ => by
+      by_cases hSelected : branch = selected <;>
+        simp [parallelTypeBranchesSelecting,
+          parallelTypeBranchesSelectingWithin, selectedTypeBranchAt,
+          singletonTypeXOfferAt, PactType.alphabet, hSelected]
+  | _ :: _ :: _, _ => by
+      simp only [parallelTypeBranchesSelecting,
+        parallelTypeBranchesSelectingWithin]
+      split <;> rfl
 
 /-- Reannotation rewrites only alphabets, so it leaves every tail-occurrence
 judgement of the underlying term unchanged. -/
@@ -1051,29 +966,29 @@ theorem parallelTypeBranchesSelectingWithin_tailRecursive
 /-- Committing a conjunctive offer produces a term with no free occurrence of
 any name that the offer's branch bodies do not mention. -/
 theorem parallelTypeBranchesSelecting_tailOccurrences (name : String)
-    (selected : BareMessage × PactType)
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
     (branches : List (BareMessage × PactType)) (tail : Prop)
     (hBranches : ∀ branch ∈ branches, branch.2.TailOccurrences name False)
     (hSelected : selected.2.TailOccurrences name False) :
-    (parallelTypeBranchesSelecting selected branches).TailOccurrences
+    (parallelTypeBranchesSelecting alphabet selected branches).TailOccurrences
       name tail := by
   cases branches with
   | nil => simp [parallelTypeBranchesSelecting, PactType.TailOccurrences]
   | cons branch rest =>
       exact parallelTypeBranchesSelectingWithin_tailOccurrences name selected
-        (branch :: rest) branch.2.alphabet tail hBranches hSelected
+        (branch :: rest) alphabet tail hBranches hSelected
 
 theorem parallelTypeBranchesSelecting_tailRecursive
-    (selected : BareMessage × PactType)
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
     (branches : List (BareMessage × PactType))
     (hBranches : ∀ branch ∈ branches, branch.2.TailRecursive)
     (hSelected : selected.2.TailRecursive) :
-    (parallelTypeBranchesSelecting selected branches).TailRecursive := by
+    (parallelTypeBranchesSelecting alphabet selected branches).TailRecursive := by
   cases branches with
   | nil => simp [parallelTypeBranchesSelecting, PactType.TailRecursive]
   | cons branch rest =>
       exact parallelTypeBranchesSelectingWithin_tailRecursive selected
-        (branch :: rest) branch.2.alphabet hBranches hSelected
+        (branch :: rest) alphabet hBranches hSelected
 
 theorem parallelTypeBranchesSelectingWithin_clockGuarded
     (selected : BareMessage × PactType) :
@@ -1116,16 +1031,16 @@ theorem parallelTypeBranchesSelectingWithin_clockGuarded
                 hBranches item (List.mem_cons_of_mem branch hItem)) hSelected⟩
 
 theorem parallelTypeBranchesSelecting_clockGuarded
-    (selected : BareMessage × PactType)
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
     (branches : List (BareMessage × PactType))
     (hBranches : ∀ branch ∈ branches, branch.2.ClockGuarded)
     (hSelected : selected.2.ClockGuarded) :
-    (parallelTypeBranchesSelecting selected branches).ClockGuarded := by
+    (parallelTypeBranchesSelecting alphabet selected branches).ClockGuarded := by
   cases branches with
   | nil => simp [parallelTypeBranchesSelecting, PactType.ClockGuarded]
   | cons branch rest =>
       exact parallelTypeBranchesSelectingWithin_clockGuarded selected
-        (branch :: rest) branch.2.alphabet hBranches hSelected
+        (branch :: rest) alphabet hBranches hSelected
 
 /-- Actions appearing at the heads of an offer's branches. -/
 def typeBranchActions

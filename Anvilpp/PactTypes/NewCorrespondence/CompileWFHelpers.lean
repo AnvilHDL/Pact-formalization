@@ -8,24 +8,6 @@ namespace NewCorrespondence
 
 noncomputable section
 
-/-- Proves that a transition-alphabet symbol has an environment allowed by the signature. -/
-lemma transitionAlphabet_environment_mem
-    (signature : TypeAlphabet)
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet) :
-    env ∈ signature.localEnvironments := by
-  classical
-  unfold TypeAlphabet.transitionAlphabet at hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  rcases hSymbol with ⟨env0, hEnv0, hRest⟩
-  rw [Finset.mem_biUnion] at hRest
-  rcases hRest with ⟨_label0, _hLabel0, hImage⟩
-  rw [Finset.mem_image] at hImage
-  rcases hImage with ⟨_offers0, _hOffers0, hEq⟩
-  injection hEq with hEnvEq _ _
-  simpa [hEnvEq] using hEnv0
-
 /-- A symbol in a type's fixed public alphabet uses an environment over that
 same fixed alphabet. -/
 lemma transitionAlphabetFor_localEnvironment_mem
@@ -358,7 +340,8 @@ lemma compileType_message_wait_edge
       target := .root }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
       hLocal, hClock, hNoNeed, hDeclared]
-  · simp [computeFutureOf_message_root signature msg dir hDeclared]
+  · simp [PactType.alphabet,
+      computeFutureOf_message_root signature msg dir hDeclared]
 
 /-- Proves that compiled message has the final-state non-clock idle edge. -/
 lemma compileType_message_final_edge
@@ -420,7 +403,8 @@ lemma compileType_message_edge_cases
     exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hNeed⟩
   · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed, hDeclared⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only [computeFutureOf_message_root signature msg dir hDeclared]
+    simp only [PactType.alphabet,
+      computeFutureOf_message_root signature msg dir hDeclared]
       at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env

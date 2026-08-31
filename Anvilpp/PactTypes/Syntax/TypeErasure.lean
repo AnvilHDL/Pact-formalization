@@ -21,17 +21,15 @@ mutual
           (PactTypeAlphabet.ofAction (msg, .recv))
           (processAlphabet process)
     | Proc.var _ | Proc.skip | Proc.cycle => PactTypeAlphabet.empty
-    | Proc.endp pid => PactTypeAlphabet.ofProgress pid
+    | Proc.endp _ => PactTypeAlphabet.empty
     | Proc.par left right interface =>
         PactTypeAlphabet.mergeHidden (processAlphabet left)
           (processAlphabet right) interface
     | Proc.seq left right | Proc.ifunfair _ left right =>
         PactTypeAlphabet.union (processAlphabet left) (processAlphabet right)
     | Proc.letp _ _ process => processAlphabet process
-    | Proc.iffair bid _ left right =>
-        PactTypeAlphabet.union (PactTypeAlphabet.ofFair bid)
-          (PactTypeAlphabet.union (processAlphabet left)
-            (processAlphabet right))
+    | Proc.iffair _ _ left right =>
+        PactTypeAlphabet.union (processAlphabet left) (processAlphabet right)
     | Proc.xoffer elseProcess branches | Proc.offer elseProcess branches =>
         PactTypeAlphabet.union (processAlphabet elseProcess)
           (branchesAlphabet branches)
@@ -218,6 +216,10 @@ def eraseLabel : Label → TypeLabel
   | .actions observations => .actions (observations.image eraseObservation)
   | .tock => .tock
 
+/-- The complementary environment action needed to fire a type action. -/
+def typeNeed (action : BareMessage) : BareMessage :=
+  (action.1, action.2.invert)
+
 /-- A value-erased one-step environment. -/
 structure TypeEnvironment : Type where
   immediate : Finset BareMessage
@@ -233,9 +235,13 @@ namespace TypeEnvironment
   def tock : TypeEnvironment :=
     { immediate := ∅, future := ∅, clock := true }
 
-  def WellFormed (env : TypeEnvironment) : Prop :=
+  /-- Well-formedness of an environment offered to a type with fixed alphabet
+  `alphabet`: both menus lie within the needs of the type's own actions. -/
+  def WellFormed (env : TypeEnvironment) (alphabet : PactTypeAlphabet) : Prop :=
     (env.clock = true → env.immediate = ∅ ∧ env.future = ∅) ∧
-    (env.clock = false → env.immediate ∩ env.future = ∅)
+    (env.clock = false → env.immediate ∩ env.future = ∅) ∧
+    env.immediate ⊆ alphabet.actions.image typeNeed ∧
+    env.future ⊆ alphabet.actions.image typeNeed
 
   def hasNeed (env : TypeEnvironment) (action : BareMessage) : Prop :=
     (action.1, action.2.invert) ∈ env.immediate

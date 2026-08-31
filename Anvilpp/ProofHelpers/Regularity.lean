@@ -36,10 +36,17 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.ParallelFairChoiceOwnership processType ∧
     PactType.InterfaceScoped processType
 
-/-- Types admitted by the canonical construction relative to a fixed alphabet. -/
-def AdmissibleType (signature : TypeAlphabet) (processType : PactType) : Prop :=
-  signature.WellFormed ∧ signature.Supports processType ∧
-    processType.AlphabetWellFormed ∧ ClosedGuardedRegular processType
+/-- Types admitted by the canonical construction.  Nothing is checked against
+the signature any more: the signature holds only the resolved observations and
+identifiers fixed at the start of compilation, and every action-indexed set is
+read off the type's own alphabet.  What admissibility adds is linearity of the
+progress and fair-choice identifiers, which is what lets a label name the
+subterm that emitted it. -/
+def AdmissibleType (_signature : TypeAlphabet) (processType : PactType) : Prop :=
+  processType.AlphabetWellFormed ∧
+    PactType.ProgressLinear processType ∧
+    PactType.FairChoiceLinear processType ∧
+    ClosedGuardedRegular processType
 
 /-- `skip` cannot take its silent operational step in a clock environment. -/
 theorem skip_has_no_clock_transition {alphabet : PactTypeAlphabet} :

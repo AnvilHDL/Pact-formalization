@@ -312,8 +312,8 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
         buildSelectedConjunctiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun selected => (selected.1, compileTypeFuel signature
-            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-            (parallelTypeBranchesSelecting selected branches))))
+            (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+            (parallelTypeBranchesSelecting alphabet selected branches))))
     (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 0 visited) =
@@ -328,8 +328,8 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     compileTypeFuel signature (typeCompilationFuel elseType) elseType
   let selectedConjunctions := branches.map fun selected =>
     (selected.1, compileTypeFuel signature
-      (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-      (parallelTypeBranchesSelecting selected branches))
+      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+      (parallelTypeBranchesSelecting alphabet selected branches))
   let parentFragment :=
     buildSelectedConjunctiveOfferAutomaton signature alphabet branches
       elseFragment selectedConjunctions
@@ -367,31 +367,31 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
         buildSelectedConjunctiveOfferAutomaton signature alphabet branches
           (compileTypeFuel signature (typeCompilationFuel elseType) elseType)
           (branches.map fun selected => (selected.1, compileTypeFuel signature
-            (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-            (parallelTypeBranchesSelecting selected branches))))
+            (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+            (parallelTypeBranchesSelecting alphabet selected branches))))
     (i : Nat) (selected : BareMessage × PactType)
     (hSelected : branches[i]? = some selected)
-    (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting selected branches) +
+    (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) +
       1 ≤ typeCompilationFuel whole)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child (i + 1) visited) =
-        stateProductInfo (parallelTypeBranchesSelecting selected branches)
+        stateProductInfo (parallelTypeBranchesSelecting alphabet selected branches)
           visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel signature
-      (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-      (parallelTypeBranchesSelecting selected branches)).states) :
+      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+      (parallelTypeBranchesSelecting alphabet selected branches)).states) :
     computeFutureOf signature whole (.child (i + 1) state) =
-      computeFutureOf signature (parallelTypeBranchesSelecting selected branches)
+      computeFutureOf signature (parallelTypeBranchesSelecting alphabet selected branches)
         state := by
   classical
   let elseFragment :=
     compileTypeFuel signature (typeCompilationFuel elseType) elseType
   let selectedConjunctions := branches.map fun branch =>
     (branch.1, compileTypeFuel signature
-      (typeCompilationFuel (parallelTypeBranchesSelecting branch branches))
-      (parallelTypeBranchesSelecting branch branches))
-  let branchType := parallelTypeBranchesSelecting selected branches
+      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet branch branches))
+      (parallelTypeBranchesSelecting alphabet branch branches))
+  let branchType := parallelTypeBranchesSelecting alphabet selected branches
   let branchFragment :=
     compileTypeFuel signature (typeCompilationFuel branchType) branchType
   let parentFragment :=
@@ -433,17 +433,18 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
 
 /-- Relates a branch's generated commit type found by index after mapping compiled fragments in to the same branch found by index in the original list. -/
 theorem branches_map_selecting_getElem?_eq_some_iff
-    (signature : TypeAlphabet) (branches : List (BareMessage × PactType))
+    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
     (i : Nat) (action : BareMessage) (automaton : AutomatonFragment) :
     (branches.map fun selected => (selected.1, compileTypeFuel signature
-        (typeCompilationFuel (parallelTypeBranchesSelecting selected branches))
-        (parallelTypeBranchesSelecting selected branches)))[i]? =
+        (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+        (parallelTypeBranchesSelecting alphabet selected branches)))[i]? =
         some (action, automaton) ↔
       ∃ branchType, branches[i]? = some (action, branchType) ∧
         compileTypeFuel signature
           (typeCompilationFuel
-            (parallelTypeBranchesSelecting (action, branchType) branches))
-          (parallelTypeBranchesSelecting (action, branchType) branches) =
+            (parallelTypeBranchesSelecting alphabet (action, branchType) branches))
+          (parallelTypeBranchesSelecting alphabet (action, branchType) branches) =
           automaton := by
   rw [List.getElem?_map, Option.map_eq_some_iff]
   constructor
@@ -470,9 +471,9 @@ def offerRelationShape
       branches[i]? = some selected ∧
       entry.2 = .child (i + 1) q ∧
       relationMembership
-        (buildRelationSet (parallelTypeBranchesSelecting selected branches)
+        (buildRelationSet (parallelTypeBranchesSelecting alphabet selected branches)
           (compileType signature
-            (parallelTypeBranchesSelecting selected branches)))
+            (parallelTypeBranchesSelecting alphabet selected branches)))
         entry.1 q)
 
 lemma relationMembership_offer_root
@@ -529,8 +530,8 @@ lemma relationMembership_offer_selected
     {state : TypeAutomatonState}
     (hGet : branches[index]? = some selected)
     (hRelated : relationMembership
-      (buildRelationSet (parallelTypeBranchesSelecting selected branches)
-        (compileType signature (parallelTypeBranchesSelecting selected branches)))
+      (buildRelationSet (parallelTypeBranchesSelecting alphabet selected branches)
+        (compileType signature (parallelTypeBranchesSelecting alphabet selected branches)))
       residual state) :
     relationMembership
       (buildRelationSet (.offer alphabet elseType branches)
@@ -541,7 +542,7 @@ lemma relationMembership_offer_selected
     simp only [typeCompilationFuel]
     omega
   have hSelectedFuel :
-      typeCompilationFuel (parallelTypeBranchesSelecting selected branches) ≤
+      typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) ≤
         max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) := by
     rw [typeCompilationFuel_parallelTypeBranchesSelecting]
     exact le_max_right _ _
@@ -558,7 +559,7 @@ lemma relationMembership_offer_selected
   apply Finset.mem_image.mpr
   refine ⟨(residual, state), ?_, rfl⟩
   rw [buildRelationSetCoreFuel_eq_of_sufficient signature
-    (parallelTypeBranchesSelecting selected branches) hSelectedFuel le_rfl]
+    (parallelTypeBranchesSelecting alphabet selected branches) hSelectedFuel le_rfl]
   exact hRelated
 
 set_option maxHeartbeats 4000000 in
@@ -607,23 +608,23 @@ lemma relationMembership_offer_cases
     have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
     have hSelectedFuel :
         typeCompilationFuel
-            (parallelTypeBranchesSelecting item.1 branches) ≤
+            (parallelTypeBranchesSelecting alphabet item.1 branches) ≤
           max (typeCompilationFuel elseType)
             (conjunctiveCompilationFuel branches) := by
       rw [typeCompilationFuel_parallelTypeBranchesSelecting]
       exact le_max_right _ _
     have hSelectedRelated : relationMembership
-        (buildRelationSet (parallelTypeBranchesSelecting item.1 branches)
+        (buildRelationSet (parallelTypeBranchesSelecting alphabet item.1 branches)
           (compileType signature
-            (parallelTypeBranchesSelecting item.1 branches)))
+            (parallelTypeBranchesSelecting alphabet item.1 branches)))
         entry.1 entry.2 := by
       show (entry.1, entry.2) ∈
         buildRelationSetCoreFuel signature
           (typeCompilationFuel
-            (parallelTypeBranchesSelecting item.1 branches))
-          (parallelTypeBranchesSelecting item.1 branches)
+            (parallelTypeBranchesSelecting alphabet item.1 branches))
+          (parallelTypeBranchesSelecting alphabet item.1 branches)
       rw [← buildRelationSetCoreFuel_eq_of_sufficient signature
-        (parallelTypeBranchesSelecting item.1 branches)
+        (parallelTypeBranchesSelecting alphabet item.1 branches)
         hSelectedFuel le_rfl]
       exact hEntry
     exact Or.inr (Or.inr ⟨item.2, item.1, entry.2,

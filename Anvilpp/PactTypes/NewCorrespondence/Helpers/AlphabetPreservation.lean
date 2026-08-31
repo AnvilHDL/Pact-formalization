@@ -228,13 +228,10 @@ mutual
   def PactType.ReannotationSafe (alphabet : PactTypeAlphabet) :
       PactType → Prop
     | .message _ msg dir => (msg, dir) ∈ alphabet.actions
-    | .progress _ pid => pid ∈ alphabet.progress
-    | .tock _ | .skip _ | .var _ _ => True
-    | .choice _ left right | .seq _ left right =>
+    | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+    | .choice _ left right | .seq _ left right
+    | .fairChoice _ _ left right =>
         ReannotationSafe alphabet left ∧ ReannotationSafe alphabet right
-    | .fairChoice _ bid left right =>
-        bid ∈ alphabet.fair ∧
-          ReannotationSafe alphabet left ∧ ReannotationSafe alphabet right
     | .par _ left right interface =>
         PactTypeAlphabet.ParallelCompatible alphabet
           (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
@@ -277,8 +274,7 @@ theorem PactType.AlphabetWellFormed.alphabet_wellFormed
 
 /-- One alphabet declares no more than another. -/
 def PactTypeAlphabet.Subalphabet (small large : PactTypeAlphabet) : Prop :=
-  small.actions ⊆ large.actions ∧ small.progress ⊆ large.progress ∧
-    small.fair ⊆ large.fair
+  small.actions ⊆ large.actions
 
 /-- Restricted to a target it already covers, the child projection keeps the
 child's interface actions and its declarations shared with the target. -/
@@ -340,26 +336,6 @@ theorem PactTypeAlphabet.projectParallelLeft_wellFormed
     · exact hTargetWF msg ⟨hSendT, hRecvT⟩
   · exact hTargetWF msg ⟨hSendT, hRecvT⟩
 
-theorem PactTypeAlphabet.projectParallelLeft_progress
-    (target left right : PactTypeAlphabet) (interface : Interface) :
-    (projectParallelLeft target left right interface).progress =
-      target.progress \ right.progress := by
-  simp only [projectParallelLeft, projectParallelChild]
-  apply Finset.ext
-  intro x
-  simp only [Finset.mem_sdiff, Finset.mem_inter]
-  tauto
-
-theorem PactTypeAlphabet.projectParallelLeft_fair
-    (target left right : PactTypeAlphabet) (interface : Interface) :
-    (projectParallelLeft target left right interface).fair =
-      target.fair \ right.fair := by
-  simp only [projectParallelLeft, projectParallelChild]
-  apply Finset.ext
-  intro x
-  simp only [Finset.mem_sdiff, Finset.mem_inter]
-  tauto
-
 /-- Splitting a target that the parallel node's own alphabet already covers
 gives two projected children compatible with it.  The interface actions are
 taken from the original children, so no interface message is lost. -/
@@ -372,13 +348,9 @@ theorem PactTypeAlphabet.projectParallel_compatible
   have hParentActions : parent.actions =
       (left.actions ∪ right.actions).filter fun action => action.1 ∉ interface := by
     rw [hCompatible.parent_eq]; rfl
-  have hParentProgress : parent.progress = left.progress ∪ right.progress := by
-    rw [hCompatible.parent_eq]; rfl
-  have hParentFair : parent.fair = left.fair ∪ right.fair := by
-    rw [hCompatible.parent_eq]; rfl
   have hTargetNoInterface : ∀ a ∈ target.actions, a.1 ∉ interface := by
     intro a ha
-    have := hSub.1 ha
+    have := hSub ha
     rw [hParentActions] at this
     exact (Finset.mem_filter.mp this).2
   have hLeftActions : (projectParallelLeft target left right interface).actions =
@@ -391,9 +363,7 @@ theorem PactTypeAlphabet.projectParallel_compatible
         action.1 ∈ interface ∨ action ∈ target.actions := rfl
   refine
     { parent_eq := ?parentEq
-      complementary := ?complementary
-      progress_disjoint := ?progressDisjoint
-      fair_disjoint := ?fairDisjoint }
+      complementary := ?complementary }
   case parentEq =>
     have hA : ((projectParallelLeft target left right interface).actions ∪
         (projectParallelChild target right interface).actions).filter
@@ -416,34 +386,8 @@ theorem PactTypeAlphabet.projectParallel_compatible
         by_cases hR : a ∈ right.actions
         · exact Or.inr ⟨hR, Or.inr ha⟩
         · exact Or.inl (Or.inr ⟨ha, hR⟩)
-    have hP : (projectParallelLeft target left right interface).progress ∪
-        (projectParallelChild target right interface).progress = target.progress := by
-      rw [projectParallelLeft_progress]
-      show target.progress \ right.progress ∪ right.progress ∩ target.progress = _
-      apply Finset.ext
-      intro x
-      simp only [Finset.mem_union, Finset.mem_sdiff, Finset.mem_inter]
-      tauto
-    have hF : (projectParallelLeft target left right interface).fair ∪
-        (projectParallelChild target right interface).fair = target.fair := by
-      rw [projectParallelLeft_fair]
-      show target.fair \ right.fair ∪ right.fair ∩ target.fair = _
-      apply Finset.ext
-      intro x
-      simp only [Finset.mem_union, Finset.mem_sdiff, Finset.mem_inter]
-      tauto
-    show target = { actions := _, progress := _, fair := _ }
-    rw [hA, hP, hF]
-  case progressDisjoint =>
-    rw [projectParallelLeft_progress]
-    show Disjoint (target.progress \ right.progress) (right.progress ∩ target.progress)
-    exact Finset.disjoint_left.mpr fun x hx hy =>
-      (Finset.mem_sdiff.mp hx).2 (Finset.mem_inter.mp hy).1
-  case fairDisjoint =>
-    rw [projectParallelLeft_fair]
-    show Disjoint (target.fair \ right.fair) (right.fair ∩ target.fair)
-    exact Finset.disjoint_left.mpr fun x hx hy =>
-      (Finset.mem_sdiff.mp hx).2 (Finset.mem_inter.mp hy).1
+    show target = { actions := _ }
+    rw [hA]
   case complementary =>
     intro msg hMsg
     rcases hCompatible.complementary msg hMsg with ⟨hL, hR⟩ | ⟨hL, hR⟩
@@ -3361,15 +3305,15 @@ theorem TypeTransition.preserves_alphabetWellFormed
       exact hWF.1
   -- Unlike `par_fuse`, whose target is `.skip`, the survivor targets keep the
   -- residual and re-stamp it with the parent alphabet.
-  | left_complete outer interface left right right' rightLabel rightCurrent
-      rightFuture hLeftSkip _ rightTransition hRightOffers hNotSkip
+  | left_complete outer rightEnv interface left right right' rightLabel
+      rightCurrent rightFuture hLeftSkip _ rightTransition hRightOffers hNotSkip
       hRightCurrent
-      hRightFuture hOuterWF ihRight =>
+      hRightFuture hLocal hOuterWF ihRight =>
       intro hWF hTailRec hDisjoint
       sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-  | right_complete outer interface left left' right leftLabel leftCurrent
-      leftFuture hRightSkip _ leftTransition hLeftOffers hNotSkip hLeftCurrent
-      hLeftFuture hOuterWF ihLeft =>
+  | right_complete outer leftEnv interface left left' right leftLabel
+      leftCurrent leftFuture hRightSkip _ leftTransition hLeftOffers hNotSkip
+      hLeftCurrent hLeftFuture hLocal hOuterWF ihLeft =>
       intro hWF hTailRec hDisjoint
       sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
 

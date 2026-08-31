@@ -743,29 +743,6 @@ namespace PactType
       omega
   end
 
-  mutual
-    def MessageActions : PactType → Finset BareMessage
-      | .message _ msg dir => {(msg, dir)}
-      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
-      | .recur _ _ body => MessageActions body
-      | .choice _ left right | .seq _ left right |
-          .fairChoice _ _ left right | .par _ left right _ =>
-          MessageActions left ∪ MessageActions right
-      | .xoffer _ elseType branches | .offer _ elseType branches =>
-          MessageActions elseType ∪ BranchMessageActions branches
-    termination_by processType => sizeOf processType
-
-    def BranchMessageActions : List (BareMessage × PactType) → Finset BareMessage
-      | [] => ∅
-      | (action, processType) :: rest =>
-          {action} ∪ MessageActions processType ∪ BranchMessageActions rest
-    termination_by branches => sizeOf branches
-  decreasing_by
-    all_goals
-      simp_wf
-      omega
-  end
-
   /-! Progress and fair-choice identifiers are also observable in labels.
   Parallel siblings therefore own disjoint sets of these identifiers. -/
   mutual
@@ -807,6 +784,64 @@ namespace PactType
       | [] => ∅
       | (_, processType) :: rest =>
           FairChoiceIds processType ∪ BranchFairChoiceIds rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  /-! Progress and fair-choice identifiers are used linearly: sibling subterms
+  declare disjoint identifiers, and a fair binder does not reuse one of its own
+  body's.  A recursion body may repeat its identifiers across iterations. -/
+  mutual
+    def ProgressLinear : PactType → Prop
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => ProgressLinear body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
+          ProgressLinear left ∧ ProgressLinear right ∧
+            Disjoint (ProgressIds left) (ProgressIds right)
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
+          ProgressLinear elseType ∧ ProgressLinearBranches branches ∧
+            Disjoint (ProgressIds elseType) (BranchProgressIds branches)
+    termination_by processType => sizeOf processType
+
+    def ProgressLinearBranches : List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          ProgressLinear processType ∧
+            Disjoint (ProgressIds processType) (BranchProgressIds rest) ∧
+            ProgressLinearBranches rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+  mutual
+    def FairChoiceLinear : PactType → Prop
+      | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+      | .recur _ _ body => FairChoiceLinear body
+      | .fairChoice _ bid left right =>
+          FairChoiceLinear left ∧ FairChoiceLinear right ∧
+            Disjoint (FairChoiceIds left) (FairChoiceIds right) ∧
+            bid ∉ FairChoiceIds left ∪ FairChoiceIds right
+      | .choice _ left right | .seq _ left right | .par _ left right _ =>
+          FairChoiceLinear left ∧ FairChoiceLinear right ∧
+            Disjoint (FairChoiceIds left) (FairChoiceIds right)
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
+          FairChoiceLinear elseType ∧ FairChoiceLinearBranches branches ∧
+            Disjoint (FairChoiceIds elseType) (BranchFairChoiceIds branches)
+    termination_by processType => sizeOf processType
+
+    def FairChoiceLinearBranches : List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          FairChoiceLinear processType ∧
+            Disjoint (FairChoiceIds processType) (BranchFairChoiceIds rest) ∧
+            FairChoiceLinearBranches rest
     termination_by branches => sizeOf branches
   decreasing_by
     all_goals

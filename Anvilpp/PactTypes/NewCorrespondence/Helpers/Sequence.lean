@@ -564,18 +564,6 @@ inductive SeqCompiledEdgeCase
       future = ∅ →
       SeqCompiledEdgeCase signature alphabet left right residual residual' state state'
         env label current future
-  | entryFuse (skipAlphabet : PactTypeAlphabet) :
-      residual = .seq alphabet (.skip skipAlphabet) right →
-      residual' = right →
-      state = .child 0 (compileType signature left).initial →
-      state' = .child 1 (compileType signature right).initial →
-      label = TypeLabel.silent →
-      current = ∅ →
-      future = typeFutureOffers right →
-      env.WellFormed →
-      env.clock = false →
-      SeqCompiledEdgeCase signature alphabet left right residual residual' state state'
-        env label current future
   | rightStep (q q' : TypeAutomatonState) :
       state = .child 1 q →
       state' = .child 1 q' →

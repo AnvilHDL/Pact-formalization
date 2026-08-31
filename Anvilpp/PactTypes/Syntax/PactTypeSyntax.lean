@@ -16,8 +16,6 @@ unpolarized message names are derived from `actions`.
 -/
 structure PactTypeAlphabet : Type where
   actions : Finset BareMessage
-  progress : Finset ProcId
-  fair : Finset BranchId
   deriving DecidableEq
 
 instance : SizeOf PactTypeAlphabet := ⟨fun _ => 0⟩
@@ -32,43 +30,23 @@ namespace PactTypeAlphabet
     alphabet.OnePolarity
 
   def empty : PactTypeAlphabet :=
-    { actions := ∅
-      progress := ∅
-      fair := ∅ }
+    { actions := ∅ }
 
   def ofAction (action : BareMessage) : PactTypeAlphabet :=
-    { actions := {action}
-      progress := ∅
-      fair := ∅ }
-
-  def ofProgress (pid : ProcId) : PactTypeAlphabet :=
-    { actions := ∅
-      progress := {pid}
-      fair := ∅ }
-
-  def ofFair (bid : BranchId) : PactTypeAlphabet :=
-    { actions := ∅
-      progress := ∅
-      fair := {bid} }
+    { actions := {action} }
 
   def union (left right : PactTypeAlphabet) : PactTypeAlphabet :=
-    { actions := left.actions ∪ right.actions
-      progress := left.progress ∪ right.progress
-      fair := left.fair ∪ right.fair }
+    { actions := left.actions ∪ right.actions }
 
   def hideInterface (alphabet : PactTypeAlphabet)
       (interface : Interface) : PactTypeAlphabet :=
-    { actions := alphabet.actions.filter fun action => action.1 ∉ interface
-      progress := alphabet.progress
-      fair := alphabet.fair }
+    { actions := alphabet.actions.filter fun action => action.1 ∉ interface }
 
   def mergeHidden (left right : PactTypeAlphabet)
       (interface : Interface) : PactTypeAlphabet :=
     { actions :=
         (left.actions ∪ right.actions).filter fun action =>
-          action.1 ∉ interface
-      progress := left.progress ∪ right.progress
-      fair := left.fair ∪ right.fair }
+          action.1 ∉ interface }
 
   @[simp] theorem mergeHidden_self_empty (alphabet : PactTypeAlphabet) :
       mergeHidden alphabet alphabet ∅ = alphabet := by
@@ -82,21 +60,6 @@ namespace PactTypeAlphabet
           (msg, MessageDir.recv) ∈ right.actions) ∨
         ((msg, MessageDir.recv) ∈ left.actions ∧
           (msg, MessageDir.send) ∈ right.actions))
-
-  /-- Compatibility of the fixed alphabets at a parallel node.
-
-  The parent alphabet is the union of the two child alphabets with the
-  interface messages hidden.  On interface ids the two children must use
-  complementary polarities.  Declared actions may overlap freely: what the two
-  bodies actually perform is kept apart by `ParallelMessageOwnership`, and a
-  sequenced sibling forces both children to declare its actions.  Progress ids
-  and fair-choice ids are still disjoint. -/
-  structure ParallelCompatible
-      (parent left right : PactTypeAlphabet) (interface : Interface) : Prop where
-    parent_eq : parent = mergeHidden left right interface
-    complementary : ComplementaryOn left right interface
-    progress_disjoint : Disjoint left.progress right.progress
-    fair_disjoint : Disjoint left.fair right.fair
 
 end PactTypeAlphabet
 
@@ -141,6 +104,59 @@ namespace PactType
   def recurSelf (name : String) (body : PactType) : PactType :=
     .recur body.alphabet name body
 
+  /-! Actions a type can perform.  Needed here so a conjunctive-offer branch
+  can be given the alphabet its siblings do not own. -/
+  mutual
+    def MessageActions : PactType → Finset BareMessage
+      | .message _ msg dir => {(msg, dir)}
+      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
+      | .recur _ _ body => MessageActions body
+      | .choice _ left right | .seq _ left right |
+          .fairChoice _ _ left right | .par _ left right _ =>
+          MessageActions left ∪ MessageActions right
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
+          MessageActions elseType ∪ BranchMessageActions branches
+    termination_by processType => sizeOf processType
+
+    def BranchMessageActions : List (BareMessage × PactType) → Finset BareMessage
+      | [] => ∅
+      | (action, processType) :: rest =>
+          {action} ∪ MessageActions processType ∪ BranchMessageActions rest
+    termination_by branches => sizeOf branches
+  decreasing_by
+    all_goals
+      simp_wf
+      omega
+  end
+
+end PactType
+
+namespace PactTypeAlphabet
+
+  /-- Compatibility of the fixed alphabets at a parallel node.
+
+  On interface ids the two children use complementary polarities.  The parent
+  declares each child's non-interface actions together with the actions the
+  sibling body actually performs — one equation from each side. -/
+  structure ParallelCompatible
+      (parent left right : PactTypeAlphabet)
+      (leftType rightType : PactType) (interface : Interface) : Prop where
+    complementary : ComplementaryOn left right interface
+    parent_left : parent.actions =
+      (hideInterface left interface).actions ∪ PactType.MessageActions rightType
+    parent_right : parent.actions =
+      (hideInterface right interface).actions ∪ PactType.MessageActions leftType
+
+end PactTypeAlphabet
+
+namespace PactType
+
+  /-- Actions declared by the branch alphabets of an offer. -/
+  def branchAlphabetActions : List (BareMessage × PactType) → Finset BareMessage
+    | [] => ∅
+    | (_, processType) :: rest =>
+        processType.alphabet.actions ∪ branchAlphabetActions rest
+
   mutual
     /-- The fixed alphabet discipline for type syntax.
 
@@ -152,17 +168,17 @@ namespace PactType
     -/
     def AlphabetWellFormed : PactType → Prop
       | .message alphabet msg dir =>
-          alphabet.WellFormed ∧ (msg, dir) ∈ alphabet.actions
-      | .progress alphabet pid =>
-          alphabet.WellFormed ∧ pid ∈ alphabet.progress
+          alphabet.WellFormed
+      | .progress alphabet _ =>
+          alphabet.WellFormed
       | .tock alphabet | .skip alphabet | .var alphabet _ =>
           alphabet.WellFormed
       | .choice alphabet left right | .seq alphabet left right =>
           alphabet.WellFormed ∧
             left.alphabet = alphabet ∧ right.alphabet = alphabet ∧
             AlphabetWellFormed left ∧ AlphabetWellFormed right
-      | .fairChoice alphabet bid left right =>
-          alphabet.WellFormed ∧ bid ∈ alphabet.fair ∧
+      | .fairChoice alphabet _ left right =>
+          alphabet.WellFormed ∧
             left.alphabet = alphabet ∧ right.alphabet = alphabet ∧
             AlphabetWellFormed left ∧ AlphabetWellFormed right
       | .recur alphabet _ body =>
@@ -171,29 +187,47 @@ namespace PactType
       | .par alphabet left right interface =>
           alphabet.WellFormed ∧
             PactTypeAlphabet.ParallelCompatible alphabet left.alphabet
-              right.alphabet interface ∧
+              right.alphabet left right interface ∧
             AlphabetWellFormed left ∧ AlphabetWellFormed right
-      | .xoffer alphabet elseType branches
-      | .offer alphabet elseType branches =>
+      | .xoffer alphabet elseType branches =>
           alphabet.WellFormed ∧ elseType.alphabet = alphabet ∧
             AlphabetWellFormed elseType ∧
             BranchesAlphabetWellFormed alphabet branches
+      | .offer alphabet elseType branches =>
+          alphabet.WellFormed ∧ elseType.alphabet = alphabet ∧
+            AlphabetWellFormed elseType ∧
+            OfferBranchesWellFormed alphabet ∅ branches
     termination_by processType => sizeOf processType
 
     def BranchesAlphabetWellFormed
         (alphabet : PactTypeAlphabet) :
         List (BareMessage × PactType) → Prop
       | [] => True
-      | (action, processType) :: rest =>
-          action ∈ alphabet.actions ∧
+      | (_, processType) :: rest =>
             processType.alphabet = alphabet ∧
             AlphabetWellFormed processType ∧
             BranchesAlphabetWellFormed alphabet rest
+    termination_by branches => sizeOf branches
+
+    /-- A conjunctive offer expands into a parallel product, so each branch
+    carries the offer's actions minus everything its siblings own.  `seen`
+    collects the branches already passed, `rest` those still to come. -/
+    def OfferBranchesWellFormed
+        (alphabet : PactTypeAlphabet) (seen : Finset BareMessage) :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (action, processType) :: rest =>
+            processType.alphabet.actions =
+              alphabet.actions \ (seen ∪ BranchMessageActions rest) ∧
+            AlphabetWellFormed processType ∧
+            OfferBranchesWellFormed alphabet
+              (seen ∪ ({action} ∪ MessageActions processType)) rest
     termination_by branches => sizeOf branches
   decreasing_by
     all_goals
       simp_wf
       omega
+
   end
 
   theorem branch_alphabet_eq_of_mem
@@ -211,8 +245,8 @@ namespace PactType
         simp only [List.mem_cons] at hMem
         rcases hMem with hHead | hTail
         · cases hHead
-          exact hBranches.2.1
-        · exact ih hBranches.2.2.2 hTail
+          exact hBranches.1
+        · exact ih hBranches.2.2 hTail
 
   mutual
     /-- Capture-avoiding replacement of a recursive type variable. -/

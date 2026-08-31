@@ -344,12 +344,14 @@ theorem correspondence_par_stepIff
       -- Survivor steps leave a single child re-stamped with the parent alphabet;
       -- the sibling is already `skip` at the source, so its state is accepting.
       -- H13 turns the `skip` sibling into the accepting state the edge needs,
-      -- and the survivor edge family no longer gates on the child alphabet.
-      -- What blocks the case is the child IH: reaching a compiled child edge
-      -- at all needs the symbol in `(compileType signature child).alphabet`,
-      -- while the semantic rule hands the survivor the parent environment
-      -- unprojected and `mergeHidden` keeps the finished side's actions.  Also
-      -- open: `q1 ∈ states` for the finished sibling.
+      -- and the survivor edge family now ranges over every merged environment
+      -- projecting onto the one the child's edge carries.  What still blocks
+      -- the case is that the semantic rule hands the survivor the *parent*
+      -- environment unprojected, so the child IH would need a step under
+      -- `projectAutomatonEnvironment child.alphabet env`: missing is
+      -- `DecoratedTypeTransition env t l o t' ↔
+      --  DecoratedTypeTransition (projectAutomatonEnvironment t.alphabet env)
+      --    t l o t'`.  Also open: `q1 ∈ states` for the finished sibling.
       | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ =>
           sorry -- OPEN: parent environment does not reach the child alphabet
       | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ =>

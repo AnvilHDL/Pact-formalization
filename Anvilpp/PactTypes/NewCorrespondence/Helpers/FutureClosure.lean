@@ -132,10 +132,10 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
     Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
       ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
-        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
+        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
+        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩, _⟩ |
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
@@ -428,13 +428,13 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact compileTypeFuel_initial_mem signature fuel original.2
               (hBranches original hOriginal)
-      | offer _ elseType branches =>
+      | offer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           have hSelected : ∀ selected ∈ branches,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting selected branches) fuel := by
+                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
             intro selected hSelected
             simp only [TypeCompilationFuelSufficient,
               typeCompilationFuel_parallelTypeBranchesSelecting]
@@ -446,14 +446,14 @@ theorem compileTypeFuel_edgeTargetsInStates (signature : TypeAlphabet) :
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
-            exact ih (parallelTypeBranchesSelecting original branches)
+            exact ih (parallelTypeBranchesSelecting alphabet original branches)
               (hSelected original hOriginal)
           · exact compileTypeFuel_initial_mem signature fuel elseType hElse
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact compileTypeFuel_initial_mem signature fuel
-              (parallelTypeBranchesSelecting original branches)
+              (parallelTypeBranchesSelecting alphabet original branches)
               (hSelected original hOriginal)
 
 /-- In a clock environment only the clock itself can fire, with no offers.
@@ -627,13 +627,13 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact ih original.2 (hBranches original hOriginal)
-      | offer _ elseType branches =>
+      | offer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           have hSelected : ∀ selected ∈ branches,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting selected branches) fuel := by
+                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
             intro selected hSelected
             simp only [TypeCompilationFuelSufficient,
               typeCompilationFuel_parallelTypeBranchesSelecting]
@@ -645,7 +645,7 @@ theorem compileTypeFuel_clockEdgesAreTock (signature : TypeAlphabet) :
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
-            exact ih (parallelTypeBranchesSelecting original branches)
+            exact ih (parallelTypeBranchesSelecting alphabet original branches)
               (hSelected original hOriginal)
 
 theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
@@ -801,7 +801,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
             omega
           have hSelected : ∀ selected ∈ branches,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting selected branches) fuel := by
+                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
             intro selected hSelected
             simp only [TypeCompilationFuelSufficient,
               typeCompilationFuel_parallelTypeBranchesSelecting]
@@ -814,13 +814,13 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
               (compileTypeFuel signature fuel elseType)
               (branches.map fun selected =>
                 (selected.1, compileTypeFuel signature fuel
-                  (parallelTypeBranchesSelecting selected branches)))
+                  (parallelTypeBranchesSelecting alphabet selected branches)))
               (ih elseType hElse)
               (by
                 intro entry hEntry
                 simp only [List.mem_map] at hEntry
                 obtain ⟨original, hOriginal, rfl⟩ := hEntry
-                exact ih (parallelTypeBranchesSelecting original branches)
+                exact ih (parallelTypeBranchesSelecting alphabet original branches)
                   (hSelected original hOriginal))
               (compileTypeFuel_initial_mem signature fuel elseType hElse)
               (by
@@ -828,7 +828,7 @@ theorem compileTypeFuel_futureTargetsInStates (signature : TypeAlphabet) :
                 simp only [List.mem_map] at hEntry
                 obtain ⟨original, hOriginal, rfl⟩ := hEntry
                 exact compileTypeFuel_initial_mem signature fuel
-                  (parallelTypeBranchesSelecting original branches)
+                  (parallelTypeBranchesSelecting alphabet original branches)
                   (hSelected original hOriginal))
           simpa [compileTypeFuel] using hResult
 
@@ -1172,7 +1172,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                           (by simpa [hBranch] using hInfo)
                       constructor <;> omega
           | _ => simp [stateProductInfoFuel] at hInfo
-      | offer _ elseType branches =>
+      | offer alphabet elseType branches =>
           cases state with
           | child index state =>
               cases index with
@@ -1191,7 +1191,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                   | none => simp [hSelected] at hInfo
                   | some selected =>
                       obtain ⟨hLeft, hRight⟩ :=
-                        ih (parallelTypeBranchesSelecting selected branches) state
+                        ih (parallelTypeBranchesSelecting alphabet selected branches) state
                           interface componentLeft componentRight q1 q2
                           (by
                             unfold TypeCompilationFuelSufficient

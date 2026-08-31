@@ -74,7 +74,8 @@ representatives of erased environments".  Every well-formed erased
 environment `e` has a concrete representative `γ(e)` with
 `Erase(γ(e)) = e`, `Avail(γ(e)) = Avail(e)`, and `γ(∅,∅) = (∅,∅)`. -/
 lemma helper_h2_concrete_representative_of_erased_environment
-    (env : TypeEnvironment) (hWellFormed : env.WellFormed) :
+    (env : TypeEnvironment) {alphabet : PactTypeAlphabet}
+    (hWellFormed : env.WellFormed alphabet) :
     ∃ concrete : Environment,
       eraseEnvironment concrete = env ∧
       concrete.available = typeAvailable env ∧
@@ -518,8 +519,10 @@ lemma helper_h6_abstraction_offer_transformation_preserved
     (selected : ChoiceBranch) (branches : List ChoiceBranch) :
     inferProcess
         (parallelProcessBranchesSelecting (inferBranch selected) branches) =
-      parallelTypeBranchesSelecting (inferBranch selected)
-        (branches.map inferBranch) := by
+      parallelTypeBranchesSelecting
+        (processAlphabet
+          (parallelProcessBranchesSelecting (inferBranch selected) branches))
+        (inferBranch selected) (branches.map inferBranch) := by
   sorry
 
 -- Need to define the helper lemma h6 for offer transformation.

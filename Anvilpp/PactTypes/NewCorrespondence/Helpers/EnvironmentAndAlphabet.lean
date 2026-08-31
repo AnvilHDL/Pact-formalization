@@ -8,89 +8,6 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
-/-- Changing fixed type alphabets does not change which declarations are used
-from the surrounding signature. -/
-theorem TypeAlphabet.supports_reannotate_iff
-    (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
-    (processType : PactType) :
-    signature.Supports (processType.reannotate alphabet) ↔
-      signature.Supports processType := by
-  induction hSize : sizeOf processType using Nat.strong_induction_on
-      generalizing processType alphabet with
-  | _ n ih =>
-      have hBranches : ∀ branches : List (BareMessage × PactType),
-          sizeOf branches < n → ∀ branchAlphabet,
-          signature.SupportsBranches
-              (PactType.reannotateBranches branchAlphabet branches) ↔
-            signature.SupportsBranches branches := by
-        intro branches hBranchesSize branchAlphabet
-        induction branches with
-        | nil => simp [TypeAlphabet.SupportsBranches]
-        | cons branch rest restIH =>
-            rcases branch with ⟨action, branchType⟩
-            have hType : sizeOf branchType < n := by
-              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
-                simp_wf; omega
-              have hHead : sizeOf (action, branchType) <
-                  sizeOf ((action, branchType) :: rest) := by
-                simp_wf; omega
-              omega
-            have hRest : sizeOf rest < n := by
-              have hTail : sizeOf rest <
-                  sizeOf ((action, branchType) :: rest) := by
-                simp_wf; omega
-              omega
-            simp only [PactType.reannotateBranches_cons,
-              TypeAlphabet.SupportsBranches]
-            rw [ih (sizeOf branchType) hType branchAlphabet branchType rfl,
-              restIH hRest]
-      cases processType with
-      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
-          simp [PactType.reannotate, TypeAlphabet.Supports]
-      | recur _ _ body =>
-          have hBody : sizeOf body < n := by rw [← hSize]; simp_wf; omega
-          simp [PactType.reannotate, TypeAlphabet.Supports,
-            ih (sizeOf body) hBody alphabet body rfl]
-      | choice _ left right | seq _ left right =>
-          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          simp [PactType.reannotate, TypeAlphabet.Supports,
-            ih (sizeOf left) hLeft alphabet left rfl,
-            ih (sizeOf right) hRight alphabet right rfl]
-      | fairChoice _ _ left right =>
-          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          simp [PactType.reannotate, TypeAlphabet.Supports,
-            ih (sizeOf left) hLeft alphabet left rfl,
-            ih (sizeOf right) hRight alphabet right rfl]
-      | par _ left right interface =>
-          have hLeft : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          simp [PactType.reannotate, TypeAlphabet.Supports,
-            ih (sizeOf left) hLeft
-              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
-                right.alphabet interface) left rfl,
-            ih (sizeOf right) hRight
-              (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
-                interface) right rfl]
-      | xoffer _ elseType branches | offer _ elseType branches =>
-          have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
-          have hBranchSize : sizeOf branches < n := by
-            rw [← hSize]; simp_wf; omega
-          simp [PactType.reannotate, TypeAlphabet.Supports,
-            ih (sizeOf elseType) hElse alphabet elseType rfl,
-            hBranches branches hBranchSize alphabet]
-
-@[simp] theorem transitionAlphabet_mk_mem_iff
-    (signature : TypeAlphabet) (env : TypeEnvironment) (label : TypeLabel)
-    (offers : TypeOfferSummary) :
-    TypeAutomatonSymbol.mk env label offers ∈ signature.transitionAlphabet ↔
-      env ∈ signature.localEnvironments ∧
-      label ∈ signature.localLabels ∧
-      offers ∈ signature.localOfferSummaries := by
-  classical
-  simp [TypeAlphabet.transitionAlphabet]
-
 @[simp] theorem transitionAlphabetFor_mk_mem_iff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     (env : TypeEnvironment) (label : TypeLabel)
@@ -98,18 +15,10 @@ theorem TypeAlphabet.supports_reannotate_iff
     TypeAutomatonSymbol.mk env label offers ∈
         signature.transitionAlphabetFor alphabet ↔
       env ∈ signature.localEnvironmentsFor alphabet ∧
-      label ∈ signature.localLabels ∧
+      label ∈ signature.localLabelsFor alphabet ∧
       offers ∈ signature.localOfferSummariesFor alphabet := by
   classical
   simp [TypeAlphabet.transitionAlphabetFor]
-
-@[simp] theorem localOfferSummaries_mk_mem_iff
-    (signature : TypeAlphabet) (current future : Finset BareMessage) :
-    TypeOfferSummary.mk current future ∈ signature.localOfferSummaries ↔
-      current ⊆ signature.localActions ∧
-      future ⊆ signature.localActions := by
-  classical
-  simp [TypeAlphabet.localOfferSummaries, TypeAlphabet.localOfferSets]
 
 @[simp] theorem localOfferSummariesFor_mk_mem_iff
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
@@ -235,9 +144,9 @@ theorem typeOffers_future_subset_target_union_current
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
   | par_fuse_tock =>
       simp
-  | left_complete outer interface left right right' rightLabel rightCurrent
-      rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hWF hNotTock
-      hRightIH =>
+  | left_complete outer rightEnv interface left right right' rightLabel
+      rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hLocal
+      hWF hNotTock hRightIH =>
       intro action hAction
       rw [typeFutureOffers_reannotate]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
@@ -249,9 +158,9 @@ theorem typeOffers_future_subset_target_union_current
       · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
   | left_complete_tock =>
       simp
-  | right_complete outer interface left left' right leftLabel leftCurrent
-      leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hWF hNotTock
-      hLeftIH =>
+  | right_complete outer leftEnv interface left left' right leftLabel
+      leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hLocal
+      hWF hNotTock hLeftIH =>
       intro action hAction
       rw [typeFutureOffers_reannotate]
       simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
@@ -264,89 +173,6 @@ theorem typeOffers_future_subset_target_union_current
   | right_complete_tock =>
       simp
 
-/-- Proves that a transition-alphabet symbol carries an offer summary from the signature. -/
-theorem transitionAlphabet_offerSummary_mem
-    (signature : TypeAlphabet) {env : TypeEnvironment} {label : TypeLabel}
-    {offers : TypeOfferSummary}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet) :
-    offers ∈ signature.localOfferSummaries := by
-  classical
-  unfold TypeAlphabet.transitionAlphabet at hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  obtain ⟨environment, _hEnvironment, hSymbol⟩ := hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  obtain ⟨label', _hLabel, hOffers⟩ := hSymbol
-  rw [Finset.mem_image] at hOffers
-  obtain ⟨offers', hOffers', hEq⟩ := hOffers
-  cases hEq
-  exact hOffers'
-
-/-- Proves that a transition-alphabet symbol remains in the alphabet when only its offer summary is replaced by another signature offer summary. -/
-theorem transitionAlphabet_change_offers
-    (signature : TypeAlphabet) {env : TypeEnvironment} {label : TypeLabel}
-    {offers offers' : TypeOfferSummary}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      signature.transitionAlphabet)
-    (hOffers' : offers' ∈ signature.localOfferSummaries) :
-    TypeAutomatonSymbol.mk env label offers' ∈ signature.transitionAlphabet := by
-  classical
-  unfold TypeAlphabet.transitionAlphabet at hSymbol ⊢
-  rw [Finset.mem_biUnion] at hSymbol
-  obtain ⟨environment, hEnvironment, hSymbol⟩ := hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  obtain ⟨label', hLabel, hOffers⟩ := hSymbol
-  rw [Finset.mem_image] at hOffers
-  obtain ⟨offers0, _hOffers0, hEq⟩ := hOffers
-  cases hEq
-  rw [Finset.mem_biUnion]
-  refine ⟨env, hEnvironment, ?_⟩
-  rw [Finset.mem_biUnion]
-  refine ⟨label, hLabel, ?_⟩
-  rw [Finset.mem_image]
-  exact ⟨offers', hOffers', rfl⟩
-
-/-- Proves that an offer summary stays supported when its future part is drawn from the old future and current parts. -/
-theorem offerSummary_mem_of_future_subset_union
-    (signature : TypeAlphabet) {current future future' : Finset BareMessage}
-    (hOffers : TypeOfferSummary.mk current future ∈ signature.localOfferSummaries)
-    (hFuture' : future' ⊆ future ∪ current) :
-    TypeOfferSummary.mk current future' ∈ signature.localOfferSummaries := by
-  classical
-  unfold TypeAlphabet.localOfferSummaries at hOffers ⊢
-  rw [Finset.mem_biUnion] at hOffers
-  obtain ⟨current0, hCurrent0, hImage⟩ := hOffers
-  rw [Finset.mem_image] at hImage
-  obtain ⟨future0, hFuture0, hEq⟩ := hImage
-  cases hEq
-  rw [Finset.mem_biUnion]
-  refine ⟨current, hCurrent0, ?_⟩
-  rw [Finset.mem_image]
-  refine ⟨future', ?_, rfl⟩
-  unfold TypeAlphabet.localOfferSets at hCurrent0 hFuture0 ⊢
-  rw [Finset.mem_powerset] at hCurrent0 hFuture0 ⊢
-  intro action hAction
-  have hUnion := hFuture' hAction
-  rw [Finset.mem_union] at hUnion
-  exact hUnion.elim (fun hFuture => hFuture0 hFuture)
-    (fun hCurrent => hCurrent0 hCurrent)
-
-/-- Proves transition-alphabet closure when the new future offer is drawn from the old future and current offers. -/
-theorem transitionAlphabet_change_future_of_subset_union
-    (signature : TypeAlphabet) {env : TypeEnvironment} {label : TypeLabel}
-    {current future future' : Finset BareMessage}
-    (hSymbol :
-      TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future) ∈
-        signature.transitionAlphabet)
-    (hFuture' : future' ⊆ future ∪ current) :
-    TypeAutomatonSymbol.mk env label (TypeOfferSummary.mk current future') ∈
-      signature.transitionAlphabet := by
-  exact transitionAlphabet_change_offers signature hSymbol
-    (offerSummary_mem_of_future_subset_union signature
-      (transitionAlphabet_offerSummary_mem signature hSymbol) hFuture')
-
-/-- Fixed-alphabet analogue of
-`transitionAlphabet_change_future_of_subset_union`. -/
 theorem transitionAlphabetFor_change_future_of_subset_union
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     {env : TypeEnvironment} {label : TypeLabel}
@@ -364,30 +190,6 @@ theorem transitionAlphabetFor_change_future_of_subset_union
   exact ⟨hSymbol.2.2.1, hFuture'.trans
     (Finset.union_subset hSymbol.2.2.2 hSymbol.2.2.1)⟩
 
-/-- Proves that a child offer pair remains in the transition alphabet when its target menu is covered by the parent future and current offers. -/
-theorem transitionAlphabet_of_typeOffers_target_subset
-    (signature : TypeAlphabet) {env : TypeEnvironment} {source target : PactType}
-    {label : TypeLabel} {current parentFuture childFuture : Finset BareMessage}
-    (hSymbol :
-      TypeAutomatonSymbol.mk env label
-        (TypeOfferSummary.mk current parentFuture) ∈
-          signature.transitionAlphabet)
-    (hOffers : TypeOffers env source label target current childFuture)
-    (hTarget :
-      typeFutureOffers target ⊆ parentFuture ∪ current) :
-    TypeAutomatonSymbol.mk env label
-      (TypeOfferSummary.mk current childFuture) ∈ signature.transitionAlphabet := by
-  apply transitionAlphabet_change_future_of_subset_union signature hSymbol
-  intro action hAction
-  have hStepFuture :=
-    typeOffers_future_subset_target_union_current hOffers hAction
-  rw [Finset.mem_union] at hStepFuture ⊢
-  rcases hStepFuture with hFuture | hCurrent
-  · simpa [Finset.mem_union] using hTarget hFuture
-  · exact Or.inr hCurrent
-
-/-- Fixed-alphabet analogue of
-`transitionAlphabet_of_typeOffers_target_subset`. -/
 theorem transitionAlphabetFor_of_typeOffers_target_subset
     (signature : TypeAlphabet) (alphabet : PactTypeAlphabet)
     {env : TypeEnvironment} {source target : PactType}
@@ -412,7 +214,6 @@ theorem transitionAlphabetFor_of_typeOffers_target_subset
   · simpa [Finset.mem_union] using hTarget hFuture
   · exact Or.inr hCurrent
 
-/-- Proves that a finite set is contained in itself with a current-offer set restored after subtraction. -/
 theorem subset_sdiff_union_self {α : Type} [DecidableEq α]
     (future current : Finset α) :
     future ⊆ (future \ current) ∪ current := by

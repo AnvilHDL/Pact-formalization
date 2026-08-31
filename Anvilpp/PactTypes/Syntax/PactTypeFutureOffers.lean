@@ -229,56 +229,56 @@ mutual
         Finset BareMessage → Finset BareMessage → Prop where
     | action (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
-        env.WellFormed ∧ env.hasNeed (msg, dir) →
+        env.WellFormed alphabet ∧ env.hasNeed (msg, dir) →
         (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) (TypeLabel.message msg dir)
           (.skip alphabet) {(msg, dir)} (typeFutureOffers (.skip alphabet))
     | action_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
-        env.WellFormed ∧ ¬ env.hasNeed (msg, dir) ∧ env.clock = false →
+        env.WellFormed alphabet ∧ ¬ env.hasNeed (msg, dir) ∧ env.clock = false →
         (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) TypeLabel.silent
           (.message alphabet msg dir) {(msg, dir)}
           (typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)})
     | choice_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent left
           ∅ (typeFutureOffers left)
     | choice_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent right
           ∅ (typeFutureOffers right)
     | fair_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
           (TypeLabel.fair bid true) left ∅ (typeFutureOffers left)
     | fair_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
           (TypeLabel.fair bid false) right ∅ (typeFutureOffers right)
     | cycle (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
-        env.WellFormed ∧ env.clock = true →
+        env.WellFormed alphabet ∧ env.clock = true →
         TypeOffers env (.tock alphabet) .tock (.skip alphabet) ∅ ∅
     | cycle_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.tock alphabet) TypeLabel.silent (.tock alphabet) ∅ ∅
     | skip (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.skip alphabet) TypeLabel.silent (.skip alphabet) ∅ ∅
     | progress (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (pid : ProcId) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.progress alphabet pid) (TypeLabel.progress pid)
           (.skip alphabet) ∅ ∅
     | recur (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (name : String) (body : PactType) :
-        env.WellFormed ∧ env.clock = false →
+        env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.recur alphabet name body) TypeLabel.silent
           (body.replaceVar name (.recur alphabet name body)) ∅
           (typeFutureOffers (body.replaceVar name (.recur alphabet name body)))
@@ -314,7 +314,7 @@ mutual
         (elseType : PactType)
         (branches : List (BareMessage × PactType))
         (action : BareMessage) (processType : PactType) :
-        env.WellFormed ∧
+        env.WellFormed alphabet ∧
           (action, processType) ∈ branches ∧
           TypeBranchEnabled env (action, processType) ∧
           TypeResolved env branches →
@@ -325,7 +325,7 @@ mutual
     | xoffer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧ env.clock = false ∧
+        env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
@@ -333,7 +333,7 @@ mutual
     | xoffer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧ ¬ TypeResolved env branches ∧ env.clock = false →
+        env.WellFormed alphabet ∧ ¬ TypeResolved env branches ∧ env.clock = false →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           (.xoffer alphabet elseType branches) (typeWaitingOffers env branches)
@@ -343,15 +343,16 @@ mutual
         (elseType : PactType)
         (branches : List (BareMessage × PactType))
         (enabled : BareMessage × PactType) :
-        env.WellFormed ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
+        env.WellFormed alphabet ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          (parallelTypeBranchesSelecting enabled branches) ∅
-          (typeFutureOffers (parallelTypeBranchesSelecting enabled branches))
+          (parallelTypeBranchesSelecting alphabet enabled branches) ∅
+          (typeFutureOffers
+            (parallelTypeBranchesSelecting alphabet enabled branches))
     | offer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧ env.clock = false ∧
+        env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
@@ -359,7 +360,7 @@ mutual
     | offer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
-        env.WellFormed ∧ env.clock = false ∧
+        env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ ¬ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
@@ -378,7 +379,9 @@ mutual
           rightFuture leftEnv →
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv →
-        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+            right.alphabet interface) ∧
+          TypeLabel.Sync interface leftLabel rightLabel →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
           (TypeLabel.combine interface leftLabel rightLabel)
@@ -397,7 +400,9 @@ mutual
           rightFuture leftEnv →
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv →
-        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+            right.alphabet interface) ∧
+          TypeLabel.Sync interface leftLabel rightLabel →
         TypeLabel.combine interface leftLabel rightLabel ≠ TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -418,7 +423,9 @@ mutual
           rightFuture leftEnv →
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv →
-        outer.WellFormed ∧ TypeLabel.Sync interface leftLabel rightLabel →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+            right.alphabet interface) ∧
+          TypeLabel.Sync interface leftLabel rightLabel →
         TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -429,17 +436,21 @@ mutual
           ∅
     -- The left side is already `skip` at the source, so only the right survives
     -- and the product carries the survivor's own label and offers.
-    | left_complete (outer : TypeEnvironment)
+    | left_complete (outer rightEnv : TypeEnvironment)
         (interface : Interface)
         (left right right' : PactType) (rightLabel : TypeLabel)
         (rightCurrent rightFuture : Finset BareMessage) :
         left = .skip left.alphabet →
         right ≠ .skip right.alphabet →
-        TypeOffers outer right rightLabel right' rightCurrent rightFuture →
+        TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
         right' ≠ .skip right'.alphabet →
         restrictTypeOffers interface rightCurrent = ∅ →
         restrictTypeOffers interface rightFuture = ∅ →
-        outer.WellFormed →
+        -- The finished side has no menu, so the survivor's own environment
+        -- stands in the sibling slot and the premise projects `outer` alone.
+        LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+          right.alphabet interface) →
         rightLabel ≠ TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -448,17 +459,19 @@ mutual
             right.alphabet interface))
           (hideTypeOffers interface rightCurrent)
           (hideTypeOffers interface rightFuture)
-    | left_complete_tock (outer : TypeEnvironment)
+    | left_complete_tock (outer rightEnv : TypeEnvironment)
         (interface : Interface)
         (left right right' : PactType) (rightLabel : TypeLabel)
         (rightCurrent rightFuture : Finset BareMessage) :
         left = .skip left.alphabet →
         right ≠ .skip right.alphabet →
-        TypeOffers outer right rightLabel right' rightCurrent rightFuture →
+        TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
         right' ≠ .skip right'.alphabet →
         restrictTypeOffers interface rightCurrent = ∅ →
         restrictTypeOffers interface rightFuture = ∅ →
-        outer.WellFormed →
+        LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+          right.alphabet interface) →
         rightLabel = TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -468,17 +481,19 @@ mutual
           (hideTypeOffers interface rightCurrent)
           ∅
     -- Mirror of `left_complete`: the right side is already `skip`.
-    | right_complete (outer : TypeEnvironment)
+    | right_complete (outer leftEnv : TypeEnvironment)
         (interface : Interface)
         (left left' right : PactType) (leftLabel : TypeLabel)
         (leftCurrent leftFuture : Finset BareMessage) :
         right = .skip right.alphabet →
         left ≠ .skip left.alphabet →
-        TypeOffers outer left leftLabel left' leftCurrent leftFuture →
+        TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         left' ≠ .skip left'.alphabet →
         restrictTypeOffers interface leftCurrent = ∅ →
         restrictTypeOffers interface leftFuture = ∅ →
-        outer.WellFormed →
+        LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+          right.alphabet interface) →
         leftLabel ≠ TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -487,17 +502,19 @@ mutual
             right.alphabet interface))
           (hideTypeOffers interface leftCurrent)
           (hideTypeOffers interface leftFuture)
-    | right_complete_tock (outer : TypeEnvironment)
+    | right_complete_tock (outer leftEnv : TypeEnvironment)
         (interface : Interface)
         (left left' right : PactType) (leftLabel : TypeLabel)
         (leftCurrent leftFuture : Finset BareMessage) :
         right = .skip right.alphabet →
         left ≠ .skip left.alphabet →
-        TypeOffers outer left leftLabel left' leftCurrent leftFuture →
+        TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         left' ≠ .skip left'.alphabet →
         restrictTypeOffers interface leftCurrent = ∅ →
         restrictTypeOffers interface leftFuture = ∅ →
-        outer.WellFormed →
+        LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
+        outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
+          right.alphabet interface) →
         leftLabel = TypeLabel.tock →
         TypeOffers outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left right interface)
@@ -587,17 +604,17 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       simp [hideTypeOffers]
   | par_fuse_tock =>
       simp
-  | left_complete outer interface left right right' rightLabel rightCurrent
-      rightFuture hLeftSkip hRightNotSkip hRight hNotSkip _ _ hWF hNotTock
-      ihRight =>
+  | left_complete outer rightEnv interface left right right' rightLabel
+      rightCurrent rightFuture hLeftSkip hRightNotSkip hRight hNotSkip _ _
+      hLocal hWF hNotTock ihRight =>
       refine absurd ?_ hNotSkip
       cases hForm : right' <;> rw [hForm] at hTarget <;>
         simp [PactType.reannotate, PactType.alphabet] at hTarget ⊢
   | left_complete_tock =>
       simp
-  | right_complete outer interface left left' right leftLabel leftCurrent
-      leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip _ _ hWF hNotTock
-      ihLeft =>
+  | right_complete outer leftEnv interface left left' right leftLabel
+      leftCurrent leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip _ _
+      hLocal hWF hNotTock ihLeft =>
       refine absurd ?_ hNotSkip
       cases hForm : left' <;> rw [hForm] at hTarget <;>
         simp [PactType.reannotate, PactType.alphabet] at hTarget ⊢
@@ -656,10 +673,10 @@ theorem TypeOffers.future_eq_empty_of_label_tock
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => simp
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | left_complete_tock => simp
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | right_complete_tock => simp
 

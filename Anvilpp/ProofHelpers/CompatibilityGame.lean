@@ -58,10 +58,11 @@ def CompatibilityVertex.isPlayerZero : CompatibilityVertex → Prop
   | .fail => False
 
 /-- `E_choice ∪ E_resolve ∪ E_fail`. -/
-def compatibilityEdge (automaton : TypeAutomaton) :
+def compatibilityEdge (automaton : TypeAutomaton)
+    (alphabet : PactTypeAlphabet) :
     CompatibilityVertex → CompatibilityVertex → Prop
   | .choice state memory, .resolve state' memory' env =>
-      state' = state ∧ memory' = memory ∧ env.WellFormed
+      state' = state ∧ memory' = memory ∧ env.WellFormed alphabet
   | .resolve state memory env, .choice state' memory' =>
       memory.Admissible env ∧
       ∃ label, compiledTypeEdge automaton state env label state' ∧
@@ -155,7 +156,7 @@ def compatibilityGame (signature : TypeAlphabet) (initial : PactType)
   Vertex := CompatibilityVertex
   initial := .choice (compileType signature initial).initial .star
   isPlayerZero := CompatibilityVertex.isPlayerZero
-  edge := compatibilityEdge (compileType signature initial)
+  edge := compatibilityEdge (compileType signature initial) initial.alphabet
   rabinPairs := by
     sorry -- TODO(redevelopment): needs the play/log correspondence from
     -- `objectiveRabinPairs`.

@@ -29,6 +29,33 @@ def combineAutomatonEnvironment (interface : Interface)
       future := hideOffers interface (left.future ∪ right.future)
       clock := false }
 
+/-- Restrict a parent environment to the actions one child alphabet declares.
+A clocked environment projects to `tock`; otherwise both menus are filtered by
+`projectTypeEnvironmentOffers`, exactly as `AutomatonLocalEnvironment.ordinary`
+projects the outer environment onto a component. -/
+def projectAutomatonEnvironment (alphabet : PactTypeAlphabet)
+    (environment : TypeEnvironment) : TypeEnvironment :=
+  if environment.clock then TypeEnvironment.tock
+  else
+    { immediate := projectTypeEnvironmentOffers alphabet environment.immediate
+      future := projectTypeEnvironmentOffers alphabet environment.future
+      clock := false }
+
+/-- A clocked parent environment projects to `tock`. -/
+theorem projectAutomatonEnvironment_of_clock {alphabet : PactTypeAlphabet}
+    {environment : TypeEnvironment} (hClock : environment.clock = true) :
+    projectAutomatonEnvironment alphabet environment = TypeEnvironment.tock := by
+  simp [projectAutomatonEnvironment, hClock]
+
+/-- Only a clocked parent environment has a clocked projection. -/
+theorem clock_of_projectAutomatonEnvironment_clock {alphabet : PactTypeAlphabet}
+    {environment : TypeEnvironment}
+    (hClock : (projectAutomatonEnvironment alphabet environment).clock = true) :
+    environment.clock = true := by
+  by_cases hParent : environment.clock
+  · exact hParent
+  · simp [projectAutomatonEnvironment, hParent] at hClock
+
 /-- Equality after restriction to the internal interface. -/
 def sameOnInterface (interface : Interface)
     (left right : Finset BareMessage) : Prop :=
