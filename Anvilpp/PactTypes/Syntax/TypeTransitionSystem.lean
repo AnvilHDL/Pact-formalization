@@ -389,7 +389,11 @@ theorem TypeTransition.exists_typeOffers
       hRightNotSkip _ hLeftOffers
       _ hRightOffers hNotBothSkip conditions ihLeft ihRight =>
       exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-        hideTypeOffers interface (leftFuture ∪ rightFuture),
+        (if TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+          then ∅
+          else typeFutureOffers (.par (PactTypeAlphabet.mergeHidden
+            left.alphabet right.alphabet interface) left' right' interface) \
+            hideTypeOffers interface (leftCurrent ∪ rightCurrent)),
         TypeOffers.par outer leftEnv rightEnv interface left left' right right'
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hLeftNotSkip hRightNotSkip

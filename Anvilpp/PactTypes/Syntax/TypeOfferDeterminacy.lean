@@ -1502,10 +1502,11 @@ theorem typeOffers_unique_aux :
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
       cases h₂ <;>
         (try (first
-                | (refine absurd hSource ?_; simp; done)
-                | (refine absurd hLabel ?_; simp; done)
-                | (injection hSource; subst_vars; contradiction))) <;>
+                | (exfalso; cases hSource; done)
+                | (injection hSource; subst_vars; contradiction)
+                | (refine absurd hLabel ?_; simp; done))) <;>
         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+        (try (have hShape := congrArg PactType.shape hTarget)) <;>
         first
           | rfl
           | (subst hTarget; rfl)
@@ -1678,44 +1679,19 @@ theorem typeOffers_unique_aux :
                    (H ∪ interface) hR
                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
                    rfl rfl).1 hShR]
-             have keyF : ∀ {lenv renv : TypeEnvironment} {lt rt : PactType} {ll rl : TypeLabel}
-                 {lc lf rc rf : Finset BareMessage},
-                 TypeOffers lenv left ll lt lc lf →
-                 TypeOffers renv right rl rt rc rf →
-                 LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
-                 LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
-                 (e₂.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-                     right.alphabet interface) ∧ TypeLabel.Sync interface ll rl) →
-                 TypeLabel.combine interface leftLabel rightLabel =
-                   TypeLabel.combine interface ll rl →
-                 left' = lt → right' = rt →
-                 hideTypeOffers H (hideTypeOffers interface (leftFuture ∪ rightFuture)) =
-                   hideTypeOffers H (hideTypeOffers interface (lf ∪ rf)) := by
-               intro lenv renv lt rt ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb hShL hShR
-               obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
-                 TypeOffers.par_combine_inj_hypotheses hMsg hProg hFair hScop
-                   hLeftChild hRightChild hL hR
-               obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
-                 hOwnB hCrossA hCrossB hFreshA hFreshB hComb
-               subst hLLeq
-               subst hRLeq
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
-                 hideTypeOffers_union, hideTypeOffers_union,
-                 (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
-                   (H ∪ interface) hL
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
-                   rfl rfl).2 hShL,
-                 (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
-                   (H ∪ interface) hR
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
-                   rfl rfl).2 hShR]
              first
                | (simp only [PactType.shape, PactShape.par.injEq] at hShape
                   exact keyC (by assumption) (by assumption) (by assumption)
                     (by assumption) (by assumption) hLabel hShape.1 hShape.2.1)
-               | (injection hTarget with _ hLeftTgt hRightTgt _
-                  exact keyF (by assumption) (by assumption) (by assumption)
-                    (by assumption) (by assumption) hLabel hLeftTgt hRightTgt))
+               | (simp only [PactType.shape, PactShape.par.injEq] at hShape
+                  have hCur := keyC (by assumption) (by assumption) (by assumption)
+                    (by assumption) (by assumption) hLabel hShape.1 hShape.2.1
+                  simp only [hLabel, hTarget]
+                  try split_ifs with hIfTock
+                  all_goals
+                    first
+                      | rfl
+                      | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff, hCur]))
           | skip
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftChild hRightChild
@@ -1723,10 +1699,11 @@ theorem typeOffers_unique_aux :
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
       cases h₂ <;>
         (try (first
-                | (refine absurd hSource ?_; simp; done)
-                | (refine absurd hLabel ?_; simp; done)
-                | (injection hSource; subst_vars; contradiction))) <;>
+                | (exfalso; cases hSource; done)
+                | (injection hSource; subst_vars; contradiction)
+                | (refine absurd hLabel ?_; simp; done))) <;>
         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+        (try (have hShape := congrArg PactType.shape hTarget)) <;>
         first
           | rfl
           | (subst hTarget; rfl)

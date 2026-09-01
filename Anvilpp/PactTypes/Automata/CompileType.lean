@@ -352,6 +352,10 @@ def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
       match processType, state with
       | .par _ left right interface, .pair q1 q2 =>
           some (interface, left, right, q1, q2)
+      | .par alphabet left _ _, .survivor 0 q =>
+          stateProductInfoFuel fuel (left.reannotate alphabet) q
+      | .par alphabet _ right _, .survivor 1 q =>
+          stateProductInfoFuel fuel (right.reannotate alphabet) q
       | .choice _ left _, .child 0 q => stateProductInfoFuel fuel left q
       | .choice _ _ right, .child 1 q => stateProductInfoFuel fuel right q
       | .fairChoice _ _ left _, .child 0 q => stateProductInfoFuel fuel left q

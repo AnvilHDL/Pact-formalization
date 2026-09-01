@@ -396,7 +396,11 @@ mutual
           (.par (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface) left' right' interface)
           (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-          (hideTypeOffers interface (leftFuture ∪ rightFuture))
+          (if TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
+            then ∅
+            else typeFutureOffers (.par (PactTypeAlphabet.mergeHidden
+              left.alphabet right.alphabet interface) left' right' interface) \
+              hideTypeOffers interface (leftCurrent ∪ rightCurrent))
     | par_fuse (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
         (left right : PactType) (leftLabel rightLabel : TypeLabel)
         (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
@@ -675,10 +679,7 @@ theorem TypeOffers.future_eq_empty_of_label_tock
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip hLeft hRight hNotBothSkip hLocal1 hLocal2 hConditions
       ihLeft ihRight =>
-      obtain ⟨hLeftTock, hRightTock⟩ :=
-        (TypeLabel.combine_eq_tock_iff interface leftLabel rightLabel).mp hLabel
-      rw [ihLeft hLeftTock, ihRight hRightTock]
-      simp [hideTypeOffers]
+      simp [hLabel]
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => simp
