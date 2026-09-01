@@ -4,6 +4,7 @@ defaultTargets = ["Anvilpp"]
 
 [[lean_lib]]
 name = "Anvilpp"
+moreLeanArgs = ["--tstack=400000"]
 
 [[require]]
 name = "mathlib"

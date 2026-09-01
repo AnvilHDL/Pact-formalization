@@ -162,7 +162,7 @@ def buildExclusiveOfferAutomaton
             environment := environment
             label := .visible (TypeLabel.message action.1 action.2)
             current := {action}
-            future := .at (childState (index + 1) automaton.initial) ∅
+            future := .at (childState (index + 1) automaton.initial) {action}
             target := childState (index + 1) automaton.initial }
       edges ∪ newEdges) ∅
   let waitEdges : Finset PendingAutomatonEdge :=
@@ -340,12 +340,11 @@ def buildSelectedConjunctiveOfferAutomaton
       needs ∩ environment.future ≠ ∅ ∧
       ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
     waitingEnvironments.image fun environment =>
-      let waiting := (environment.future.image typeNeed) ∩ actions
       { source := TypeAutomatonState.root
         environment := environment
         label := .visible TypeLabel.silent
-        current := waiting
-        future := .at TypeAutomatonState.root waiting
+        current := actions
+        future := .at TypeAutomatonState.root actions
         target := TypeAutomatonState.root }
   let elseEdges : Finset PendingAutomatonEdge :=
     let resolvedEnvironments :=
@@ -359,7 +358,7 @@ def buildSelectedConjunctiveOfferAutomaton
         environment := environment
         label := .visible TypeLabel.silent
         current := actions
-        future := .at (childState 0 elseAutomaton.initial) ∅
+        future := .at (childState 0 elseAutomaton.initial) actions
         target := childState 0 elseAutomaton.initial }
   exact finishAutomatonFragment states .root accepting
     (childPendingEdges 0 elseAutomaton ∪

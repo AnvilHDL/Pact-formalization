@@ -304,7 +304,7 @@ mutual
         TypeOffers env left TypeLabel.tock left' current childFuture →
         left' ≠ .skip left'.alphabet →
         TypeOffers env (.seq alphabet left right) TypeLabel.tock
-          (.seq alphabet left' right) current ∅
+          (.seq alphabet left' right) ∅ ∅
     | seq_fuse (env : TypeEnvironment) (alphabet skipAlphabet : PactTypeAlphabet)
         (left right : PactType)
         (label : TypeLabel) (current childFuture : Finset BareMessage) :
@@ -316,7 +316,7 @@ mutual
         (left right : PactType)
         (current childFuture : Finset BareMessage) :
         TypeOffers env left TypeLabel.tock (.skip skipAlphabet) current childFuture →
-        TypeOffers env (.seq alphabet left right) TypeLabel.tock right current ∅
+        TypeOffers env (.seq alphabet left right) TypeLabel.tock right ∅ ∅
     | xoffer_branch (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType))
@@ -328,7 +328,7 @@ mutual
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches)
           (TypeLabel.message action.1 action.2) processType
-          {action} (typeFutureOffers processType)
+          {action} (typeFutureOffers processType \ {action})
     | xoffer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
@@ -363,7 +363,8 @@ mutual
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          elseType (typeBranchActions branches) (typeFutureOffers elseType)
+          elseType (typeBranchActions branches)
+          (typeFutureOffers elseType \ typeBranchActions branches)
     | offer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
@@ -371,9 +372,9 @@ mutual
           TypeNoImmediateBranch env branches ∧ ¬ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          (.offer alphabet elseType branches) (typeWaitingOffers env branches)
+          (.offer alphabet elseType branches) (typeBranchActions branches)
           (typeFutureOffers (.offer alphabet elseType branches) \
-            typeWaitingOffers env branches)
+            typeBranchActions branches)
     | par (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
         (left left' right right' : PactType) (leftLabel rightLabel : TypeLabel)
         (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
@@ -439,8 +440,7 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (.skip (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
-          ∅
+          ∅ ∅
     -- The left side is already `skip` at the source, so only the right survives
     -- and the product carries the survivor's own label and offers.
     | left_complete (outer rightEnv : TypeEnvironment)
@@ -465,7 +465,9 @@ mutual
           (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
           (hideTypeOffers interface rightCurrent)
-          (hideTypeOffers interface rightFuture)
+          (typeFutureOffers (right'.reannotate (PactTypeAlphabet.mergeHidden
+            left.alphabet right.alphabet interface)) \
+            hideTypeOffers interface rightCurrent)
     | left_complete_tock (outer rightEnv : TypeEnvironment)
         (interface : Interface)
         (left right right' : PactType) (rightLabel : TypeLabel)
@@ -485,8 +487,7 @@ mutual
           rightLabel
           (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface rightCurrent)
-          ∅
+          ∅ ∅
     -- Mirror of `left_complete`: the right side is already `skip`.
     | right_complete (outer leftEnv : TypeEnvironment)
         (interface : Interface)
@@ -508,7 +509,9 @@ mutual
           (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
           (hideTypeOffers interface leftCurrent)
-          (hideTypeOffers interface leftFuture)
+          (typeFutureOffers (left'.reannotate (PactTypeAlphabet.mergeHidden
+            left.alphabet right.alphabet interface)) \
+            hideTypeOffers interface leftCurrent)
     | right_complete_tock (outer leftEnv : TypeEnvironment)
         (interface : Interface)
         (left left' right : PactType) (leftLabel : TypeLabel)
@@ -528,8 +531,7 @@ mutual
           leftLabel
           (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
             right.alphabet interface))
-          (hideTypeOffers interface leftCurrent)
-          ∅
+          ∅ ∅
 
 end
 

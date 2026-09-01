@@ -8,7 +8,9 @@ open Classical
 noncomputable section
 
 
-/-- Relation Set Builder, related type to its compiled automaton state --/
+/-- Relates each residual of `ty` to the compiled state that represents it.
+A rebuilt node carries `ty`'s alphabet; a residual copied from a child keeps
+the child's. -/
 def buildRelationSetCoreFuel :
     Nat → PactType → Finset (PactType × TypeAutomatonState)
   | 0, ty => {(ty, .root)}
@@ -66,21 +68,19 @@ def buildRelationSetCoreFuel :
                 (.par alphabet entry.1.1 entry.2.1 interface,
                   TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
               ((buildRelationSetCoreFuel fuel
-                  left).filter fun entry =>
+                  (left.reannotate alphabet)).filter fun entry =>
                   entry.2 ∉
                     (compileTypeFuel fuel
-                      left).accepting).image
+                      (left.reannotate alphabet)).accepting).image
                 (fun entry =>
-                  (entry.1.reannotate alphabet,
-                    TypeAutomatonState.survivor 0 entry.2)) ∪
+                  (entry.1, TypeAutomatonState.survivor 0 entry.2)) ∪
               ((buildRelationSetCoreFuel fuel
-                  right).filter fun entry =>
+                  (right.reannotate alphabet)).filter fun entry =>
                   entry.2 ∉
                     (compileTypeFuel fuel
-                      right).accepting).image
+                      (right.reannotate alphabet)).accepting).image
                 (fun entry =>
-                  (entry.1.reannotate alphabet,
-                    TypeAutomatonState.survivor 1 entry.2)))
+                  (entry.1, TypeAutomatonState.survivor 1 entry.2)))
       | .recur alphabet name body =>
           insert (ty, TypeAutomatonState.root)
             ((buildRelationSetCoreFuel fuel
@@ -635,18 +635,20 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
-                ((buildRelationSetCoreFuel (fuel+1) left).filter
+                ((buildRelationSetCoreFuel (fuel+1)
+                      (left.reannotate alphabet)).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel (fuel+1) left).accepting).image
+                      (compileTypeFuel (fuel+1)
+                        (left.reannotate alphabet)).accepting).image
                   (fun entry =>
-                    (entry.1.reannotate alphabet,
-                      TypeAutomatonState.survivor 0 entry.2)) ∪
-                ((buildRelationSetCoreFuel (fuel+1) right).filter
+                    (entry.1, TypeAutomatonState.survivor 0 entry.2)) ∪
+                ((buildRelationSetCoreFuel (fuel+1)
+                      (right.reannotate alphabet)).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel (fuel+1) right).accepting).image
+                      (compileTypeFuel (fuel+1)
+                        (right.reannotate alphabet)).accepting).image
                   (fun entry =>
-                    (entry.1.reannotate alphabet,
-                      TypeAutomatonState.survivor 1 entry.2))) =
+                    (entry.1, TypeAutomatonState.survivor 1 entry.2))) =
             insert (PactType.skip alphabet, TypeAutomatonState.final)
               (((Finset.product (buildRelationSetCoreFuel fuel left)
                   (buildRelationSetCoreFuel fuel right)).filter fun entry =>
@@ -660,18 +662,20 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
-                ((buildRelationSetCoreFuel fuel left).filter
+                ((buildRelationSetCoreFuel fuel
+                      (left.reannotate alphabet)).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel fuel left).accepting).image
+                      (compileTypeFuel fuel
+                        (left.reannotate alphabet)).accepting).image
                   (fun entry =>
-                    (entry.1.reannotate alphabet,
-                      TypeAutomatonState.survivor 0 entry.2)) ∪
-                ((buildRelationSetCoreFuel fuel right).filter
+                    (entry.1, TypeAutomatonState.survivor 0 entry.2)) ∪
+                ((buildRelationSetCoreFuel fuel
+                      (right.reannotate alphabet)).filter
                     fun entry => entry.2 ∉
-                      (compileTypeFuel fuel right).accepting).image
+                      (compileTypeFuel fuel
+                        (right.reannotate alphabet)).accepting).image
                   (fun entry =>
-                    (entry.1.reannotate alphabet,
-                      TypeAutomatonState.survivor 1 entry.2)))
+                    (entry.1, TypeAutomatonState.survivor 1 entry.2)))
           simp only [compiledChildFutureFuel,
             Nat.min_eq_right hLeft, Nat.min_eq_right (Nat.le.step hLeft),
             Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight)]

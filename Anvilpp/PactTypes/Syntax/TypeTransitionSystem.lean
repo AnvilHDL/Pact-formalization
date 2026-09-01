@@ -330,7 +330,7 @@ theorem TypeTransition.exists_typeOffers
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
       by_cases hTock : label = TypeLabel.tock
       · subst hTock
-        exact ⟨current, ∅,
+        exact ⟨∅, ∅,
           TypeOffers.seq_fuse_tock env alphabet skipAlphabet left right current
             childFuture hOffers⟩
       · exact ⟨current, typeFutureOffers right \ current,
@@ -346,7 +346,7 @@ theorem TypeTransition.exists_typeOffers
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
       by_cases hTock : label = TypeLabel.tock
       · subst hTock
-        exact ⟨current, ∅,
+        exact ⟨∅, ∅,
           TypeOffers.seq_tock env alphabet left left' right current childFuture
             hOffers hNotSkip⟩
       · exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
@@ -354,7 +354,7 @@ theorem TypeTransition.exists_typeOffers
             hOffers hNotSkip hTock⟩
   | xoffer_branch env alphabet elseType branches action processType conditions
       hAlphabet =>
-      exact ⟨{action}, typeFutureOffers processType,
+      exact ⟨{action}, typeFutureOffers processType \ {action},
         TypeOffers.xoffer_branch env alphabet elseType branches action
           processType conditions hAlphabet⟩
   | xoffer_else env alphabet elseType branches conditions hAlphabet =>
@@ -374,13 +374,14 @@ theorem TypeTransition.exists_typeOffers
         TypeOffers.offer_some env alphabet elseType branches enabled conditions
           hAlphabet⟩
   | offer_else env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨typeBranchActions branches, typeFutureOffers elseType,
+      exact ⟨typeBranchActions branches,
+        typeFutureOffers elseType \ typeBranchActions branches,
         TypeOffers.offer_else env alphabet elseType branches conditions
           hAlphabet⟩
   | offer_wait env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨typeWaitingOffers env branches,
+      exact ⟨typeBranchActions branches,
         typeFutureOffers (.offer alphabet elseType branches) \
-          typeWaitingOffers env branches,
+          typeBranchActions branches,
         TypeOffers.offer_wait env alphabet elseType branches conditions
           hAlphabet⟩
   | par outer leftEnv rightEnv interface left left' right right' leftLabel
@@ -399,7 +400,7 @@ theorem TypeTransition.exists_typeOffers
       hRightOffers conditions ihLeft ihRight =>
       by_cases hTock :
           TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent), ∅,
+      · exact ⟨∅, ∅,
           TypeOffers.par_fuse_tock outer leftEnv rightEnv interface left right
             leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
             hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
@@ -414,13 +415,15 @@ theorem TypeTransition.exists_typeOffers
       rightCurrent rightFuture hLeftSkip hRightNotSkip _ hRightOffers hNotSkip
       hRightCurrentHidden hRightFutureHidden hLocal hWF ihRight =>
       by_cases hTock : rightLabel = TypeLabel.tock
-      · exact ⟨hideTypeOffers interface rightCurrent, ∅,
+      · exact ⟨∅, ∅,
           TypeOffers.left_complete_tock outer rightEnv interface left right
             right' rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
             hRightOffers hNotSkip
             hRightCurrentHidden hRightFutureHidden hLocal hWF hTock⟩
       · exact ⟨hideTypeOffers interface rightCurrent,
-          hideTypeOffers interface rightFuture,
+          typeFutureOffers (right'.reannotate (PactTypeAlphabet.mergeHidden
+            left.alphabet right.alphabet interface)) \
+            hideTypeOffers interface rightCurrent,
           TypeOffers.left_complete outer rightEnv interface left right right'
             rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
             hRightOffers hNotSkip
@@ -429,13 +432,15 @@ theorem TypeTransition.exists_typeOffers
       leftCurrent leftFuture hRightSkip hLeftNotSkip _ hLeftOffers hNotSkip
       hLeftCurrentHidden hLeftFutureHidden hLocal hWF ihLeft =>
       by_cases hTock : leftLabel = TypeLabel.tock
-      · exact ⟨hideTypeOffers interface leftCurrent, ∅,
+      · exact ⟨∅, ∅,
           TypeOffers.right_complete_tock outer leftEnv interface left left'
             right leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip
             hLeftOffers hNotSkip
             hLeftCurrentHidden hLeftFutureHidden hLocal hWF hTock⟩
       · exact ⟨hideTypeOffers interface leftCurrent,
-          hideTypeOffers interface leftFuture,
+          typeFutureOffers (left'.reannotate (PactTypeAlphabet.mergeHidden
+            left.alphabet right.alphabet interface)) \
+            hideTypeOffers interface leftCurrent,
           TypeOffers.right_complete outer leftEnv interface left left' right
             leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip
             hLeftOffers hNotSkip
