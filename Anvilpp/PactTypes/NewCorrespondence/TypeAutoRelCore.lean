@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Automata.CompileType
+import Anvilpp.PactTypes.Automata.CompileTypeLemmas
 import Mathlib.Data.Finset.Prod
 
 namespace Pact
@@ -60,9 +60,12 @@ def buildRelationSetCoreFuel :
                     right.alphabet interface
                     (compileTypeFuel fuel left)
                     (compileTypeFuel fuel right)
+                    (compileTypeFuel fuel (left.reannotate alphabet))
+                    (compileTypeFuel fuel (right.reannotate alphabet))
                     (compiledChildFutureFuel fuel left)
-                    (compiledChildFutureFuel fuel
-                      right)
+                    (compiledChildFutureFuel fuel right)
+                    (compiledChildFutureFuel fuel (left.reannotate alphabet))
+                    (compiledChildFutureFuel fuel (right.reannotate alphabet))
                     (.pair entry.1.2 entry.2.2)).image
               (fun entry =>
                 (.par alphabet entry.1.1 entry.2.1 interface,
@@ -203,8 +206,12 @@ theorem buildRelationSetCoreFuel_initial_mem  :
                   right.alphabet interface
                   (compileTypeFuel fuel left)
                   (compileTypeFuel fuel right)
+                  (compileTypeFuel fuel (left.reannotate alphabet))
+                  (compileTypeFuel fuel (right.reannotate alphabet))
                   (compiledChildFutureFuel fuel left)
-                  (compiledChildFutureFuel fuel right)⟩,
+                  (compiledChildFutureFuel fuel right)
+                  (compiledChildFutureFuel fuel (left.reannotate alphabet))
+                  (compiledChildFutureFuel fuel (right.reannotate alphabet))⟩,
               rfl⟩))
 
 /-- The seed pair for the public compiler's own fuel choice. -/
@@ -377,9 +384,10 @@ theorem buildRelationSetCoreFuel_functional  :
             have hInner : a.2 = a'.2 := by injection hState
             refine (congrArg Prod.fst hEq).symm.trans
               (Eq.trans ?_ (congrArg Prod.fst hEq'))
-            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel left := by
+            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel
+                (left.reannotate alphabet) := by
               rw [hInner]; exact (Prod.mk.eta (p := a')) ▸ ha'
-            rw [ih left ha.1 hm]
+            rw [ih (left.reannotate alphabet) ha.1 hm]
           · obtain ⟨a, -, hEq⟩ := hS0
             obtain ⟨a', -, hEq'⟩ := hS1'
             have h1 : _ = state := congrArg Prod.snd hEq
@@ -405,9 +413,10 @@ theorem buildRelationSetCoreFuel_functional  :
             have hInner : a.2 = a'.2 := by injection hState
             refine (congrArg Prod.fst hEq).symm.trans
               (Eq.trans ?_ (congrArg Prod.fst hEq'))
-            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel right := by
+            have hm : (a'.1, a.2) ∈ buildRelationSetCoreFuel fuel
+                (right.reannotate alphabet) := by
               rw [hInner]; exact (Prod.mk.eta (p := a')) ▸ ha'
-            rw [ih right ha.1 hm]
+            rw [ih (right.reannotate alphabet) ha.1 hm]
       | recur alphabet name body =>
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
             Finset.mem_image, Prod.mk.injEq] at h h'
@@ -622,6 +631,22 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
             compileTypeFuel_eq_of_sufficient right
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hRight) hRight
+          have hLeftR : typeCompilationFuel (left.reannotate alphabet) ≤ fuel := by
+            rw [typeCompilationFuel_reannotate]; exact hLeft
+          have hRightR : typeCompilationFuel (right.reannotate alphabet) ≤ fuel := by
+            rw [typeCompilationFuel_reannotate]; exact hRight
+          have hCompileLeftR :
+              compileTypeFuel (fuel + 1) (left.reannotate alphabet) =
+                compileTypeFuel fuel (left.reannotate alphabet) :=
+            compileTypeFuel_eq_of_sufficient (left.reannotate alphabet)
+              (leftFuel := fuel + 1) (rightFuel := fuel)
+              (Nat.le.step hLeftR) hLeftR
+          have hCompileRightR :
+              compileTypeFuel (fuel + 1) (right.reannotate alphabet) =
+                compileTypeFuel fuel (right.reannotate alphabet) :=
+            compileTypeFuel_eq_of_sufficient (right.reannotate alphabet)
+              (leftFuel := fuel + 1) (rightFuel := fuel)
+              (Nat.le.step hRightR) hRightR
           change insert (PactType.skip alphabet, TypeAutomatonState.final)
               (((Finset.product (buildRelationSetCoreFuel (fuel+1) left)
                   (buildRelationSetCoreFuel (fuel+1) right)).filter fun entry =>
@@ -629,8 +654,12 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                       right.alphabet interface
                       (compileTypeFuel (fuel+1) left)
                       (compileTypeFuel (fuel+1) right)
+                      (compileTypeFuel (fuel+1) (left.reannotate alphabet))
+                      (compileTypeFuel (fuel+1) (right.reannotate alphabet))
                       (compiledChildFutureFuel (fuel+1) left)
                       (compiledChildFutureFuel (fuel+1) right)
+                      (compiledChildFutureFuel (fuel+1) (left.reannotate alphabet))
+                      (compiledChildFutureFuel (fuel+1) (right.reannotate alphabet))
                       (.pair entry.1.2 entry.2.2)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
@@ -656,8 +685,12 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                       right.alphabet interface
                       (compileTypeFuel fuel left)
                       (compileTypeFuel fuel right)
+                      (compileTypeFuel fuel (left.reannotate alphabet))
+                      (compileTypeFuel fuel (right.reannotate alphabet))
                       (compiledChildFutureFuel fuel left)
                       (compiledChildFutureFuel fuel right)
+                      (compiledChildFutureFuel fuel (left.reannotate alphabet))
+                      (compiledChildFutureFuel fuel (right.reannotate alphabet))
                       (.pair entry.1.2 entry.2.2)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
@@ -678,8 +711,13 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                     (entry.1, TypeAutomatonState.survivor 1 entry.2)))
           simp only [compiledChildFutureFuel,
             Nat.min_eq_right hLeft, Nat.min_eq_right (Nat.le.step hLeft),
-            Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight)]
-          rw [ih left hLeft, ih right hRight, hCompileLeft, hCompileRight]
+            Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight),
+            Nat.min_eq_right hLeftR, Nat.min_eq_right (Nat.le.step hLeftR),
+            Nat.min_eq_right hRightR, Nat.min_eq_right (Nat.le.step hRightR)]
+          rw [ih left hLeft, ih right hRight,
+            ih (left.reannotate alphabet) hLeftR,
+            ih (right.reannotate alphabet) hRightR,
+            hCompileLeft, hCompileRight, hCompileLeftR, hCompileRightR]
       | recur alphabet name body =>
           have hBody : typeCompilationFuel body ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
@@ -971,7 +1009,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 Finset.mem_image, Finset.mem_filter]
               exact Or.inl ⟨(residual, childEdge.target),
                 ⟨hResidual,
-                  not_mem_sequenceDeleted_of_not_accepting hNotAccepting⟩,
+                  not_mem_sequenceDeleted_of_not_accepting hNotAccepting.2⟩,
                 rfl⟩
             · right
               exact ⟨markerName, by

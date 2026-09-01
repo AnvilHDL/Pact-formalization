@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Syntax.TypeTransitionSystem
+import Anvilpp.PactTypes.Syntax.TypeTransitionSystemLemmas
 
 /-!
 A decorated step preserves the fixed syntactic alphabet of an

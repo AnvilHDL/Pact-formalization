@@ -1,8 +1,4 @@
-import Anvilpp.PactTypes.Syntax.TypeCompletionFuel
-
-/-!
-# Fuel-bounded syntactic future-offer menu
--/
+import Anvilpp.PactTypes.Syntax.TypeFutureOffersFuelDefs
 
 namespace Pact
 
@@ -21,32 +17,6 @@ theorem replaceBranches_head_gate_iff
   | cons branch rest ih =>
       rcases branch with ⟨action, branchType⟩
       simp only [PactType.replaceBranches, List.forall_mem_cons, ih]
-
-/-- Syntactic future-offer menu, bounded by the depth of the finite type term. -/
-def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
-  | 0, _ => ∅
-  | fuel + 1, processType =>
-      match processType with
-      | .message alphabet msg dir =>
-          if (msg, dir) ∈ alphabet.actions then {(msg, dir)} else ∅
-      | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
-      | .recur _ _ body => typeFutureOffersFuel fuel body
-      | .choice _ left right | .fairChoice _ _ left right =>
-          typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right
-      | .seq _ left right =>
-          let leftOffers := typeFutureOffersFuel fuel left
-          if typeCanCompleteThisCycleFuel fuel left then
-            leftOffers ∪ typeFutureOffersFuel fuel right
-          else leftOffers
-      | .par _ left right interface =>
-          hideTypeOffers interface
-            (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
-      | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
-          if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-            branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-              (typeFutureOffersFuel fuel elseType)
-          else ∅
 
 /-- Once fuel covers the finite syntax tree, one more unit cannot expose a new
 same-cycle future offer. -/
@@ -394,10 +364,6 @@ termination_by fuel
 decreasing_by
   all_goals
     omega
-
-/-- All message actions that may still be offered before the next clock. -/
-def typeFutureOffers (processType : PactType) : Finset BareMessage :=
-  typeFutureOffersFuel (sizeOf processType + 1) processType
 
 /-- Any fuel budget covering the syntax computes the same public future menu. -/
 theorem typeFutureOffersFuel_eq_typeFutureOffers

@@ -1,12 +1,4 @@
-import Anvilpp.PactTypes.Syntax.TypeTransitionSystem
-import Anvilpp.PactTypes.Syntax.PactTypeRegularity
-import Anvilpp.PactTypes.Syntax.TypeLabelCombine
-
-/-!
-Label observations of a decorated step are drawn from the syntax of its
-source type.  This bridges the type-level ownership predicates of
-`PactTypeRegularity` to the label-level hypotheses of `TypeLabel.combine_inj`.
--/
+import Anvilpp.PactTypes.Syntax.TypeLabelOwnershipDefs
 
 namespace Pact
 
@@ -90,20 +82,6 @@ theorem branch_subset_branchMessageIds
       · cases hEq
         exact Finset.subset_union_left
       · exact (ih hTail).trans Finset.subset_union_right
-
-/-! ## Label ownership -/
-
-/-- Every observation a label carries is declared by the type the step started from:
-message actions by `MessageActions`/`MessageIds`, progress identifiers by `ProgressIds`,
-fair-choice identifiers by `FairChoiceIds`, and a resolved message by the interface of
-some parallel binder inside the type — which is also a message name the type uses. -/
-def PactType.LabelOwned (source : PactType) (label : TypeLabel) : Prop :=
-  (∀ msg dir, label.contains (.message msg dir) →
-      (msg, dir) ∈ source.MessageActions ∧ msg ∈ source.MessageIds) ∧
-    (∀ pid, label.contains (.progress pid) → pid ∈ source.ProgressIds) ∧
-    (∀ bid taken, label.contains (.fair bid taken) → bid ∈ source.FairChoiceIds) ∧
-    (∀ msg, label.contains (.resolved msg) →
-      msg ∈ source.ParallelInterfaces ∧ msg ∈ source.MessageIds)
 
 namespace PactType.LabelOwned
 

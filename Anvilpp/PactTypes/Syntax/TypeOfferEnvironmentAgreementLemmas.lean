@@ -1,10 +1,4 @@
-import Anvilpp.PactTypes.Syntax.PactTypeFutureOffers
-
-/-!
-Boundary (outside-the-interface) algebra for `hideTypeOffers`, and the
-replacement for Lemma 1: a component's local environment is determined by the
-outer environment *outside the interface*, whatever the sibling offers are.
--/
+import Anvilpp.PactTypes.Syntax.TypeOfferEnvironmentAgreementDefs
 
 namespace Pact
 
@@ -95,14 +89,6 @@ theorem hideTypeOffers_hide_union (H interface : Interface)
   ext action
   simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union]
   tauto
-
-/-! ### Environments agreeing away from a hidden set -/
-
-/-- Two environments agree away from the hidden set `H`. -/
-structure EnvAgreeOutside (H : Interface) (env₁ env₂ : TypeEnvironment) : Prop where
-  immediate : hideTypeOffers H env₁.immediate = hideTypeOffers H env₂.immediate
-  future : hideTypeOffers H env₁.future = hideTypeOffers H env₂.future
-  clock : env₁.clock = env₂.clock
 
 theorem EnvAgreeOutside.refl (H : Interface) (env : TypeEnvironment) :
     EnvAgreeOutside H env env := ⟨rfl, rfl, rfl⟩

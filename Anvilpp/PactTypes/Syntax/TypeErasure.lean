@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Syntax.PactTypeRegularity
+import Anvilpp.PactTypes.Syntax.PactTypeRegularityLemmas
 
 /-!
 # Erasure to the type-level observation/label/environment alphabet

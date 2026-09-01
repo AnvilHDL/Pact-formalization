@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Automata.SyncEdges
+import Anvilpp.PactTypes.Automata.SyncEdgesLemmas
 
 /-!
 # Backward completion closure used to seed recursion-body completing sets

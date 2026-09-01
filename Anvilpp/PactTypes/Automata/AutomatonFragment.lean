@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Automata.TypeAlphabet
+import Anvilpp.PactTypes.Automata.TypeAlphabetLemmas
 
 /-!
 # Automaton state/edge/fragment representation used by every constructor

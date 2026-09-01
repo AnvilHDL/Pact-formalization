@@ -1,10 +1,10 @@
-import Anvilpp.PactTypes.Syntax.TypeTransitionSystem
-import Anvilpp.PactTypes.Syntax.PactTypeRegularity
-import Anvilpp.PactTypes.Syntax.PactTypeShape
+import Anvilpp.PactTypes.Syntax.TypeTransitionSystemLemmas
+import Anvilpp.PactTypes.Syntax.PactTypeRegularityLemmas
+import Anvilpp.PactTypes.Syntax.PactTypeShapeLemmas
 import Anvilpp.PactTypes.Syntax.TypeOffersAlphabet
-import Anvilpp.PactTypes.Syntax.TypeOfferEnvironmentAgreement
+import Anvilpp.PactTypes.Syntax.TypeOfferEnvironmentAgreementLemmas
 import Anvilpp.PactTypes.Syntax.TypeLabelCombine
-import Anvilpp.PactTypes.Syntax.TypeLabelOwnership
+import Anvilpp.PactTypes.Syntax.TypeLabelOwnershipLemmas
 
 namespace Pact
 open Classical

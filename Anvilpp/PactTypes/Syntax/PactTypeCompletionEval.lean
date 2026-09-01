@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Syntax.TypeFutureOffersFuel
+import Anvilpp.PactTypes.Syntax.TypeFutureOffersFuelLemmas
 
 /-!
 # Valuation-polymorphic completion evaluator and its substitution/hygiene transport
