@@ -6,17 +6,12 @@ noncomputable section
 
 open Classical
 
-/-! ## The honesty-aware compatibility game (`pactcompat.typ`)
+/-! ## The honesty-aware compatibility game
 
-This is a genuinely concrete rendering of `pactcompat.typ`'s arena: the
-honesty memory `H_I`, the two-player vertex sets `V_0`/`V_1` (plus the
-absorbing failure sink), and the environment-choice/resolve/fail edges. What
-is *not* rendered concretely is the finite round-robin monitor product used
-to turn the Rabin objective into a finite-state acceptance condition
-(`pactformalappendix.typ`, "Common monitor product"): that is bookkeeping
-needed only for the effective decision procedure (Theorem 4.4), so the Rabin
-winning condition below is stated directly against the infinite play's
-label/environment sequence instead. -/
+A concrete rendering of the arena: the honesty memory `H_I`, the two-player
+vertex sets `V_0`/`V_1` with an absorbing failure sink, and the
+environment-choice/resolve/fail edges.  The Rabin winning condition is stated
+directly against the infinite play's label/environment sequence. -/
 
 /-- `H_I = {star} ∪ {E_F | (E_C,E_F) ∈ cal(Env)_I}`. -/
 inductive HonestyMemory : Type where
@@ -161,7 +156,7 @@ def compatibilityGame  (initial : PactType)
     sorry -- TODO(redevelopment): needs the play/log correspondence from
     -- `objectiveRabinPairs`.
 
-/-- Definition 4.5/`pactcompat.typ`: the compatibility query for a fixed
+/-- The compatibility query for a fixed
 composition `initial` (itself an already-`||_I`-composed `PactType`) and
 progress set. -/
 def TypeCompatible  (initial : PactType)

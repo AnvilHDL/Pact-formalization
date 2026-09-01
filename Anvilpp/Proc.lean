@@ -274,7 +274,5 @@ mutual
           Proc.AllBranchVariablesBound procVars dataVars rest
 end
 
-/-- `WFProc(P)`: every process- and data-variable in `P` is bound.  The
-expression language is untyped booleans throughout, so "every expression is
-well typed" (the other conjunct of the paper's `WFProc`) is vacuous. -/
+/-- Every process- and data-variable in `P` is bound. -/
 def WFProc (process : Proc) : Prop := Proc.AllVariablesBound [] [] process

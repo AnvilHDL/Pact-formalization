@@ -573,10 +573,8 @@ theorem correspondence_par_stepIff
     sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
   · -- survivor-right: the parent alphabet is stamped onto a right child residual.
     sorry -- BLOCKED(pending-issues.md#1): needs `ReannotationSafe`
-  · -- `q_done` case: `residual` already represents literal `.skip`, whose
-    -- only rule is `T-Skip`; matches `.final`'s own non-clock silent idle
-    -- self-loop (paper's "Forward direction at the done state" / third
-    -- backward-direction bullet).
+  · -- `q_done` case: `residual` is literal `.skip`, matching `.final`'s own
+    -- non-clock silent idle self-loop.
     injection hEntryEq with hResidualEq hStateEq
     subst hResidualEq; subst hStateEq
     have hFinalAccepting : TypeAutomatonState.final ∈

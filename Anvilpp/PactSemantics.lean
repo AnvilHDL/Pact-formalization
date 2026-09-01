@@ -89,7 +89,7 @@ namespace Label
     | .actions obs => messageIdsWith .recv obs
     | .tock => ∅
 
-  /-- `Sync_I` from the paper -/
+  /-- Synchronization on the interface `I`. -/
   def Sync (interface : Interface) (left right : Label) : Prop :=
     interface ∩ left.sends = interface ∩ right.recvs ∧
     interface ∩ left.recvs = interface ∩ right.sends ∧

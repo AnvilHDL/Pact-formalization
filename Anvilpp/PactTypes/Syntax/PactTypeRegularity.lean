@@ -918,10 +918,21 @@ namespace PactType
           Disjoint (MessageIds left \ interface) (MessageIds right \ interface) ∧
             Disjoint (MessageActions left) (MessageActions right) ∧
             ParallelMessageOwnership left ∧ ParallelMessageOwnership right
-      | .xoffer _ elseType branches | .offer _ elseType branches =>
+      | .xoffer _ elseType branches =>
+          ParallelMessageOwnership elseType ∧
+            ParallelMessageOwnershipBodies branches
+      | .offer _ elseType branches =>
           ParallelMessageOwnership elseType ∧
             ParallelMessageOwnershipBranches branches
     termination_by processType => sizeOf processType
+
+    def ParallelMessageOwnershipBodies :
+        List (BareMessage × PactType) → Prop
+      | [] => True
+      | (_, processType) :: rest =>
+          ParallelMessageOwnership processType ∧
+            ParallelMessageOwnershipBodies rest
+    termination_by branches => sizeOf branches
 
     def ParallelMessageOwnershipBranches :
         List (BareMessage × PactType) → Prop
@@ -1149,6 +1160,34 @@ theorem offerBranchesDisjoint_of_ownership :
             exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl hMsg.1
                 hProgress.1 hFair.1,
               restIH hTailSize hMsg.2.2.2 hProgress.2.2 hFair.2.2⟩
+      have hBodies : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n →
+          PactType.ParallelMessageOwnershipBodies branches →
+          PactType.ParallelProgressOwnershipBranches branches →
+          PactType.ParallelFairChoiceOwnershipBranches branches →
+          PactType.OfferBranchesDisjointBranches branches := by
+        intro branches hBranchesSize hMsg hProgress hFair
+        induction branches with
+        | nil => simp [PactType.OfferBranchesDisjointBranches]
+        | cons head tail restIH =>
+            rcases head with ⟨action, branchType⟩
+            simp only [PactType.ParallelMessageOwnershipBodies] at hMsg
+            simp only [PactType.ParallelProgressOwnershipBranches] at hProgress
+            simp only [PactType.ParallelFairChoiceOwnershipBranches] at hFair
+            simp only [PactType.OfferBranchesDisjointBranches]
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, branchType) :: tail) := by
+                simp_wf; omega
+              omega
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl hMsg.1
+                hProgress.1 hFair.1,
+              restIH hTailSize hMsg.2 hProgress.2.2 hFair.2.2⟩
       intro hMsg hProgress hFair
       cases processType with
       | message a m d | progress a p | tock a | skip a | var a _ =>
@@ -1186,7 +1225,7 @@ theorem offerBranchesDisjoint_of_ownership :
           have hE : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBr : sizeOf branches < n := by rw [← hSize]; simp_wf; omega
           exact ⟨ih (sizeOf elseType) hE elseType rfl hMsg.1 hProgress.1 hFair.1,
-            hBranches branches hBr hMsg.2 hProgress.2 hFair.2⟩
+            hBodies branches hBr hMsg.2 hProgress.2 hFair.2⟩
       | offer a elseType branches =>
           simp only [PactType.ParallelMessageOwnership] at hMsg
           simp only [PactType.ParallelProgressOwnership] at hProgress

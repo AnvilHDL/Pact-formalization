@@ -8,12 +8,27 @@ namespace Pact
 
 noncomputable section
 
+/-- Substitution rewrites branch bodies only, so a branch-head condition is
+unaffected by it. -/
+theorem replaceBranches_head_gate_iff
+    (branches : List (BareMessage × PactType)) (name : String)
+    (replacement : PactType) (alphabet : PactTypeAlphabet) :
+    (∀ b ∈ PactType.replaceBranches branches name replacement,
+        b.1 ∈ alphabet.actions) ↔
+      ∀ b ∈ branches, b.1 ∈ alphabet.actions := by
+  induction branches with
+  | nil => simp [PactType.replaceBranches]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      simp only [PactType.replaceBranches, List.forall_mem_cons, ih]
+
 /-- Syntactic future-offer menu, bounded by the depth of the finite type term. -/
 def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
   | 0, _ => ∅
   | fuel + 1, processType =>
       match processType with
-      | .message _ msg dir => {(msg, dir)}
+      | .message alphabet msg dir =>
+          if (msg, dir) ∈ alphabet.actions then {(msg, dir)} else ∅
       | .progress _ _ | .tock _ | .skip _ | .var _ _ => ∅
       | .recur _ _ body => typeFutureOffersFuel fuel body
       | .choice _ left right | .fairChoice _ _ left right =>
@@ -26,10 +41,12 @@ def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
       | .par _ left right interface =>
           hideTypeOffers interface
             (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
-      | .xoffer _ elseType branches | .offer _ elseType branches =>
-          branches.foldl (fun offers branch =>
-            offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-            (typeFutureOffersFuel fuel elseType)
+      | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
+          if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+            branches.foldl (fun offers branch =>
+              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+              (typeFutureOffersFuel fuel elseType)
+          else ∅
 
 /-- Once fuel covers the finite syntax tree, one more unit cannot expose a new
 same-cycle future offer. -/
@@ -132,13 +149,19 @@ private theorem typeFutureOffersFuel_succ_stable :
                 omega
               omega)]
       | xoffer alphabet elseType branches =>
-          change branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪
-                typeFutureOffersFuel (fuel + 1) branch.2)
-              (typeFutureOffersFuel (fuel + 1) elseType) =
-            branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-              (typeFutureOffersFuel fuel elseType)
+          change (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+              branches.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel (fuel + 1) branch.2)
+                (typeFutureOffersFuel (fuel + 1) elseType)
+            else ∅) =
+            (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+              branches.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+                (typeFutureOffersFuel fuel elseType)
+            else ∅)
+          split_ifs with hGate
+          case neg => rfl
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.xoffer alphabet elseType branches) := by
@@ -177,13 +200,19 @@ private theorem typeFutureOffersFuel_succ_stable :
                 exact hSubset other (by simp [hOther])
           exact hFold branches _ (by simp)
       | offer alphabet elseType branches =>
-          change branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪
-                typeFutureOffersFuel (fuel + 1) branch.2)
-              (typeFutureOffersFuel (fuel + 1) elseType) =
-            branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-              (typeFutureOffersFuel fuel elseType)
+          change (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+              branches.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪
+                  typeFutureOffersFuel (fuel + 1) branch.2)
+                (typeFutureOffersFuel (fuel + 1) elseType)
+            else ∅) =
+            (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+              branches.foldl (fun offers branch =>
+                offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+                (typeFutureOffersFuel fuel elseType)
+            else ∅)
+          split_ifs with hGate
+          case neg => rfl
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.offer alphabet elseType branches) := by
@@ -326,7 +355,10 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
                 rw [guardedOccurrences_replace_typeFutureOffersFuel
                   name replacement branchType hBranch fuel]
                 exact ih hRest _
-          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          simp only [PactType.replaceVar, typeFutureOffersFuel,
+            replaceBranches_head_gate_iff]
+          split_ifs with hGate
+          case neg => rfl
           rw [guardedOccurrences_replace_typeFutureOffersFuel
             name replacement elseType hElse fuel]
           exact hFold _
@@ -351,7 +383,10 @@ theorem guardedOccurrences_replace_typeFutureOffersFuel
                 rw [guardedOccurrences_replace_typeFutureOffersFuel
                   name replacement branchType hBranch fuel]
                 exact ih hRest _
-          simp only [PactType.replaceVar, typeFutureOffersFuel]
+          simp only [PactType.replaceVar, typeFutureOffersFuel,
+            replaceBranches_head_gate_iff]
+          split_ifs with hGate
+          case neg => rfl
           rw [guardedOccurrences_replace_typeFutureOffersFuel
             name replacement elseType hElse fuel]
           exact hFold _
@@ -421,65 +456,6 @@ theorem typeCanCompleteThisCycleFuel_reannotate :
       | offer a e bs =>
           simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
             congrArg₂ (· || ·) (ih e alphabet) (hBranches bs alphabet)
-
-/-- The future-offer menu ignores alphabet annotations. -/
-theorem typeFutureOffersFuel_reannotate :
-    ∀ (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet),
-      typeFutureOffersFuel fuel (processType.reannotate alphabet) =
-        typeFutureOffersFuel fuel processType := by
-  intro fuel
-  induction fuel with
-  | zero => intro processType alphabet; rfl
-  | succ fuel ih =>
-      have hBranches : ∀ (branches : List (BareMessage × PactType))
-          (alphabet : PactTypeAlphabet) (seed : Finset BareMessage),
-          (PactType.reannotateBranches alphabet branches).foldl
-              (fun offers branch =>
-                offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2) seed =
-            branches.foldl (fun offers branch =>
-              offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2) seed := by
-        intro branches alphabet
-        induction branches with
-        | nil => intro seed; simp
-        | cons branch rest restIH =>
-            rcases branch with ⟨action, branchType⟩
-            intro seed
-            simp only [PactType.reannotateBranches_cons, List.foldl_cons,
-              ih branchType alphabet]
-            exact restIH _
-      intro processType alphabet
-      cases processType with
-      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
-          simp [PactType.reannotate, typeFutureOffersFuel]
-      | recur a binder body =>
-          simpa [PactType.reannotate, typeFutureOffersFuel] using ih body alphabet
-      | choice a l r =>
-          simpa [PactType.reannotate, typeFutureOffersFuel] using
-            congrArg₂ (· ∪ ·) (ih l alphabet) (ih r alphabet)
-      | fairChoice a b l r =>
-          simpa [PactType.reannotate, typeFutureOffersFuel] using
-            congrArg₂ (· ∪ ·) (ih l alphabet) (ih r alphabet)
-      | seq a l r =>
-          simp only [PactType.reannotate, typeFutureOffersFuel,
-            ih l alphabet, ih r alphabet,
-            typeCanCompleteThisCycleFuel_reannotate fuel l alphabet]
-      | par a l r bdry =>
-          simp only [PactType.reannotate, typeFutureOffersFuel, ih l _, ih r _]
-      | xoffer a e bs =>
-          simp only [PactType.reannotate, typeFutureOffersFuel, ih e alphabet]
-          exact hBranches bs alphabet _
-      | offer a e bs =>
-          simp only [PactType.reannotate, typeFutureOffersFuel, ih e alphabet]
-          exact hBranches bs alphabet _
-
-/-- Relabelling leaves the public future menu unchanged. -/
-theorem typeFutureOffers_reannotate (processType : PactType)
-    (alphabet : PactTypeAlphabet) :
-    typeFutureOffers (processType.reannotate alphabet) =
-      typeFutureOffers processType := by
-  unfold typeFutureOffers
-  rw [PactType.reannotate_sizeOf processType alphabet]
-  exact typeFutureOffersFuel_reannotate _ processType alphabet
 
 end
 

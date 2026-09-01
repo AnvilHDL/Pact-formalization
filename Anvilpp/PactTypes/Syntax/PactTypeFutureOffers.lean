@@ -81,7 +81,8 @@ theorem typeFutureOffers_fairChoice
 branch head, and every branch continuation menu. -/
 theorem typeFutureOffers_xoffer
     (alphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     typeFutureOffers (.xoffer alphabet elseType branches) =
       branches.foldl (fun offers branch =>
         offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
@@ -118,9 +119,12 @@ theorem typeFutureOffers_xoffer
         apply ih
         intro entry hEntry
         exact hRest entry (by simp [hEntry])
-  change branches.foldl (fun offers branch =>
-      offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-      (typeFutureOffersFuel fuel elseType) = _
+  change (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
+      branches.foldl (fun offers branch =>
+        offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+        (typeFutureOffersFuel fuel elseType)
+    else ∅) = _
+  rw [if_pos hGate]
   rw [typeFutureOffersFuel_eq_typeFutureOffers elseType fuel hElseFuel]
   exact hFold branches hBranchFuel (typeFutureOffers elseType)
 
@@ -128,13 +132,14 @@ theorem typeFutureOffers_xoffer
 offers: the else continuation, every branch head, and every branch menu. -/
 theorem typeFutureOffers_offer
     (alphabet : PactTypeAlphabet)
-    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
     typeFutureOffers (.offer alphabet elseType branches) =
       branches.foldl (fun offers branch =>
         offers ∪ {branch.1} ∪ typeFutureOffers branch.2)
         (typeFutureOffers elseType) := by
   simpa only [typeFutureOffers, typeFutureOffersFuel] using
-    typeFutureOffers_xoffer alphabet elseType branches
+    typeFutureOffers_xoffer alphabet elseType branches hGate
 
 /-- Parallel future offers are the optimistic union of both syntax-derived
 component menus, with the synchronization interface hidden. -/
@@ -267,15 +272,17 @@ mutual
         TypeOffers env (.tock alphabet) .tock (.skip alphabet) ∅ ∅
     | cycle_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
         env.WellFormed alphabet ∧ env.clock = false →
-        TypeOffers env (.tock alphabet) TypeLabel.silent (.tock alphabet) ∅ ∅
+        TypeOffers env (.tock alphabet) TypeLabel.silent (.tock alphabet) ∅
+          (typeFutureOffers (.tock alphabet))
     | skip (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
         env.WellFormed alphabet ∧ env.clock = false →
-        TypeOffers env (.skip alphabet) TypeLabel.silent (.skip alphabet) ∅ ∅
+        TypeOffers env (.skip alphabet) TypeLabel.silent (.skip alphabet) ∅
+          (typeFutureOffers (.skip alphabet))
     | progress (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (pid : ProcId) :
         env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.progress alphabet pid) (TypeLabel.progress pid)
-          (.skip alphabet) ∅ ∅
+          (.skip alphabet) ∅ (typeFutureOffers (.skip alphabet))
     | recur (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (name : String) (body : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
@@ -557,11 +564,11 @@ theorem TypeOffers.future_eq_empty_of_target_skip
   | cycle =>
       simp
   | cycle_wait =>
-      simp
+      simp [typeFutureOffers, typeFutureOffersFuel]
   | skip =>
-      simp
+      simp [typeFutureOffers, typeFutureOffersFuel]
   | progress =>
-      simp
+      simp [typeFutureOffers, typeFutureOffersFuel]
   | recur env alphabet name body hConditions =>
       rw [hTarget]
       simp [typeFutureOffers, typeFutureOffersFuel]

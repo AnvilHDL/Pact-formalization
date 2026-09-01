@@ -7,7 +7,7 @@ noncomputable section
 open Classical
 
 /-! ## Type logs, honesty, and the semantic compatibility objective
-(`pacttypes.typ`, `pactcompat.typ`) -/
+-/
 
 abbrev TypeLog := ℕ → TypeEnvironment × TypeLabel
 abbrev TypeHistory := List (TypeEnvironment × TypeLabel × PactType)

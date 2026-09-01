@@ -63,8 +63,8 @@ namespace PactTypeAlphabet
 
 end PactTypeAlphabet
 
-/-- The type grammar from Section 4.1, annotated with the fixed alphabet
-chosen for each subterm. -/
+/-- The type grammar, annotated with the fixed alphabet chosen for each
+subterm. -/
 inductive PactType : Type where
   | message : PactTypeAlphabet → MessageId → MessageDir → PactType
   | progress : PactTypeAlphabet → ProcId → PactType
@@ -167,7 +167,7 @@ namespace PactType
     owned in complementary polarities.
     -/
     def AlphabetWellFormed : PactType → Prop
-      | .message alphabet msg dir =>
+      | .message alphabet _ _ =>
           alphabet.WellFormed
       | .progress alphabet _ =>
           alphabet.WellFormed

@@ -86,7 +86,7 @@ inductive AutomatonLocalEnvironment
             localEdge.environment.immediate →
       AutomatonLocalEnvironment outer interface localAlphabet sibling localEdge
 
-/-- The paper's `SyncEdges_I` side condition for a pair of component edges. -/
+/-- The side condition on a pair of component edges forming a product edge. -/
 def syncAutomatonEdges (leftAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
     (left right : AutomatonFragmentEdge) : Prop :=
   let outer := combineAutomatonEnvironment interface

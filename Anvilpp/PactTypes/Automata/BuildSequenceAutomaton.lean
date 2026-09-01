@@ -8,7 +8,7 @@ namespace Pact
 
 noncomputable section
 
-/-! ### Sequential composition by the paper's left/redirect/right clauses. -/
+/-! ### Sequential composition: the left, redirect, and right clauses. -/
 
 /-- The left states the sequence construction drops: every accepting state of
 `left` other than its own entry.  The entry is kept even when it is accepting
@@ -57,8 +57,7 @@ def sequenceRedirectFutureSpec (label : AutomatonConstructionLabel)
 
 /-- The image of a left edge whose target is not final.
 
-This is the paper's `δ_seq^left` clause.  The edge stays in the left copy,
-retagged.  The future field is rebuilt as a fresh `OF(q')` reference at the
+The edge stays in the left copy, retagged.  The future field is rebuilt as a fresh `OF(q')` reference at the
 retagged target — never the original edge's own `.future` retargeted in
 place, since that original reference was resolved against `left` alone and
 may carry an unrelated `removed` set.  `edge.current` is always a safe
@@ -80,8 +79,8 @@ def sequenceKeptLeftEdge (left right : AutomatonFragment)
 
 /-- The image of a left edge whose target is final.
 
-This is the paper's `δ_seq^redirect` clause.  The source, environment, label,
-and current offers are copied from the left edge.  The target becomes the
+The source, environment, label, and current offers are copied from the left
+edge.  The target becomes the
 right entry, and the future field is `OF(i₂)` — with `removed := edge.current`
 for the same self-loop-safety reason as `sequenceKeptLeftEdge`. -/
 def sequenceRedirectEdge (_left right : AutomatonFragment)
@@ -97,7 +96,9 @@ def sequenceRedirectEdge (_left right : AutomatonFragment)
 /-- `δ_seq^left`: keep exactly the left edges whose target is not accepting. -/
 def sequenceLeftEdges (left right : AutomatonFragment) :
     Finset PendingAutomatonEdge :=
-  (left.edges.filter fun edge => edge.target ∉ left.accepting).image
+  (left.edges.filter fun edge =>
+    edge.source ∉ sequenceDeleted left ∧
+      edge.target ∉ left.accepting).image
     (sequenceKeptLeftEdge left right)
 
 /-- `δ_seq^right`: copy all right edges into the right component. -/
@@ -108,7 +109,9 @@ def sequenceRightEdges (right : AutomatonFragment) :
 /-- `δ_seq^redirect`: redirect exactly the left edges whose target is accepting. -/
 def sequenceRedirectEdges (left right : AutomatonFragment) :
     Finset PendingAutomatonEdge :=
-  (left.edges.filter fun edge => edge.target ∈ left.accepting).image
+  (left.edges.filter fun edge =>
+    edge.source ∉ sequenceDeleted left ∧
+      edge.target ∈ left.accepting).image
     (sequenceRedirectEdge left right)
 
 /-- Compatibility helper for older correspondence proofs.

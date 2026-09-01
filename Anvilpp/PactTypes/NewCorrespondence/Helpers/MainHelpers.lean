@@ -78,9 +78,8 @@ theorem typeSameCycleReaches_seq_fuse (alphabet skipAlphabet : PactTypeAlphabet)
       · exact Relation.ReflTransGen.head ⟨env, label,
           TypeTransition.seq env alphabet current next right label hTrans hNextSkip, hNotTock⟩ ih
 
-/-- `pact.pdf`'s own same-cycle completion equation for sequence (p.34): "A
-sequence finishes in the current cycle exactly when its left child can
-finish and its right child can then finish." -/
+/-- A sequence finishes in the current cycle exactly when its left child can
+finish and its right child can then finish. -/
 theorem typeSameCycleReaches_seq_iff (alphabet : PactTypeAlphabet) (left right : PactType) :
     TypeSameCycleReaches (.seq alphabet left right) (.skip alphabet) ↔
       (∃ skipAlphabet, TypeSameCycleReaches left (.skip skipAlphabet)) ∧
@@ -845,14 +844,10 @@ def typeSameCycleSteps : PactType → Finset (Finset BareMessage × PactType)
       else ∅
 
 /-- The Kleene-staged semantic future-offer menu, indexed by the *same* stage
-convention as `ofStage` — one stage per same-cycle step actually taken, not
-per syntactic unwrap (unlike `typeFutureOffersFuel`, which decrements fuel on
-structural descent regardless of whether that descent corresponds to a real
-step — see `interestingdiscoveries.md` for the counterexample this was built
-to fix). Mirrors `pact.pdf`'s Ψ directly: `Bare(O_C)` off one same-cycle step
-unioned with the stage-below value at that step's target, plus the same
-unconditional `hideTypeOffers` term at a `.par` residual that `ofStage`'s Φ
-has at a product state. -/
+convention as `ofStage`: one stage per same-cycle step actually taken, not per
+syntactic unwrap.  The current offers off one same-cycle step, unioned with the
+stage-below value at that step's target, plus an unconditional `hideTypeOffers`
+term at a `.par` residual. -/
 def futOffStage : Nat → PactType → Finset BareMessage
   | 0, _ => ∅
   | n + 1, ty =>
@@ -5205,6 +5200,32 @@ theorem PactType.reannotate_ownership_data
               hRestFacts.2.2.2.1, hRestFacts.2.2.2.2.1,
               hRestFacts.2.2.2.2.2.1, hRestFacts.2.2.2.2.2.2]
             simp
+      have hBodies : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet,
+          (PactType.ParallelMessageOwnershipBodies
+              (PactType.reannotateBranches branchAlphabet branches) ↔
+            PactType.ParallelMessageOwnershipBodies branches) := by
+        intro branches hBranchesSize branchAlphabet
+        induction branches with
+        | nil => simp [PactType.ParallelMessageOwnershipBodies]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            simp only [PactType.reannotateBranches_cons,
+              PactType.ParallelMessageOwnershipBodies]
+            rw [(ih (sizeOf branchType) hType branchAlphabet branchType
+              rfl).2.2.2.2.1, restIH hRest]
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
           simp [PactType.reannotate, PactType.MessageIds,
@@ -5264,7 +5285,8 @@ theorem PactType.reannotate_ownership_data
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             ih (sizeOf elseType) hElse alphabet elseType rfl,
-            hBranches branches hBranchSize alphabet]
+            hBranches branches hBranchSize alphabet,
+            hBodies branches hBranchSize alphabet]
 
 @[simp] theorem PactType.messageIds_reannotate
     (alphabet : PactTypeAlphabet) (processType : PactType) :

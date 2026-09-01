@@ -99,8 +99,8 @@ theorem decoratedTypeTransition_replaceVar_eq_of_tailOccurrences_false
 
 /-- Atomic marker-source fact for a bare variable.
 
-For an arbitrary recursion body, the analogous statement is not true without
-the paper's tail-recursion premise.  A marker labelled `name` can be copied
+For an arbitrary recursion body, the analogous statement needs the
+tail-recursion premise.  A marker labelled `name` can be copied
 through choices and offers, but tail regularity is what rules out marker
 sources under sequence-left, parallel, and conjunctive-offer contexts.  The
 recursion correspondence caller should therefore first split the copied

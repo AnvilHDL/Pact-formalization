@@ -14,9 +14,8 @@ noncomputable section
 /-- Step correspondence for the `skip` constructor, stated for the new
 relation-set presentation used by `PactSafety.type_automaton_correspondence`.
 
-This is the Section 7.2/Lemma 4.5 base case: the compiled `skip` automaton
-has exactly the non-clock silent self-loop that the operational `skip` type
-has, and no clock step. -/
+The compiled `skip` automaton has exactly the non-clock silent self-loop
+that the operational `skip` type has, and no clock step. -/
 theorem correspondence_skip_stepIff
      (alphabet : PactTypeAlphabet)
     {residual residual' : PactType} {state : TypeAutomatonState}

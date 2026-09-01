@@ -556,13 +556,9 @@ def TypeReady (env : TypeEnvironment) (processType : PactType) : Prop :=
 def ProcessReady (env : Environment) (process : Proc) : Prop :=
   ∃ label target, ProcessTransition env process label target
 
-/--
-An erased alternating simulation witnessing `P ⊧ τ` (`pactformalappendix.typ`,
-"Erasure"). Besides matching every process resolution with a single erased
-type step (not a weak, epsilon-padded one), it reflects availability from the
-type to the process: a winning environment choice transferred from a type
-strategy must not become stuck merely by being realized concretely.
--/
+/-- An erased alternating simulation witnessing `P ⊧ τ`: it matches every
+process resolution with a single erased type step, and reflects availability
+from the type back to the process. -/
 structure ConformanceWitness (process : Proc) (processType : PactType) : Type where
   relation : Proc → PactType → Prop
   initial : relation process processType
@@ -583,14 +579,10 @@ structure ConformanceWitness (process : Proc) (processType : PactType) : Type wh
 def Conforms (process : Proc) (processType : PactType) : Prop :=
   Nonempty (ConformanceWitness process processType)
 
-/--
-The precision preorder `precise ⊑ abstract` (Definition 4.2), an alternating
-simulation over single *decorated* type steps: the response and availability
-clauses are indexed by the same label and the same current/future offer pair
-`(O_C,O_F)` on both sides (the offer-polarity condition needed for the
-parallel-composition congruence, `pactformalappendix.typ`/`pactproofs.typ`
-Lemma 4.7), and a related pair agrees on whether it is literally `skip`.
--/
+/-- The precision preorder `precise ⊑ abstract`: an alternating simulation over
+single decorated type steps, indexed by the same label and the same
+current/future offer pair, with related pairs agreeing on whether they are
+literally `skip`. -/
 structure RefinementWitness (precise abstract : PactType) : Type where
   relation : PactType → PactType → Prop
   initial : relation precise abstract

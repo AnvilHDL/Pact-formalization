@@ -403,7 +403,7 @@ def compileTypeFuel :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .explicit ∅
+                future := .at .root ∅
                 target := .root }
 
       -- message: fire to final when its complement is immediate; otherwise wait.
@@ -442,7 +442,7 @@ def compileTypeFuel :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .explicit ∅
+                future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
@@ -463,7 +463,7 @@ def compileTypeFuel :
                   environment := environment
                   label := .visible TypeLabel.silent
                   current := ∅
-                  future := .explicit ∅
+                  future := .at .root ∅
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments :=
@@ -474,7 +474,7 @@ def compileTypeFuel :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .explicit ∅
+                future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
             (actionEdges ∪ finalEdges)
@@ -499,7 +499,7 @@ def compileTypeFuel :
                 environment := environment
                 label := .visible TypeLabel.silent
                 current := ∅
-                future := .explicit ∅
+                future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
             (actionEdges ∪ finalEdges)
@@ -517,7 +517,7 @@ def compileTypeFuel :
                 environment := environment
                 label := .variable name
                 current := ∅
-                future := .explicit ∅
+                future := .at .final ∅
                 target := .final }
 
       -- recursion: replace matching variable edges by silent back-edges.
@@ -550,10 +550,16 @@ def compileTypeFuel :
             right.alphabet interface
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right)
+            (compileTypeFuel fuel (left.reannotate alphabet))
+            (compileTypeFuel fuel (right.reannotate alphabet))
             (computeFutureOfFuel
               (min fuel (typeCompilationFuel left)) left)
             (computeFutureOfFuel
               (min fuel (typeCompilationFuel right)) right)
+            (computeFutureOfFuel
+              (min fuel (typeCompilationFuel left)) (left.reannotate alphabet))
+            (computeFutureOfFuel
+              (min fuel (typeCompilationFuel right)) (right.reannotate alphabet))
 
       -- exclusive offer: compile else and every branch independently first.
       | .xoffer alphabet elseType branches =>
@@ -579,7 +585,7 @@ def compileTypeFuel :
 
 termination_by fuel processType => (fuel, 0)
 
-/-- The paper's global future-menu fixed point. The graph closure and every
+/-- The global future-menu fixed point. The graph closure and every
 product-state contribution are computed from the same type-aware compiler. -/
 def computeFutureOfFuel :
     Nat → PactType → TypeAutomatonState → Finset BareMessage
@@ -905,7 +911,7 @@ def AutomatonFragment.HasResolvedEdge
         = offers.future ∧
       edge.target = target
 
-/-- Resolve every symbolic future reference with the paper's global,
+/-- Resolve every symbolic future reference with the global,
 product-aware `computeFutureOf` function. -/
 def resolvedAutomatonEdges
     (processType : PactType) (fragment : AutomatonFragment) :

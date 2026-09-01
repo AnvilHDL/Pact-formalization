@@ -9,22 +9,8 @@ open Classical
 
 /-! ## Regularity, checking, and complexity helpers -/
 
-/--
-The paper's admissible recursive types: variables are closed, every recursive
-backedge is preceded by at least one synchronized clock step, recursive calls
-are tail terminating, a message is exchanged at most once per cycle, and
-nested parallel binders have lexically disjoint interfaces.
-
-At source parallel nodes, ownership is recorded by the fixed child alphabets.
-Conjunctive offers later turn their branches into an internal parallel
-product.  Their branch bodies initially share the enclosing offer alphabet,
-so the three ownership predicates are retained here to justify the disjoint
-alphabet partition used by that generated product.
-
-Tail termination is the finite-control part of regularity.  It ensures that a
-shared backedge never has to retain a newly generated sequence, parallel, or
-conjunctive-offer context.
--/
+/-- Closure, hygiene, clock guarding, tail recursion, same-cycle message
+linearity, parallel message ownership, and interface scoping. -/
 def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
     PactType.BinderHygienic [] processType ∧
@@ -32,16 +18,9 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType ∧
     PactType.ParallelMessageOwnership processType ∧
-    PactType.ParallelProgressOwnership processType ∧
-    PactType.ParallelFairChoiceOwnership processType ∧
     PactType.InterfaceScoped processType
 
-/-- Types admitted by the canonical construction.  Nothing is checked against
-the any more: the holds only the resolved observations and
-identifiers fixed at the start of compilation, and every action-indexed set is
-read off the type's own alphabet.  What admissibility adds is linearity of the
-progress and fair-choice identifiers, which is what lets a label name the
-subterm that emitted it. -/
+/-- Types admitted by the canonical construction. -/
 def AdmissibleType (processType : PactType) : Prop :=
   processType.AlphabetWellFormed ∧
     PactType.ProgressLinear processType ∧
@@ -72,7 +51,7 @@ noncomputable def dataObliviousCheckingDecidable
     Decidable (DataObliviousChecks process claimed) := by
   sorry
 
-/-- Abstract cost predicates used to record the paper's asymptotic claims. -/
+/-- Abstract cost predicates recording the asymptotic claims. -/
 def RunsInLinearTime {α β : Type} (function : α → β) : Prop := by
   sorry
 

@@ -72,6 +72,7 @@ def parallelLeftCompleteEdges
   exact
     ((left.accepting ∩ left.states).biUnion fun leftState =>
       ((resolveAutomatonEdgesWith right rightFuture).filter fun rightEdge =>
+          rightEdge.source ∉ right.accepting ∧
           rightEdge.target ∉ right.accepting ∧
           restrictTypeOffers interface rightEdge.current = ∅ ∧
           restrictTypeOffers interface rightEdge.future = ∅).biUnion
@@ -103,6 +104,7 @@ def parallelRightCompleteEdges
   exact
     ((right.accepting ∩ right.states).biUnion fun rightState =>
       ((resolveAutomatonEdgesWith left leftFuture).filter fun leftEdge =>
+          leftEdge.source ∉ left.accepting ∧
           leftEdge.target ∉ left.accepting ∧
           restrictTypeOffers interface leftEdge.current = ∅ ∧
           restrictTypeOffers interface leftEdge.future = ∅).biUnion
@@ -123,56 +125,92 @@ def parallelRightCompleteEdges
 /-- The continuation of `parallelLeftCompleteEdges` inside the survivor
 region: the surviving right component keeps stepping from `survivor 1`. -/
 def parallelLeftCompleteSurvivorEdges
-    (parentAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
-    (right : AutomatonFragment)
-    (rightFuture : TypeAutomatonState → Finset BareMessage) :
+    (interface : Interface)
+    (restampedRight : AutomatonFragment)
+    (restampedRightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
   classical
   exact
-    ((resolveAutomatonEdgesWith right rightFuture).filter fun rightEdge =>
-        rightEdge.target ∉ right.accepting ∧
+    ((resolveAutomatonEdgesWith restampedRight restampedRightFuture).filter
+        fun rightEdge =>
+        rightEdge.target ∉ restampedRight.accepting ∧
         restrictTypeOffers interface rightEdge.current = ∅ ∧
-        restrictTypeOffers interface rightEdge.future = ∅).biUnion
+        restrictTypeOffers interface rightEdge.future = ∅).image
       fun rightEdge =>
-        ((parentAlphabet.localEnvironments).filter
-          fun environment =>
-            projectAutomatonEnvironment rightAlphabet environment =
-              rightEdge.environment).image
-          fun environment =>
-            let target : TypeAutomatonState := .survivor 1 rightEdge.target
-            { source := .survivor 1 rightEdge.source
-              environment := environment
-              label := rightEdge.label
-              current := rightEdge.current
-              future := parallelFutureSpec rightEdge.label target rightEdge.current
-              target := target }
+        let target : TypeAutomatonState := .survivor 1 rightEdge.target
+        { source := .survivor 1 rightEdge.source
+          environment := rightEdge.environment
+          label := rightEdge.label
+          current := rightEdge.current
+          future := parallelFutureSpec rightEdge.label target rightEdge.current
+          target := target }
+
+/-- The survivor's completing step: the re-stamped right component reaches an
+accepting state, so the product enters `q_done`. -/
+def parallelLeftCompleteDoneEdges
+    (interface : Interface)
+    (restampedRight : AutomatonFragment)
+    (restampedRightFuture : TypeAutomatonState → Finset BareMessage) :
+    Finset PendingAutomatonEdge := by
+  classical
+  exact
+    ((resolveAutomatonEdgesWith restampedRight restampedRightFuture).filter
+        fun rightEdge =>
+        rightEdge.target ∈ restampedRight.accepting ∧
+        restrictTypeOffers interface rightEdge.current = ∅ ∧
+        restrictTypeOffers interface rightEdge.future = ∅).image
+      fun rightEdge =>
+        { source := .survivor 1 rightEdge.source
+          environment := rightEdge.environment
+          label := rightEdge.label
+          current := rightEdge.current
+          future := parallelFutureSpec rightEdge.label .final rightEdge.current
+          target := .final }
 
 /-- The mirror of `parallelLeftCompleteSurvivorEdges` for a surviving left
 component, stepping from `survivor 0`. -/
 def parallelRightCompleteSurvivorEdges
-    (parentAlphabet leftAlphabet : PactTypeAlphabet) (interface : Interface)
-    (left : AutomatonFragment)
-    (leftFuture : TypeAutomatonState → Finset BareMessage) :
+    (interface : Interface)
+    (restampedLeft : AutomatonFragment)
+    (restampedLeftFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
   classical
   exact
-    ((resolveAutomatonEdgesWith left leftFuture).filter fun leftEdge =>
-        leftEdge.target ∉ left.accepting ∧
+    ((resolveAutomatonEdgesWith restampedLeft restampedLeftFuture).filter
+        fun leftEdge =>
+        leftEdge.target ∉ restampedLeft.accepting ∧
         restrictTypeOffers interface leftEdge.current = ∅ ∧
-        restrictTypeOffers interface leftEdge.future = ∅).biUnion
+        restrictTypeOffers interface leftEdge.future = ∅).image
       fun leftEdge =>
-        ((parentAlphabet.localEnvironments).filter
-          fun environment =>
-            projectAutomatonEnvironment leftAlphabet environment =
-              leftEdge.environment).image
-          fun environment =>
-            let target : TypeAutomatonState := .survivor 0 leftEdge.target
-            { source := .survivor 0 leftEdge.source
-              environment := environment
-              label := leftEdge.label
-              current := leftEdge.current
-              future := parallelFutureSpec leftEdge.label target leftEdge.current
-              target := target }
+        let target : TypeAutomatonState := .survivor 0 leftEdge.target
+        { source := .survivor 0 leftEdge.source
+          environment := leftEdge.environment
+          label := leftEdge.label
+          current := leftEdge.current
+          future := parallelFutureSpec leftEdge.label target leftEdge.current
+          target := target }
+
+/-- The mirror of `parallelLeftCompleteDoneEdges` for a surviving left
+component. -/
+def parallelRightCompleteDoneEdges
+    (interface : Interface)
+    (restampedLeft : AutomatonFragment)
+    (restampedLeftFuture : TypeAutomatonState → Finset BareMessage) :
+    Finset PendingAutomatonEdge := by
+  classical
+  exact
+    ((resolveAutomatonEdgesWith restampedLeft restampedLeftFuture).filter
+        fun leftEdge =>
+        leftEdge.target ∈ restampedLeft.accepting ∧
+        restrictTypeOffers interface leftEdge.current = ∅ ∧
+        restrictTypeOffers interface leftEdge.future = ∅).image
+      fun leftEdge =>
+        { source := .survivor 0 leftEdge.source
+          environment := leftEdge.environment
+          label := leftEdge.label
+          current := leftEdge.current
+          future := parallelFutureSpec leftEdge.label .final leftEdge.current
+          target := .final }
 
 /-- The non-clock idle edges attached to the completed parallel state. -/
 def parallelDoneEdges
@@ -187,47 +225,54 @@ def parallelDoneEdges
         future := .explicit ∅
         target := .final }
 
-/-- One raw graph step used by the paper's `Reach` side condition. -/
+/-- One raw graph step used by the reachability side condition. -/
 def ParallelRawStep
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
-    (left right : AutomatonFragment)
-    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage)
     (source target : TypeAutomatonState) : Prop :=
   ∃ edge ∈ parallelRawTransitionEdges leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture ∪
+      interface left right leftFuture rightFuture ∪
       parallelLeftCompleteEdges parentAlphabet rightAlphabet
         interface left right rightFuture ∪
       parallelRightCompleteEdges parentAlphabet leftAlphabet
         interface left right leftFuture ∪
-      parallelLeftCompleteSurvivorEdges parentAlphabet rightAlphabet
-        interface right rightFuture ∪
-      parallelRightCompleteSurvivorEdges parentAlphabet leftAlphabet
-        interface left leftFuture ∪
+      parallelLeftCompleteSurvivorEdges interface restampedRight
+        restampedRightFuture ∪
+      parallelRightCompleteSurvivorEdges interface restampedLeft
+        restampedLeftFuture ∪
+      parallelLeftCompleteDoneEdges interface restampedRight
+        restampedRightFuture ∪
+      parallelRightCompleteDoneEdges interface restampedLeft
+        restampedLeftFuture ∪
       parallelDoneEdges parentAlphabet,
     edge.source = source ∧ edge.target = target
 
-/-- Joint reachability in the raw synchronized product. This is the
-`Reach(τ₁ ∥_I τ₂)` premise appearing in `SyncEdges_I` in the paper. -/
+/-- Joint reachability in the raw synchronized product. -/
 def ParallelReachable
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
-    (left right : AutomatonFragment)
-    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage)
     (state : TypeAutomatonState) : Prop :=
   Relation.ReflTransGen
     (ParallelRawStep parentAlphabet leftAlphabet rightAlphabet
-      interface left right leftFuture rightFuture)
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture)
     (.pair left.initial right.initial) state
 
 theorem parallelReachable_initial
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
-    (left right : AutomatonFragment)
-    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage) :
     ParallelReachable parentAlphabet leftAlphabet rightAlphabet
-      interface left right leftFuture rightFuture
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture
       (.pair left.initial right.initial) :=
   Relation.ReflTransGen.refl
 
@@ -235,17 +280,20 @@ theorem ParallelReachable.tail_raw
 
     {parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet}
     {interface : Interface}
-    {left right : AutomatonFragment} {source target : TypeAutomatonState}
-    {leftFuture rightFuture : TypeAutomatonState → Finset BareMessage}
+    {left right restampedLeft restampedRight : AutomatonFragment}
+    {source target : TypeAutomatonState}
+    {leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage}
     (hSource : ParallelReachable parentAlphabet leftAlphabet
-      rightAlphabet interface left right
-      leftFuture rightFuture source)
+      rightAlphabet interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture source)
     (hStep : ParallelRawStep parentAlphabet leftAlphabet
-      rightAlphabet interface left right
-      leftFuture rightFuture source target) :
+      rightAlphabet interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture
+      source target) :
     ParallelReachable parentAlphabet leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture target :=
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture target :=
   Relation.ReflTransGen.tail hSource hStep
 
 /-- A raw synchronized edge extends a jointly reachable source to its target. -/
@@ -253,21 +301,26 @@ theorem ParallelReachable.target_of_rawTransition
 
     {parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet}
     {interface : Interface}
-    {left right : AutomatonFragment} {edge : PendingAutomatonEdge}
-    {leftFuture rightFuture : TypeAutomatonState → Finset BareMessage}
+    {left right restampedLeft restampedRight : AutomatonFragment}
+    {edge : PendingAutomatonEdge}
+    {leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage}
     (hSource : ParallelReachable parentAlphabet leftAlphabet
-      rightAlphabet interface left right
-      leftFuture rightFuture edge.source)
+      rightAlphabet interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture
+      edge.source)
     (hEdge : edge ∈ parallelRawTransitionEdges leftAlphabet
       rightAlphabet interface left right
       leftFuture rightFuture) :
     ParallelReachable parentAlphabet leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture edge.target :=
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture edge.target :=
   hSource.tail_raw
     ⟨edge, Finset.mem_union_left _ (Finset.mem_union_left _
-      (Finset.mem_union_left _
-        (Finset.mem_union_left _ (Finset.mem_union_left _ hEdge)))), rfl, rfl⟩
+      (Finset.mem_union_left _ (Finset.mem_union_left _
+        (Finset.mem_union_left _
+          (Finset.mem_union_left _ (Finset.mem_union_left _ hEdge)))))),
+      rfl, rfl⟩
 
 /--
 Build a synchronized parallel product.
@@ -283,8 +336,9 @@ non-clock silent idle self-loop.
 def buildParallelAutomaton
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
-    (left right : AutomatonFragment)
-    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage) :
     AutomatonFragment := by
   classical
   let states : Finset TypeAutomatonState :=
@@ -304,14 +358,19 @@ def buildParallelAutomaton
         interface left right rightFuture ∪
       parallelRightCompleteEdges parentAlphabet leftAlphabet
         interface left right leftFuture ∪
-      parallelLeftCompleteSurvivorEdges parentAlphabet rightAlphabet
-        interface right rightFuture ∪
-      parallelRightCompleteSurvivorEdges parentAlphabet leftAlphabet
-        interface left leftFuture).filter
+      parallelLeftCompleteSurvivorEdges interface restampedRight
+        restampedRightFuture ∪
+      parallelRightCompleteSurvivorEdges interface restampedLeft
+        restampedLeftFuture ∪
+      parallelLeftCompleteDoneEdges interface restampedRight
+        restampedRightFuture ∪
+      parallelRightCompleteDoneEdges interface restampedLeft
+        restampedLeftFuture).filter
       fun edge =>
       ParallelReachable parentAlphabet leftAlphabet rightAlphabet
-        interface left right
-        leftFuture rightFuture edge.source
+        interface left right restampedLeft restampedRight
+        leftFuture rightFuture restampedLeftFuture restampedRightFuture
+        edge.source
   let product := finishAutomatonFragment
     states (.pair left.initial right.initial) accepting
       (transitionEdges ∪ parallelDoneEdges parentAlphabet)
@@ -329,25 +388,26 @@ theorem buildParallelAutomaton_clockEdgesAreTock
     (hLeftClock : left.ClockEdgesAreTock)
     (hRightClock : right.ClockEdgesAreTock) :
     (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture).ClockEdgesAreTock := by
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture).ClockEdgesAreTock := by
   classical
   intro edge hEdge hClock
   simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
     parallelRawTransitionEdges, parallelLeftCompleteEdges,
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
-    parallelRightCompleteSurvivorEdges, parallelDoneEdges, Finset.mem_biUnion,
+    parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
+    parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
     Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
+      ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
         ⟨leftState, ⟨_, hLeftState⟩, rightEdge, ⟨hRightEdge, _hAllowed⟩,
           survivorEnv, ⟨_, hProject⟩, rfl⟩⟩ |
         ⟨rightState, ⟨_, hRightState⟩, leftEdge, ⟨hLeftEdge, _hAllowed⟩,
           survivorEnv, ⟨_, hProject⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩,
-          survivorEnv, ⟨_, hProject⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩,
-          survivorEnv, ⟨_, hProject⟩, rfl⟩,
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩⟩ |
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩,
         _⟩ |
       ⟨environment, ⟨_, hNotClock⟩, rfl⟩
   · -- The combined environment is clocked only on the `tock` branch, which
@@ -495,14 +555,15 @@ theorem buildParallelAutomaton_futureTargetsInStates
     (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightEdgeTargets : ∀ edge ∈ right.edges, edge.target ∈ right.states) :
     (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture).FutureTargetsInStates := by
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture).FutureTargetsInStates := by
   classical
   intro edge hEdge target removed hFuture
   simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
     parallelRawTransitionEdges, parallelLeftCompleteEdges,
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
-    parallelRightCompleteSurvivorEdges, parallelDoneEdges, Finset.mem_biUnion,
+    parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
+    parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
     Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
       ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |

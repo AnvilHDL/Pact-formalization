@@ -485,8 +485,8 @@ theorem buildParallelAutomaton_final_hasEdge_iff
     simp [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelDoneEdges, hLocal, hClock]
 
-/-- Every public edge leaving a parallel product state extends the paper's
-joint `Reach` path to its target. -/
+/-- Every public edge leaving a parallel product state extends the joint
+reachability path to its target. -/
 theorem compiledParallel_pair_edge_target_reachable
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
@@ -4885,10 +4885,9 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
     simpa [combinedLabel, combinedCurrent,
       AutomatonConstructionLabel.combine] using hResolved
 
-/-- Defines the related-state shape for a compiled parallel product,
-mirroring `pactproofs.typ`'s own "Related states" bullets verbatim: a
-product state represents the pointwise composition, or the dedicated
-`q_done` state (`.final`) represents `skip` once both components finish. -/
+/-- The related-state shape for a compiled parallel product: a product state
+represents the pointwise composition, and `.final` represents `skip` once both
+components finish. -/
 def parRelationShape
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)

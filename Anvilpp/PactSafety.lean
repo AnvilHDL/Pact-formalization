@@ -4,15 +4,9 @@ import Anvilpp.PactTypes.NewCorrespondence.CasesTop
 import Anvilpp.PactSafetyStructures
 
 /-!
-# Communication safety: the paper's theorem catalog
+# Communication safety
 
-Redeveloped to match the current formalism in `pact.typ`, rather than the
-earlier, now-superseded uppercase `Pact.pdf` scaffold. This file states the
-numbered results exactly as they appear, in order, in `pactproofs.typ`
-("Lemmas, Theorems, and Proofs"). All supporting definitions (histories,
-strategies, honesty, the `pactcompat.typ` compatibility game, etc.) live in
-`Anvilpp/ProofHelpers.lean`. Theorems whose proofs constitute the
-research development are intentionally closed with `sorry`.
+Supporting definitions live in `Anvilpp/ProofHelpers.lean`.
 -/
 
 namespace Pact
