@@ -321,9 +321,6 @@ def CurrentOfferCorrespondence (processType : PactType) : Prop :=
         (buildRelationSet processType (compileType processType))
         residual state →
       AutomatonStateReachable processType state →
-      ({ environment := env, label := label,
-          offers := { current := current, future := future } } :
-          TypeAutomatonSymbol) ∈ (compileType processType).alphabet →
       DecoratedTypeTransition env residual label
         { current := current, future := future } residual' →
       ∃ state' future',
@@ -339,9 +336,6 @@ def CurrentOfferCorrespondence (processType : PactType) : Prop :=
         (buildRelationSet processType (compileType processType))
         residual state →
       AutomatonStateReachable processType state →
-      ({ environment := env, label := label,
-          offers := { current := current, future := future } } :
-          TypeAutomatonSymbol) ∈ (compileType processType).alphabet →
       (compileType processType).HasEdge state env label
         { current := current, future := future } state' →
       ∃ residual' future',
@@ -911,12 +905,410 @@ lemma sameCycleCompletionAgrees_progress (alphabet : PactTypeAlphabet)
       refine ⟨TypeAutomatonState.final, Relation.ReflTransGen.refl, ?_⟩
       simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment]
 
+/-! ### Recovering the transition-alphabet guard where it is needed
+
+The paper's `<current-offer-correspondence>` carries no alphabet guard, so
+`CurrentOfferCorrespondence` does not either.  `StepIffStatement` does, so the
+base cases — which are proved in that form — need the guard supplied rather
+than assumed.  It is available: a semantic step's environment is well formed
+over the type's own alphabet, and well-formedness is exactly membership in
+`localEnvironments`. -/
+
+theorem PactTypeAlphabet.mem_localEnvironments_of_wellFormed
+    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    (hWF : env.WellFormed alphabet) :
+    env ∈ alphabet.localEnvironments := by
+  classical
+  obtain ⟨hClock, hNonClock, hImmediate, hFuture⟩ := hWF
+  simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
+    Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+    Finset.mem_image]
+  cases hEnvClock : env.clock with
+  | true =>
+      obtain ⟨hI, hF⟩ := hClock hEnvClock
+      refine Or.inl ?_
+      rcases env with ⟨immediate, future, clock⟩
+      simp only at hI hF hEnvClock
+      simp [TypeEnvironment.tock, hI, hF, hEnvClock]
+  | false =>
+      refine Or.inr ⟨env.immediate, hImmediate, env.future, ?_, ?_⟩
+      · intro action hAction
+        refine Finset.mem_sdiff.mpr ⟨hFuture hAction, ?_⟩
+        intro hImm
+        have hDisjoint := hNonClock hEnvClock
+        have : action ∈ env.immediate ∩ env.future :=
+          Finset.mem_inter.mpr ⟨hImm, hAction⟩
+        rw [hDisjoint] at this
+        exact absurd this (by simp)
+      · rcases env with ⟨immediate, future, clock⟩
+        simp only at hEnvClock
+        simp [hEnvClock]
+
+private lemma mem_transitionAlphabet_of
+    {processType : PactType} {env : TypeEnvironment} {label : TypeLabel}
+    {offers : TypeOfferSummary}
+    (hEnv : env ∈ processType.alphabet.localEnvironments)
+    (hLabel : label ∈ processType.labels)
+    (hOffers : offers ∈ processType.alphabet.localOfferSummaries) :
+    ({ environment := env, label := label, offers := offers } :
+      TypeAutomatonSymbol) ∈ (compileType processType).alphabet := by
+  simp only [compileType, PactType.mem_transitionAlphabet_iff]
+  exact ⟨hEnv, hLabel, hOffers⟩
+
+private lemma mem_localOfferSummaries_of_subset
+    {alphabet : PactTypeAlphabet} {current future : Finset BareMessage}
+    (hCurrent : current ⊆ alphabet.actions) (hFuture : future ⊆ alphabet.actions) :
+    ({ current := current, future := future } : TypeOfferSummary) ∈
+      alphabet.localOfferSummaries := by
+  classical
+  simp only [PactTypeAlphabet.localOfferSummaries, Finset.mem_biUnion,
+    Finset.mem_powerset, Finset.mem_image]
+  exact ⟨current, hCurrent, future, hFuture, rfl⟩
+
+private lemma silent_mem_labels (processType : PactType) :
+    TypeLabel.silent ∈ processType.labels := by
+  classical
+  simp only [PactType.labels, TypeLabel.silent, Finset.mem_union,
+    Finset.mem_image, Finset.mem_powerset]
+  exact Or.inl ⟨∅, Finset.empty_subset _, rfl⟩
+
+private lemma tock_mem_labels (processType : PactType) :
+    TypeLabel.tock ∈ processType.labels := by
+  simp [PactType.labels]
+
+private lemma message_mem_labels {processType : PactType}
+    {msg : MessageId} {dir : MessageDir}
+    (hDeclared : (msg, dir) ∈ processType.alphabet.actions) :
+    TypeLabel.message msg dir ∈ processType.labels := by
+  classical
+  simp only [PactType.labels, TypeLabel.message, Finset.mem_union,
+    Finset.mem_image, Finset.mem_powerset]
+  refine Or.inl ⟨{TypeObservation.message msg dir}, ?_, rfl⟩
+  intro observation hObservation
+  simp only [Finset.mem_singleton] at hObservation
+  subst hObservation
+  simp only [PactType.observations, Finset.mem_union, Finset.mem_image]
+  exact Or.inl (Or.inl (Or.inl ⟨(msg, dir),
+    Finset.mem_union_left _ hDeclared, rfl⟩))
+
+private lemma progress_mem_labels {processType : PactType} {pid : ProcId}
+    (hDeclared : pid ∈ PactType.ProgressIds processType) :
+    TypeLabel.progress pid ∈ processType.labels := by
+  classical
+  simp only [PactType.labels, TypeLabel.progress, Finset.mem_union,
+    Finset.mem_image, Finset.mem_powerset]
+  refine Or.inl ⟨{TypeObservation.progress pid}, ?_, rfl⟩
+  intro observation hObservation
+  simp only [Finset.mem_singleton] at hObservation
+  subst hObservation
+  simp only [PactType.observations, Finset.mem_union, Finset.mem_image]
+  exact Or.inl (Or.inr ⟨pid, hDeclared, rfl⟩)
+
+/-- Every compiled edge of a base fragment draws its environment from the
+fragment's own local environments: each edge family is an image of a filtered
+`localEnvironments`. -/
+private lemma compileType_base_edge_env_mem
+    {processType : PactType} {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
+    (hFamilies : ∀ edge ∈ (compileTypeFuel (typeCompilationFuel processType)
+        processType).edges, edge.environment ∈ processType.alphabet.localEnvironments)
+    (hEdge : (compileType processType).HasEdge source env label offers target) :
+    env ∈ processType.alphabet.localEnvironments := by
+  classical
+  obtain ⟨edge, hPending, hSource, hEnv, hLabel, hCurrent, hFuture, hTarget⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge processType source target env label
+      offers).mp hEdge
+  rw [← hEnv]
+  exact hFamilies edge hPending
+
+private lemma skip_edge_families (alphabet : PactTypeAlphabet) :
+    ∀ edge ∈ (compileTypeFuel (typeCompilationFuel (.skip alphabet))
+      (.skip alphabet)).edges,
+      edge.environment ∈ (PactType.skip alphabet).alphabet.localEnvironments := by
+  intro edge hEdge
+  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    Finset.mem_image, Finset.mem_filter] at hEdge
+  obtain ⟨environment, ⟨hLocal, -⟩, hEq⟩ := hEdge
+  rw [← hEq]; exact hLocal
+
+private lemma message_edge_families (alphabet : PactTypeAlphabet)
+    (msg : MessageId) (dir : MessageDir) :
+    ∀ edge ∈ (compileTypeFuel (typeCompilationFuel (.message alphabet msg dir))
+      (.message alphabet msg dir)).edges,
+      edge.environment ∈
+        (PactType.message alphabet msg dir).alphabet.localEnvironments := by
+  intro edge hEdge
+  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with (⟨environment, ⟨hLocal, -⟩, hEq⟩ |
+      ⟨environment, ⟨hLocal, -⟩, hEq⟩) | ⟨environment, ⟨hLocal, -⟩, hEq⟩ <;>
+    · rw [← hEq]; exact hLocal
+
+private lemma tock_edge_families (alphabet : PactTypeAlphabet) :
+    ∀ edge ∈ (compileTypeFuel (typeCompilationFuel (.tock alphabet))
+      (.tock alphabet)).edges,
+      edge.environment ∈ (PactType.tock alphabet).alphabet.localEnvironments := by
+  intro edge hEdge
+  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with ⟨environment, hLocal, hEq⟩ | ⟨environment, ⟨hLocal, -⟩, hEq⟩
+  · rw [← hEq]; split <;> exact hLocal
+  · rw [← hEq]; exact hLocal
+
+private lemma progress_edge_families (alphabet : PactTypeAlphabet)
+    (pid : ProcId) :
+    ∀ edge ∈ (compileTypeFuel (typeCompilationFuel (.progress alphabet pid))
+      (.progress alphabet pid)).edges,
+      edge.environment ∈
+        (PactType.progress alphabet pid).alphabet.localEnvironments := by
+  intro edge hEdge
+  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with ⟨environment, ⟨hLocal, -⟩, hEq⟩ |
+      ⟨environment, ⟨hLocal, -⟩, hEq⟩ <;>
+    · rw [← hEq]; exact hLocal
+
+private lemma compileType_message_root_edge_declared
+    {alphabet : PactTypeAlphabet} (msg : MessageId) (dir : MessageDir)
+    {target : TypeAutomatonState} {env : TypeEnvironment} {label : TypeLabel}
+    {offers : TypeOfferSummary}
+    (hEdge : (compileType (.message alphabet msg dir)).HasEdge
+      TypeAutomatonState.root env label offers target) :
+    (msg, dir) ∈ alphabet.actions := by
+  classical
+  obtain ⟨edge, hPending, hSource, -, -, -, -, -⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge (.message alphabet msg dir)
+      TypeAutomatonState.root target env label offers).mp hEdge
+  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hPending
+  rcases hPending with (⟨environment, ⟨-, -, hA⟩, hEq⟩ |
+      ⟨environment, ⟨-, -, -, hA⟩, hEq⟩) | ⟨environment, -, hEq⟩
+  · exact hA
+  · exact hA
+  · rw [← hEq] at hSource; simp at hSource
+
+/-- The shape of the guard obligation the base cases must discharge: the
+symbol carried by an actual step, or by an actual edge, lies in the fixed
+transition alphabet.  This is recoverable exactly because every base rule and
+every base edge family carries its own declaration gate. -/
+def BaseGuard (processType : PactType) : Prop :=
+  ∀ {residual : PactType} {state : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
+    relationMembership
+      (buildRelationSet processType (compileType processType)) residual state →
+    ((∃ target, DecoratedTypeTransition env residual label offers target) ∨
+      (∃ state', (compileType processType).HasEdge state env label offers
+        state')) →
+    ({ environment := env, label := label, offers := offers } :
+      TypeAutomatonSymbol) ∈ (compileType processType).alphabet
+
+private lemma skip_guard (alphabet : PactTypeAlphabet) :
+    BaseGuard (.skip alphabet) := by
+  intro residual state env label offers hRelated hCase
+  rcases offers with ⟨current, future⟩
+  obtain ⟨hR, hS⟩ := relationMembership_skip_cases alphabet hRelated
+  subst hR; subst hS
+  rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+  · cases hOffers with
+    | skip _ _ cond =>
+        refine mem_transitionAlphabet_of
+          (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+          (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) ?_)
+        simp [typeFutureOffers, typeFutureOffersFuel]
+  · obtain ⟨-, -, hLabel, hCurrent, hFuture, -⟩ :=
+      compileType_skip_edge_cases hEdge
+    subst hLabel; subst hCurrent; subst hFuture
+    exact mem_transitionAlphabet_of
+      (compileType_base_edge_env_mem (skip_edge_families alphabet) hEdge)
+      (silent_mem_labels _)
+      (mem_localOfferSummaries_of_subset (by simp) (by simp))
+
+private lemma message_guard (alphabet : PactTypeAlphabet)
+    (msg : MessageId) (dir : MessageDir) :
+    BaseGuard (.message alphabet msg dir) := by
+  intro residual state env label offers hRelated hCase
+  rcases offers with ⟨current, future⟩
+  rcases relationMembership_message_cases alphabet msg dir hRelated with
+    ⟨hR, hS⟩ | ⟨hR, hS⟩ <;> subst hR <;> subst hS
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | action _ _ _ _ cond hA =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (message_mem_labels hA)
+            (mem_localOfferSummaries_of_subset ?_ ?_)
+          · intro x hx
+            simp at hx
+            subst hx; exact hA
+          · simp [typeFutureOffers, typeFutureOffersFuel]
+      | action_wait _ _ _ _ cond hA =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (silent_mem_labels _)
+            (mem_localOfferSummaries_of_subset ?_ ?_)
+          · intro x hx
+            simp at hx
+            subst hx; exact hA
+          · have hFut : typeFutureOffers (PactType.message alphabet msg dir) ⊆
+                alphabet.actions := by
+              rw [show typeFutureOffers (PactType.message alphabet msg dir)
+                    = ({(msg, dir)} : Finset BareMessage) from by
+                simp [typeFutureOffers, typeFutureOffersFuel, hA]]
+              intro y hy
+              simp at hy
+              subst hy
+              exact hA
+            exact Finset.Subset.trans Finset.sdiff_subset hFut
+    · have hEnvMem := compileType_base_edge_env_mem
+        (message_edge_families alphabet msg dir) hEdge
+      have hDeclared : (msg, dir) ∈ alphabet.actions :=
+        compileType_message_root_edge_declared msg dir hEdge
+      have hCurrentSub : ({(msg, dir)} : Finset BareMessage) ⊆ alphabet.actions := by
+        intro x hx
+        simp only [Finset.mem_singleton] at hx
+        subst hx; exact hDeclared
+      rcases compileType_message_edge_cases msg dir hEdge with
+        ⟨-, -, hLabel, hCurrent, hFuture, -⟩ |
+        ⟨-, -, hLabel, hCurrent, hFuture, -, -⟩ |
+        ⟨hSource, -, -, -, -, -⟩
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (message_mem_labels hDeclared)
+          (mem_localOfferSummaries_of_subset hCurrentSub (by simp))
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset hCurrentSub (by simp))
+      · simp at hSource
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | skip _ _ cond =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (silent_mem_labels _)
+            (mem_localOfferSummaries_of_subset (by simp) ?_)
+          simp [typeFutureOffers, typeFutureOffersFuel]
+    · have hEnvMem := compileType_base_edge_env_mem
+        (message_edge_families alphabet msg dir) hEdge
+      rcases compileType_message_edge_cases msg dir hEdge with
+        ⟨hSource, -⟩ | ⟨hSource, -⟩ | ⟨-, -, hLabel, hCurrent, hFuture, -⟩
+      · simp at hSource
+      · simp at hSource
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+
+private lemma tock_guard (alphabet : PactTypeAlphabet) :
+    BaseGuard (.tock alphabet) := by
+  intro residual state env label offers hRelated hCase
+  rcases offers with ⟨current, future⟩
+  rcases relationMembership_tock_cases alphabet hRelated with
+    ⟨hR, hS⟩ | ⟨hR, hS⟩ <;> subst hR <;> subst hS
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | cycle _ _ cond =>
+          exact mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (tock_mem_labels _)
+            (mem_localOfferSummaries_of_subset (by simp) (by simp))
+      | cycle_wait _ _ cond =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (silent_mem_labels _)
+            (mem_localOfferSummaries_of_subset (by simp) ?_)
+          simp [typeFutureOffers, typeFutureOffersFuel]
+    · have hEnvMem := compileType_base_edge_env_mem
+        (tock_edge_families alphabet) hEdge
+      rcases compileType_tock_edge_cases hEdge with
+        ⟨-, -, hLabel, hCurrent, hFuture, -⟩ |
+        ⟨-, -, hLabel, hCurrent, hFuture, -⟩ | ⟨hSource, -⟩
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (tock_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+      · simp at hSource
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | skip _ _ cond =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (silent_mem_labels _)
+            (mem_localOfferSummaries_of_subset (by simp) ?_)
+          simp [typeFutureOffers, typeFutureOffersFuel]
+    · have hEnvMem := compileType_base_edge_env_mem
+        (tock_edge_families alphabet) hEdge
+      rcases compileType_tock_edge_cases hEdge with
+        ⟨hSource, -⟩ | ⟨hSource, -⟩ | ⟨-, -, hLabel, hCurrent, hFuture, -⟩
+      · simp at hSource
+      · simp at hSource
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+
+private lemma progress_guard (alphabet : PactTypeAlphabet) (pid : ProcId) :
+    BaseGuard (.progress alphabet pid) := by
+  intro residual state env label offers hRelated hCase
+  rcases offers with ⟨current, future⟩
+  rcases relationMembership_progress_cases alphabet pid hRelated with
+    ⟨hR, hS⟩ | ⟨hR, hS⟩ <;> subst hR <;> subst hS
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | progress _ _ _ cond =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (progress_mem_labels (by simp [PactType.ProgressIds]))
+            (mem_localOfferSummaries_of_subset (by simp) ?_)
+          simp [typeFutureOffers, typeFutureOffersFuel]
+    · have hEnvMem := compileType_base_edge_env_mem
+        (progress_edge_families alphabet pid) hEdge
+      rcases compileType_progress_edge_cases pid hEdge with
+        ⟨-, -, hLabel, hCurrent, hFuture, -⟩ | ⟨hSource, -⟩
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem
+          (progress_mem_labels (by simp [PactType.ProgressIds]))
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+      · simp at hSource
+  · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+    · cases hOffers with
+      | skip _ _ cond =>
+          refine mem_transitionAlphabet_of
+            (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
+            (silent_mem_labels _)
+            (mem_localOfferSummaries_of_subset (by simp) ?_)
+          simp [typeFutureOffers, typeFutureOffersFuel]
+    · have hEnvMem := compileType_base_edge_env_mem
+        (progress_edge_families alphabet pid) hEdge
+      rcases compileType_progress_edge_cases pid hEdge with
+        ⟨hSource, -⟩ | ⟨-, -, hLabel, hCurrent, hFuture, -⟩
+      · simp at hSource
+      · subst hLabel; subst hCurrent; subst hFuture
+        exact mem_transitionAlphabet_of hEnvMem (silent_mem_labels _)
+          (mem_localOfferSummaries_of_subset (by simp) (by simp))
+
+private lemma var_guard (alphabet : PactTypeAlphabet) (name : String) :
+    BaseGuard (.var alphabet name) := by
+  intro residual state env label offers hRelated hCase
+  obtain ⟨hR, hS⟩ := relationMembership_var_cases alphabet name hRelated
+  subst hR; subst hS
+  rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
+  · exact absurd hTrans (by rintro h; cases h)
+  · exfalso
+    rw [compileType_hasEdge_iff_hasResolvedEdge (.var alphabet name)
+      TypeAutomatonState.root state' env label offers] at hEdge
+    obtain ⟨edge, hPending, -, -, hLabel, -, -, -⟩ := hEdge
+    simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
+      Finset.mem_image] at hPending
+    obtain ⟨environment, -, rfl⟩ := hPending
+    simp at hLabel
+
 /-! ### Current-offer correspondence at the base fragments -/
 
 /-- The full step correspondence is stronger than its current-offer half, once
 every edge target is known to be related to some residual. -/
 theorem currentOfferCorrespondence_of_stepIff {processType : PactType}
     (hStep : StepIffStatement processType)
+    (hGuard : BaseGuard processType)
     (hTargets : ∀ {residual : PactType} {state state' : TypeAutomatonState}
       {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
       relationMembership
@@ -929,11 +1321,12 @@ theorem currentOfferCorrespondence_of_stepIff {processType : PactType}
     CurrentOfferCorrespondence processType := by
   constructor
   · intro residual residual' state env label current future hRelated _hReach
-      hSymbol hTransition
+      hTransition
+    have hSymbol := hGuard hRelated (Or.inl ⟨residual', hTransition⟩)
     obtain ⟨state', hEdge, hRelated'⟩ := (hStep hRelated hSymbol).mp hTransition
     exact ⟨state', future, hEdge, hRelated'⟩
-  · intro residual state state' env label current future hRelated _hReach hSymbol
-      hEdge
+  · intro residual state state' env label current future hRelated _hReach hEdge
+    have hSymbol := hGuard hRelated (Or.inr ⟨state', hEdge⟩)
     obtain ⟨residual', hRelated'⟩ := hTargets hRelated hEdge
     exact ⟨residual', future,
       (hStep hRelated hSymbol).mpr ⟨state', hEdge, hRelated'⟩, hRelated'⟩
@@ -942,7 +1335,7 @@ lemma currentOfferCorrespondence_skip (alphabet : PactTypeAlphabet) :
     CurrentOfferCorrespondence (.skip alphabet) := by
   refine currentOfferCorrespondence_of_stepIff
     (fun hRelated hSymbol => correspondence_skip_stepIff alphabet hRelated hSymbol)
-    ?_
+    (skip_guard alphabet) ?_
   intro residual state state' env label offers hRelated hEdge
   rcases offers with ⟨current, future⟩
   obtain ⟨-, hTarget, -, -, -, -⟩ := compileType_skip_edge_cases hEdge
@@ -957,7 +1350,7 @@ lemma currentOfferCorrespondence_message (alphabet : PactTypeAlphabet)
   refine currentOfferCorrespondence_of_stepIff
     (fun hRelated hSymbol =>
       correspondence_message_stepIff alphabet msg dir hRelated hSymbol)
-    ?_
+    (message_guard alphabet msg dir) ?_
   intro residual state state' env label offers hRelated hEdge
   rcases offers with ⟨current, future⟩
   rcases compileType_message_edge_cases msg dir hEdge with
@@ -976,7 +1369,7 @@ lemma currentOfferCorrespondence_tock (alphabet : PactTypeAlphabet) :
     CurrentOfferCorrespondence (.tock alphabet) := by
   refine currentOfferCorrespondence_of_stepIff
     (fun hRelated hSymbol => correspondence_tock_stepIff alphabet hRelated hSymbol)
-    ?_
+    (tock_guard alphabet) ?_
   intro residual state state' env label offers hRelated hEdge
   rcases offers with ⟨current, future⟩
   rcases compileType_tock_edge_cases hEdge with
@@ -997,7 +1390,7 @@ lemma currentOfferCorrespondence_progress (alphabet : PactTypeAlphabet)
   refine currentOfferCorrespondence_of_stepIff
     (fun hRelated hSymbol =>
       correspondence_progress_stepIff alphabet pid hRelated hSymbol)
-    ?_
+    (progress_guard alphabet pid) ?_
   intro residual state state' env label offers hRelated hEdge
   rcases offers with ⟨current, future⟩
   rcases compileType_progress_edge_cases pid hEdge with
@@ -1010,7 +1403,7 @@ lemma currentOfferCorrespondence_var (alphabet : PactTypeAlphabet)
     (name : String) :
     CurrentOfferCorrespondence (.var alphabet name) := by
   refine currentOfferCorrespondence_of_stepIff
-    (correspondence_var_stepIff alphabet name) ?_
+    (correspondence_var_stepIff alphabet name) (var_guard alphabet name) ?_
   intro residual state state' env label offers hRelated hEdge
   exfalso
   rw [compileType_hasEdge_iff_hasResolvedEdge (.var alphabet name)
@@ -3694,7 +4087,7 @@ theorem relationMembership_ownership_subset :
           have hRre : typeCompilationFuel (r.reannotate a) < n := by
             rw [typeCompilationFuel_reannotate]; exact hR
           rcases relationMembership_par_cases a l r i hRelated with
-            ⟨q1, q2, ρl, ρr, hEntry, hLeft, hRight, -⟩ |
+            ⟨q1, q2, ρl, ρr, hEntry, hLeft, hRight⟩ |
             ⟨q1, ρl, hEntry, hLeft, -⟩ | ⟨q2, ρr, hEntry, hRight, -⟩ | hFinal
           · injection hEntry with hRes hStateEq
             subst hRes

@@ -60,8 +60,8 @@ def parallelRawTransitionEdges
           target := target }
 
 /-- The unpartnered edges of a product state whose left component has already
-reached an accepting state.  The surviving right component steps alone, so
-there is nothing left to synchronize with: only the interface has to be empty
+reached an accepting state.  The step is taken in the written right component
+under its projected local environment, and only the interface has to be empty
 on both its offer fields. -/
 def parallelLeftCompleteEdges
     (parentAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
@@ -71,15 +71,13 @@ def parallelLeftCompleteEdges
   classical
   exact
     ((left.accepting ∩ left.states).biUnion fun leftState =>
-      ((resolveAutomatonEdgesWith right rightFuture).filter fun rightEdge =>
+      ((resolveAutomatonEdgesWith right rightFuture).filter
+          fun rightEdge =>
           rightEdge.source ∉ right.accepting ∧
           rightEdge.target ∉ right.accepting ∧
           restrictTypeOffers interface rightEdge.current = ∅ ∧
           restrictTypeOffers interface rightEdge.future = ∅).biUnion
         fun rightEdge =>
-          -- The survivor stands for the child re-stamped with the merged
-          -- alphabet, so it is observable under every merged environment whose
-          -- projection is the one the child's edge carries.
           ((parentAlphabet.localEnvironments).filter
             fun environment =>
               projectAutomatonEnvironment rightAlphabet environment =
@@ -103,7 +101,8 @@ def parallelRightCompleteEdges
   classical
   exact
     ((right.accepting ∩ right.states).biUnion fun rightState =>
-      ((resolveAutomatonEdgesWith left leftFuture).filter fun leftEdge =>
+      ((resolveAutomatonEdgesWith left leftFuture).filter
+          fun leftEdge =>
           leftEdge.source ∉ left.accepting ∧
           leftEdge.target ∉ left.accepting ∧
           restrictTypeOffers interface leftEdge.current = ∅ ∧
@@ -357,12 +356,7 @@ def buildParallelAutomaton
       parallelLeftCompleteDoneEdges interface restampedRight
         restampedRightFuture ∪
       parallelRightCompleteDoneEdges interface restampedLeft
-        restampedLeftFuture).filter
-      fun edge =>
-      ParallelReachable parentAlphabet leftAlphabet rightAlphabet
-        interface left right restampedLeft restampedRight
-        leftFuture rightFuture restampedLeftFuture restampedRightFuture
-        edge.source
+        restampedLeftFuture)
   let product := finishAutomatonFragment
     states (.pair left.initial right.initial) accepting
       (transitionEdges ∪ parallelDoneEdges parentAlphabet)
@@ -398,16 +392,15 @@ theorem buildParallelAutomaton_clockEdgesAreTock
     parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
     Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
+      ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
         ⟨leftState, ⟨_, hLeftState⟩, rightEdge, ⟨hRightEdge, _hAllowed⟩,
-          survivorEnv, ⟨_, hProject⟩, rfl⟩⟩ |
+          survivorEnv, ⟨_, hProject⟩, rfl⟩) |
         ⟨rightState, ⟨_, hRightState⟩, leftEdge, ⟨hLeftEdge, _hAllowed⟩,
-          survivorEnv, ⟨_, hProject⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩,
-        _⟩ |
+          survivorEnv, ⟨_, hProject⟩, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩) |
       ⟨environment, ⟨_, hNotClock⟩, rfl⟩
   · -- The combined environment is clocked only on the `tock` branch, which
     -- requires both component environments to be clocked.
@@ -599,16 +592,15 @@ theorem buildParallelAutomaton_futureTargetsInStates
     parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
     Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
+      ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
         ⟨leftState, ⟨_, hLeftState⟩, rightEdge, ⟨hRightEdge, _hAllowed⟩,
-          _survivorEnv, -, rfl⟩⟩ |
+          _survivorEnv, -, rfl⟩) |
         ⟨rightState, ⟨_, hRightState⟩, leftEdge, ⟨hLeftEdge, _hAllowed⟩,
-          _survivorEnv, -, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩,
-        _⟩ |
+          _survivorEnv, -, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩) |
       ⟨environment, _, rfl⟩
   · by_cases hClock :
         (AutomatonConstructionLabel.combine interface leftEdge.label

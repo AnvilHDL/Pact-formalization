@@ -942,7 +942,7 @@ theorem relationMembership_alphabet_eq
           rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
-              hEntry, hLeftRelated, hRightRelated, _⟩
+              hEntry, hLeftRelated, hRightRelated⟩
             injection hEntry with hResidual _
             rw [hResidual]
             simp only [PactType.alphabet]
@@ -1312,7 +1312,7 @@ theorem relationMembership_tailOccurrences  :
           rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
-              hEntry, hLeftRelated, hRightRelated, _⟩
+              hEntry, hLeftRelated, hRightRelated⟩
             injection hEntry with hResidual _
             rw [hResidual]
             have hLeftFuel : typeCompilationFuel left < n := by
@@ -1579,7 +1579,7 @@ theorem relationMembership_tailRecursive  :
           rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
-              hEntry, hLeftRelated, hRightRelated, _⟩
+              hEntry, hLeftRelated, hRightRelated⟩
             injection hEntry with hResidual _
             rw [hResidual]
             have hLeftFuel : typeCompilationFuel left < n := by
@@ -2287,7 +2287,7 @@ theorem relationMembership_offerBranchesDisjoint  :
           rcases relationMembership_par_cases alphabet left right
               interface hRelated with hPair | hSurvL | hSurvR | hFinal
           · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
-              hEntry, hLeftRelated, hRightRelated, _⟩
+              hEntry, hLeftRelated, hRightRelated⟩
             injection hEntry with hResidual _
             rw [hResidual]
             have hLeftFuel : typeCompilationFuel left < n := by

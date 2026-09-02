@@ -1567,11 +1567,134 @@ theorem compileType_accepting_eq
       = (compileType ty).accepting := by
   simp [compileType]
 
-/-- A non-accepting right-child state represents the reannotated survivor. -/
+/-- The right survivor region is the compiled re-signed right component tagged
+by `survivor 1`, so a state the re-signed component's own relation pairs with a
+residual keeps that residual there.  Re-signing moves no accepting state, so the
+completion edge's non-accepting target still passes the survivor filter. -/
 theorem survivorRight_relationMembership
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
     {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : right.OfferBranchesDisjoint)
+    (hChild : relationMembership
+      (buildRelationSet (right.reannotate alphabet)
+        (compileType (right.reannotate alphabet))) residual q)
+    (hNotAcc : q ∉ (compileTypeFuel
+      (typeCompilationFuel right) right).accepting) :
+    relationMembership
+      (buildRelationSet (.par alphabet left right interface)
+        (compileType (.par alphabet left right interface)))
+      residual (.survivor 1 q) := by
+  have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hRightFuel : typeCompilationFuel right ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) :=
+    le_max_right _ _
+  have hRightReFuel : typeCompilationFuel (right.reannotate alphabet) ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) := by
+    rw [typeCompilationFuel_reannotate]; exact hRightFuel
+  -- The survivor clause reads the re-signed component's relation at the
+  -- parent's own budget, which the child's budget already saturates.
+  have hMem : (residual, q) ∈
+      buildRelationSetCoreFuel
+        (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (right.reannotate alphabet) := by
+    rw [buildRelationSetCoreFuel_eq_of_sufficient (right.reannotate alphabet)
+      hRightReFuel le_rfl]
+    exact hChild
+  -- Re-signing preserves the accepting set, so `q` is non-accepting there too.
+  have hAcc : (compileTypeFuel
+      (max (typeCompilationFuel left) (typeCompilationFuel right))
+      (right.reannotate alphabet)).accepting =
+      (compileTypeFuel (typeCompilationFuel right) right).accepting := by
+    rw [(CompiledShape.compileTypeFuel_shapeEq_reannotate
+      (max (typeCompilationFuel left) (typeCompilationFuel right)) right
+      hDisjoint alphabet).2.2,
+      compileTypeFuel_eq_of_sufficient right hRightFuel le_rfl]
+  show (residual, TypeAutomatonState.survivor 1 q) ∈
+    buildRelationSetCoreFuel
+      (typeCompilationFuel (.par alphabet left right interface))
+      (.par alphabet left right interface)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  refine Finset.mem_insert_of_mem (Finset.mem_union_right _ ?_)
+  refine Finset.mem_image.mpr
+    ⟨(residual, q), Finset.mem_filter.mpr ⟨hMem, ?_⟩, rfl⟩
+  rw [hAcc]
+  exact hNotAcc
+
+/-- The mirror of `survivorRight_relationMembership` for the left survivor
+region, tagged by `survivor 0`. -/
+theorem survivorLeft_relationMembership
+     (alphabet : PactTypeAlphabet)
+    (left right : PactType) (interface : Interface)
+    {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : left.OfferBranchesDisjoint)
+    (hChild : relationMembership
+      (buildRelationSet (left.reannotate alphabet)
+        (compileType (left.reannotate alphabet))) residual q)
+    (hNotAcc : q ∉ (compileTypeFuel
+      (typeCompilationFuel left) left).accepting) :
+    relationMembership
+      (buildRelationSet (.par alphabet left right interface)
+        (compileType (.par alphabet left right interface)))
+      residual (.survivor 0 q) := by
+  have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hLeftFuel : typeCompilationFuel left ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) :=
+    le_max_left _ _
+  have hLeftReFuel : typeCompilationFuel (left.reannotate alphabet) ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) := by
+    rw [typeCompilationFuel_reannotate]; exact hLeftFuel
+  have hMem : (residual, q) ∈
+      buildRelationSetCoreFuel
+        (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (left.reannotate alphabet) := by
+    rw [buildRelationSetCoreFuel_eq_of_sufficient (left.reannotate alphabet)
+      hLeftReFuel le_rfl]
+    exact hChild
+  have hAcc : (compileTypeFuel
+      (max (typeCompilationFuel left) (typeCompilationFuel right))
+      (left.reannotate alphabet)).accepting =
+      (compileTypeFuel (typeCompilationFuel left) left).accepting := by
+    rw [(CompiledShape.compileTypeFuel_shapeEq_reannotate
+      (max (typeCompilationFuel left) (typeCompilationFuel right)) left
+      hDisjoint alphabet).2.2,
+      compileTypeFuel_eq_of_sufficient left hLeftFuel le_rfl]
+  show (residual, TypeAutomatonState.survivor 0 q) ∈
+    buildRelationSetCoreFuel
+      (typeCompilationFuel (.par alphabet left right interface))
+      (.par alphabet left right interface)
+  rw [hFuelEq]
+  simp only [buildRelationSetCoreFuel]
+  refine Finset.mem_insert_of_mem
+    (Finset.mem_union_left _ (Finset.mem_union_right _ ?_))
+  refine Finset.mem_image.mpr
+    ⟨(residual, q), Finset.mem_filter.mpr ⟨hMem, ?_⟩, rfl⟩
+  rw [hAcc]
+  exact hNotAcc
+
+
+/-- `<survivor-entry>` as the paper states it, from the component's own
+relation.  Re-signing rewrites the gates, so carrying a residual from
+`right`'s relation to `right.reannotate alphabet`'s is a separate obligation:
+it is the paper's first conclusion, taken here as `hTransport`.  Everything
+after it is discharged. -/
+theorem survivorRight_relationMembership_of_transport
+     (alphabet : PactTypeAlphabet)
+    (left right : PactType) (interface : Interface)
+    {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : right.OfferBranchesDisjoint)
+    (hTransport : ∀ {childResidual : PactType} {childState : TypeAutomatonState},
+      relationMembership (buildRelationSet right (compileType right))
+        childResidual childState →
+      relationMembership
+        (buildRelationSet (right.reannotate alphabet)
+          (compileType (right.reannotate alphabet)))
+        (childResidual.reannotate alphabet) childState)
     (hChild : relationMembership
       (buildRelationSet right (compileType right)) residual q)
     (hNotAcc : q ∉ (compileTypeFuel
@@ -1579,15 +1702,23 @@ theorem survivorRight_relationMembership
     relationMembership
       (buildRelationSet (.par alphabet left right interface)
         (compileType (.par alphabet left right interface)))
-      (residual.reannotate alphabet) (.survivor 1 q) := by
-  -- TODO: proof invalidated by the 2026-09-01 spec change (re-stamped parallel children / new offer law).
-  sorry
+      (residual.reannotate alphabet) (.survivor 1 q) :=
+  survivorRight_relationMembership alphabet left right interface hDisjoint
+    (hTransport hChild) hNotAcc
 
-/-- A non-accepting left-child state represents the reannotated survivor. -/
-theorem survivorLeft_relationMembership
+/-- The mirror of `survivorRight_relationMembership_of_transport`. -/
+theorem survivorLeft_relationMembership_of_transport
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
     {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : left.OfferBranchesDisjoint)
+    (hTransport : ∀ {childResidual : PactType} {childState : TypeAutomatonState},
+      relationMembership (buildRelationSet left (compileType left))
+        childResidual childState →
+      relationMembership
+        (buildRelationSet (left.reannotate alphabet)
+          (compileType (left.reannotate alphabet)))
+        (childResidual.reannotate alphabet) childState)
     (hChild : relationMembership
       (buildRelationSet left (compileType left)) residual q)
     (hNotAcc : q ∉ (compileTypeFuel
@@ -1595,10 +1726,9 @@ theorem survivorLeft_relationMembership
     relationMembership
       (buildRelationSet (.par alphabet left right interface)
         (compileType (.par alphabet left right interface)))
-      (residual.reannotate alphabet) (.survivor 0 q) := by
-  -- TODO: proof invalidated by the 2026-09-01 spec change (re-stamped parallel children / new offer law).
-  sorry
-
+      (residual.reannotate alphabet) (.survivor 0 q) :=
+  survivorLeft_relationMembership alphabet left right interface hDisjoint
+    (hTransport hChild) hNotAcc
 
 /-- A reachable pair of related child states represents the parallel pair. -/
 theorem pair_relationMembership
@@ -1640,30 +1770,34 @@ theorem computeFutureOf_survivorRight_related
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
     {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : right.OfferBranchesDisjoint)
     (hChild : relationMembership
-      (buildRelationSet right (compileType right)) residual q)
+      (buildRelationSet (right.reannotate alphabet)
+        (compileType (right.reannotate alphabet))) residual q)
     (hNotAcc : q ∉ (compileTypeFuel
       (typeCompilationFuel right) right).accepting) :
     computeFutureOf (.par alphabet left right interface)
-        (.survivor 1 q) = typeFutureOffers (residual.reannotate alphabet) :=
+        (.survivor 1 q) = typeFutureOffers residual :=
   helper_h15_future_offers_agree
     (survivorRight_relationMembership alphabet left right interface
-      hChild hNotAcc)
+      hDisjoint hChild hNotAcc)
 
 /-- H15's future agreement at a surviving left-component state. -/
 theorem computeFutureOf_survivorLeft_related
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
     {residual : PactType} {q : TypeAutomatonState}
+    (hDisjoint : left.OfferBranchesDisjoint)
     (hChild : relationMembership
-      (buildRelationSet left (compileType left)) residual q)
+      (buildRelationSet (left.reannotate alphabet)
+        (compileType (left.reannotate alphabet))) residual q)
     (hNotAcc : q ∉ (compileTypeFuel
       (typeCompilationFuel left) left).accepting) :
     computeFutureOf (.par alphabet left right interface)
-        (.survivor 0 q) = typeFutureOffers (residual.reannotate alphabet) :=
+        (.survivor 0 q) = typeFutureOffers residual :=
   helper_h15_future_offers_agree
     (survivorLeft_relationMembership alphabet left right interface
-      hChild hNotAcc)
+      hDisjoint hChild hNotAcc)
 
 
 /-- A lone edge of the surviving right component is a product edge. -/
@@ -2327,26 +2461,7 @@ def parRelationShape
       relationMembership (buildRelationSet left (compileType left))
         residualLeft q1 ∧
       relationMembership (buildRelationSet right (compileType right))
-        residualRight q2 ∧
-      ParallelReachable alphabet left.alphabet right.alphabet
-        interface
-        (compileTypeFuel (typeCompilationFuel left) left)
-        (compileTypeFuel (typeCompilationFuel right) right)
-        (compileTypeFuel
-          (typeCompilationFuel (left.reannotate alphabet))
-          (left.reannotate alphabet))
-        (compileTypeFuel
-          (typeCompilationFuel (right.reannotate alphabet))
-          (right.reannotate alphabet))
-        (computeFutureOf left)
-        (computeFutureOf right)
-        (computeFutureOfFuel
-          (typeCompilationFuel (left.reannotate alphabet))
-          (left.reannotate alphabet))
-        (computeFutureOfFuel
-          (typeCompilationFuel (right.reannotate alphabet))
-          (right.reannotate alphabet))
-        (.pair q1 q2)) ∨
+        residualRight q2) ∨
     (∃ q1 residualLeft,
       entry = (residualLeft, .survivor 0 q1) ∧
       relationMembership
@@ -2402,11 +2517,10 @@ lemma relationMembership_par_cases
   rcases Finset.mem_union.mp hRest with hProductOrLeft | hSurvivorRight
   · rcases Finset.mem_union.mp hProductOrLeft with hProduct | hSurvivorLeft
     · rcases Finset.mem_image.mp hProduct with ⟨entry, hEntry, hEq⟩
-      have hPair := Finset.mem_product.mp (Finset.mem_filter.mp hEntry).1
-      have hReachable := (Finset.mem_filter.mp hEntry).2
+      have hPair := Finset.mem_product.mp hEntry
       injection hEq with hResidual hState
       refine Or.inl ⟨entry.1.2, entry.2.2, entry.1.1, entry.2.1,
-        by rw [← hResidual, ← hState], ?_, ?_, ?_⟩
+        by rw [← hResidual, ← hState], ?_, ?_⟩
       · show (entry.1.1, entry.1.2) ∈
           buildRelationSetCoreFuel (typeCompilationFuel left) left
         rw [← buildRelationSetCoreFuel_eq_of_sufficient left hLeftFuel le_rfl]
@@ -2415,19 +2529,6 @@ lemma relationMembership_par_cases
           buildRelationSetCoreFuel (typeCompilationFuel right) right
         rw [← buildRelationSetCoreFuel_eq_of_sufficient right hRightFuel le_rfl]
         exact hPair.2
-      · rw [compileTypeFuel_eq_of_sufficient left hLeftFuel le_rfl,
-          compileTypeFuel_eq_of_sufficient right hRightFuel le_rfl,
-          compileTypeFuel_eq_of_sufficient (left.reannotate alphabet)
-            hLeftReFuel le_rfl,
-          compileTypeFuel_eq_of_sufficient (right.reannotate alphabet)
-            hRightReFuel le_rfl,
-          compiledChildFutureFuel_eq_computeFutureOf _ left hLeftFuel,
-          compiledChildFutureFuel_eq_computeFutureOf _ right hRightFuel,
-          compiledChildFutureFuel_eq_computeFutureOf _
-            (left.reannotate alphabet) hLeftReFuel,
-          compiledChildFutureFuel_eq_computeFutureOf _
-            (right.reannotate alphabet) hRightReFuel] at hReachable
-        exact hReachable
     · rcases Finset.mem_image.mp hSurvivorLeft with ⟨entry, hEntry, hEq⟩
       have hEntryMem := (Finset.mem_filter.mp hEntry).1
       have hNotAccepting := (Finset.mem_filter.mp hEntry).2

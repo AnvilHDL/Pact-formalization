@@ -24,6 +24,20 @@ def MarkerSource (fragment : AutomatonFragment) (name : String)
   ∃ edge ∈ fragment.edges,
     edge.source = state ∧ edge.label = AutomatonConstructionLabel.variable name
 
+/-- No edge of the fragment is an unresolved call of `name`. -/
+def AutomatonFragment.NoMarkerFor (fragment : AutomatonFragment)
+    (name : String) : Prop :=
+  ∀ edge ∈ fragment.edges,
+    edge.label ≠ AutomatonConstructionLabel.variable name
+
+/-- A marker edge adds nothing to the same-cycle menu at its source: it carries
+no current offer, and its future is symbolic rather than an explicit menu. -/
+def AutomatonFragment.MarkerOffersInert (fragment : AutomatonFragment)
+    (name : String) : Prop :=
+  ∀ edge ∈ fragment.edges,
+    edge.label = AutomatonConstructionLabel.variable name →
+      edge.current = ∅ ∧ ∀ offers, edge.future = .explicit offers → offers = ∅
+
 /-- Stop unresolved calls of one name without changing the carrier or any
 other edge.  This is useful when an execution view has followed a temporary
 variable edge to its bookkeeping target, while an enclosing recursion

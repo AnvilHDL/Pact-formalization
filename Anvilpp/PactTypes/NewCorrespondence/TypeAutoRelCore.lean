@@ -52,21 +52,9 @@ def buildRelationSetCoreFuel :
               (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
       | .par alphabet left right interface =>
           insert (PactType.skip alphabet, TypeAutomatonState.final)
-            (((Finset.product
+            ((Finset.product
                 (buildRelationSetCoreFuel fuel left)
-                (buildRelationSetCoreFuel fuel
-                  right)).filter fun entry =>
-                  ParallelReachable alphabet left.alphabet
-                    right.alphabet interface
-                    (compileTypeFuel fuel left)
-                    (compileTypeFuel fuel right)
-                    (compileTypeFuel fuel (left.reannotate alphabet))
-                    (compileTypeFuel fuel (right.reannotate alphabet))
-                    (compiledChildFutureFuel fuel left)
-                    (compiledChildFutureFuel fuel right)
-                    (compiledChildFutureFuel fuel (left.reannotate alphabet))
-                    (compiledChildFutureFuel fuel (right.reannotate alphabet))
-                    (.pair entry.1.2 entry.2.2)).image
+                (buildRelationSetCoreFuel fuel right)).image
               (fun entry =>
                 (.par alphabet entry.1.1 entry.2.1 interface,
                   TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
@@ -201,17 +189,7 @@ theorem buildRelationSetCoreFuel_initial_mem  :
             (Finset.mem_image.mpr ⟨
               ((left, (compileTypeFuel fuel left).initial),
                 (right, (compileTypeFuel fuel right).initial)),
-              Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hLeftMem, hRightMem⟩,
-                parallelReachable_initial alphabet left.alphabet
-                  right.alphabet interface
-                  (compileTypeFuel fuel left)
-                  (compileTypeFuel fuel right)
-                  (compileTypeFuel fuel (left.reannotate alphabet))
-                  (compileTypeFuel fuel (right.reannotate alphabet))
-                  (compiledChildFutureFuel fuel left)
-                  (compiledChildFutureFuel fuel right)
-                  (compiledChildFutureFuel fuel (left.reannotate alphabet))
-                  (compiledChildFutureFuel fuel (right.reannotate alphabet))⟩,
+              Finset.mem_product.mpr ⟨hLeftMem, hRightMem⟩,
               rfl⟩))
 
 /-- The seed pair for the public compiler's own fuel choice. -/
@@ -345,8 +323,8 @@ theorem buildRelationSetCoreFuel_functional  :
             have h1 : _ = state := congrArg Prod.snd hEq
             have h2 : state = _ := congrArg Prod.snd hDone'
             exact absurd (h1.trans h2) (by simp)
-          · obtain ⟨a, ⟨haMem, -⟩, hEq⟩ := hProd
-            obtain ⟨a', ⟨ha'Mem, -⟩, hEq'⟩ := hProd'
+          · obtain ⟨a, haMem, hEq⟩ := hProd
+            obtain ⟨a', ha'Mem, hEq'⟩ := hProd'
             obtain ⟨haLeft, haRight⟩ := Finset.mem_product.mp haMem
             obtain ⟨ha'Left, ha'Right⟩ := Finset.mem_product.mp ha'Mem
             have hState := (congrArg Prod.snd hEq).trans (congrArg Prod.snd hEq').symm
@@ -648,19 +626,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hRightR) hRightR
           change insert (PactType.skip alphabet, TypeAutomatonState.final)
-              (((Finset.product (buildRelationSetCoreFuel (fuel+1) left)
-                  (buildRelationSetCoreFuel (fuel+1) right)).filter fun entry =>
-                    ParallelReachable alphabet left.alphabet
-                      right.alphabet interface
-                      (compileTypeFuel (fuel+1) left)
-                      (compileTypeFuel (fuel+1) right)
-                      (compileTypeFuel (fuel+1) (left.reannotate alphabet))
-                      (compileTypeFuel (fuel+1) (right.reannotate alphabet))
-                      (compiledChildFutureFuel (fuel+1) left)
-                      (compiledChildFutureFuel (fuel+1) right)
-                      (compiledChildFutureFuel (fuel+1) (left.reannotate alphabet))
-                      (compiledChildFutureFuel (fuel+1) (right.reannotate alphabet))
-                      (.pair entry.1.2 entry.2.2)).image
+              ((Finset.product (buildRelationSetCoreFuel (fuel+1) left)
+                  (buildRelationSetCoreFuel (fuel+1) right)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
@@ -679,19 +646,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                   (fun entry =>
                     (entry.1, TypeAutomatonState.survivor 1 entry.2))) =
             insert (PactType.skip alphabet, TypeAutomatonState.final)
-              (((Finset.product (buildRelationSetCoreFuel fuel left)
-                  (buildRelationSetCoreFuel fuel right)).filter fun entry =>
-                    ParallelReachable alphabet left.alphabet
-                      right.alphabet interface
-                      (compileTypeFuel fuel left)
-                      (compileTypeFuel fuel right)
-                      (compileTypeFuel fuel (left.reannotate alphabet))
-                      (compileTypeFuel fuel (right.reannotate alphabet))
-                      (compiledChildFutureFuel fuel left)
-                      (compiledChildFutureFuel fuel right)
-                      (compiledChildFutureFuel fuel (left.reannotate alphabet))
-                      (compiledChildFutureFuel fuel (right.reannotate alphabet))
-                      (.pair entry.1.2 entry.2.2)).image
+              ((Finset.product (buildRelationSetCoreFuel fuel left)
+                  (buildRelationSetCoreFuel fuel right)).image
                 (fun entry =>
                   (PactType.par alphabet entry.1.1 entry.2.1 interface,
                     TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
@@ -709,15 +665,20 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
                         (right.reannotate alphabet)).accepting).image
                   (fun entry =>
                     (entry.1, TypeAutomatonState.survivor 1 entry.2)))
-          simp only [compiledChildFutureFuel,
+          -- The product clause no longer mentions the child future menus.
+          try simp only [compiledChildFutureFuel,
             Nat.min_eq_right hLeft, Nat.min_eq_right (Nat.le.step hLeft),
             Nat.min_eq_right hRight, Nat.min_eq_right (Nat.le.step hRight),
             Nat.min_eq_right hLeftR, Nat.min_eq_right (Nat.le.step hLeftR),
             Nat.min_eq_right hRightR, Nat.min_eq_right (Nat.le.step hRightR)]
           rw [ih left hLeft, ih right hRight,
             ih (left.reannotate alphabet) hLeftR,
-            ih (right.reannotate alphabet) hRightR,
-            hCompileLeft, hCompileRight, hCompileLeftR, hCompileRightR]
+            ih (right.reannotate alphabet) hRightR]
+          -- Only the survivor filters still read a compiled child.
+          try rw [hCompileLeft]
+          try rw [hCompileRight]
+          try rw [hCompileLeftR]
+          try rw [hCompileRightR]
       | recur alphabet name body =>
           have hBody : typeCompilationFuel body ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
@@ -1091,16 +1052,16 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             parallelDoneEdges, Finset.mem_union, Finset.mem_biUnion,
             Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
           rcases hEdge with
-              ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
+              ((((((⟨leftEdge, hLeftEdge, rightEdge,
                   ⟨hRightEdge, hSync⟩, rfl⟩ |
                 ⟨leftState, -, rightEdge,
-                  ⟨hRightEdge, -, hRightNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
+                  ⟨hRightEdge, -, hRightNotAcc, -⟩, _survivorEnv, -, rfl⟩) |
                 ⟨rightState, -, leftEdge,
-                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
-                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc⟩, rfl⟩⟩ |
-                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc⟩, rfl⟩⟩ |
-                ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-                ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, hReachable⟩ |
+                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, _survivorEnv, -, rfl⟩) |
+                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc⟩, rfl⟩) |
+                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc⟩, rfl⟩) |
+                ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
+                ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩) |
               ⟨environment, _, rfl⟩
           · let rawEdge : PendingAutomatonEdge :=
                 let bothAccept :=
@@ -1132,8 +1093,6 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 Finset.mem_image, Finset.mem_filter]
               exact ⟨leftEdge, hLeftEdge, rightEdge,
                 ⟨hRightEdge, hSync⟩, rfl⟩
-            have hRawTargetReachable :=
-              hReachable.target_of_rawTransition hRawEdge
             simp only [resolveAutomatonEdgesWith, Finset.mem_image]
               at hLeftEdge hRightEdge
             obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
@@ -1142,7 +1101,6 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               congrArg AutomatonFragmentEdge.target hLeftEq
             have hRightTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
-            rw [← hLeftTargetEq, ← hRightTargetEq] at hRawTargetReachable
             rw [← hLeftEq, ← hRightEq]
             rcases ih left hLeft leftRaw hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ |
@@ -1162,19 +1120,10 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                   simp only [if_neg hAccept, buildRelationSetCoreFuel,
                     Finset.mem_insert, Finset.mem_union, Finset.mem_image]
                   refine Or.inr (Or.inl (Or.inl ?_))
-                  refine ⟨((leftResidual, leftRaw.target),
-                    (rightResidual, rightRaw.target)), ?_, rfl⟩
-                  refine Finset.mem_filter.mpr ⟨Finset.mem_product.mpr
-                    ⟨hLeftResidual, hRightResidual⟩, ?_⟩
-                  have hAcceptEdge : ¬ (leftEdge.target ∈
-                      (compileTypeFuel fuel left).accepting ∧
-                    rightEdge.target ∈
-                      (compileTypeFuel fuel right).accepting) := by
-                    rw [← hLeftTargetEq, ← hRightTargetEq]; exact hAccept
-                  simpa only [rawEdge, if_neg hAcceptEdge, hLeftTargetEq,
-                    hRightTargetEq, compiledChildFutureFuel,
-                    typeCompilationFuel_reannotate]
-                    using hRawTargetReachable
+                  exact ⟨((leftResidual, leftRaw.target),
+                    (rightResidual, rightRaw.target)),
+                    Finset.mem_product.mpr ⟨hLeftResidual, hRightResidual⟩,
+                    rfl⟩
               · right
                 cases hLeftConstruction : leftRaw.label with
                 | visible leftLabel =>

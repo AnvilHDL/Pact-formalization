@@ -151,13 +151,13 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
     Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
-        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
-        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
+      ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
+        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩) |
+        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩) |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩) |
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting

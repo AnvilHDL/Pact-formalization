@@ -14,6 +14,7 @@ is never a tagged state. -/
 theorem buildRecursionAutomaton_offersAt_child
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
+    (hInert : body.MarkerOffersInert name)
     (q : TypeAutomatonState) :
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
@@ -43,9 +44,19 @@ theorem buildRecursionAutomaton_offersAt_child
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hAction⟩
     by_cases hMarker : edge.label = AutomatonConstructionLabel.variable name
     · exfalso
-      -- Needs body marker edges to be offer-inert: empty `current` and a
-      -- future that is not `.explicit` with offers.  Nothing in scope says so.
-      sorry
+      obtain ⟨hCurrent, hFuture⟩ := hInert edge hEdge hMarker
+      have hSem : ¬ (AutomatonConstructionLabel.variable name).semantic =
+          TypeLabel.tock := by
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+      rw [hMarker] at hAction
+      rw [if_neg hSem, hCurrent, Finset.empty_union] at hAction
+      cases hSpec : edge.future with
+      | explicit offers =>
+          rw [hSpec, hFuture offers hSpec] at hAction
+          simp at hAction
+      | «at» target removed =>
+          rw [hSpec] at hAction
+          simp at hAction
     · refine ⟨_, ⟨Or.inr ⟨edge, hEdge, rfl⟩, ?_⟩, ?_⟩
       · rw [if_neg hMarker]
         simp [childState, hSource]
@@ -67,14 +78,15 @@ theorem mem_buildRecursionAutomaton_referencedStates_child
     target ∈ (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).referencedStates (childState 0 q) ↔
-      (∃ inner ∈ (⟨body.states, body.edges⟩ :
+      (∃ inner ∈ (⟨(markerStoppedFragment body name).states,
+          (markerStoppedFragment body name).edges⟩ :
           PendingAutomaton).referencedStates q,
         target = childState 0 inner) ∨
         (MarkerSource body name q ∧ target = childState 0 body.initial) := by
   classical
   simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-    Finset.mem_filter, buildRecursionAutomaton, finishAutomatonFragment,
-    Finset.mem_union, Finset.mem_image]
+    Finset.mem_filter, buildRecursionAutomaton, markerStoppedFragment,
+    finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
   constructor
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hTarget⟩
     rcases hEdge with ⟨environment, _, rfl⟩ | ⟨original, hOriginal, rfl⟩
@@ -102,15 +114,21 @@ theorem mem_buildRecursionAutomaton_referencedStates_child
               simp at hTarget
           | «at» inner removed =>
               simp only [hSpec, childFutureSpec, if_neg hTock] at hTarget
-              refine ⟨inner, ⟨original, ⟨hOriginal, hSourceEq⟩, ?_⟩, ?_⟩
-              · simp [hSpec, if_neg hTock]
+              refine ⟨inner, ⟨_, ⟨⟨original, hOriginal, rfl⟩, ?_⟩, ?_⟩, ?_⟩
+              · rw [if_neg hMarker]; exact hSourceEq
+              · rw [if_neg hMarker]
+                simp [hSpec, if_neg hTock]
               · simpa using hTarget
-  · rintro (⟨inner, ⟨original, ⟨hOriginal, hSourceEq⟩, hInner⟩, rfl⟩ |
+  · rintro (⟨inner, ⟨stopped, ⟨⟨original, hOriginal, hStopped⟩, hSourceEq⟩,
+        hInner⟩, rfl⟩ |
       ⟨⟨original, hOriginal, hSourceEq, hMarker⟩, rfl⟩)
-    -- False in general: a marker edge whose future is `.at t _` does put `t` in
-    -- the body's references, and installation rewrites it to the entry.
-    · have hMarker : original.label ≠ AutomatonConstructionLabel.variable name :=
-        sorry
+    -- A stopped marker edge publishes `.explicit ∅`, so it references nothing:
+    -- the witness has to be an ordinary body edge, copied unchanged.
+    · have hMarker : original.label ≠ AutomatonConstructionLabel.variable name := by
+        intro hEq
+        rw [← hStopped, if_pos hEq] at hInner
+        simp at hInner
+      rw [← hStopped, if_neg hMarker] at hSourceEq hInner
       by_cases hTock : original.label.semantic = TypeLabel.tock
       · exfalso; simp [hTock] at hInner
       · cases hSpec : original.future with
@@ -133,32 +151,38 @@ theorem mem_buildRecursionAutomaton_referencedStates_child
       · rw [if_pos hMarker]
         simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
 
-/-- Tagged body reachability is always available in the installed graph:
-whatever the body reaches from `state`, its tagged copy is reached from the
-tagged `state`.  No marker hypothesis is needed, because installing backedges
-only ever *adds* references. -/
+/-- Tagged body reachability is available in the installed graph once the
+body's own calls of `name` are stopped.  Installation rewrites exactly those
+edges — it does not merely add references — so the marker's own target is the
+one thing the tagged copy need not reach. -/
 theorem futureReachable_buildRecursionAutomaton_child_superset
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+          (markerStoppedFragment body name).edges⟩ :
+        PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
         PendingAutomaton).ReferencesClosed)
     (state : TypeAutomatonState) (hState : state ∈ body.states) :
-    ((⟨body.states, body.edges⟩ :
+    ((⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ :
         PendingAutomaton).futureReachable state).image (childState 0) ⊆
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
         PendingAutomaton).futureReachable (childState 0 state) := by
   classical
-  set child : PendingAutomaton := ⟨body.states, body.edges⟩ with hChild
+  set child : PendingAutomaton :=
+    ⟨(markerStoppedFragment body name).states,
+      (markerStoppedFragment body name).edges⟩ with hChild
   set parent : PendingAutomaton :=
     ⟨(buildRecursionAutomaton alphabet name body).states,
       (buildRecursionAutomaton alphabet name body).edges⟩ with hParent
   have hReachSubset : child.futureReachable state ⊆ body.states :=
-    child.futureReachable_subset_of_reference_closed state body.states hState
+    child.futureReachable_subset_of_reference_closed state body.states
+      (by simpa [hChild, markerStoppedFragment] using hState)
       (fun current hCurrent => hBodyClosed current hCurrent)
   have hStepClosed : ∀ q ∈ child.futureReachable state,
       child.referencedStates q ⊆ child.futureReachable state := by
@@ -207,27 +231,33 @@ theorem futureReachable_buildRecursionAutomaton_child_of_no_marker
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
         PendingAutomaton).ReferencesClosed)
     (state : TypeAutomatonState) (hState : state ∈ body.states)
-    (hNoMarker : ∀ q ∈ (⟨body.states, body.edges⟩ :
+    (hNoMarker : ∀ q ∈ (⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ :
         PendingAutomaton).futureReachable state,
       ¬ MarkerSource body name q) :
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).futureReachable (childState 0 state) =
-      ((⟨body.states, body.edges⟩ :
+      ((⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ :
         PendingAutomaton).futureReachable state).image (childState 0) := by
   classical
-  set child : PendingAutomaton := ⟨body.states, body.edges⟩ with hChild
+  set child : PendingAutomaton :=
+    ⟨(markerStoppedFragment body name).states,
+      (markerStoppedFragment body name).edges⟩ with hChild
   set parent : PendingAutomaton :=
     ⟨(buildRecursionAutomaton alphabet name body).states,
       (buildRecursionAutomaton alphabet name body).edges⟩ with hParent
   have hReachSubset : child.futureReachable state ⊆ body.states :=
-    child.futureReachable_subset_of_reference_closed state body.states hState
+    child.futureReachable_subset_of_reference_closed state body.states
+      (by simpa [hChild, markerStoppedFragment] using hState)
       (fun current hCurrent => hBodyClosed current hCurrent)
   -- The body-reachable set is closed under body references.
   have hStepClosed : ∀ q ∈ child.futureReachable state,
@@ -262,31 +292,37 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
         PendingAutomaton).ReferencesClosed)
     (hBodyInitial : body.initial ∈ body.states)
     (state : TypeAutomatonState) (hState : state ∈ body.states)
-    (hMarker : ∃ m ∈ (⟨body.states, body.edges⟩ :
+    (hMarker : ∃ m ∈ (⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ :
         PendingAutomaton).futureReachable state,
       MarkerSource body name m) :
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).futureReachable (childState 0 state) =
-      ((⟨body.states, body.edges⟩ :
+      ((⟨(markerStoppedFragment body name).states,
+          (markerStoppedFragment body name).edges⟩ :
           PendingAutomaton).futureReachable state).image (childState 0) ∪
         (⟨(buildRecursionAutomaton alphabet name body).states,
             (buildRecursionAutomaton alphabet name body).edges⟩ :
           PendingAutomaton).futureReachable (childState 0 body.initial) := by
   classical
-  set child : PendingAutomaton := ⟨body.states, body.edges⟩ with hChild
+  set child : PendingAutomaton :=
+    ⟨(markerStoppedFragment body name).states,
+      (markerStoppedFragment body name).edges⟩ with hChild
   set parent : PendingAutomaton :=
     ⟨(buildRecursionAutomaton alphabet name body).states,
       (buildRecursionAutomaton alphabet name body).edges⟩ with hParent
   have hReachSubset : child.futureReachable state ⊆ body.states :=
-    child.futureReachable_subset_of_reference_closed state body.states hState
+    child.futureReachable_subset_of_reference_closed state body.states
+      (by simpa [hChild, markerStoppedFragment] using hState)
       (fun current hCurrent => hBodyClosed current hCurrent)
   have hStepClosed : ∀ q ∈ child.futureReachable state,
       child.referencedStates q ⊆ child.futureReachable state := by
@@ -365,7 +401,8 @@ theorem futureReachable_buildRecursionAutomaton_child_at_initial
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
@@ -374,11 +411,14 @@ theorem futureReachable_buildRecursionAutomaton_child_at_initial
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).futureReachable (childState 0 body.initial) =
-      ((⟨body.states, body.edges⟩ :
+      ((⟨(markerStoppedFragment body name).states,
+        (markerStoppedFragment body name).edges⟩ :
         PendingAutomaton).futureReachable body.initial).image
           (childState 0) := by
   classical
-  set child : PendingAutomaton := ⟨body.states, body.edges⟩ with hChild
+  set child : PendingAutomaton :=
+    ⟨(markerStoppedFragment body name).states,
+      (markerStoppedFragment body name).edges⟩ with hChild
   set parent : PendingAutomaton :=
     ⟨(buildRecursionAutomaton alphabet name body).states,
       (buildRecursionAutomaton alphabet name body).edges⟩ with hParent
@@ -512,7 +552,8 @@ theorem buildRecursionAutomaton_markerReachable_child
     (name other : String)
     (body : AutomatonFragment) (hDistinct : other ≠ name)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+          (markerStoppedFragment body name).edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
@@ -521,19 +562,25 @@ theorem buildRecursionAutomaton_markerReachable_child
     (state : TypeAutomatonState) (hState : state ∈ body.states) :
     MarkerReachable (buildRecursionAutomaton alphabet name body) other
         (childState 0 state) ↔
-      (MarkerReachable body other state ∨
-        (MarkerReachable body name state ∧
+      (MarkerReachable (markerStoppedFragment body name) other state ∨
+        (MarkerReachable (markerStoppedFragment body name) name state ∧
           MarkerReachable (buildRecursionAutomaton alphabet name body) other
             (childState 0 body.initial))) := by
   classical
   have hTagged : ∀ q, MarkerSource (buildRecursionAutomaton alphabet name body)
-      other (childState 0 q) ↔ MarkerSource body other q :=
-    fun q => buildRecursionAutomaton_markerSource_child alphabet name other
-      body hDistinct q
-  by_cases hMarker : MarkerReachable body name state
+      other (childState 0 q) ↔ MarkerSource (markerStoppedFragment body name) other q :=
+    fun q => (buildRecursionAutomaton_markerSource_child alphabet name other
+      body hDistinct q).trans
+        (markerStoppedFragment_markerSource body name other q).symm
+  by_cases hMarker : MarkerReachable (markerStoppedFragment body name) name state
   · simp only [MarkerReachable]
     rw [futureReachable_buildRecursionAutomaton_child_of_marker alphabet name
-      body hBodyClosed hParentClosed hBodyInitial state hState hMarker]
+      body hBodyClosed hParentClosed hBodyInitial state hState
+      (by
+        obtain ⟨reached, hReached, hSource⟩ := hMarker
+        exact ⟨reached, hReached,
+          (markerStoppedFragment_markerSource body name name reached).mp
+            hSource⟩)]
     simp only [MarkerReachable, Finset.mem_union, Finset.mem_image]
     constructor
     · rintro ⟨reached, hReached | hReached, hSource⟩
@@ -547,7 +594,10 @@ theorem buildRecursionAutomaton_markerReachable_child
     rw [futureReachable_buildRecursionAutomaton_child_of_no_marker
       alphabet
       name body hBodyClosed hParentClosed state hState
-        (by simpa [MarkerReachable] using hMarker)]
+        (by
+          intro q hq hSource
+          exact hMarker ⟨q, hq,
+            (markerStoppedFragment_markerSource body name name q).mpr hSource⟩)]
     simp only [Finset.mem_image]
     constructor
     · rintro ⟨reached, ⟨q, hq, rfl⟩, hSource⟩
@@ -564,7 +614,8 @@ theorem buildRecursionAutomaton_markerReachable_child_at_initial
     (name other : String)
     (body : AutomatonFragment) (hDistinct : other ≠ name)
     (hBodyClosed :
-      (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
+      (⟨(markerStoppedFragment body name).states,
+          (markerStoppedFragment body name).edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
       (⟨(buildRecursionAutomaton alphabet name body).states,
           (buildRecursionAutomaton alphabet name body).edges⟩ :
@@ -572,7 +623,7 @@ theorem buildRecursionAutomaton_markerReachable_child_at_initial
     (hBodyInitial : body.initial ∈ body.states) :
     MarkerReachable (buildRecursionAutomaton alphabet name body) other
         (childState 0 body.initial) ↔
-      MarkerReachable body other body.initial := by
+      MarkerReachable (markerStoppedFragment body name) other body.initial := by
   classical
   simp only [MarkerReachable]
   rw [futureReachable_buildRecursionAutomaton_child_at_initial alphabet name
@@ -580,12 +631,14 @@ theorem buildRecursionAutomaton_markerReachable_child_at_initial
   simp only [Finset.mem_image]
   constructor
   · rintro ⟨reached, ⟨q, hq, rfl⟩, hSource⟩
-    exact ⟨q, hq, (buildRecursionAutomaton_markerSource_child alphabet name
-      other body hDistinct q).mp hSource⟩
+    exact ⟨q, hq, (markerStoppedFragment_markerSource body name other q).mpr
+      ((buildRecursionAutomaton_markerSource_child alphabet name
+        other body hDistinct q).mp hSource)⟩
   · rintro ⟨q, hq, hSource⟩
     exact ⟨childState 0 q, ⟨q, hq, rfl⟩,
       (buildRecursionAutomaton_markerSource_child alphabet name other body
-        hDistinct q).mpr hSource⟩
+        hDistinct q).mpr
+        ((markerStoppedFragment_markerSource body name other q).mp hSource)⟩
 
 /-- Marker reachability from the recursion header is exactly marker
 reachability from the tagged body entry. -/
