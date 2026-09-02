@@ -2315,7 +2315,8 @@ theorem buildParallelAutomaton_pair_hasEdge_iff
   sorry
 
 /-- The related-state shape for a compiled parallel product: a product state
-represents the pointwise composition, and `.final` represents `skip` once both
+represents the pointwise composition, a survivor state represents a residual of
+the re-signed component it survives in, and `.final` represents `skip` once both
 components finish. -/
 def parRelationShape
      (alphabet : PactTypeAlphabet)
@@ -2347,36 +2348,23 @@ def parRelationShape
           (right.reannotate alphabet))
         (.pair q1 q2)) ∨
     (∃ q1 residualLeft,
-      entry = (residualLeft.reannotate alphabet, .survivor 0 q1) ∧
-      relationMembership (buildRelationSet left (compileType left))
+      entry = (residualLeft, .survivor 0 q1) ∧
+      relationMembership
+        (buildRelationSet (left.reannotate alphabet)
+          (compileType (left.reannotate alphabet)))
         residualLeft q1 ∧
-      q1 ∉ (compileType left).accepting) ∨
+      q1 ∉ (compileType (left.reannotate alphabet)).accepting) ∨
     (∃ q2 residualRight,
-      entry = (residualRight.reannotate alphabet, .survivor 1 q2) ∧
-      relationMembership (buildRelationSet right (compileType right))
+      entry = (residualRight, .survivor 1 q2) ∧
+      relationMembership
+        (buildRelationSet (right.reannotate alphabet)
+          (compileType (right.reannotate alphabet)))
         residualRight q2 ∧
-      q2 ∉ (compileType right).accepting) ∨
+      q2 ∉ (compileType (right.reannotate alphabet)).accepting) ∨
     entry = (PactType.skip alphabet, TypeAutomatonState.final)
 
-/-- Proves every related parallel pair has the parallel shape.
-
-High-level proof idea:
-
-Invert `hRelated` using the structural construction of the parallel relation.
-
-A pair in the parallel relation can arise in only two ways. Either it is the
-distinguished completed pair `(skip, .final)`, which immediately gives the
-completed case of `parRelationShape`; or it comes from the product of the left
-and right relation sets. In the latter case, unpack the product membership to
-obtain child residuals `ρ₁`, `ρ₂` and states `q₁`, `q₂`, together with
-`ρ₁ ~ q₁` and `ρ₂ ~ q₂`. The parent pair is then
-`(ρ₁ ‖_I ρ₂, .pair q₁ q₂)`, which gives the product case.
-
-The observable-footprint invariant below shows that each child residual uses
-only identifiers from its source child. Therefore the three sibling
-disjointness conditions also hold for the two residuals.
-
--/
+/-- Proves every related parallel pair has the parallel shape, by inverting the
+four families of the relation's `.par` clause at the parent's own fuel. -/
 lemma relationMembership_par_cases
      (alphabet : PactTypeAlphabet)
     (left right : PactType) (interface : Interface)
@@ -2388,8 +2376,96 @@ lemma relationMembership_par_cases
         residual state) :
     parRelationShape alphabet left right interface
       (residual, state) := by
-  -- TODO: proof invalidated by the 2026-09-01 spec change (re-stamped parallel children / new offer law).
-  sorry
+  have hFuelEq : typeCompilationFuel (.par alphabet left right interface) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hLeftFuel : typeCompilationFuel left ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) :=
+    le_max_left _ _
+  have hRightFuel : typeCompilationFuel right ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) :=
+    le_max_right _ _
+  have hLeftReFuel : typeCompilationFuel (left.reannotate alphabet) ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) := by
+    rw [typeCompilationFuel_reannotate]; exact hLeftFuel
+  have hRightReFuel : typeCompilationFuel (right.reannotate alphabet) ≤
+      max (typeCompilationFuel left) (typeCompilationFuel right) := by
+    rw [typeCompilationFuel_reannotate]; exact hRightFuel
+  have hMem : (residual, state) ∈
+      buildRelationSetCoreFuel
+        (typeCompilationFuel (.par alphabet left right interface))
+        (.par alphabet left right interface) := hRelated
+  rw [hFuelEq] at hMem
+  simp only [buildRelationSetCoreFuel] at hMem
+  rcases Finset.mem_insert.mp hMem with hFinal | hRest
+  · exact Or.inr (Or.inr (Or.inr hFinal))
+  rcases Finset.mem_union.mp hRest with hProductOrLeft | hSurvivorRight
+  · rcases Finset.mem_union.mp hProductOrLeft with hProduct | hSurvivorLeft
+    · rcases Finset.mem_image.mp hProduct with ⟨entry, hEntry, hEq⟩
+      have hPair := Finset.mem_product.mp (Finset.mem_filter.mp hEntry).1
+      have hReachable := (Finset.mem_filter.mp hEntry).2
+      injection hEq with hResidual hState
+      refine Or.inl ⟨entry.1.2, entry.2.2, entry.1.1, entry.2.1,
+        by rw [← hResidual, ← hState], ?_, ?_, ?_⟩
+      · show (entry.1.1, entry.1.2) ∈
+          buildRelationSetCoreFuel (typeCompilationFuel left) left
+        rw [← buildRelationSetCoreFuel_eq_of_sufficient left hLeftFuel le_rfl]
+        exact hPair.1
+      · show (entry.2.1, entry.2.2) ∈
+          buildRelationSetCoreFuel (typeCompilationFuel right) right
+        rw [← buildRelationSetCoreFuel_eq_of_sufficient right hRightFuel le_rfl]
+        exact hPair.2
+      · rw [compileTypeFuel_eq_of_sufficient left hLeftFuel le_rfl,
+          compileTypeFuel_eq_of_sufficient right hRightFuel le_rfl,
+          compileTypeFuel_eq_of_sufficient (left.reannotate alphabet)
+            hLeftReFuel le_rfl,
+          compileTypeFuel_eq_of_sufficient (right.reannotate alphabet)
+            hRightReFuel le_rfl,
+          compiledChildFutureFuel_eq_computeFutureOf _ left hLeftFuel,
+          compiledChildFutureFuel_eq_computeFutureOf _ right hRightFuel,
+          compiledChildFutureFuel_eq_computeFutureOf _
+            (left.reannotate alphabet) hLeftReFuel,
+          compiledChildFutureFuel_eq_computeFutureOf _
+            (right.reannotate alphabet) hRightReFuel] at hReachable
+        exact hReachable
+    · rcases Finset.mem_image.mp hSurvivorLeft with ⟨entry, hEntry, hEq⟩
+      have hEntryMem := (Finset.mem_filter.mp hEntry).1
+      have hNotAccepting := (Finset.mem_filter.mp hEntry).2
+      injection hEq with hResidual hState
+      refine Or.inr (Or.inl ⟨entry.2, entry.1,
+        by rw [← hResidual, ← hState], ?_, ?_⟩)
+      · show (entry.1, entry.2) ∈
+          buildRelationSetCoreFuel
+            (typeCompilationFuel (left.reannotate alphabet))
+            (left.reannotate alphabet)
+        rw [← buildRelationSetCoreFuel_eq_of_sufficient
+          (left.reannotate alphabet) hLeftReFuel le_rfl]
+        exact hEntryMem
+      · show entry.2 ∉ (compileTypeFuel
+          (typeCompilationFuel (left.reannotate alphabet))
+          (left.reannotate alphabet)).accepting
+        rw [← compileTypeFuel_eq_of_sufficient (left.reannotate alphabet)
+          hLeftReFuel le_rfl]
+        exact hNotAccepting
+  · rcases Finset.mem_image.mp hSurvivorRight with ⟨entry, hEntry, hEq⟩
+    have hEntryMem := (Finset.mem_filter.mp hEntry).1
+    have hNotAccepting := (Finset.mem_filter.mp hEntry).2
+    injection hEq with hResidual hState
+    refine Or.inr (Or.inr (Or.inl ⟨entry.2, entry.1,
+      by rw [← hResidual, ← hState], ?_, ?_⟩))
+    · show (entry.1, entry.2) ∈
+        buildRelationSetCoreFuel
+          (typeCompilationFuel (right.reannotate alphabet))
+          (right.reannotate alphabet)
+      rw [← buildRelationSetCoreFuel_eq_of_sufficient
+        (right.reannotate alphabet) hRightReFuel le_rfl]
+      exact hEntryMem
+    · show entry.2 ∉ (compileTypeFuel
+        (typeCompilationFuel (right.reannotate alphabet))
+        (right.reannotate alphabet)).accepting
+      rw [← compileTypeFuel_eq_of_sufficient (right.reannotate alphabet)
+        hRightReFuel le_rfl]
+      exact hNotAccepting
 
 end
 

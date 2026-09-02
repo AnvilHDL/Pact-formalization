@@ -1076,37 +1076,58 @@ theorem buildSequenceAutomaton_outgoing_left_any
     exact ⟨childEdge, hChildMem, hChildSource,
       by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting.2]⟩
 
+/-- A non-clock step out of a left-child state gives one of `left`'s own
+steps, landing either at the retagged target or, when that target accepts, at
+the right entry.  This direction holds for every left state: each sequence
+edge out of a left-child state is the image of a left edge. -/
+theorem automatonNonClockStep_sequence_child0_left
+     (left right : AutomatonFragment)
+    (q target : TypeAutomatonState)
+    (hStep : AutomatonNonClockStep (buildSequenceAutomaton left right)
+      (childState 0 q) target) :
+    ∃ q', AutomatonNonClockStep left q q' ∧
+      target = sequenceRedirect left right q' := by
+  obtain ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩ := hStep
+  obtain ⟨childEdge, hChildMem, hChildSource, hEdgeEq⟩ :=
+    buildSequenceAutomaton_outgoing_left_any left right q edge
+      ⟨hEdgeMem, hSource⟩
+  refine ⟨childEdge.target, ⟨childEdge, hChildMem, hChildSource, rfl, ?_⟩, ?_⟩
+  · rw [hEdgeEq] at hNotTock; simpa using hNotTock
+  · rw [hEdgeEq] at hTarget; simpa using hTarget.symm
+
 /-- A non-clock step out of a left-child state mirrors one of `left`'s own
 steps, landing either at the retagged target or, when that target accepts, at
-the right entry. -/
+the right entry.  The right-to-left direction needs `q ∉ sequenceDeleted left`:
+both left edge families keep only edges whose source survives the sequence
+construction, so a left step out of a deleted state has no image.  The default
+tactic discharges the side condition at the `q = left.initial` call sites; pass
+it explicitly anywhere else. -/
 theorem automatonNonClockStep_sequence_child0
      (left right : AutomatonFragment)
-    (q target : TypeAutomatonState) :
+    (q target : TypeAutomatonState)
+    (hSurvives : q ∉ sequenceDeleted left := by
+      simp only [sequenceDeleted, Finset.mem_sdiff, Finset.mem_singleton,
+        not_and, not_not]
+      all_goals (intro _; trivial)) :
     AutomatonNonClockStep (buildSequenceAutomaton left right)
         (childState 0 q) target ↔
       ∃ q', AutomatonNonClockStep left q q' ∧
         target = sequenceRedirect left right q' := by
   constructor
-  · rintro ⟨edge, hEdgeMem, hSource, hTarget, hNotTock⟩
-    obtain ⟨childEdge, hChildMem, hChildSource, hEdgeEq⟩ :=
-      buildSequenceAutomaton_outgoing_left_any left right q edge
-        ⟨hEdgeMem, hSource⟩
-    refine ⟨childEdge.target, ⟨childEdge, hChildMem, hChildSource, rfl, ?_⟩, ?_⟩
-    · rw [hEdgeEq] at hNotTock; simpa using hNotTock
-    · rw [hEdgeEq] at hTarget; simpa using hTarget.symm
+  · exact automatonNonClockStep_sequence_child0_left left right q target
   · rintro ⟨q', ⟨childEdge, hChildMem, hChildSource, hChildTarget, hNotTock⟩,
       hTargetEq⟩
+    have hEdgeSurvives : childEdge.source ∉ sequenceDeleted left := by
+      rw [hChildSource]; exact hSurvives
     refine ⟨sequenceLeftEdge left right childEdge, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment,
         sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
       by_cases hAccepting : childEdge.target ∈ left.accepting
-      · refine Or.inr ⟨childEdge, ⟨hChildMem, ?_, hAccepting⟩,
+      · exact Or.inr ⟨childEdge, ⟨hChildMem, hEdgeSurvives, hAccepting⟩,
           by rw [sequenceLeftEdge, if_pos hAccepting]⟩
-        sorry
-      · refine Or.inl (Or.inl ⟨childEdge, ⟨hChildMem, ?_, hAccepting⟩,
+      · exact Or.inl (Or.inl ⟨childEdge, ⟨hChildMem, hEdgeSurvives, hAccepting⟩,
           by rw [sequenceLeftEdge, if_neg hAccepting]⟩)
-        sorry
     · simp [hChildSource]
     · rw [sequenceLeftEdge_target, hChildTarget]; exact hTargetEq.symm
     · simpa using hNotTock
@@ -1214,29 +1235,36 @@ theorem compileTypeFuel_nonClockStep_of_initial_accepting
 
 /-- A left path whose last state accepts lifts into the sequence: either it
 crosses the redirect into the right entry, or it was empty at an accepting
-start. -/
-theorem automatonSameCycleReaches_sequence_lift_left
+start.  The path's start must survive the sequence construction; every later
+state on it then survives too, being non-accepting until the last. -/
+theorem automatonSameCycleReaches_sequence_lift_left_of_not_deleted
      (left right : AutomatonFragment)
     (q q' : TypeAutomatonState)
     (hReach : Relation.ReflTransGen (AutomatonNonClockStep left) q q')
-    (hAccepting : q' ∈ left.accepting) :
+    (hAccepting : q' ∈ left.accepting)
+    (hSurvives : q ∉ sequenceDeleted left) :
     Relation.ReflTransGen
       (AutomatonNonClockStep (buildSequenceAutomaton left right))
       (childState 0 q) (childState 1 right.initial) ∨ q = q' := by
+  revert hSurvives
   induction hReach using Relation.ReflTransGen.head_induction_on with
-  | refl => exact Or.inr rfl
+  | refl => exact fun _ => Or.inr rfl
   | @head a b hStep hRest ih =>
+      intro hSurvivesA
       refine Or.inl ?_
       by_cases hAcceptingB : b ∈ left.accepting
       · refine Relation.ReflTransGen.single ?_
-        refine (automatonNonClockStep_sequence_child0 left right a _).mpr
-          ⟨b, hStep, ?_⟩
+        refine (automatonNonClockStep_sequence_child0 left right a _
+          hSurvivesA).mpr ⟨b, hStep, ?_⟩
         rw [sequenceRedirect, if_pos hAcceptingB]
-      · refine Relation.ReflTransGen.head (b := childState 0 b) ?_ ?_
+      · have hSurvivesB : b ∉ sequenceDeleted left := by
+          simp only [sequenceDeleted, Finset.mem_sdiff, not_and]
+          exact fun hMem => absurd hMem hAcceptingB
+        refine Relation.ReflTransGen.head (b := childState 0 b) ?_ ?_
         · exact (automatonNonClockStep_sequence_child0 left right a
-            (childState 0 b)).mpr ⟨b, hStep,
+            (childState 0 b) hSurvivesA).mpr ⟨b, hStep,
             by rw [sequenceRedirect, if_neg hAcceptingB]⟩
-        · rcases ih with hPath | hEq
+        · rcases ih hSurvivesB with hPath | hEq
           · exact hPath
           · exact absurd (hEq ▸ hAccepting) hAcceptingB
 
@@ -1261,7 +1289,7 @@ theorem automatonSameCycleReaches_sequence_child0_cases
       rcases ih with ⟨q', hEq, hLeftReach⟩ | ⟨q', hLeftReach, hAccepting, hRest⟩
       · subst hEq
         obtain ⟨q'', hLeftStep, hTargetEq⟩ :=
-          (automatonNonClockStep_sequence_child0 left right _ _).mp hStep
+          automatonNonClockStep_sequence_child0_left left right _ _ hStep
         by_cases hAccepting : q'' ∈ left.accepting
         · refine Or.inr ⟨q'', hLeftReach.tail hLeftStep, hAccepting, ?_⟩
           rw [hTargetEq, sequenceRedirect, if_pos hAccepting]
@@ -4102,8 +4130,16 @@ theorem helper_h14_same_cycle_completion
             obtain ⟨q2', hRightReach, hRightFinal⟩ :=
               (hTag1 rightAuto.initial).mpr (hIHRightInit.mpr hRightDone)
             refine ⟨q2', Relation.ReflTransGen.trans ?_ hRightReach, hRightFinal⟩
-            rcases automatonSameCycleReaches_sequence_lift_left
-                leftAuto rightAuto q1 q' hLeftReach hAccepting with
+            have hSurvivesQ1 : q1 ∉ sequenceDeleted leftAuto := by
+              simp only [sequenceDeleted, Finset.mem_sdiff, Finset.mem_singleton,
+                not_and, not_not]
+              intro hAcc
+              rcases hSurvives with hNot | hInit
+              · exact absurd hAcc (by
+                  simpa only [compileType, ← hLeftAutoDef] using hNot)
+              · simpa only [compileType, ← hLeftAutoDef] using hInit
+            rcases automatonSameCycleReaches_sequence_lift_left_of_not_deleted
+                leftAuto rightAuto q1 q' hLeftReach hAccepting hSurvivesQ1 with
               hPath | hEq
             · exact hPath
             · -- `q1` already accepts, so it is `left`'s entry and its own idle
@@ -5217,6 +5253,80 @@ theorem PactType.reannotate_ownership_data
               hRestFacts.2.2.2.1, hRestFacts.2.2.2.2.1,
               hRestFacts.2.2.2.2.2.1, hRestFacts.2.2.2.2.2.2]
             simp
+      have hOfferBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet (seen : Finset BareMessage),
+          PactType.BranchMessageIds
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) =
+              PactType.BranchMessageIds branches ∧
+            PactType.BranchMessageActions
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) =
+              PactType.BranchMessageActions branches ∧
+            PactType.BranchProgressIds
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) =
+              PactType.BranchProgressIds branches ∧
+            PactType.BranchFairChoiceIds
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) =
+              PactType.BranchFairChoiceIds branches ∧
+            (PactType.ParallelMessageOwnershipBranches
+                (PactType.reannotateOfferBranches branchAlphabet seen
+                  branches) ↔
+              PactType.ParallelMessageOwnershipBranches branches) ∧
+            (PactType.ParallelProgressOwnershipBranches
+                (PactType.reannotateOfferBranches branchAlphabet seen
+                  branches) ↔
+              PactType.ParallelProgressOwnershipBranches branches) ∧
+            (PactType.ParallelFairChoiceOwnershipBranches
+                (PactType.reannotateOfferBranches branchAlphabet seen
+                  branches) ↔
+              PactType.ParallelFairChoiceOwnershipBranches branches) := by
+        intro branches hBranchesSize branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds,
+              PactType.ParallelMessageOwnershipBranches,
+              PactType.ParallelProgressOwnershipBranches,
+              PactType.ParallelFairChoiceOwnershipBranches]
+        | cons branch rest restIH =>
+            intro seen
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hTypeFacts := fun branchAlphabet' =>
+              ih (sizeOf branchType) hType branchAlphabet' branchType rfl
+            have hRestFacts := fun (seen' : Finset BareMessage) =>
+              restIH hRest seen'
+            simp only [PactType.reannotateOfferBranches_cons,
+              PactType.BranchMessageIds, PactType.BranchMessageActions,
+              PactType.BranchProgressIds, PactType.BranchFairChoiceIds,
+              PactType.ParallelMessageOwnershipBranches,
+              PactType.ParallelProgressOwnershipBranches,
+              PactType.ParallelFairChoiceOwnershipBranches]
+            simp only [fun a => (hTypeFacts a).1, fun a => (hTypeFacts a).2.1,
+              fun a => (hTypeFacts a).2.2.1,
+              fun a => (hTypeFacts a).2.2.2.1,
+              fun a => (hTypeFacts a).2.2.2.2.1,
+              fun a => (hTypeFacts a).2.2.2.2.2.1,
+              fun a => (hTypeFacts a).2.2.2.2.2.2,
+              fun t => (hRestFacts t).1, fun t => (hRestFacts t).2.1,
+              fun t => (hRestFacts t).2.2.1,
+              fun t => (hRestFacts t).2.2.2.1,
+              fun t => (hRestFacts t).2.2.2.2.1,
+              fun t => (hRestFacts t).2.2.2.2.2.1,
+              fun t => (hRestFacts t).2.2.2.2.2.2]
+            simp
       have hBodies : ∀ branches : List (BareMessage × PactType),
           sizeOf branches < n → ∀ branchAlphabet,
           (PactType.ParallelMessageOwnershipBodies
@@ -5243,6 +5353,36 @@ theorem PactType.reannotate_ownership_data
               PactType.ParallelMessageOwnershipBodies]
             rw [(ih (sizeOf branchType) hType branchAlphabet branchType
               rfl).2.2.2.2.1, restIH hRest]
+      have hOfferBodies : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet (seen : Finset BareMessage),
+          (PactType.ParallelMessageOwnershipBodies
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) ↔
+            PactType.ParallelMessageOwnershipBodies branches) := by
+        intro branches hBranchesSize branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.ParallelMessageOwnershipBodies]
+        | cons branch rest restIH =>
+            intro seen
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            simp only [PactType.reannotateOfferBranches_cons,
+              PactType.ParallelMessageOwnershipBodies]
+            rw [(ih (sizeOf branchType) hType _ branchType
+              rfl).2.2.2.2.1, restIH hRest _]
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
           simp [PactType.reannotate, PactType.MessageIds,
@@ -5288,11 +5428,11 @@ theorem PactType.reannotate_ownership_data
             PactType.ParallelFairChoiceOwnership,
             ih (sizeOf left) hLeft
               (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
-                right.alphabet interface) left rfl,
+                right interface) left rfl,
             ih (sizeOf right) hRight
               (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
                 interface) right rfl]
-      | xoffer _ elseType branches | offer _ elseType branches =>
+      | xoffer _ elseType branches =>
           have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchSize : sizeOf branches < n := by
             rw [← hSize]; simp_wf; omega
@@ -5304,6 +5444,18 @@ theorem PactType.reannotate_ownership_data
             ih (sizeOf elseType) hElse alphabet elseType rfl,
             hBranches branches hBranchSize alphabet,
             hBodies branches hBranchSize alphabet]
+      | offer _ elseType branches =>
+          have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp [PactType.reannotate, PactType.MessageIds,
+            PactType.MessageActions, PactType.ProgressIds,
+            PactType.FairChoiceIds, PactType.ParallelMessageOwnership,
+            PactType.ParallelProgressOwnership,
+            PactType.ParallelFairChoiceOwnership,
+            ih (sizeOf elseType) hElse alphabet elseType rfl,
+            hOfferBranches branches hBranchSize alphabet ∅,
+            hOfferBodies branches hBranchSize alphabet ∅]
 
 @[simp] theorem PactType.messageIds_reannotate
     (alphabet : PactTypeAlphabet) (processType : PactType) :

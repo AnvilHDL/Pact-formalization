@@ -397,6 +397,22 @@ theorem typeCanCompleteThisCycleFuel_reannotate :
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.reannotateBranches_cons, List.any_cons, restIH,
               ih branchType alphabet]
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (alphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          (PactType.reannotateOfferBranches alphabet seen branches).any
+              (fun branch => typeCanCompleteThisCycleFuel fuel branch.2) =
+            branches.any fun branch =>
+              typeCanCompleteThisCycleFuel fuel branch.2 := by
+        intro branches alphabet
+        induction branches with
+        | nil =>
+            intro seen
+            simp [PactType.reannotateOfferBranches_nil]
+        | cons branch rest restIH =>
+            intro seen
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.reannotateOfferBranches_cons, List.any_cons,
+              restIH, ih branchType]
       intro processType alphabet
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
@@ -421,7 +437,7 @@ theorem typeCanCompleteThisCycleFuel_reannotate :
             congrArg₂ (· || ·) (ih e alphabet) (hBranches bs alphabet)
       | offer a e bs =>
           simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
-            congrArg₂ (· || ·) (ih e alphabet) (hBranches bs alphabet)
+            congrArg₂ (· || ·) (ih e alphabet) (hOfferBranches bs alphabet ∅)
 
 end
 

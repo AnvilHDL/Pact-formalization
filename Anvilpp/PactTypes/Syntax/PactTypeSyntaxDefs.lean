@@ -134,10 +134,10 @@ namespace PactTypeAlphabet
       (parent left right : PactTypeAlphabet)
       (leftType rightType : PactType) (interface : Interface) : Prop where
     complementary : ComplementaryOn left right interface
-    parent_left : parent.actions =
-      (hideInterface left interface).actions ∪ PactType.MessageActions rightType
-    parent_right : parent.actions =
-      (hideInterface right interface).actions ∪ PactType.MessageActions leftType
+    parent_left : parent.actions \ PactType.MessageActions rightType =
+      (hideInterface left interface).actions
+    parent_right : parent.actions \ PactType.MessageActions leftType =
+      (hideInterface right interface).actions
 
 end PactTypeAlphabet
 

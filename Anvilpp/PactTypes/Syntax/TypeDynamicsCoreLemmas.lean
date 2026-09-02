@@ -24,6 +24,25 @@ namespace PactType
           reannotateBranches alphabet rest := by
     rw [reannotateBranches.eq_def]
 
+  theorem reannotateOfferBranches_nil
+      (alphabet : PactTypeAlphabet) (seen : Finset BareMessage) :
+      reannotateOfferBranches alphabet seen [] = [] := by
+    rw [reannotateOfferBranches.eq_def]
+
+  theorem reannotateOfferBranches_cons
+      (alphabet : PactTypeAlphabet) (seen : Finset BareMessage)
+      (action : BareMessage) (processType : PactType)
+      (rest : List (BareMessage × PactType)) :
+      reannotateOfferBranches alphabet seen ((action, processType) :: rest) =
+        (action,
+          reannotate
+            { actions :=
+                alphabet.actions \ (seen ∪ BranchMessageActions rest) }
+            processType) ::
+          reannotateOfferBranches alphabet
+            (seen ∪ ({action} ∪ MessageActions processType)) rest := by
+    rw [reannotateOfferBranches.eq_def]
+
 end PactType
 
 @[simp] theorem singletonTypeXOffer_alphabet
@@ -115,6 +134,40 @@ theorem PactType.reannotate_tailOccurrences (name : String) :
               And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
                   branchAlphabet branchTail hFields.1)
                 (restIH hRestSize hFields.2)
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage)
+          (branchTail : Prop),
+          sizeOf branches < n →
+          PactType.TailBranchOccurrences name branchTail branches →
+          PactType.TailBranchOccurrences name branchTail
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen branchTail _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.TailBranchOccurrences]
+        | cons branch rest restIH =>
+            intro seen branchTail hBranchesSize hBranchesTail
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.TailOccurrences name branchTail ∧
+                PactType.TailBranchOccurrences name branchTail rest := by
+              simpa only [PactType.TailBranchOccurrences] using hBranchesTail
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.TailBranchOccurrences]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                branchTail hFields.1,
+              restIH _ branchTail hRestSize hFields.2⟩
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ =>
           simp [PactType.reannotate, PactType.TailOccurrences]
@@ -180,7 +233,8 @@ theorem PactType.reannotate_tailOccurrences (name : String) :
           simpa only [PactType.reannotate, PactType.TailOccurrences] using
             And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet tail
                 hFields.1)
-              (hBranches branches alphabet False hBranchesSize hFields.2)
+              (hOfferBranches branches alphabet ∅ False hBranchesSize
+                hFields.2)
 
 /-- Reannotation changes no alphabet a clock guarantee depends on. -/
 theorem PactType.reannotate_mustTockBeforeCompletion :
@@ -219,6 +273,36 @@ theorem PactType.reannotate_mustTockBeforeCompletion :
             exact and_congr
               (ih (sizeOf branchType) hBranchSize branchType rfl branchAlphabet)
               (restIH hRestSize)
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          (PactType.BranchesMustTockBeforeCompletion
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) ↔
+            PactType.BranchesMustTockBeforeCompletion branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.BranchesMustTockBeforeCompletion]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.BranchesMustTockBeforeCompletion]
+            exact and_congr
+              (ih (sizeOf branchType) hBranchSize branchType rfl _)
+              (restIH _ hRestSize)
       cases processType with
       | message _ _ _ | progress _ _ | skip _ | var _ _ =>
           simp [PactType.reannotate, PactType.MustTockBeforeCompletion]
@@ -246,13 +330,20 @@ theorem PactType.reannotate_mustTockBeforeCompletion :
           simp only [PactType.reannotate, PactType.MustTockBeforeCompletion]
           exact and_congr (ih (sizeOf left) hLeftSize left rfl _)
             (ih (sizeOf right) hRightSize right rfl _)
-      | xoffer _ elseType branches | offer _ elseType branches =>
+      | xoffer _ elseType branches =>
           have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchesSize : sizeOf branches < n := by
             rw [← hSize]; simp_wf; omega
           simp only [PactType.reannotate, PactType.MustTockBeforeCompletion]
           exact and_congr (ih (sizeOf elseType) hElseSize elseType rfl alphabet)
             (hBranches branches alphabet hBranchesSize)
+      | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          simp only [PactType.reannotate, PactType.MustTockBeforeCompletion]
+          exact and_congr (ih (sizeOf elseType) hElseSize elseType rfl alphabet)
+            (hOfferBranches branches alphabet ∅ hBranchesSize)
 
 /-- Reannotation preserves clock guardedness of a name's free occurrences. -/
 theorem PactType.reannotate_guardedOccurrences (name : String) :
@@ -294,6 +385,41 @@ theorem PactType.reannotate_guardedOccurrences (name : String) :
               And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
                   branchAlphabet branchGuarded hFields.1)
                 (restIH hRestSize hFields.2)
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage)
+          (branchGuarded : Prop),
+          sizeOf branches < n →
+          PactType.GuardedBranchOccurrences name branchGuarded branches →
+          PactType.GuardedBranchOccurrences name branchGuarded
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen branchGuarded _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.GuardedBranchOccurrences]
+        | cons branch rest restIH =>
+            intro seen branchGuarded hBranchesSize hBranchesGuarded
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.GuardedOccurrences name branchGuarded ∧
+                PactType.GuardedBranchOccurrences name branchGuarded rest := by
+              simpa only [PactType.GuardedBranchOccurrences]
+                using hBranchesGuarded
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.GuardedBranchOccurrences]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                branchGuarded hFields.1,
+              restIH _ branchGuarded hRestSize hFields.2⟩
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ =>
           simp [PactType.reannotate, PactType.GuardedOccurrences]
@@ -333,7 +459,7 @@ theorem PactType.reannotate_guardedOccurrences (name : String) :
           simpa only [PactType.reannotate, PactType.GuardedOccurrences] using
             And.intro (ih (sizeOf left) hLeftSize left rfl _ guarded hFields.1)
               (ih (sizeOf right) hRightSize right rfl _ guarded hFields.2)
-      | xoffer _ elseType branches | offer _ elseType branches =>
+      | xoffer _ elseType branches =>
           have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchesSize : sizeOf branches < n := by
             rw [← hSize]; simp_wf; omega
@@ -344,6 +470,18 @@ theorem PactType.reannotate_guardedOccurrences (name : String) :
             And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
                 guarded hFields.1)
               (hBranches branches alphabet guarded hBranchesSize hFields.2)
+      | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.GuardedOccurrences name guarded ∧
+              PactType.GuardedBranchOccurrences name guarded branches := by
+            simpa only [PactType.GuardedOccurrences] using hGuarded
+          simpa only [PactType.reannotate, PactType.GuardedOccurrences] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
+                guarded hFields.1)
+              (hOfferBranches branches alphabet ∅ guarded hBranchesSize
+                hFields.2)
 
 /-- Reannotation preserves tail recursion for the same structural reason. -/
 theorem PactType.reannotate_tailRecursive :
@@ -385,6 +523,39 @@ theorem PactType.reannotate_tailRecursive :
               And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
                   branchAlphabet hFields.1)
                 (restIH hRestSize hFields.2)
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          PactType.TailRecursiveBranches branches →
+          PactType.TailRecursiveBranches
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.TailRecursiveBranches]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize hBranchesRec
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.TailRecursive ∧
+                PactType.TailRecursiveBranches rest := by
+              simpa only [PactType.TailRecursiveBranches] using hBranchesRec
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.TailRecursiveBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                hFields.1,
+              restIH _ hRestSize hFields.2⟩
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
           simp [PactType.reannotate, PactType.TailRecursive]
@@ -412,7 +583,7 @@ theorem PactType.reannotate_tailRecursive :
           simpa only [PactType.reannotate, PactType.TailRecursive] using
             And.intro (ih (sizeOf left) hLeftSize left rfl _ hFields.1)
               (ih (sizeOf right) hRightSize right rfl _ hFields.2)
-      | xoffer _ elseType branches | offer _ elseType branches =>
+      | xoffer _ elseType branches =>
           have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchesSize : sizeOf branches < n := by
             rw [← hSize]; simp_wf; omega
@@ -423,6 +594,17 @@ theorem PactType.reannotate_tailRecursive :
             And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
                 hFields.1)
               (hBranches branches alphabet hBranchesSize hFields.2)
+      | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.TailRecursive ∧
+              PactType.TailRecursiveBranches branches := by
+            simpa only [PactType.TailRecursive] using hRec
+          simpa only [PactType.reannotate, PactType.TailRecursive] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
+                hFields.1)
+              (hOfferBranches branches alphabet ∅ hBranchesSize hFields.2)
 
 /-- Reannotation rewrites only alphabets, so it preserves the syntax size. -/
 theorem PactType.reannotate_sizeOf :
@@ -457,6 +639,33 @@ theorem PactType.reannotate_sizeOf :
             simp_wf
             rw [ih (sizeOf branchType) hBranchSize branchType rfl branchAlphabet,
               restIH hRestSize]
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          sizeOf (PactType.reannotateOfferBranches branchAlphabet seen
+              branches) = sizeOf branches := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _
+            rw [PactType.reannotateOfferBranches_nil]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize
+            rcases branch with ⟨action, branchType⟩
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp_wf
+            rw [ih (sizeOf branchType) hBranchSize branchType rfl _,
+              restIH _ hRestSize]
       subst hSize
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
@@ -506,7 +715,7 @@ theorem PactType.reannotate_sizeOf :
           have hB : sizeOf bs < sizeOf (PactType.offer a e bs) := by simp_wf; omega
           simp only [PactType.reannotate]
           simp_wf
-          rw [ih _ hE e rfl alphabet, hBranches bs alphabet hB]
+          rw [ih _ hE e rfl alphabet, hOfferBranches bs alphabet ∅ hB]
 
 /-- Reannotation preserves clock guardedness for the same structural reason. -/
 theorem PactType.reannotate_clockGuarded :
@@ -548,6 +757,39 @@ theorem PactType.reannotate_clockGuarded :
               And.intro (ih (sizeOf branchType) hBranchSize branchType rfl
                   branchAlphabet hFields.1)
                 (restIH hRestSize hFields.2)
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          PactType.ClockGuardedBranches branches →
+          PactType.ClockGuardedBranches
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.ClockGuardedBranches]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize hBranchesGuarded
+            rcases branch with ⟨action, branchType⟩
+            have hFields : branchType.ClockGuarded ∧
+                PactType.ClockGuardedBranches rest := by
+              simpa only [PactType.ClockGuardedBranches] using hBranchesGuarded
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType <
+                  sizeOf (action, branchType) := by simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hRest : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.ClockGuardedBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                hFields.1,
+              restIH _ hRestSize hFields.2⟩
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
           simp [PactType.reannotate, PactType.ClockGuarded]
@@ -576,7 +818,7 @@ theorem PactType.reannotate_clockGuarded :
           simpa only [PactType.reannotate, PactType.ClockGuarded] using
             And.intro (ih (sizeOf left) hLeftSize left rfl _ hFields.1)
               (ih (sizeOf right) hRightSize right rfl _ hFields.2)
-      | xoffer _ elseType branches | offer _ elseType branches =>
+      | xoffer _ elseType branches =>
           have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchesSize : sizeOf branches < n := by
             rw [← hSize]; simp_wf; omega
@@ -587,6 +829,17 @@ theorem PactType.reannotate_clockGuarded :
             And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
                 hFields.1)
               (hBranches branches alphabet hBranchesSize hFields.2)
+      | offer _ elseType branches =>
+          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]; simp_wf; omega
+          have hFields : elseType.ClockGuarded ∧
+              PactType.ClockGuardedBranches branches := by
+            simpa only [PactType.ClockGuarded] using hGuarded
+          simpa only [PactType.reannotate, PactType.ClockGuarded] using
+            And.intro (ih (sizeOf elseType) hElseSize elseType rfl alphabet
+                hFields.1)
+              (hOfferBranches branches alphabet ∅ hBranchesSize hFields.2)
 
 /-- A generated singleton offer inherits its branch body's tail properties. -/
 theorem singletonTypeXOfferAt_tailOccurrences (name : String)

@@ -33,7 +33,7 @@ mutual
           branchShapes_reannotateBranches alphabet branches]
     | .offer _ elseType branches => by
         simp only [reannotate, shape, shape_reannotate alphabet elseType,
-          branchShapes_reannotateBranches alphabet branches]
+          branchShapes_reannotateOfferBranches alphabet ∅ branches]
   termination_by processType => sizeOf processType
 
   theorem branchShapes_reannotateBranches (alphabet : PactTypeAlphabet) :
@@ -44,6 +44,19 @@ mutual
         simp only [reannotateBranches, branchShapes,
           shape_reannotate alphabet processType,
           branchShapes_reannotateBranches alphabet rest]
+  termination_by branches => sizeOf branches
+
+  theorem branchShapes_reannotateOfferBranches (alphabet : PactTypeAlphabet)
+      (seen : Finset BareMessage) :
+      ∀ branches : List (BareMessage × PactType),
+        branchShapes (reannotateOfferBranches alphabet seen branches) =
+          branchShapes branches
+    | [] => by simp [reannotateOfferBranches_nil, branchShapes]
+    | (action, processType) :: rest => by
+        simp only [reannotateOfferBranches_cons, branchShapes,
+          shape_reannotate _ processType,
+          branchShapes_reannotateOfferBranches alphabet
+            (seen ∪ ({action} ∪ MessageActions processType)) rest]
   termination_by branches => sizeOf branches
 decreasing_by
   all_goals

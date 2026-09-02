@@ -1,3 +1,5 @@
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.NewMainHelpers
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous
 import Anvilpp.PactTypes.Syntax.TypeOfferDeterminacy
 import Anvilpp.PactTypes.Syntax.PactTypeShapeLemmas
 import Anvilpp.PactTypes.Syntax.TypeOffersAlphabet

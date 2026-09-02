@@ -75,6 +75,46 @@ theorem typeCompilationFuel_reannotate
                 simp only [conjunctiveCompilationFuel]
                 rw [ih (sizeOf branchType) hType branchAlphabet branchType rfl,
                   hRestEq]
+      have hConjOffer : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ branchAlphabet (seen : Finset BareMessage),
+          conjunctiveCompilationFuel
+              (PactType.reannotateOfferBranches branchAlphabet seen branches) =
+            conjunctiveCompilationFuel branches := by
+        intro branches hBranches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen
+            rw [PactType.reannotateOfferBranches_nil]
+        | cons branch rest restIH =>
+            intro seen
+            rcases branch with ⟨action, branchType⟩
+            have hType : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            have hRest : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf; omega
+              omega
+            cases rest with
+            | nil =>
+                rw [PactType.reannotateOfferBranches_cons,
+                  PactType.reannotateOfferBranches_nil]
+                simp only [conjunctiveCompilationFuel]
+                rw [ih (sizeOf branchType) hType _ branchType rfl]
+            | cons next tail =>
+                rcases next with ⟨nextAction, nextType⟩
+                have hRestEq := restIH hRest
+                  (seen ∪ ({action} ∪ PactType.MessageActions branchType))
+                rw [PactType.reannotateOfferBranches_cons] at hRestEq
+                rw [PactType.reannotateOfferBranches_cons,
+                  PactType.reannotateOfferBranches_cons]
+                simp only [conjunctiveCompilationFuel]
+                rw [ih (sizeOf branchType) hType _ branchType rfl, hRestEq]
       cases processType with
       | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
           simp [PactType.reannotate, typeCompilationFuel]
@@ -106,7 +146,7 @@ theorem typeCompilationFuel_reannotate
           simp [PactType.reannotate, typeCompilationFuel,
             ih (sizeOf left) hLeft
               (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
-                right.alphabet interface) left rfl,
+                right interface) left rfl,
             ih (sizeOf right) hRight
               (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
                 interface) right rfl]
@@ -123,8 +163,7 @@ theorem typeCompilationFuel_reannotate
             rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, typeCompilationFuel,
             ih (sizeOf elseType) hElse alphabet elseType rfl,
-            hBranch branches hBranches alphabet,
-            hConj branches hBranches alphabet]
+            hConjOffer branches hBranches alphabet ∅]
 
 theorem typeCompilationFuel_parallelTypeBranchesWithin
     (alphabet : PactTypeAlphabet) : ∀ branches,

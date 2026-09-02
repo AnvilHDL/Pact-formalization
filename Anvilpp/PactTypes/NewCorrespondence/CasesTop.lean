@@ -15,8 +15,16 @@ private theorem branchesAlphabetWellFormed_of_mem
     (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
     (hMem : (action, branchType) ∈ branches) :
     branchType.AlphabetWellFormed := by
-  -- TODO: proof invalidated by the 2026-09-01 alphabet/offer spec change.
-  sorry
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hTail
+      · cases hEq
+        exact hBranches.2.1
+      · exact ih hBranches.2.2 hTail
 
 private theorem tailRecursiveBranches_of_mem
     {branches : List (BareMessage × PactType)}

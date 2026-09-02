@@ -47,12 +47,11 @@ namespace PactTypeAlphabet
   its own projection, and additionally absorbs the declarations that are new to
   the reannotated parallel node, so the two projected children still
   reconstruct the whole parent alphabet. -/
-  def projectParallelLeft (parent left right : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
-    let rightPart := projectParallelChild parent right interface
+  def projectParallelLeft (parent left : PactTypeAlphabet)
+      (rightType : PactType) (interface : Interface) : PactTypeAlphabet :=
     { actions :=
         (projectParallelChild parent left interface).actions ∪
-          (parent.actions \ rightPart.actions) }
+          (parent.actions \ PactType.MessageActions rightType) }
 
 end PactTypeAlphabet
 
@@ -76,7 +75,7 @@ namespace PactType
             (reannotate alphabet right)
       | .par _ left right interface =>
           let leftAlphabet := PactTypeAlphabet.projectParallelLeft alphabet
-            left.alphabet right.alphabet interface
+            left.alphabet right interface
           let rightAlphabet := PactTypeAlphabet.projectParallelChild alphabet
             right.alphabet interface
           .par alphabet (reannotate leftAlphabet left)
@@ -91,7 +90,7 @@ namespace PactType
             (reannotateBranches alphabet branches)
       | .offer _ elseType branches =>
           .offer alphabet (reannotate alphabet elseType)
-            (reannotateBranches alphabet branches)
+            (reannotateOfferBranches alphabet ∅ branches)
     termination_by processType => sizeOf processType
 
     def reannotateBranches (alphabet : PactTypeAlphabet) :
@@ -100,6 +99,22 @@ namespace PactType
       | (action, processType) :: rest =>
           (action, reannotate alphabet processType) ::
             reannotateBranches alphabet rest
+    termination_by branches => sizeOf branches
+
+    /-- Conjunctive-offer branches run concurrently, so each carries the part of
+    the alphabet no other branch claims. -/
+    def reannotateOfferBranches (alphabet : PactTypeAlphabet)
+        (seen : Finset BareMessage) :
+        List (BareMessage × PactType) → List (BareMessage × PactType)
+      | [] => []
+      | (action, processType) :: rest =>
+          (action,
+            reannotate
+              { actions :=
+                  alphabet.actions \ (seen ∪ PactType.BranchMessageActions rest) }
+              processType) ::
+            reannotateOfferBranches alphabet
+              (seen ∪ ({action} ∪ PactType.MessageActions processType)) rest
     termination_by branches => sizeOf branches
   decreasing_by
     all_goals

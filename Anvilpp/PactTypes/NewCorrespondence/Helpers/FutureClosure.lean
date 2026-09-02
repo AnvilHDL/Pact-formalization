@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.EnvironmentAndAlphabet
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.CompiledShape
 
 namespace Pact
 
@@ -113,12 +113,17 @@ private theorem buildSequenceAutomaton_edgeTargetsInStates
       finishAutomatonFragment, childStates, childState, hRightInitial]
 
 /-- Re-stamping a type with a different boundary alphabet renames no state:
-the compiled carrier is the same finite set. -/
+the compiled carrier is the same finite set.  Pairwise disjoint offer-branch
+declarations are what keep a conjunctive offer's committed branch in place
+when re-stamping erases the annotations that tell two branches apart. -/
 theorem compileTypeFuel_states_reannotate
-    (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet) :
+    (fuel : Nat) (processType : PactType)
+    (hDisjoint : processType.OfferBranchesDisjoint)
+    (alphabet : PactTypeAlphabet) :
     (compileTypeFuel fuel (processType.reannotate alphabet)).states =
-      (compileTypeFuel fuel processType).states := by
-  sorry
+      (compileTypeFuel fuel processType).states :=
+  (CompiledShape.compileTypeFuel_shapeEq_reannotate fuel processType hDisjoint
+    alphabet).1
 
 private theorem buildParallelAutomaton_edgeTargetsInStates
 
@@ -319,15 +324,16 @@ declared by that same compiled fragment. -/
 theorem compileTypeFuel_edgeTargetsInStates  :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →
+      processType.OfferBranchesDisjoint →
       (compileTypeFuel fuel processType).EdgeTargetsInStates := by
   intro fuel
   induction fuel with
   | zero =>
-      intro processType hFuel
+      intro processType hFuel _
       exact (Nat.not_lt_zero _
         (TypeCompilationFuelSufficient.positive hFuel)).elim
   | succ fuel ih =>
-      intro processType hFuel
+      intro processType hFuel hDisjoint
       cases processType with
       | message _ msg dir =>
           intro edge hEdge
@@ -369,9 +375,10 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildRecursionAutomaton_edgeTargetsInStates _ name
-            (compileTypeFuel fuel body) (ih body hBody)
+            (compileTypeFuel fuel body) (ih body hBody hDisjoint)
             (compileTypeFuel_initial_mem fuel body hBody)
       | choice _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
@@ -380,11 +387,12 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_edgeTargetsInStates _
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right) .silent .silent
-            (ih left hLeft) (ih right hRight)
+            (ih left hLeft hDisjoint.1) (ih right hRight hDisjoint.2)
             (compileTypeFuel_initial_mem fuel left hLeft)
             (compileTypeFuel_initial_mem fuel right hRight)
       | fairChoice _ bid left right =>
@@ -394,11 +402,13 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_edgeTargetsInStates _
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right) (.fair bid true)
-            (.fair bid false) (ih left hLeft) (ih right hRight)
+            (.fair bid false) (ih left hLeft hDisjoint.1)
+            (ih right hRight hDisjoint.2)
             (compileTypeFuel_initial_mem fuel left hLeft)
             (compileTypeFuel_initial_mem fuel right hRight)
       | seq _ left right =>
@@ -408,11 +418,12 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildSequenceAutomaton_edgeTargetsInStates
             (compileTypeFuel fuel left)
-            (compileTypeFuel fuel right) (ih left hLeft)
-            (ih right hRight)
+            (compileTypeFuel fuel right) (ih left hLeft hDisjoint.1)
+            (ih right hRight hDisjoint.2)
             (compileTypeFuel_initial_mem fuel right hRight)
       | par alphabet left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
@@ -421,6 +432,7 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           have hLeftRestamped :
               TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
@@ -442,13 +454,19 @@ theorem compileTypeFuel_edgeTargetsInStates  :
               (left.reannotate alphabet))
             (computeFutureOfFuel (min fuel (typeCompilationFuel right))
               (right.reannotate alphabet))
-            (ih left hLeft) (ih right hRight)
+            (ih left hLeft hDisjoint.1) (ih right hRight hDisjoint.2)
             (fun edge hEdge => by
-              rw [← compileTypeFuel_states_reannotate fuel left alphabet]
-              exact ih (left.reannotate alphabet) hLeftRestamped edge hEdge)
+              rw [← compileTypeFuel_states_reannotate fuel left hDisjoint.1
+                alphabet]
+              exact ih (left.reannotate alphabet) hLeftRestamped
+                (reannotate_offerBranchesDisjoint left alphabet hDisjoint.1)
+                edge hEdge)
             (fun edge hEdge => by
-              rw [← compileTypeFuel_states_reannotate fuel right alphabet]
-              exact ih (right.reannotate alphabet) hRightRestamped edge hEdge)
+              rw [← compileTypeFuel_states_reannotate fuel right hDisjoint.2
+                alphabet]
+              exact ih (right.reannotate alphabet) hRightRestamped
+                (reannotate_offerBranchesDisjoint right alphabet hDisjoint.2)
+                edge hEdge)
       | xoffer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -461,13 +479,15 @@ theorem compileTypeFuel_edgeTargetsInStates  :
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             simp only [TypeCompilationFuelSufficient]
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           apply buildExclusiveOfferAutomaton_edgeTargetsInStates
-          · exact ih elseType hElse
+          · exact ih elseType hElse hDisjoint.1
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact ih original.2 (hBranches original hOriginal)
+              (offerBranchesDisjoint_of_mem_branch hDisjoint.2 hOriginal)
           · exact compileTypeFuel_initial_mem fuel elseType hElse
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
@@ -486,14 +506,18 @@ theorem compileTypeFuel_edgeTargetsInStates  :
               typeCompilationFuel_parallelTypeBranchesSelecting]
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           apply buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
-          · exact ih elseType hElse
+          · exact ih elseType hElse hDisjoint.1
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact ih (parallelTypeBranchesSelecting alphabet original branches)
               (hSelected original hOriginal)
+              (parallelTypeBranchesSelecting_offerBranchesDisjoint original
+                branches fun item hItem =>
+                  offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hItem)
           · exact compileTypeFuel_initial_mem fuel elseType hElse
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
@@ -713,15 +737,16 @@ theorem compileTypeFuel_clockEdgesAreTock  :
 theorem compileTypeFuel_futureTargetsInStates  :
     ∀ fuel processType,
       TypeCompilationFuelSufficient processType fuel →
+      processType.OfferBranchesDisjoint →
       (compileTypeFuel fuel processType).FutureTargetsInStates := by
   intro fuel
   induction fuel with
   | zero =>
-      intro processType hFuel
+      intro processType hFuel _
       exact (Nat.not_lt_zero _
         (TypeCompilationFuelSufficient.positive hFuel)).elim
   | succ fuel ih =>
-      intro processType hFuel
+      intro processType hFuel hDisjoint
       cases processType with
       | message _ msg dir =>
           intro edge hEdge target removed hFuture
@@ -773,9 +798,10 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildRecursionAutomaton_futureTargetsInStates _ name
-            (compileTypeFuel fuel body) (ih body hBody)
+            (compileTypeFuel fuel body) (ih body hBody hDisjoint)
             (compileTypeFuel_initial_mem fuel body hBody)
       | choice _ left right =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
@@ -784,11 +810,13 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_futureTargetsInStates _
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right) TypeLabel.silent
-            TypeLabel.silent (ih left hLeft) (ih right hRight)
+            TypeLabel.silent (ih left hLeft hDisjoint.1)
+            (ih right hRight hDisjoint.2)
             (compileTypeFuel_initial_mem fuel left hLeft)
             (compileTypeFuel_initial_mem fuel right hRight)
       | fairChoice _ bid left right =>
@@ -798,11 +826,13 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildChoiceAutomaton_futureTargetsInStates _
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right) (TypeLabel.fair bid true)
-            (TypeLabel.fair bid false) (ih left hLeft) (ih right hRight)
+            (TypeLabel.fair bid false) (ih left hLeft hDisjoint.1)
+            (ih right hRight hDisjoint.2)
             (compileTypeFuel_initial_mem fuel left hLeft)
             (compileTypeFuel_initial_mem fuel right hRight)
       | seq _ left right =>
@@ -812,11 +842,12 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           exact buildSequenceAutomaton_futureTargetsInStates
             (compileTypeFuel fuel left)
-            (compileTypeFuel fuel right) (ih right hRight)
-            (compileTypeFuel_edgeTargetsInStates fuel left hLeft)
+            (compileTypeFuel fuel right) (ih right hRight hDisjoint.2)
+            (compileTypeFuel_edgeTargetsInStates fuel left hLeft hDisjoint.1)
             (compileTypeFuel_initial_mem fuel right hRight)
       | par alphabet left right interface =>
           have hLeft : TypeCompilationFuelSufficient left fuel := by
@@ -825,6 +856,7 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           have hLeftRestamped :
               TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
@@ -846,16 +878,23 @@ theorem compileTypeFuel_futureTargetsInStates  :
               (left.reannotate alphabet))
             (computeFutureOfFuel (min fuel (typeCompilationFuel right))
               (right.reannotate alphabet))
-            (compileTypeFuel_edgeTargetsInStates fuel left hLeft)
-            (compileTypeFuel_edgeTargetsInStates fuel right hRight)
+            (compileTypeFuel_edgeTargetsInStates fuel left hLeft hDisjoint.1)
+            (compileTypeFuel_edgeTargetsInStates fuel right hRight
+              hDisjoint.2)
             (fun edge hEdge => by
-              rw [← compileTypeFuel_states_reannotate fuel left alphabet]
+              rw [← compileTypeFuel_states_reannotate fuel left hDisjoint.1
+                alphabet]
               exact compileTypeFuel_edgeTargetsInStates fuel
-                (left.reannotate alphabet) hLeftRestamped edge hEdge)
+                (left.reannotate alphabet) hLeftRestamped
+                (reannotate_offerBranchesDisjoint left alphabet hDisjoint.1)
+                edge hEdge)
             (fun edge hEdge => by
-              rw [← compileTypeFuel_states_reannotate fuel right alphabet]
+              rw [← compileTypeFuel_states_reannotate fuel right hDisjoint.2
+                alphabet]
               exact compileTypeFuel_edgeTargetsInStates fuel
-                (right.reannotate alphabet) hRightRestamped edge hEdge)
+                (right.reannotate alphabet) hRightRestamped
+                (reannotate_offerBranchesDisjoint right alphabet hDisjoint.2)
+                edge hEdge)
       | xoffer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -868,17 +907,19 @@ theorem compileTypeFuel_futureTargetsInStates  :
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             simp only [TypeCompilationFuelSufficient]
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           have hResult := buildExclusiveOfferAutomaton_futureTargetsInStates
             alphabet branches (compileTypeFuel fuel elseType)
             (branches.map fun branch =>
               (branch.1, compileTypeFuel fuel branch.2))
-            (ih elseType hElse)
+            (ih elseType hElse hDisjoint.1)
             (by
               intro entry hEntry
               simp only [List.mem_map] at hEntry
               obtain ⟨original, hOriginal, rfl⟩ := hEntry
-              exact ih original.2 (hBranches original hOriginal))
+              exact ih original.2 (hBranches original hOriginal)
+                (offerBranchesDisjoint_of_mem_branch hDisjoint.2 hOriginal))
             (compileTypeFuel_initial_mem fuel elseType hElse)
             (by
               intro entry hEntry
@@ -899,6 +940,7 @@ theorem compileTypeFuel_futureTargetsInStates  :
               typeCompilationFuel_parallelTypeBranchesSelecting]
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           have hResult :=
             buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
@@ -907,13 +949,16 @@ theorem compileTypeFuel_futureTargetsInStates  :
               (branches.map fun selected =>
                 (selected.1, compileTypeFuel fuel
                   (parallelTypeBranchesSelecting alphabet selected branches)))
-              (ih elseType hElse)
+              (ih elseType hElse hDisjoint.1)
               (by
                 intro entry hEntry
                 simp only [List.mem_map] at hEntry
                 obtain ⟨original, hOriginal, rfl⟩ := hEntry
                 exact ih (parallelTypeBranchesSelecting alphabet original branches)
-                  (hSelected original hOriginal))
+                  (hSelected original hOriginal)
+                  (parallelTypeBranchesSelecting_offerBranchesDisjoint original
+                    branches fun item hItem =>
+                      offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hItem))
               (compileTypeFuel_initial_mem fuel elseType hElse)
               (by
                 intro entry hEntry
@@ -927,13 +972,14 @@ theorem compileTypeFuel_futureTargetsInStates  :
 /-- Proves every sufficiently fuelled fragment's pending automaton is closed under its own future references. -/
 theorem compileTypeFuel_referencesClosed
     (fuel : Nat) (processType : PactType)
-    (hFuel : TypeCompilationFuelSufficient processType fuel) :
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hDisjoint : processType.OfferBranchesDisjoint) :
     ({ states := (compileTypeFuel fuel processType).states
        edges := (compileTypeFuel fuel processType).edges } :
       PendingAutomaton).ReferencesClosed :=
   PendingAutomaton.referencesClosed_of_futureTargetsInStates
     (compileTypeFuel fuel processType)
-    (compileTypeFuel_futureTargetsInStates fuel processType hFuel)
+    (compileTypeFuel_futureTargetsInStates fuel processType hFuel hDisjoint)
 
 private theorem stateProductInfoFuel_succ_stable :
     ∀ fuel processType state,
@@ -1485,6 +1531,7 @@ theorem computeFutureOfFuel_child_embedding
       compileTypeFuel childFuel childType = childFragment)
     (hParentFuel : TypeCompilationFuelSufficient parentType parentFuel)
     (hChildFuel : TypeCompilationFuelSufficient childType childFuel)
+    (hChildDisjoint : childType.OfferBranchesDisjoint)
     (hChildFits : childFuel + 1 ≤ parentFuel)
     (hProductInfo : ∀ visited,
       stateProductInfo parentType (childState index visited) =
@@ -1526,7 +1573,7 @@ theorem computeFutureOfFuel_child_embedding
         PendingAutomaton).ReferencesClosed
       rw [← hChildCompile]
       exact compileTypeFuel_referencesClosed (childRest + 1)
-        childType hChildFuel
+        childType hChildFuel hChildDisjoint
     · simpa [child] using hState
     · exact hCard
   conv_lhs => rw [computeFutureOfFuel]
@@ -1713,6 +1760,7 @@ theorem computeFutureOf_binaryChoice_left
           (compileTypeFuel (typeCompilationFuel right) right)
           selectionLeft selectionRight)
     (hFuel : typeCompilationFuel left + 1 ≤ typeCompilationFuel whole)
+    (hDisjoint : left.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 0 visited) =
         stateProductInfo left visited)
@@ -1748,7 +1796,7 @@ theorem computeFutureOf_binaryChoice_left
     (typeCompilationFuel whole) (typeCompilationFuel left)
     parentFragment leftFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient left) hFuel hProductInfo
+    (typeCompilationFuel_sufficient left) hDisjoint hFuel hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_left alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [leftFragment] using hState)
@@ -1766,6 +1814,7 @@ theorem computeFutureOf_binaryChoice_right
           (compileTypeFuel (typeCompilationFuel right) right)
           selectionLeft selectionRight)
     (hFuel : typeCompilationFuel right + 1 ≤ typeCompilationFuel whole)
+    (hDisjoint : right.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 1 visited) =
         stateProductInfo right visited)
@@ -1801,7 +1850,7 @@ theorem computeFutureOf_binaryChoice_right
     (typeCompilationFuel whole) (typeCompilationFuel right)
     parentFragment rightFragment 1 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient right) hFuel hProductInfo
+    (typeCompilationFuel_sufficient right) hDisjoint hFuel hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_right alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [rightFragment] using hState)
@@ -1818,6 +1867,7 @@ theorem computeFutureOf_exclusiveOffer_else
           (branches.map fun branch => (branch.1, compileTypeFuel
             (typeCompilationFuel branch.2) branch.2)))
     (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
+    (hDisjoint : elseType.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 0 visited) =
         stateProductInfo elseType visited)
@@ -1854,7 +1904,7 @@ theorem computeFutureOf_exclusiveOffer_else
     (typeCompilationFuel whole) (typeCompilationFuel elseType)
     parentFragment elseFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient elseType) hFuel hProductInfo
+    (typeCompilationFuel_sufficient elseType) hDisjoint hFuel hProductInfo
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_else alphabet
       branches elseFragment branchFragments q edge)
     hCard state (by simpa [elseFragment] using hState)
@@ -1873,6 +1923,7 @@ theorem computeFutureOf_exclusiveOffer_branch
     (i : Nat) (action : BareMessage) (branchType : PactType)
     (hBranch : branches[i]? = some (action, branchType))
     (hFuel : typeCompilationFuel branchType + 1 ≤ typeCompilationFuel whole)
+    (hDisjoint : branchType.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child (i + 1) visited) =
         stateProductInfo branchType visited)
@@ -1919,7 +1970,7 @@ theorem computeFutureOf_exclusiveOffer_branch
     (typeCompilationFuel whole) (typeCompilationFuel branchType)
     parentFragment branchFragment (i + 1) hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient branchType) hFuel hProductInfo
+    (typeCompilationFuel_sufficient branchType) hDisjoint hFuel hProductInfo
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch alphabet
       branches elseFragment branchFragments i action branchFragment
       hBranchFragment q edge)

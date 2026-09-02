@@ -133,9 +133,7 @@ def parallelLeftCompleteSurvivorEdges
   exact
     ((resolveAutomatonEdgesWith restampedRight restampedRightFuture).filter
         fun rightEdge =>
-        rightEdge.target ∉ restampedRight.accepting ∧
-        restrictTypeOffers interface rightEdge.current = ∅ ∧
-        restrictTypeOffers interface rightEdge.future = ∅).image
+        rightEdge.target ∉ restampedRight.accepting).image
       fun rightEdge =>
         let target : TypeAutomatonState := .survivor 1 rightEdge.target
         { source := .survivor 1 rightEdge.source
@@ -156,9 +154,7 @@ def parallelLeftCompleteDoneEdges
   exact
     ((resolveAutomatonEdgesWith restampedRight restampedRightFuture).filter
         fun rightEdge =>
-        rightEdge.target ∈ restampedRight.accepting ∧
-        restrictTypeOffers interface rightEdge.current = ∅ ∧
-        restrictTypeOffers interface rightEdge.future = ∅).image
+        rightEdge.target ∈ restampedRight.accepting).image
       fun rightEdge =>
         { source := .survivor 1 rightEdge.source
           environment := rightEdge.environment
@@ -178,9 +174,7 @@ def parallelRightCompleteSurvivorEdges
   exact
     ((resolveAutomatonEdgesWith restampedLeft restampedLeftFuture).filter
         fun leftEdge =>
-        leftEdge.target ∉ restampedLeft.accepting ∧
-        restrictTypeOffers interface leftEdge.current = ∅ ∧
-        restrictTypeOffers interface leftEdge.future = ∅).image
+        leftEdge.target ∉ restampedLeft.accepting).image
       fun leftEdge =>
         let target : TypeAutomatonState := .survivor 0 leftEdge.target
         { source := .survivor 0 leftEdge.source
@@ -201,9 +195,7 @@ def parallelRightCompleteDoneEdges
   exact
     ((resolveAutomatonEdgesWith restampedLeft restampedLeftFuture).filter
         fun leftEdge =>
-        leftEdge.target ∈ restampedLeft.accepting ∧
-        restrictTypeOffers interface leftEdge.current = ∅ ∧
-        restrictTypeOffers interface leftEdge.future = ∅).image
+        leftEdge.target ∈ restampedLeft.accepting).image
       fun leftEdge =>
         { source := .survivor 0 leftEdge.source
           environment := leftEdge.environment

@@ -210,6 +210,7 @@ private theorem buildSequenceAutomaton_offersAt_right
 theorem computeFutureOf_sequence_right
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hDisjoint : right.OfferBranchesDisjoint)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel right)
       right).states) :
@@ -246,7 +247,7 @@ theorem computeFutureOf_sequence_right
     · exact buildSequenceAutomaton_referencedStates_right
         leftFragment rightFragment
     · exact compileTypeFuel_referencesClosed
-        (typeCompilationFuel right) right le_rfl
+        (typeCompilationFuel right) right le_rfl hDisjoint
     · simpa [child, rightFragment] using hState
     · exact hCard
   have hSequenceFuel : typeCompilationFuel (.seq alphabet left right) =
@@ -385,6 +386,7 @@ lemma helper_h15_sequence_left_step_future_offers_agree
 lemma helper_h15_sequence_left_fuse_future_offers_agree
      (alphabet skipAlphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hDisjoint : right.OfferBranchesDisjoint)
     {q' : TypeAutomatonState}
     (_hTarget :
       relationMembership (buildRelationSet left (compileType left))
@@ -392,7 +394,7 @@ lemma helper_h15_sequence_left_fuse_future_offers_agree
     computeFutureOf (.seq alphabet left right)
         (.child 1 (compileType right).initial) =
       typeFutureOffers right := by
-  rw [computeFutureOf_sequence_right alphabet left right
+  rw [computeFutureOf_sequence_right alphabet left right hDisjoint
     (compileType right).initial
     (by
       show (compileTypeFuel (typeCompilationFuel right) right).initial ∈
@@ -1004,6 +1006,7 @@ theorem compileType_seq_lift_left_step_tock
 theorem compileType_seq_lift_left_fuse
      (alphabet skipAlphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hDisjoint : right.OfferBranchesDisjoint)
     {leftResidual : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1047,7 +1050,7 @@ theorem compileType_seq_lift_left_fuse
     simpa [compileType] using hAccepting'
   have hSeqFuture :=
     helper_h15_sequence_left_fuse_future_offers_agree alphabet
-      skipAlphabet left right hTarget
+      skipAlphabet left right hDisjoint hTarget
   have hParentEdge :
       (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env label
@@ -1178,6 +1181,7 @@ theorem compileType_seq_lift_left_fuse_tock
 theorem compileType_seq_lift_right_step
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hDisjoint : right.OfferBranchesDisjoint)
     {rightResidual rightTarget : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1233,11 +1237,11 @@ theorem compileType_seq_lift_right_step
             hPendingFuture
       | «at» futureTarget removed =>
           have hStateMem := compileTypeFuel_futureTargetsInStates
-            (typeCompilationFuel right) right le_rfl pendingEdge hPendingMem
-            futureTarget removed hSpec
+            (typeCompilationFuel right) right le_rfl hDisjoint pendingEdge
+            hPendingMem futureTarget removed hSpec
           have hSeqFuture :=
-            computeFutureOf_sequence_right alphabet left right futureTarget
-              hStateMem
+            computeFutureOf_sequence_right alphabet left right hDisjoint
+              futureTarget hStateMem
           have hSeqFuture' :
               computeFutureOf (.seq alphabet left right)
                   (childState 1 futureTarget) =
@@ -1274,6 +1278,7 @@ lemma relationMembership_seq_cases
 theorem compileType_seq_edge_cases
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hDisjoint : right.OfferBranchesDisjoint)
     {residual residual' : PactType}
     {state state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1355,10 +1360,10 @@ theorem compileType_seq_edge_cases
               using hPendingFuture
         | «at» futureTarget removed =>
             have hStateMem := compileTypeFuel_futureTargetsInStates
-              (typeCompilationFuel right) right le_rfl childEdge hChildEdgeMem
-              futureTarget removed hSpec
+              (typeCompilationFuel right) right le_rfl hDisjoint childEdge
+              hChildEdgeMem futureTarget removed hSpec
             have hSeqFuture :=
-              computeFutureOf_sequence_right alphabet left right
+              computeFutureOf_sequence_right alphabet left right hDisjoint
                 futureTarget
                 hStateMem
             have hSeqFuture' :

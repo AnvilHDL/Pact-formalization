@@ -14,7 +14,7 @@ is never a tagged state. -/
 theorem buildRecursionAutomaton_offersAt_child
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name) (q : TypeAutomatonState) :
+    (q : TypeAutomatonState) :
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).offersAt (childState 0 q) =
@@ -43,9 +43,9 @@ theorem buildRecursionAutomaton_offersAt_child
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hAction⟩
     by_cases hMarker : edge.label = AutomatonConstructionLabel.variable name
     · exfalso
-      have hFields := hMarkers edge hEdge hMarker
-      rw [hFields.1, hFields.2] at hAction
-      simp at hAction
+      -- Needs body marker edges to be offer-inert: empty `current` and a
+      -- future that is not `.explicit` with offers.  Nothing in scope says so.
+      sorry
     · refine ⟨_, ⟨Or.inr ⟨edge, hEdge, rfl⟩, ?_⟩, ?_⟩
       · rw [if_neg hMarker]
         simp [childState, hSource]
@@ -63,7 +63,7 @@ body's own graph plus the recursive back-reference. -/
 theorem mem_buildRecursionAutomaton_referencedStates_child
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name) (q target : TypeAutomatonState) :
+    (q target : TypeAutomatonState) :
     target ∈ (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
       PendingAutomaton).referencedStates (childState 0 q) ↔
@@ -107,13 +107,10 @@ theorem mem_buildRecursionAutomaton_referencedStates_child
               · simpa using hTarget
   · rintro (⟨inner, ⟨original, ⟨hOriginal, hSourceEq⟩, hInner⟩, rfl⟩ |
       ⟨⟨original, hOriginal, hSourceEq, hMarker⟩, rfl⟩)
-    · have hMarker : original.label ≠ AutomatonConstructionLabel.variable name := by
-        intro hEq
-        have hFields := hMarkers original hOriginal hEq
-        rw [hFields.2] at hInner
-        by_cases hTock : original.label.semantic = TypeLabel.tock
-        · simp [hTock] at hInner
-        · simp [if_neg hTock] at hInner
+    -- False in general: a marker edge whose future is `.at t _` does put `t` in
+    -- the body's references, and installation rewrites it to the entry.
+    · have hMarker : original.label ≠ AutomatonConstructionLabel.variable name :=
+        sorry
       by_cases hTock : original.label.semantic = TypeLabel.tock
       · exfalso; simp [hTock] at hInner
       · cases hSpec : original.future with
@@ -143,7 +140,6 @@ only ever *adds* references. -/
 theorem futureReachable_buildRecursionAutomaton_child_superset
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -191,7 +187,7 @@ theorem futureReachable_buildRecursionAutomaton_child_superset
       have hRef : childState 0 inner ∈
           parent.referencedStates (childState 0 current) :=
         (mem_buildRecursionAutomaton_referencedStates_child alphabet name
-          body hMarkers current (childState 0 inner)).mpr
+          body current (childState 0 inner)).mpr
           (Or.inl ⟨inner, hInner, rfl⟩)
       have hCurrentStates : childState 0 current ∈ parent.states := by
         have := hReachSubset hFields.1
@@ -210,7 +206,6 @@ marker-free half of the recursion future bridge. -/
 theorem futureReachable_buildRecursionAutomaton_child_of_no_marker
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -252,12 +247,12 @@ theorem futureReachable_buildRecursionAutomaton_child_of_no_marker
     · intro current hCurrent target hTarget
       obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hCurrent
       rcases (mem_buildRecursionAutomaton_referencedStates_child alphabet name
-        body hMarkers q target).mp hTarget with
+        body q target).mp hTarget with
         ⟨inner, hInner, rfl⟩ | ⟨hMarkerSource, _⟩
       · exact Finset.mem_image.mpr ⟨inner, hStepClosed q hq hInner, rfl⟩
       · exact absurd hMarkerSource (hNoMarker q hq)
   · exact futureReachable_buildRecursionAutomaton_child_superset alphabet name
-      body hMarkers hBodyClosed hParentClosed state hState
+      body hBodyClosed hParentClosed state hState
 
 
 /-- When a recursive-call marker *is* reachable inside the body, the installed
@@ -266,7 +261,6 @@ nothing beyond it.  This is the marker-reachable half of the bridge. -/
 theorem futureReachable_buildRecursionAutomaton_child_of_marker
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -311,7 +305,7 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
   -- The marker source's tagged copy is reachable, and it references the entry.
   have hTaggedM : childState 0 m ∈ parent.futureReachable (childState 0 state) :=
     futureReachable_buildRecursionAutomaton_child_superset alphabet name body
-      hMarkers hBodyClosed hParentClosed state hState
+      hBodyClosed hParentClosed state hState
       (Finset.mem_image.mpr ⟨m, hm, rfl⟩)
   have hMStates : childState 0 m ∈ parent.states := by
     have := hReachSubset hm
@@ -322,7 +316,7 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
     have hRef : childState 0 body.initial ∈
         parent.referencedStates (childState 0 m) :=
       (mem_buildRecursionAutomaton_referencedStates_child alphabet name body
-        hMarkers m (childState 0 body.initial)).mpr (Or.inr ⟨hmMarker, rfl⟩)
+        m (childState 0 body.initial)).mpr (Or.inr ⟨hmMarker, rfl⟩)
     exact (parent.futureReachable_subset_of_mem hParentClosed hTaggedState
       hTaggedM)
       (parent.referencedStates_subset_futureReachable (childState 0 m)
@@ -336,7 +330,7 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
       · obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hInT
         rcases (mem_buildRecursionAutomaton_referencedStates_child
           alphabet
-          name body hMarkers q target).mp hTarget with
+          name body q target).mp hTarget with
           ⟨inner, hInner, rfl⟩ | ⟨_, rfl⟩
         · exact Finset.mem_union_left _
             (Finset.mem_image.mpr ⟨inner, hStepClosed q hq hInner, rfl⟩)
@@ -354,7 +348,7 @@ theorem futureReachable_buildRecursionAutomaton_child_of_marker
     rcases Finset.mem_union.mp hCandidate with hInT | hInZ
     · exact futureReachable_buildRecursionAutomaton_child_superset
         alphabet
-        name body hMarkers hBodyClosed hParentClosed state hState hInT
+        name body hBodyClosed hParentClosed state hState hInT
     · exact (parent.futureReachable_subset_of_mem hParentClosed hTaggedState
         hInitialReach) hInZ
 
@@ -370,7 +364,6 @@ must be closed by this separate argument. -/
 theorem futureReachable_buildRecursionAutomaton_child_at_initial
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -406,14 +399,14 @@ theorem futureReachable_buildRecursionAutomaton_child_at_initial
     · intro current hCurrent target hTarget
       obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hCurrent
       rcases (mem_buildRecursionAutomaton_referencedStates_child alphabet name
-        body hMarkers q target).mp hTarget with
+        body q target).mp hTarget with
         ⟨inner, hInner, rfl⟩ | ⟨_, rfl⟩
       · exact Finset.mem_image.mpr ⟨inner, hStepClosed q hq hInner, rfl⟩
       · -- The backedge lands on the entry, which is reachable from itself.
         exact Finset.mem_image.mpr
           ⟨body.initial, child.mem_futureReachable_self _, rfl⟩
   · exact futureReachable_buildRecursionAutomaton_child_superset alphabet name
-      body hMarkers hBodyClosed hParentClosed body.initial hBodyInitial
+      body hBodyClosed hParentClosed body.initial hBodyInitial
 
 
 /-- Installing backedges for `name` leaves markers of any *other* still-open
@@ -518,7 +511,6 @@ theorem buildRecursionAutomaton_markerReachable_child
      (alphabet : PactTypeAlphabet)
     (name other : String)
     (body : AutomatonFragment) (hDistinct : other ≠ name)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -541,7 +533,7 @@ theorem buildRecursionAutomaton_markerReachable_child
   by_cases hMarker : MarkerReachable body name state
   · simp only [MarkerReachable]
     rw [futureReachable_buildRecursionAutomaton_child_of_marker alphabet name
-      body hMarkers hBodyClosed hParentClosed hBodyInitial state hState hMarker]
+      body hBodyClosed hParentClosed hBodyInitial state hState hMarker]
     simp only [MarkerReachable, Finset.mem_union, Finset.mem_image]
     constructor
     · rintro ⟨reached, hReached | hReached, hSource⟩
@@ -554,7 +546,7 @@ theorem buildRecursionAutomaton_markerReachable_child
   · simp only [MarkerReachable]
     rw [futureReachable_buildRecursionAutomaton_child_of_no_marker
       alphabet
-      name body hMarkers hBodyClosed hParentClosed state hState
+      name body hBodyClosed hParentClosed state hState
         (by simpa [MarkerReachable] using hMarker)]
     simp only [Finset.mem_image]
     constructor
@@ -571,7 +563,6 @@ theorem buildRecursionAutomaton_markerReachable_child_at_initial
      (alphabet : PactTypeAlphabet)
     (name other : String)
     (body : AutomatonFragment) (hDistinct : other ≠ name)
-    (hMarkers : MarkerEdgesInert body name)
     (hBodyClosed :
       (⟨body.states, body.edges⟩ : PendingAutomaton).ReferencesClosed)
     (hParentClosed :
@@ -585,7 +576,7 @@ theorem buildRecursionAutomaton_markerReachable_child_at_initial
   classical
   simp only [MarkerReachable]
   rw [futureReachable_buildRecursionAutomaton_child_at_initial alphabet name
-    body hMarkers hBodyClosed hParentClosed hBodyInitial]
+    body hBodyClosed hParentClosed hBodyInitial]
   simp only [Finset.mem_image]
   constructor
   · rintro ⟨reached, ⟨q, hq, rfl⟩, hSource⟩

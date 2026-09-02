@@ -24,12 +24,6 @@ def MarkerSource (fragment : AutomatonFragment) (name : String)
   ∃ edge ∈ fragment.edges,
     edge.source = state ∧ edge.label = AutomatonConstructionLabel.variable name
 
-/-- The shape every compiled `.variable` marker edge has: no offers at all. -/
-def MarkerEdgesInert (fragment : AutomatonFragment) (name : String) : Prop :=
-  ∀ edge ∈ fragment.edges,
-    edge.label = AutomatonConstructionLabel.variable name →
-      edge.current = ∅ ∧ edge.future = FutureSpec.explicit ∅
-
 /-- Stop unresolved calls of one name without changing the carrier or any
 other edge.  This is useful when an execution view has followed a temporary
 variable edge to its bookkeeping target, while an enclosing recursion

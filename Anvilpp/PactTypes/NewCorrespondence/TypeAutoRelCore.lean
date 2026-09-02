@@ -1097,8 +1097,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                   ⟨hRightEdge, -, hRightNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
                 ⟨rightState, -, leftEdge,
                   ⟨hLeftEdge, -, hLeftNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
-                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc, -⟩, rfl⟩⟩ |
-                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc, -⟩, rfl⟩⟩ |
+                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc⟩, rfl⟩⟩ |
+                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc⟩, rfl⟩⟩ |
                 ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
                 ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, hReachable⟩ |
               ⟨environment, _, rfl⟩

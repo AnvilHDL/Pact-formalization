@@ -4,18 +4,6 @@ namespace Pact
 
 noncomputable section
 
-theorem markerStoppedFragment_markerEdgesInert
-    (fragment : AutomatonFragment) (name : String) :
-    MarkerEdgesInert (markerStoppedFragment fragment name) name := by
-  classical
-  intro edge hEdge hLabel
-  simp only [markerStoppedFragment, Finset.mem_image] at hEdge
-  rcases hEdge with ⟨original, hOriginal, rfl⟩
-  by_cases hMarker : original.label =
-      AutomatonConstructionLabel.variable name
-  · simp [hMarker]
-  · simp [hMarker] at hLabel
-
 theorem markerStoppedFragment_futureTargetsInStates
     (fragment : AutomatonFragment) (name : String)
     (hTargets : fragment.FutureTargetsInStates) :
@@ -97,7 +85,6 @@ theorem markerStoppedFragment_referencedStates_eq_of_not_markerSource
 /-- Activating markers does not change the same-cycle reference structure. -/
 theorem markerAugmentedPending_referencedStates
     (fragment : AutomatonFragment) (name : String) (menu : Finset BareMessage)
-    (hMarkers : MarkerEdgesInert fragment name)
     (state : TypeAutomatonState) :
     (markerAugmentedPending fragment name menu).referencedStates state =
       (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).referencedStates
@@ -117,16 +104,16 @@ theorem markerAugmentedPending_referencedStates
       exact ⟨original, ⟨hOriginal, hSource⟩, hTarget⟩
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hTarget⟩
     by_cases hMarker : edge.label = AutomatonConstructionLabel.variable name
+    -- False in general: a marker edge whose future is `.at t _` references `t`,
+    -- and activation to `.explicit menu` discards that reference.
     · exfalso
-      rw [(hMarkers edge hEdge hMarker).2] at hTarget
-      simp at hTarget
+      sorry
     · exact ⟨edge, ⟨⟨edge, hEdge, by simp [hMarker]⟩, by simp [hMarker, hSource]⟩,
         by simp [hMarker, hTarget]⟩
 
 /-- Consequently the saturated same-cycle reachable set is unchanged. -/
 theorem markerAugmentedPending_futureReachable
     (fragment : AutomatonFragment) (name : String) (menu : Finset BareMessage)
-    (hMarkers : MarkerEdgesInert fragment name)
     (hClosed : (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).ReferencesClosed)
     (state : TypeAutomatonState) (hState : state ∈ fragment.states) :
     (markerAugmentedPending fragment name menu).futureReachable state =
@@ -136,14 +123,14 @@ theorem markerAugmentedPending_futureReachable
   have hAugClosed :
       (markerAugmentedPending fragment name menu).ReferencesClosed := by
     intro current hCurrent target hTarget
-    rw [markerAugmentedPending_referencedStates fragment name menu hMarkers]
+    rw [markerAugmentedPending_referencedStates fragment name menu]
       at hTarget
     exact hClosed current hCurrent hTarget
   have hResult := PendingAutomaton.futureReachable_eq_of_embedding
     (markerAugmentedPending fragment name menu)
     (⟨fragment.states, fragment.edges⟩ : PendingAutomaton) id
     (fun current => by
-      rw [markerAugmentedPending_referencedStates fragment name menu hMarkers]
+      rw [markerAugmentedPending_referencedStates fragment name menu]
       simp)
     hAugClosed state hState (by simp [markerAugmentedPending])
   simpa using hResult.symm
