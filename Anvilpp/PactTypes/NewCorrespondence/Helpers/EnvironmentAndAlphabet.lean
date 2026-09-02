@@ -77,17 +77,15 @@ theorem typeOffers_future_subset_target_union_current
   | seq_fuse_tock =>
       simp
   | xoffer_branch =>
-      simp
+      exact Finset.sdiff_subset.trans Finset.subset_union_left
   | xoffer_else =>
       simp
   | xoffer_wait =>
-      intro action hAction
-      simp at hAction ⊢
-      exact Or.inl hAction.1
+      exact Finset.sdiff_subset.trans Finset.subset_union_left
   | offer_some =>
       simp
   | offer_else =>
-      simp
+      exact Finset.sdiff_subset.trans Finset.subset_union_left
   | offer_wait =>
       intro action hAction
       simp at hAction ⊢
@@ -96,23 +94,11 @@ theorem typeOffers_future_subset_target_union_current
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       _ _ hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide hLeftIH
       hRightIH =>
-      intro action hAction
-      rw [typeFutureOffers_parallel]
-      simp only [Finset.mem_union]
-      simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
-      obtain ⟨hAction, hInterface⟩ := hAction
-      simp only [Finset.mem_union] at hAction
-      rcases hAction with hLeft | hRight
-      · have hLeft' := hLeftIH hLeft
-        simp only [Finset.mem_union] at hLeft'
-        rcases hLeft' with hFuture | hCurrent
-        · exact Or.inl ⟨Finset.mem_union.mpr (Or.inl hFuture), hInterface⟩
-        · exact Or.inr ⟨Finset.mem_union.mpr (Or.inl hCurrent), hInterface⟩
-      · have hRight' := hRightIH hRight
-        simp only [Finset.mem_union] at hRight'
-        rcases hRight' with hFuture | hCurrent
-        · exact Or.inl ⟨Finset.mem_union.mpr (Or.inr hFuture), hInterface⟩
-        · exact Or.inr ⟨Finset.mem_union.mpr (Or.inr hCurrent), hInterface⟩
+      -- A clock product publishes nothing; otherwise the published menu is
+      -- the target's own menu minus the current offers.
+      split
+      · exact Finset.empty_subset _
+      · exact Finset.sdiff_subset.trans Finset.subset_union_left
   | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocal1 hLocal2 hSide hNotTock hLeftIH hRightIH =>
@@ -135,29 +121,13 @@ theorem typeOffers_future_subset_target_union_current
   | left_complete outer rightEnv interface left right right' rightLabel
       rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hLocal
       hWF hNotTock hRightIH =>
-      intro action hAction
-      rw [typeFutureOffers_reannotate]
-      simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
-      obtain ⟨hAction, hInterface⟩ := hAction
-      have hRight' := hRightIH hAction
-      simp only [Finset.mem_union] at hRight'
-      rcases hRight' with hFuture | hCurrent
-      · exact Finset.mem_union.mpr (Or.inl hFuture)
-      · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
+      exact Finset.sdiff_subset.trans Finset.subset_union_left
   | left_complete_tock =>
       simp
   | right_complete outer leftEnv interface left left' right leftLabel
       leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hLocal
       hWF hNotTock hLeftIH =>
-      intro action hAction
-      rw [typeFutureOffers_reannotate]
-      simp only [hideTypeOffers, Finset.mem_filter] at hAction ⊢
-      obtain ⟨hAction, hInterface⟩ := hAction
-      have hLeft' := hLeftIH hAction
-      simp only [Finset.mem_union] at hLeft'
-      rcases hLeft' with hFuture | hCurrent
-      · exact Finset.mem_union.mpr (Or.inl hFuture)
-      · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hCurrent, hInterface⟩))
+      exact Finset.sdiff_subset.trans Finset.subset_union_left
   | right_complete_tock =>
       simp
 

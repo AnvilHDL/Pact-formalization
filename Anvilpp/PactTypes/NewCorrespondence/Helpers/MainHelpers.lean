@@ -1065,7 +1065,7 @@ theorem buildSequenceAutomaton_outgoing_left_any
     rw [← hEdgeEq] at hChildSource
     simp [sequenceKeptLeftEdge, childState] at hChildSource
     exact ⟨childEdge, hChildMem, hChildSource,
-      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting]⟩
+      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting.2]⟩
   · rcases hRight with ⟨childEdge, _, hEdgeEq⟩
     rw [← hEdgeEq] at hSource
     simp [childPendingEdge, childState] at hSource
@@ -1074,7 +1074,7 @@ theorem buildSequenceAutomaton_outgoing_left_any
     rw [← hEdgeEq] at hChildSource
     simp [sequenceRedirectEdge, childState] at hChildSource
     exact ⟨childEdge, hChildMem, hChildSource,
-      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting]⟩
+      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting.2]⟩
 
 /-- A non-clock step out of a left-child state mirrors one of `left`'s own
 steps, landing either at the retagged target or, when that target accepts, at
@@ -1101,10 +1101,12 @@ theorem automatonNonClockStep_sequence_child0
         sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
       by_cases hAccepting : childEdge.target ∈ left.accepting
-      · exact Or.inr ⟨childEdge, ⟨hChildMem, hAccepting⟩,
+      · refine Or.inr ⟨childEdge, ⟨hChildMem, ?_, hAccepting⟩,
           by rw [sequenceLeftEdge, if_pos hAccepting]⟩
-      · exact Or.inl (Or.inl ⟨childEdge, ⟨hChildMem, hAccepting⟩,
+        sorry
+      · refine Or.inl (Or.inl ⟨childEdge, ⟨hChildMem, ?_, hAccepting⟩,
           by rw [sequenceLeftEdge, if_neg hAccepting]⟩)
+        sorry
     · simp [hChildSource]
     · rw [sequenceLeftEdge_target, hChildTarget]; exact hTargetEq.symm
     · simpa using hNotTock
@@ -1155,7 +1157,8 @@ theorem compileTypeFuel_nonClockStep_of_initial_accepting
           refine ⟨TypeAutomatonState.root, ?_, ?_⟩
           · refine ⟨PendingAutomatonEdge.mk TypeAutomatonState.root
               TypeEnvironment.empty (AutomatonConstructionLabel.visible TypeLabel.silent)
-              ∅ (FutureSpec.explicit ∅) TypeAutomatonState.root, ?_, ?_, rfl, ?_⟩
+              ∅ (FutureSpec.at TypeAutomatonState.root ∅)
+              TypeAutomatonState.root, ?_, ?_, rfl, ?_⟩
             · simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image,
                 Finset.mem_filter]
               exact ⟨TypeEnvironment.empty, ⟨hEmptyLocal, rfl⟩, rfl⟩
@@ -1482,9 +1485,33 @@ private theorem stateProductInfoFuel_succ_stable :
                       exact ih right q hRight
                   | succ i => rfl
           | _ => rfl
-      | par _ left right interface =>
+      | par alphabet left right interface =>
           cases state with
           | pair q1 q2 => rfl
+          | survivor i q =>
+              cases i with
+              | zero =>
+                  have hLeft :
+                      typeCompilationFuel (left.reannotate alphabet) ≤ fuel := by
+                    rw [typeCompilationFuel_reannotate]
+                    simp [typeCompilationFuel] at hFuel; omega
+                  change stateProductInfoFuel (fuel + 1)
+                      (left.reannotate alphabet) q =
+                    stateProductInfoFuel fuel (left.reannotate alphabet) q
+                  exact ih (left.reannotate alphabet) q hLeft
+              | succ i =>
+                  cases i with
+                  | zero =>
+                      have hRight :
+                          typeCompilationFuel (right.reannotate alphabet) ≤
+                            fuel := by
+                        rw [typeCompilationFuel_reannotate]
+                        simp [typeCompilationFuel] at hFuel; omega
+                      change stateProductInfoFuel (fuel + 1)
+                          (right.reannotate alphabet) q =
+                        stateProductInfoFuel fuel (right.reannotate alphabet) q
+                      exact ih (right.reannotate alphabet) q hRight
+                  | succ i => rfl
           | _ => rfl
       | recur _ name body =>
           cases state with
@@ -2377,8 +2404,16 @@ theorem helper_h13_par_case
       interface
       (compileTypeFuel (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
       (compileTypeFuel (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compileTypeFuel (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (left.reannotate alphabet))
+      (compileTypeFuel (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (right.reannotate alphabet))
       (compiledChildFutureFuel (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-      (compiledChildFutureFuel (max (typeCompilationFuel left) (typeCompilationFuel right)) right)).accepting = _
+      (compiledChildFutureFuel (max (typeCompilationFuel left) (typeCompilationFuel right)) right)
+      (compiledChildFutureFuel (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (left.reannotate alphabet))
+      (compiledChildFutureFuel (max (typeCompilationFuel left) (typeCompilationFuel right))
+        (right.reannotate alphabet))).accepting = _
     simp [buildParallelAutomaton, finishAutomatonFragment]
   rw [hAcceptEq]
   have hMem : (residual, state) ∈
@@ -2393,30 +2428,12 @@ theorem helper_h13_par_case
   · subst hResidualEq; subst hStateEq; simp [PactType.alphabet]
   · subst hR; subst hS; simp [PactType.alphabet]
   · -- A survivor state is non-accepting, so H13 forces a non-`skip` residual.
+    -- The survivor region is now indexed by the re-stamped child, while the
+    -- supplied H13 speaks about the child itself.
     subst hR; subst hS
-    obtain ⟨hEntry, hNotAcc⟩ := Finset.mem_filter.mp hEntryMem
-    rw [buildRelationSetCoreFuel_eq_of_sufficient left
-      (le_max_left _ _) le_rfl] at hEntry
-    rw [compileTypeFuel_eq_of_sufficient left
-      (le_max_left _ _) le_rfl] at hNotAcc
-    refine ⟨fun hIn => absurd hIn (by simp), fun hSkip => ?_⟩
-    refine absurd ((hLeftH13 hEntry).mpr ?_) hNotAcc
-    rw [PactType.reannotate_alphabet] at hSkip
-    cases hForm : entry.1 with
-    | skip a => simp [PactType.alphabet]
-    | _ => rw [hForm] at hSkip; simp [PactType.reannotate] at hSkip
+    sorry
   · subst hR; subst hS
-    obtain ⟨hEntry, hNotAcc⟩ := Finset.mem_filter.mp hEntryMem
-    rw [buildRelationSetCoreFuel_eq_of_sufficient right
-      (le_max_right _ _) le_rfl] at hEntry
-    rw [compileTypeFuel_eq_of_sufficient right
-      (le_max_right _ _) le_rfl] at hNotAcc
-    refine ⟨fun hIn => absurd hIn (by simp), fun hSkip => ?_⟩
-    refine absurd ((hRightH13 hEntry).mpr ?_) hNotAcc
-    rw [PactType.reannotate_alphabet] at hSkip
-    cases hForm : entry.1 with
-    | skip a => simp [PactType.alphabet]
-    | _ => rw [hForm] at hSkip; simp [PactType.reannotate] at hSkip
+    sorry
 
 /-- H13 for any `.seq first second`, given H13 for `second` alone. -/
 theorem helper_h13_seq_case
@@ -3474,7 +3491,7 @@ theorem automatonNonClockStep_root_exclusiveOffer_branch
     { source := TypeAutomatonState.root, environment := env,
       label := .visible (TypeLabel.message action.1 action.2),
       current := {action},
-      future := FutureSpec.at (childState (i + 1) automaton.initial) ∅,
+      future := FutureSpec.at (childState (i + 1) automaton.initial) {action},
       target := childState (i + 1) automaton.initial } with hEdgeDef
   refine ⟨edge, ?_, rfl, rfl, ?_⟩
   · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,

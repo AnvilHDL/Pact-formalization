@@ -349,7 +349,7 @@ theorem buildSequenceAutomaton_outgoing_left_visible
     rw [← hEdgeEq] at hChildSource
     simp [sequenceKeptLeftEdge, childState] at hChildSource
     exact ⟨childEdge, hChildMem, hChildSource,
-      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting]⟩
+      by rw [← hEdgeEq, sequenceLeftEdge, if_neg hNotAccepting.2]⟩
   · rcases hRight with ⟨childEdge, _, hEdgeEq⟩
     rw [← hEdgeEq] at hSource
     simp [childPendingEdge, childState] at hSource
@@ -358,7 +358,7 @@ theorem buildSequenceAutomaton_outgoing_left_visible
     rw [← hEdgeEq] at hChildSource
     simp [sequenceRedirectEdge, childState] at hChildSource
     exact ⟨childEdge, hChildMem, hChildSource,
-      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting]⟩
+      by rw [← hEdgeEq, sequenceLeftEdge, if_pos hAccepting.2]⟩
 
 /-- Proves H15's future agreement for a retained left target of a sequence step. -/
 lemma helper_h15_sequence_left_step_future_offers_agree
@@ -430,12 +430,13 @@ inductive SeqDecoratedStepCase
       label ≠ TypeLabel.tock →
       future = typeFutureOffers (.seq alphabet leftTarget right) \ current →
       SeqDecoratedStepCase alphabet right source target env label current future
-  | stepTock (leftTarget : PactType) (childFuture : Finset BareMessage) :
+  | stepTock (leftTarget : PactType)
+      (childCurrent childFuture : Finset BareMessage) :
       target = .seq alphabet leftTarget right →
       leftTarget ≠ .skip leftTarget.alphabet →
       label = TypeLabel.tock →
       DecoratedTypeTransition env source label
-        (TypeOfferSummary.mk current childFuture) leftTarget →
+        (TypeOfferSummary.mk childCurrent childFuture) leftTarget →
       future = ∅ →
       SeqDecoratedStepCase alphabet right source target env label current future
   | fuse (transitionSkipAlphabet offerSkipAlphabet : PactTypeAlphabet)
@@ -447,11 +448,12 @@ inductive SeqDecoratedStepCase
       future = typeFutureOffers right \ current →
       SeqDecoratedStepCase alphabet right source target env label current future
   | fuse_tock (transitionSkipAlphabet offerSkipAlphabet : PactTypeAlphabet)
-      (childFuture : Finset BareMessage) :
+      (childCurrent childFuture : Finset BareMessage) :
       target = right →
       label = TypeLabel.tock →
       TypeTransition env source label (.skip transitionSkipAlphabet) →
-      TypeOffers env source label (.skip offerSkipAlphabet) current childFuture →
+      TypeOffers env source label (.skip offerSkipAlphabet)
+        childCurrent childFuture →
       future = ∅ →
       SeqDecoratedStepCase alphabet right source target env label current future
 
@@ -475,9 +477,10 @@ theorem decoratedTypeTransition_seq_cases
           exact SeqDecoratedStepCase.fuse transitionSkipAlphabet
             offerSkipAlphabet childFuture rfl hChildTransition hChildOffers
             hNotTock rfl
-      | seq_fuse_tock _ _ offerSkipAlphabet _ _ _ childFuture hChildOffers =>
+      | seq_fuse_tock _ _ offerSkipAlphabet _ _ childCurrent childFuture
+          hChildOffers =>
           exact SeqDecoratedStepCase.fuse_tock transitionSkipAlphabet
-            offerSkipAlphabet childFuture rfl rfl hChildTransition
+            offerSkipAlphabet childCurrent childFuture rfl rfl hChildTransition
             hChildOffers rfl
   | seq env alphabet left leftTarget right label hChildTransition hNonFinal =>
       change TypeOffers env (.seq alphabet left right) label
@@ -486,9 +489,10 @@ theorem decoratedTypeTransition_seq_cases
       | seq _ _ _ _ _ _ _ childFuture hChildOffers _ hNotTock =>
           exact SeqDecoratedStepCase.step leftTarget childFuture rfl hNonFinal
             ⟨hChildTransition, hChildOffers⟩ hNotTock rfl
-      | seq_tock _ _ _ _ _ _ childFuture hChildOffers _ =>
-          exact SeqDecoratedStepCase.stepTock leftTarget childFuture rfl
-            hNonFinal rfl ⟨hChildTransition, hChildOffers⟩ rfl
+      | seq_tock _ _ _ _ _ childCurrent childFuture hChildOffers _ =>
+          exact SeqDecoratedStepCase.stepTock leftTarget childCurrent
+            childFuture rfl hNonFinal rfl
+            ⟨hChildTransition, hChildOffers⟩ rfl
 
 /-- Describes the public edge families leaving a related compiled sequence state. -/
 inductive SeqCompiledEdgeCase
@@ -871,7 +875,11 @@ theorem compileType_seq_lift_left_step
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-      exact Or.inl (Or.inl ⟨pendingEdge, ⟨hPendingMem, hNotAcceptingPending⟩, rfl⟩)
+      refine Or.inl (Or.inl ⟨pendingEdge, ⟨hPendingMem, ?_, hNotAcceptingPending⟩,
+        rfl⟩)
+      -- The kept-left family now also drops edges out of a deleted left
+      -- accepting state; nothing here bounds the source.
+      sorry
     · simp [sequenceKeptLeftEdge, childState, hPendingSource]
     · simp [sequenceKeptLeftEdge, hPendingEnv]
     · simp [sequenceKeptLeftEdge, hPendingLabel]
@@ -973,7 +981,11 @@ theorem compileType_seq_lift_left_step_tock
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-      exact Or.inl (Or.inl ⟨pendingEdge, ⟨hPendingMem, hNotAcceptingPending⟩, rfl⟩)
+      refine Or.inl (Or.inl ⟨pendingEdge, ⟨hPendingMem, ?_, hNotAcceptingPending⟩,
+        rfl⟩)
+      -- The kept-left family now also drops edges out of a deleted left
+      -- accepting state; nothing here bounds the source.
+      sorry
     · simp [sequenceKeptLeftEdge, childState, hPendingSource]
     · simp [sequenceKeptLeftEdge, hPendingEnv]
     · simp [sequenceKeptLeftEdge, hPendingLabel]
@@ -1052,7 +1064,9 @@ theorem compileType_seq_lift_left_fuse
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRedirectEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-      exact Or.inr ⟨pendingEdge, ⟨hPendingMem, hPendingTarget ▸ hAccepting⟩, rfl⟩
+      refine Or.inr ⟨pendingEdge,
+        ⟨hPendingMem, ?_, hPendingTarget ▸ hAccepting⟩, rfl⟩
+      sorry
     · simp [sequenceRedirectEdge, childState, hPendingSource]
     · simp [sequenceRedirectEdge, hPendingEnv]
     · simp [sequenceRedirectEdge, hPendingLabel]
@@ -1143,7 +1157,9 @@ theorem compileType_seq_lift_left_fuse_tock
       pendingEdge, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceRedirectEdges,
         Finset.mem_union, Finset.mem_image, Finset.mem_filter]
-      exact Or.inr ⟨pendingEdge, ⟨hPendingMem, hPendingTarget ▸ hAccepting⟩, rfl⟩
+      refine Or.inr ⟨pendingEdge,
+        ⟨hPendingMem, ?_, hPendingTarget ▸ hAccepting⟩, rfl⟩
+      sorry
     · simp [sequenceRedirectEdge, childState, hPendingSource]
     · simp [sequenceRedirectEdge, hPendingEnv]
     · simp [sequenceRedirectEdge, hPendingLabel]

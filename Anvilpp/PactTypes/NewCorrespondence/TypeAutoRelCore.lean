@@ -1072,24 +1072,35 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
           have hRight : TypeCompilationFuelSufficient right fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
+          have hLeftRestamped :
+              TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
+            show typeCompilationFuel (left.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]
+            exact hLeft
+          have hRightRestamped :
+              TypeCompilationFuelSufficient (right.reannotate alphabet) fuel := by
+            show typeCompilationFuel (right.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]
+            exact hRight
           simp only [compileTypeFuel, buildParallelAutomaton,
             finishAutomatonFragment, parallelRawTransitionEdges,
             parallelLeftCompleteEdges, parallelRightCompleteEdges,
             parallelLeftCompleteSurvivorEdges,
             parallelRightCompleteSurvivorEdges,
+            parallelLeftCompleteDoneEdges, parallelRightCompleteDoneEdges,
             parallelDoneEdges, Finset.mem_union, Finset.mem_biUnion,
             Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
           rcases hEdge with
-              ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
+              ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge,
                   ⟨hRightEdge, hSync⟩, rfl⟩ |
                 ⟨leftState, -, rightEdge,
-                  ⟨hRightEdge, hRightNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
+                  ⟨hRightEdge, -, hRightNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
                 ⟨rightState, -, leftEdge,
-                  ⟨hLeftEdge, hLeftNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
-                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc, -⟩,
-                  _survivorEnv, -, rfl⟩⟩ |
-                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc, -⟩,
-                  _survivorEnv, -, rfl⟩, hReachable⟩ |
+                  ⟨hLeftEdge, -, hLeftNotAcc, -⟩, _survivorEnv, -, rfl⟩⟩ |
+                ⟨rightEdge, ⟨hRightEdge, hRightNotAcc, -⟩, rfl⟩⟩ |
+                ⟨leftEdge, ⟨hLeftEdge, hLeftNotAcc, -⟩, rfl⟩⟩ |
+                ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
+                ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, hReachable⟩ |
               ⟨environment, _, rfl⟩
           · let rawEdge : PendingAutomatonEdge :=
                 let bothAccept :=
@@ -1161,7 +1172,9 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                       (compileTypeFuel fuel right).accepting) := by
                     rw [← hLeftTargetEq, ← hRightTargetEq]; exact hAccept
                   simpa only [rawEdge, if_neg hAcceptEdge, hLeftTargetEq,
-                    hRightTargetEq] using hRawTargetReachable
+                    hRightTargetEq, compiledChildFutureFuel,
+                    typeCompilationFuel_reannotate]
+                    using hRawTargetReachable
               · right
                 cases hLeftConstruction : leftRaw.label with
                 | visible leftLabel =>
@@ -1174,50 +1187,23 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             · right
               exact ⟨leftMarker, by
                 simp [AutomatonConstructionLabel.combine, hLeftLabel]⟩
-          · -- The surviving right component's state carries its own residual,
-            -- reannotated to the parent alphabet.
-            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
-            obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
-            have hTargetEq : rightRaw.target = rightEdge.target :=
-              congrArg AutomatonFragmentEdge.target hRightEq
-            rw [← hRightEq]
-            rcases ih right hRight rightRaw hRightRaw with
-                ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
-            · left
-              refine ⟨rightResidual.reannotate alphabet, ?_⟩
-              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
-                Finset.mem_union, Finset.mem_image]
-              refine Or.inr (Or.inr ⟨(rightResidual, rightRaw.target), ?_, rfl⟩)
-              exact Finset.mem_filter.mpr ⟨hRightResidual, by
-                simpa [hTargetEq] using hRightNotAcc⟩
-            · exact Or.inr ⟨rightMarker, hRightLabel⟩
-          · -- The mirror case for a surviving left component.
-            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
-            obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
-            have hTargetEq : leftRaw.target = leftEdge.target :=
-              congrArg AutomatonFragmentEdge.target hLeftEq
-            rw [← hLeftEq]
-            rcases ih left hLeft leftRaw hLeftRaw with
-                ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
-            · left
-              refine ⟨leftResidual.reannotate alphabet, ?_⟩
-              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
-                Finset.mem_union, Finset.mem_image]
-              refine Or.inr (Or.inl (Or.inr ⟨(leftResidual, leftRaw.target),
-                ?_, rfl⟩))
-              exact Finset.mem_filter.mpr ⟨hLeftResidual, by
-                simpa [hTargetEq] using hLeftNotAcc⟩
-            · exact Or.inr ⟨leftMarker, hLeftLabel⟩
+          · -- Entry into the survivor region from a completed left component.
+            -- The edge is drawn from the un-restamped right child, whereas the
+            -- relation indexes `survivor 1` by the re-stamped one.
+            sorry
+          · -- The mirror entry for a completed right component.
+            sorry
           · -- The right survivor continuing inside the survivor region.
             simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
             obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
             have hTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hRightEq]
-            rcases ih right hRight rightRaw hRightRaw with
+            rcases ih (right.reannotate alphabet) hRightRestamped rightRaw
+                hRightRaw with
                 ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
             · left
-              refine ⟨rightResidual.reannotate alphabet, ?_⟩
+              refine ⟨rightResidual, ?_⟩
               simp only [buildRelationSetCoreFuel, Finset.mem_insert,
                 Finset.mem_union, Finset.mem_image]
               refine Or.inr (Or.inr ⟨(rightResidual, rightRaw.target), ?_, rfl⟩)
@@ -1230,10 +1216,11 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             have hTargetEq : leftRaw.target = leftEdge.target :=
               congrArg AutomatonFragmentEdge.target hLeftEq
             rw [← hLeftEq]
-            rcases ih left hLeft leftRaw hLeftRaw with
+            rcases ih (left.reannotate alphabet) hLeftRestamped leftRaw
+                hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
             · left
-              refine ⟨leftResidual.reannotate alphabet, ?_⟩
+              refine ⟨leftResidual, ?_⟩
               simp only [buildRelationSetCoreFuel, Finset.mem_insert,
                 Finset.mem_union, Finset.mem_image]
               refine Or.inr (Or.inl (Or.inr ⟨(leftResidual, leftRaw.target),
@@ -1241,6 +1228,20 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               exact Finset.mem_filter.mpr ⟨hLeftResidual, by
                 simpa [hTargetEq] using hLeftNotAcc⟩
             · exact Or.inr ⟨leftMarker, hLeftLabel⟩
+          · -- The right survivor's completing step lands in `q_done`.
+            left
+            refine ⟨.skip alphabet, ?_⟩
+            change (.skip alphabet, .final) ∈
+              buildRelationSetCoreFuel (fuel + 1)
+                (.par alphabet left right interface)
+            simp [buildRelationSetCoreFuel]
+          · -- The left survivor's completing step lands in `q_done`.
+            left
+            refine ⟨.skip alphabet, ?_⟩
+            change (.skip alphabet, .final) ∈
+              buildRelationSetCoreFuel (fuel + 1)
+                (.par alphabet left right interface)
+            simp [buildRelationSetCoreFuel]
           · left
             refine ⟨.skip alphabet, ?_⟩
             change (.skip alphabet, .final) ∈

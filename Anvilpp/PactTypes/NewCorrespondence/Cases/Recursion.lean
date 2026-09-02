@@ -124,7 +124,7 @@ theorem correspondence_recur_stepIff
     obtain ⟨hResidualEq, hStateEq⟩ := hRoot
     subst hResidualEq; subst hStateEq
     have hEnvMem : env ∈ alphabet.localEnvironments :=
-      transitionAlphabetFor_localEnvironment_mem alphabet hSignatureSymbol
+      transitionAlphabetFor_localEnvironment_mem (PactType.recur alphabet name body) hSignatureSymbol
     have hHeaderPending (hClock : env.clock = false) :
         ({ source := TypeAutomatonState.root, environment := env,
             label := AutomatonConstructionLabel.visible TypeLabel.silent,
@@ -139,7 +139,8 @@ theorem correspondence_recur_stepIff
       simp only [buildRecursionAutomaton, finishAutomatonFragment, Finset.mem_union,
         Finset.mem_image, Finset.mem_filter]
       exact Or.inl ⟨env, ⟨hEnvMem, hClock⟩, rfl⟩
-    have hWF : env.WellFormed := PactTypeAlphabet.environment_wellFormed hEnvMem
+    have hWF : env.WellFormed alphabet :=
+      PactTypeAlphabet.environment_wellFormed hEnvMem
     constructor
     · intro hStep
       obtain ⟨hTrans, hOffers⟩ := hStep

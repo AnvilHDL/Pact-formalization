@@ -8,6 +8,22 @@ namespace NewCorrespondence
 
 noncomputable section
 
+/-- A state whose only same-cycle reference is itself closes at once: its
+reference closure is the singleton. -/
+lemma futureReachable_eq_singleton_of_referencedStates_subset_self
+    (automaton : PendingAutomaton) (state : TypeAutomatonState)
+    (hReferences : automaton.referencedStates state ⊆ {state}) :
+    automaton.futureReachable state = {state} :=
+  Finset.Subset.antisymm
+    (automaton.futureReachable_subset_of_reference_closed state {state}
+      (Finset.mem_singleton_self _)
+      (fun other hOther => by
+        rw [Finset.mem_singleton] at hOther
+        subst hOther
+        exact hReferences))
+    (Finset.singleton_subset_iff.mpr
+      (automaton.mem_futureReachable_self state))
+
 /-- A symbol in a type's fixed public alphabet uses an environment over that
 same fixed alphabet. -/
 lemma transitionAlphabetFor_localEnvironment_mem
@@ -53,6 +69,48 @@ lemma transitionAlphabetFor_current_mem
   rw [← hMk] at hAction
   exact hCurrent hAction
 
+/-- Proves that compiled `skip`'s root offers nothing: its only edge is the
+idle self-loop, which carries no current offers and references its own state. -/
+lemma computeFutureOf_skip_root
+     {alphabet : PactTypeAlphabet} :
+    computeFutureOf (.skip alphabet) .root = ∅ := by
+  classical
+  show computeFutureOfFuel
+    (typeCompilationFuel (.skip alphabet))
+    (.skip alphabet) .root = ∅
+  simp only [typeCompilationFuel, computeFutureOfFuel]
+  have hReferences :
+      ({ states := (compileTypeFuel 1 (.skip alphabet)).states,
+          edges := (compileTypeFuel 1 (.skip alphabet)).edges } :
+        PendingAutomaton).referencedStates .root ⊆
+        {TypeAutomatonState.root} := by
+    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+      finishAutomatonFragment]
+    intro reference hReference
+    simp only [Finset.mem_biUnion, Finset.mem_filter,
+      Finset.mem_image] at hReference
+    obtain ⟨edge, ⟨hEdgeMem, _hSource⟩, hReference⟩ := hReference
+    obtain ⟨environment, _, hEq⟩ := hEdgeMem
+    rw [← hEq] at hReference
+    simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+      using hReference
+  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+    hReferences, Finset.singleton_biUnion]
+  have hNoProduct :
+      stateProductInfo (.skip alphabet) TypeAutomatonState.root = none := by
+    simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
+  rw [hNoProduct]
+  simp only [Finset.union_empty]
+  apply Finset.eq_empty_iff_forall_notMem.mpr
+  intro action hAction
+  simp only [PendingAutomaton.offersAt, compileTypeFuel,
+    finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
+    Finset.mem_image] at hAction
+  obtain ⟨edge, ⟨hEdgeMem, _hSource⟩, hAction⟩ := hAction
+  obtain ⟨environment, _, hEq⟩ := hEdgeMem
+  rw [← hEq] at hAction
+  simp [AutomatonConstructionLabel.semantic] at hAction
+
 /-- Proves that compiled `skip` has the non-clock silent self-loop edge. -/
 lemma compileType_skip_edge
      {alphabet : PactTypeAlphabet}
@@ -69,8 +127,9 @@ lemma compileType_skip_edge
       environment := env
       label := .visible TypeLabel.silent
       current := ∅
-      future := .explicit ∅
-      target := .root }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+      future := .at .root ∅
+      target := .root }, ?_, rfl, rfl, rfl, rfl,
+    by simp [computeFutureOf_skip_root], rfl⟩
   simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     hLocal, hClock]
 
@@ -99,9 +158,9 @@ lemma compileType_skip_edge_cases
   injection hLabel with hLabelVisible
   subst label
   subst current
-  subst future
+  simp only [computeFutureOf_skip_root] at hFuture
   subst target
-  exact ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
+  exact ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩
 
 /-- Proves that a compiled message's `.final` state has no further same-cycle
 future offers: its only edge is its own idle self-loop, and that self-loop's
@@ -120,10 +179,10 @@ lemma computeFutureOf_message_final
             (.message alphabet msg dir)).states,
           edges := (compileTypeFuel 1
             (.message alphabet msg dir)).edges } :
-        PendingAutomaton).referencedStates .final = ∅ := by
-    simp only [PendingAutomaton.referencedStates, typeCompilationFuel, compileTypeFuel,
-      finishAutomatonFragment, Finset.mem_filter, Finset.mem_union, Finset.mem_image]
-    apply Finset.eq_empty_iff_forall_notMem.mpr
+        PendingAutomaton).referencedStates .final ⊆
+        {TypeAutomatonState.final} := by
+    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+      finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image] at hReference
@@ -131,8 +190,10 @@ lemma computeFutureOf_message_final
     rcases hEdgeMem with (⟨_, _, hEq⟩ | ⟨_, _, hEq⟩) | ⟨environment, _, hEq⟩
     · rw [← hEq] at hSource; simp at hSource
     · rw [← hEq] at hSource; simp at hSource
-    · rw [← hEq] at hReference; simp at hReference
-  rw [PendingAutomaton.futureReachable_eq_singleton_of_referencedStates_eq_empty _ _
+    · rw [← hEq] at hReference
+      simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+        using hReference
+  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.message alphabet msg dir)
@@ -200,19 +261,23 @@ lemma computeFutureOf_message_root
           (.message alphabet msg dir)).states,
       edges := (compileTypeFuel 1
           (.message alphabet msg dir)).edges } with hPendingDef
-  have hReferencesFinal : pending.referencedStates .final = ∅ := by
-    simp only [hPendingDef, PendingAutomaton.referencedStates, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment, Finset.mem_filter, Finset.mem_union,
-      Finset.mem_image]
-    apply Finset.eq_empty_iff_forall_notMem.mpr
+  have hReferencesFinal : pending.referencedStates .final ⊆
+      insert TypeAutomatonState.root
+        ({TypeAutomatonState.final} : Finset _) := by
+    simp only [hPendingDef, PendingAutomaton.referencedStates,
+      compileTypeFuel, finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image] at hReference
     obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hReference⟩ := hReference
+    simp only [Finset.mem_insert, Finset.mem_singleton]
     rcases hEdgeMem with (⟨_, _, hEq⟩ | ⟨_, _, hEq⟩) | ⟨environment, _, hEq⟩
     · rw [← hEq] at hSource; simp at hSource
     · rw [← hEq] at hSource; simp at hSource
-    · rw [← hEq] at hReference; simp at hReference
+    · rw [← hEq] at hReference
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+        at hReference
+      exact Or.inr hReference
   have hReferencesRoot : pending.referencedStates .root ⊆
       insert TypeAutomatonState.root ({TypeAutomatonState.final} : Finset _) := by
     simp only [hPendingDef, PendingAutomaton.referencedStates, typeCompilationFuel,
@@ -247,7 +312,7 @@ lemma computeFutureOf_message_root
       simp only [Finset.mem_insert, Finset.mem_singleton] at hState
       rcases hState with rfl | rfl
       · exact hReferencesRoot
-      · simp [hReferencesFinal]
+      · exact hReferencesFinal
   have hLower : TypeAutomatonState.root ∈ pending.futureReachable TypeAutomatonState.root :=
     pending.mem_futureReachable_self TypeAutomatonState.root
   have hNoProductRoot :
@@ -361,8 +426,9 @@ lemma compileType_message_final_edge
       environment := env
       label := .visible TypeLabel.silent
       current := ∅
-      future := .explicit ∅
-      target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+      future := .at .final ∅
+      target := .final }, ?_, rfl, rfl, rfl, rfl,
+    by simp [computeFutureOf_message_final], rfl⟩
   simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     hLocal, hClock]
 
@@ -413,11 +479,12 @@ lemma compileType_message_edge_cases
     exact Or.inr (Or.inl ⟨rfl, rfl, rfl, rfl, by simp [← hFuture], hClock, hNoNeed⟩)
   · rcases hFinal with ⟨edgeEnv, ⟨_hLocal, hClock⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only at hSource hEnv hLabel hCurrent hFuture hTarget
+    simp only [computeFutureOf_message_final] at hFuture
+    simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
     injection hLabel with hLabelVisible
-    subst label; subst current; subst future; subst target
-    exact Or.inr (Or.inr ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩)
+    subst label; subst current; subst target
+    exact Or.inr (Or.inr ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩)
 
 /-- Proves that compiled `#` has the clock edge in a clock environment. -/
 lemma compileType_tock_action_edge
@@ -442,6 +509,111 @@ lemma compileType_tock_action_edge
   left
   exact ⟨env, hLocal, by simp [hClock]⟩
 
+/-- Proves that compiled `#`'s root offers nothing: the clock edge ends the
+cycle and the non-clock wait edge carries no current offers, referencing only
+the root itself. -/
+lemma computeFutureOf_tock_root
+     {alphabet : PactTypeAlphabet} :
+    computeFutureOf (.tock alphabet) .root = ∅ := by
+  classical
+  show computeFutureOfFuel
+    (typeCompilationFuel (.tock alphabet)) (.tock alphabet) .root = ∅
+  simp only [typeCompilationFuel, computeFutureOfFuel]
+  have hReferences :
+      ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
+          edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
+        PendingAutomaton).referencedStates .root ⊆
+        {TypeAutomatonState.root} := by
+    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+      finishAutomatonFragment]
+    intro reference hReference
+    simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
+      Finset.mem_image] at hReference
+    obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hReference⟩ := hReference
+    rcases hEdgeMem with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+    · by_cases hClock : environment.clock = true
+      · rw [if_pos hClock] at hEq
+        rw [← hEq] at hReference
+        simp [AutomatonConstructionLabel.semantic] at hReference
+      · rw [if_neg hClock] at hEq
+        rw [← hEq] at hReference
+        simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+          using hReference
+    · rw [← hEq] at hSource; simp at hSource
+  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+    hReferences, Finset.singleton_biUnion]
+  have hNoProduct :
+      stateProductInfo (.tock alphabet) TypeAutomatonState.root = none := by
+    simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
+  rw [hNoProduct]
+  simp only [Finset.union_empty]
+  apply Finset.eq_empty_iff_forall_notMem.mpr
+  intro action hAction
+  simp only [PendingAutomaton.offersAt, compileTypeFuel,
+    finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
+    Finset.mem_union, Finset.mem_image] at hAction
+  obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction
+  rcases hEdgeMem with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+  · by_cases hClock : environment.clock = true
+    · rw [if_pos hClock] at hEq
+      rw [← hEq] at hAction
+      simp [AutomatonConstructionLabel.semantic] at hAction
+    · rw [if_neg hClock] at hEq
+      rw [← hEq] at hAction
+      simp [AutomatonConstructionLabel.semantic] at hAction
+  · rw [← hEq] at hSource; simp at hSource
+
+/-- Proves that compiled `#`'s final state offers nothing: its only edge is
+the idle self-loop. -/
+lemma computeFutureOf_tock_final
+     {alphabet : PactTypeAlphabet} :
+    computeFutureOf (.tock alphabet) .final = ∅ := by
+  classical
+  show computeFutureOfFuel
+    (typeCompilationFuel (.tock alphabet)) (.tock alphabet) .final = ∅
+  simp only [typeCompilationFuel, computeFutureOfFuel]
+  have hReferences :
+      ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
+          edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
+        PendingAutomaton).referencedStates .final ⊆
+        {TypeAutomatonState.final} := by
+    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+      finishAutomatonFragment]
+    intro reference hReference
+    simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
+      Finset.mem_image] at hReference
+    obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hReference⟩ := hReference
+    rcases hEdgeMem with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+    · by_cases hClock : environment.clock = true
+      · rw [if_pos hClock] at hEq
+        rw [← hEq] at hSource; simp at hSource
+      · rw [if_neg hClock] at hEq
+        rw [← hEq] at hSource; simp at hSource
+    · rw [← hEq] at hReference
+      simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+        using hReference
+  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+    hReferences, Finset.singleton_biUnion]
+  have hNoProduct :
+      stateProductInfo (.tock alphabet) TypeAutomatonState.final = none := by
+    simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
+  rw [hNoProduct]
+  simp only [Finset.union_empty]
+  apply Finset.eq_empty_iff_forall_notMem.mpr
+  intro action hAction
+  simp only [PendingAutomaton.offersAt, compileTypeFuel,
+    finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
+    Finset.mem_union, Finset.mem_image] at hAction
+  obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction
+  rcases hEdgeMem with ⟨environment, _, hEq⟩ | ⟨environment, _, hEq⟩
+  · by_cases hClock : environment.clock = true
+    · rw [if_pos hClock] at hEq
+      rw [← hEq] at hSource; simp at hSource
+    · rw [if_neg hClock] at hEq
+      rw [← hEq] at hSource; simp at hSource
+  · rw [← hEq] at hAction
+    simp [AutomatonConstructionLabel.semantic] at hAction
+
 /-- Proves that compiled `#` has the non-clock waiting edge. -/
 lemma compileType_tock_wait_edge
      {alphabet : PactTypeAlphabet}
@@ -458,8 +630,9 @@ lemma compileType_tock_wait_edge
       environment := env
       label := .visible TypeLabel.silent
       current := ∅
-      future := .explicit ∅
-      target := .root }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+      future := .at .root ∅
+      target := .root }, ?_, rfl, rfl, rfl, rfl,
+    by simp [computeFutureOf_tock_root], rfl⟩
   simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image]
   left
@@ -481,8 +654,9 @@ lemma compileType_tock_final_edge
       environment := env
       label := .visible TypeLabel.silent
       current := ∅
-      future := .explicit ∅
-      target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+      future := .at .final ∅
+      target := .final }, ?_, rfl, rfl, rfl, rfl,
+    by simp [computeFutureOf_tock_final], rfl⟩
   simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     hLocal, hClock]
 
@@ -519,19 +693,21 @@ lemma compileType_tock_edge_cases
       exact Or.inl ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
     · rw [if_neg hClock] at hEdgeEq
       rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-      simp only at hSource hEnv hLabel hCurrent hFuture hTarget
+      simp only [computeFutureOf_tock_root] at hFuture
+      simp only at hSource hEnv hLabel hCurrent hTarget
       subst source; subst env
       injection hLabel with hLabelVisible
-      subst label; subst current; subst future; subst target
-      exact Or.inr (Or.inl ⟨rfl, rfl, rfl, rfl, rfl,
+      subst label; subst current; subst target
+      exact Or.inr (Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm,
         by simpa using hClock⟩)
   · rcases hFinal with ⟨edgeEnv, ⟨_hLocal, hClock⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only at hSource hEnv hLabel hCurrent hFuture hTarget
+    simp only [computeFutureOf_tock_final] at hFuture
+    simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
     injection hLabel with hLabelVisible
-    subst label; subst current; subst future; subst target
-    exact Or.inr (Or.inr ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩)
+    subst label; subst current; subst target
+    exact Or.inr (Or.inr ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩)
 
 /-- Proves that a compiled progress's `.final` state has no further same-cycle
 future offers: its only edge is its own idle self-loop, whose future field is
@@ -549,18 +725,20 @@ lemma computeFutureOf_progress_final
             (.progress alphabet pid)).states,
           edges := (compileTypeFuel 1
             (.progress alphabet pid)).edges } :
-        PendingAutomaton).referencedStates .final = ∅ := by
-    simp only [PendingAutomaton.referencedStates, typeCompilationFuel, compileTypeFuel,
-      finishAutomatonFragment, Finset.mem_filter, Finset.mem_union, Finset.mem_image]
-    apply Finset.eq_empty_iff_forall_notMem.mpr
+        PendingAutomaton).referencedStates .final ⊆
+        {TypeAutomatonState.final} := by
+    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+      finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image] at hReference
     obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hReference⟩ := hReference
     rcases hEdgeMem with ⟨_, _, hEq⟩ | ⟨environment, _, hEq⟩
     · rw [← hEq] at hSource; simp at hSource
-    · rw [← hEq] at hReference; simp at hReference
-  rw [PendingAutomaton.futureReachable_eq_singleton_of_referencedStates_eq_empty _ _
+    · rw [← hEq] at hReference
+      simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
+        using hReference
+  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.progress alphabet pid)
@@ -618,8 +796,9 @@ lemma compileType_progress_final_edge
       environment := env
       label := .visible TypeLabel.silent
       current := ∅
-      future := .explicit ∅
-      target := .final }, ?_, rfl, rfl, rfl, rfl, by simp, rfl⟩
+      future := .at .final ∅
+      target := .final }, ?_, rfl, rfl, rfl, rfl,
+    by simp [computeFutureOf_progress_final], rfl⟩
   simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     hLocal, hClock]
 
@@ -654,11 +833,12 @@ lemma compileType_progress_edge_cases
     exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩
   · rcases hFinal with ⟨edgeEnv, ⟨_hLocal, hClock⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only at hSource hEnv hLabel hCurrent hFuture hTarget
+    simp only [computeFutureOf_progress_final] at hFuture
+    simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
     injection hLabel with hLabelVisible
-    subst label; subst current; subst future; subst target
-    exact Or.inr ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
+    subst label; subst current; subst target
+    exact Or.inr ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩
 
 /-- Proves that any decorated message fire step from `a` targets `skip`. -/
 lemma decorated_message_action_target

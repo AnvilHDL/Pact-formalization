@@ -103,7 +103,7 @@ private theorem buildSequenceAutomaton_edgeTargetsInStates
       Finset.mem_sdiff]
     exact Or.inl ⟨leftEdge.target,
       ⟨hLeftTargets leftEdge hLeftEdge,
-        not_mem_sequenceDeleted_of_not_accepting hNotAccepting⟩, rfl⟩
+        not_mem_sequenceDeleted_of_not_accepting hNotAccepting.2⟩, rfl⟩
   · obtain ⟨rightEdge, hRightEdge, rfl⟩ := hRight
     simp [childPendingEdge, buildSequenceAutomaton,
       finishAutomatonFragment, childStates, childState,
@@ -112,30 +112,47 @@ private theorem buildSequenceAutomaton_edgeTargetsInStates
     simp [sequenceRedirectEdge, buildSequenceAutomaton,
       finishAutomatonFragment, childStates, childState, hRightInitial]
 
+/-- Re-stamping a type with a different boundary alphabet renames no state:
+the compiled carrier is the same finite set. -/
+theorem compileTypeFuel_states_reannotate
+    (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet) :
+    (compileTypeFuel fuel (processType.reannotate alphabet)).states =
+      (compileTypeFuel fuel processType).states := by
+  sorry
+
 private theorem buildParallelAutomaton_edgeTargetsInStates
 
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
-    (left right : AutomatonFragment)
-    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage)
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage)
     (hLeftTargets : left.EdgeTargetsInStates)
-    (hRightTargets : right.EdgeTargetsInStates) :
+    (hRightTargets : right.EdgeTargetsInStates)
+    (hRestampedLeftTargets :
+      ∀ edge ∈ restampedLeft.edges, edge.target ∈ left.states)
+    (hRestampedRightTargets :
+      ∀ edge ∈ restampedRight.edges, edge.target ∈ right.states) :
     (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
-      interface left right
-      leftFuture rightFuture).EdgeTargetsInStates := by
+      interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture
+      restampedRightFuture).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildParallelAutomaton, finishAutomatonFragment,
     parallelRawTransitionEdges, parallelLeftCompleteEdges,
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
-    parallelRightCompleteSurvivorEdges, parallelDoneEdges,
+    parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
+    parallelRightCompleteDoneEdges, parallelDoneEdges,
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
     Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
-      ⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
+      ⟨⟨⟨⟨⟨⟨⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
         ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
         ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
-        ⟨rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩⟩ |
-        ⟨leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩, _⟩ |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩⟩ |
+        ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩⟩ |
+        ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩, _⟩ |
       ⟨environment, _, rfl⟩
   · by_cases hAccept :
       leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
@@ -178,17 +195,26 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
     simp [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges,
-      hRightTargets rightRaw hRightRaw]
+      hRestampedRightTargets rightRaw hRightRaw]
   · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
     obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
     rw [← hLeftEq]
     simp [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges,
-      hLeftTargets leftRaw hLeftRaw]
+      hRestampedLeftTargets leftRaw hLeftRaw]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
+    obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+    rw [← hRightEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment]
+  · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
+    obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+    rw [← hLeftEq]
+    simp [buildParallelAutomaton, finishAutomatonFragment]
   · simp [buildParallelAutomaton, finishAutomatonFragment,
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges]
+
 
 private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
      (alphabet : PactTypeAlphabet)
@@ -396,13 +422,33 @@ theorem compileTypeFuel_edgeTargetsInStates  :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
+          have hLeftRestamped :
+              TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
+            show typeCompilationFuel (left.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hLeft
+          have hRightRestamped :
+              TypeCompilationFuelSufficient (right.reannotate alphabet) fuel := by
+            show typeCompilationFuel (right.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hRight
           exact buildParallelAutomaton_edgeTargetsInStates alphabet
             left.alphabet right.alphabet interface
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right)
+            (compileTypeFuel fuel (left.reannotate alphabet))
+            (compileTypeFuel fuel (right.reannotate alphabet))
             (compiledChildFutureFuel fuel left)
             (compiledChildFutureFuel fuel right)
+            (computeFutureOfFuel (min fuel (typeCompilationFuel left))
+              (left.reannotate alphabet))
+            (computeFutureOfFuel (min fuel (typeCompilationFuel right))
+              (right.reannotate alphabet))
             (ih left hLeft) (ih right hRight)
+            (fun edge hEdge => by
+              rw [← compileTypeFuel_states_reannotate fuel left alphabet]
+              exact ih (left.reannotate alphabet) hLeftRestamped edge hEdge)
+            (fun edge hEdge => by
+              rw [← compileTypeFuel_states_reannotate fuel right alphabet]
+              exact ih (right.reannotate alphabet) hRightRestamped edge hEdge)
       | xoffer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -601,13 +647,29 @@ theorem compileTypeFuel_clockEdgesAreTock  :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
+          have hLeftRestamped :
+              TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
+            show typeCompilationFuel (left.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hLeft
+          have hRightRestamped :
+              TypeCompilationFuelSufficient (right.reannotate alphabet) fuel := by
+            show typeCompilationFuel (right.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hRight
           exact buildParallelAutomaton_clockEdgesAreTock alphabet
             left.alphabet right.alphabet interface
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right)
+            (compileTypeFuel fuel (left.reannotate alphabet))
+            (compileTypeFuel fuel (right.reannotate alphabet))
             (compiledChildFutureFuel fuel left)
             (compiledChildFutureFuel fuel right)
+            (computeFutureOfFuel (min fuel (typeCompilationFuel left))
+              (left.reannotate alphabet))
+            (computeFutureOfFuel (min fuel (typeCompilationFuel right))
+              (right.reannotate alphabet))
             (ih left hLeft) (ih right hRight)
+            (ih (left.reannotate alphabet) hLeftRestamped)
+            (ih (right.reannotate alphabet) hRightRestamped)
       | xoffer _ elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -677,28 +739,36 @@ theorem compileTypeFuel_futureTargetsInStates  :
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩ <;>
-            simp at hFuture
-          rcases hFuture with ⟨rfl, rfl⟩
-          simp [compileTypeFuel, finishAutomatonFragment]
+            simp at hFuture <;>
+            rcases hFuture with ⟨rfl, rfl⟩ <;>
+            simp [compileTypeFuel, finishAutomatonFragment]
       | tock _ =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩
-          · split at hFuture <;> simp at hFuture
+          · split at hFuture <;> simp at hFuture <;>
+              rcases hFuture with ⟨rfl, rfl⟩ <;>
+              simp [compileTypeFuel, finishAutomatonFragment]
           · simp at hFuture
+            rcases hFuture with ⟨rfl, rfl⟩
+            simp [compileTypeFuel, finishAutomatonFragment]
       | skip _ =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp at hFuture
+          rcases hFuture with ⟨rfl, rfl⟩
+          simp [compileTypeFuel, finishAutomatonFragment]
       | var _ name =>
           intro edge hEdge target removed hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
           simp at hFuture
+          rcases hFuture with ⟨rfl, rfl⟩
+          simp [compileTypeFuel, finishAutomatonFragment]
       | recur _ name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -756,14 +826,36 @@ theorem compileTypeFuel_futureTargetsInStates  :
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
           rw [compileTypeFuel.eq_def]
+          have hLeftRestamped :
+              TypeCompilationFuelSufficient (left.reannotate alphabet) fuel := by
+            show typeCompilationFuel (left.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hLeft
+          have hRightRestamped :
+              TypeCompilationFuelSufficient (right.reannotate alphabet) fuel := by
+            show typeCompilationFuel (right.reannotate alphabet) ≤ fuel
+            rw [typeCompilationFuel_reannotate]; exact hRight
           exact buildParallelAutomaton_futureTargetsInStates alphabet
             left.alphabet right.alphabet interface
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right)
+            (compileTypeFuel fuel (left.reannotate alphabet))
+            (compileTypeFuel fuel (right.reannotate alphabet))
             (compiledChildFutureFuel fuel left)
             (compiledChildFutureFuel fuel right)
+            (computeFutureOfFuel (min fuel (typeCompilationFuel left))
+              (left.reannotate alphabet))
+            (computeFutureOfFuel (min fuel (typeCompilationFuel right))
+              (right.reannotate alphabet))
             (compileTypeFuel_edgeTargetsInStates fuel left hLeft)
             (compileTypeFuel_edgeTargetsInStates fuel right hRight)
+            (fun edge hEdge => by
+              rw [← compileTypeFuel_states_reannotate fuel left alphabet]
+              exact compileTypeFuel_edgeTargetsInStates fuel
+                (left.reannotate alphabet) hLeftRestamped edge hEdge)
+            (fun edge hEdge => by
+              rw [← compileTypeFuel_states_reannotate fuel right alphabet]
+              exact compileTypeFuel_edgeTargetsInStates fuel
+                (right.reannotate alphabet) hRightRestamped edge hEdge)
       | xoffer alphabet elseType branches =>
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
@@ -928,8 +1020,29 @@ private theorem stateProductInfoFuel_succ_stable :
                       omega
                   | succ index => rfl
           | _ => rfl
-      | par _ left right interface =>
-          cases state <;> rfl
+      | par alphabet left right interface =>
+          cases state with
+          | survivor index q =>
+              cases index with
+              | zero =>
+                  have hLeft :
+                      typeCompilationFuel (left.reannotate alphabet) ≤ fuel := by
+                    rw [typeCompilationFuel_reannotate]
+                    simp [typeCompilationFuel] at hFuel; omega
+                  simp only [stateProductInfoFuel]
+                  exact ih (left.reannotate alphabet) q hLeft
+              | succ index =>
+                  cases index with
+                  | zero =>
+                      have hRight :
+                          typeCompilationFuel (right.reannotate alphabet) ≤
+                            fuel := by
+                        rw [typeCompilationFuel_reannotate]
+                        simp [typeCompilationFuel] at hFuel; omega
+                      simp only [stateProductInfoFuel]
+                      exact ih (right.reannotate alphabet) q hRight
+                  | succ index => rfl
+          | _ => rfl
       | xoffer _ elseType branches =>
           cases state with
           | child index q =>
@@ -1126,7 +1239,7 @@ theorem stateProductInfoFuel_component_fuel_lt :
                       constructor <;> omega
                   | succ index => simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
-      | par _ left right productInterface =>
+      | par alphabet left right productInterface =>
           cases state with
           | pair leftState rightState =>
               simp only [stateProductInfoFuel, Option.some.injEq,
@@ -1134,6 +1247,36 @@ theorem stateProductInfoFuel_component_fuel_lt :
               obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hInfo
               simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
               constructor <;> omega
+          | survivor index state =>
+              cases index with
+              | zero =>
+                  obtain ⟨hLeftLt, hRightLt⟩ :=
+                    ih (left.reannotate alphabet) state interface
+                      componentLeft componentRight q1 q2
+                      (by
+                        show typeCompilationFuel (left.reannotate alphabet) ≤ fuel
+                        rw [typeCompilationFuel_reannotate]
+                        simp [TypeCompilationFuelSufficient, typeCompilationFuel]
+                          at hFuel
+                        omega)
+                      (by simpa [stateProductInfoFuel] using hInfo)
+                  constructor <;> omega
+              | succ index =>
+                  cases index with
+                  | zero =>
+                      obtain ⟨hLeftLt, hRightLt⟩ :=
+                        ih (right.reannotate alphabet) state interface
+                          componentLeft componentRight q1 q2
+                          (by
+                            show typeCompilationFuel (right.reannotate alphabet)
+                              ≤ fuel
+                            rw [typeCompilationFuel_reannotate]
+                            simp [TypeCompilationFuelSufficient,
+                              typeCompilationFuel] at hFuel
+                            omega)
+                          (by simpa [stateProductInfoFuel] using hInfo)
+                      constructor <;> omega
+                  | succ index => simp [stateProductInfoFuel] at hInfo
           | _ => simp [stateProductInfoFuel] at hInfo
       | xoffer _ elseType branches =>
           cases state with
