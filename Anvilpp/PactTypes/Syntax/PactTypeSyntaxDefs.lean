@@ -127,19 +127,15 @@ namespace PactTypeAlphabet
 
   /-- Compatibility of the fixed alphabets at a parallel node.
 
-  The parent declares no interface action.  On interface ids the two children
-  use complementary polarities.  The parent declares each child's non-interface
-  actions together with the actions the sibling body actually performs — one
-  equation from each side. -/
+  The parent declares no interface action.  Each interface message occurs in
+  both child alphabets with opposite polarities.  Away from the interface both
+  child alphabets equal the parent. -/
   structure ParallelCompatible
-      (parent left right : PactTypeAlphabet)
-      (leftType rightType : PactType) (interface : Interface) : Prop where
+      (parent left right : PactTypeAlphabet) (interface : Interface) : Prop where
     parent_hides_interface : ∀ action ∈ parent.actions, action.1 ∉ interface
     complementary : ComplementaryOn left right interface
-    parent_left : parent.actions \ PactType.MessageActions rightType =
-      (hideInterface left interface).actions
-    parent_right : parent.actions \ PactType.MessageActions leftType =
-      (hideInterface right interface).actions
+    parent_eq_left : hideInterface left interface = parent
+    parent_eq_right : hideInterface right interface = parent
 
 end PactTypeAlphabet
 
@@ -181,7 +177,7 @@ namespace PactType
       | .par alphabet left right interface =>
           alphabet.WellFormed ∧
             PactTypeAlphabet.ParallelCompatible alphabet left.alphabet
-              right.alphabet left right interface ∧
+              right.alphabet interface ∧
             AlphabetWellFormed left ∧ AlphabetWellFormed right
       | .xoffer alphabet elseType branches =>
           alphabet.WellFormed ∧ elseType.alphabet = alphabet ∧
@@ -210,12 +206,10 @@ namespace PactType
         (alphabet : PactTypeAlphabet) (seen : Finset BareMessage) :
         List (BareMessage × PactType) → Prop
       | [] => True
-      | (action, processType) :: rest =>
-            processType.alphabet.actions =
-              alphabet.actions \ (seen ∪ BranchMessageActions rest) ∧
+      | (_, processType) :: rest =>
+            processType.alphabet = alphabet ∧
             AlphabetWellFormed processType ∧
-            OfferBranchesWellFormed alphabet
-              (seen ∪ ({action} ∪ MessageActions processType)) rest
+            OfferBranchesWellFormed alphabet seen rest
     termination_by branches => sizeOf branches
   decreasing_by
     all_goals

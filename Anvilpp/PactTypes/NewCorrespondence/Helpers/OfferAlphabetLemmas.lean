@@ -107,7 +107,7 @@ theorem typeOffers_current_subset_alphabet
   | offer_wait _ alphabet elseType branches _ hActions =>
       simp only [PactType.alphabet]
       exact typeBranchActions_subset_declared hActions
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _ _
       ihLeft ihRight =>
       simp only [PactType.AlphabetWellFormed] at hWF
@@ -118,7 +118,7 @@ theorem typeOffers_current_subset_alphabet
       simp only [PactType.alphabet]
       exact mem_mergeHidden_actions (ha.1.imp (fun hx => hL hx) (fun hx => hR hx))
         ha.2
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ ihLeft ihRight =>
       simp only [PactType.AlphabetWellFormed] at hWF
       have hL := ihLeft hWF.2.2.1
@@ -129,7 +129,7 @@ theorem typeOffers_current_subset_alphabet
       exact mem_mergeHidden_actions (ha.1.imp (fun hx => hL hx) (fun hx => hR hx))
         ha.2
   | par_fuse_tock => exact Finset.empty_subset _
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture _ _ _ _ _ _ _ _ _ ih =>
       simp only [PactType.AlphabetWellFormed] at hWF
       have hR := ih hWF.2.2.2
@@ -138,7 +138,7 @@ theorem typeOffers_current_subset_alphabet
       simp only [PactType.alphabet]
       exact mem_mergeHidden_actions (Or.inr (hR ha.1)) ha.2
   | left_complete_tock => exact Finset.empty_subset _
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture _ _ _ _ _ _ _ _ _ ih =>
       simp only [PactType.AlphabetWellFormed] at hWF
       have hL := ih hWF.2.2.1

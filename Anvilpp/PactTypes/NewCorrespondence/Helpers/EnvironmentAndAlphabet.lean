@@ -90,7 +90,7 @@ theorem typeOffers_future_subset_target_union_current
       intro action hAction
       simp at hAction ⊢
       exact Or.inl hAction.1
-  | par outer leftEnv rightEnv interface left leftTarget right rightTarget
+  | par outer leftEnv rightEnv interface alphabet left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       _ _ hLeftOffers hRightOffers hNonFinal hLocal1 hLocal2 hSide hLeftIH
       hRightIH =>
@@ -99,7 +99,7 @@ theorem typeOffers_future_subset_target_union_current
       split
       · exact Finset.empty_subset _
       · exact Finset.sdiff_subset.trans Finset.subset_union_left
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocal1 hLocal2 hSide hNotTock hLeftIH hRightIH =>
       intro action hAction
@@ -118,13 +118,13 @@ theorem typeOffers_future_subset_target_union_current
         exact ⟨Finset.mem_union.mpr (Or.inr hRight'), hInterface⟩
   | par_fuse_tock =>
       simp
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hLocal
       hWF hNotTock hRightIH =>
       exact Finset.sdiff_subset.trans Finset.subset_union_left
   | left_complete_tock =>
       simp
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hLocal
       hWF hNotTock hLeftIH =>
       exact Finset.sdiff_subset.trans Finset.subset_union_left

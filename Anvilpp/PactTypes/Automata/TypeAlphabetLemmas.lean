@@ -64,6 +64,15 @@ namespace PactTypeAlphabet
     subst hNeed
     exact Finset.mem_image.mpr ⟨action, hAction, rfl⟩
 
+  /-- Every alphabet admits the empty environment. -/
+  theorem empty_mem_localEnvironments (alphabet : PactTypeAlphabet) :
+      TypeEnvironment.empty ∈ alphabet.localEnvironments := by
+    classical
+    simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
+      Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+      Finset.mem_image]
+    exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
+
 end PactTypeAlphabet
 
 @[simp] theorem PactType.mem_transitionAlphabet_iff

@@ -158,14 +158,12 @@ theorem localTypeOfferEnvironment_agree_of_outer_agree
           have hStep : ∀ S₁ S₂ x₁ x₂ : Finset BareMessage,
               hideTypeOffers H S₁ = hideTypeOffers H S₂ →
               hideTypeOffers (H ∪ interface)
-                  (projectTypeEnvironmentOffers localType.alphabet S₁ ∪
-                    restrictTypeOffers interface x₁) =
+                  (S₁ ∪ restrictTypeOffers interface x₁) =
                 hideTypeOffers (H ∪ interface)
-                  (projectTypeEnvironmentOffers localType.alphabet S₂ ∪
-                    restrictTypeOffers interface x₂) := by
+                  (S₂ ∪ restrictTypeOffers interface x₂) := by
             intro S₁ S₂ x₁ x₂ hEq
             simp only [hideTypeOffers_union, hideTypeOffers_restrict_union,
-              hideTypeOffers_project, Finset.union_empty]
+              Finset.union_empty]
             rw [hideTypeOffers_union_interface, hideTypeOffers_union_interface,
               hEq]
           have hImmAgree :

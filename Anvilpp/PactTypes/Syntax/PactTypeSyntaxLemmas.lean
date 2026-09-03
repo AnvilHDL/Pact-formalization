@@ -11,6 +11,43 @@ namespace PactTypeAlphabet
     cases alphabet
     simp [mergeHidden]
 
+  /-- Under compatibility the merged child alphabets are exactly the parent:
+  each child equals the parent away from the interface, and the parent declares
+  no interface action. -/
+  theorem mergeHidden_eq_parent
+      {parent left right : PactTypeAlphabet} {interface : Interface}
+      (h : ParallelCompatible parent left right interface) :
+      mergeHidden left right interface = parent := by
+    classical
+    have hLeft := h.parent_eq_left
+    have hRight := h.parent_eq_right
+    have hExt : (mergeHidden left right interface).actions = parent.actions := by
+      apply Finset.ext
+      intro action
+      simp only [mergeHidden, Finset.mem_filter, Finset.mem_union]
+      constructor
+      · rintro ⟨hIn | hIn, hHidden⟩
+        · have hMem : action ∈ (hideInterface left interface).actions := by
+            simp only [hideInterface, Finset.mem_filter]
+            exact ⟨hIn, hHidden⟩
+          rwa [hLeft] at hMem
+        · have hMem : action ∈ (hideInterface right interface).actions := by
+            simp only [hideInterface, Finset.mem_filter]
+            exact ⟨hIn, hHidden⟩
+          rwa [hRight] at hMem
+      · intro hParent
+        have hHidden : action.1 ∉ interface :=
+          h.parent_hides_interface action hParent
+        have hMem : action ∈ (hideInterface left interface).actions := by
+          rw [hLeft]
+          exact hParent
+        simp only [hideInterface, Finset.mem_filter] at hMem
+        exact ⟨Or.inl hMem.1, hHidden⟩
+    cases parent with
+    | mk parentActions =>
+        simp only [mergeHidden] at hExt ⊢
+        exact congrArg PactTypeAlphabet.mk hExt
+
 end PactTypeAlphabet
 
 namespace PactType

@@ -628,8 +628,8 @@ theorem offerBranchesDisjoint_of_ownership :
           simp only [PactType.OfferBranchesDisjoint]
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
-          exact ⟨ih (sizeOf l) hL l rfl hMsg.2.2.1 hProgress.2.1 hFair.2.1,
-            ih (sizeOf r) hR r rfl hMsg.2.2.2 hProgress.2.2 hFair.2.2⟩
+          exact ⟨ih (sizeOf l) hL l rfl hMsg.2.1 hProgress.2.1 hFair.2.1,
+            ih (sizeOf r) hR r rfl hMsg.2.2 hProgress.2.2 hFair.2.2⟩
       | recur a name body =>
           simp only [PactType.ParallelMessageOwnership] at hMsg
           simp only [PactType.ParallelProgressOwnership] at hProgress

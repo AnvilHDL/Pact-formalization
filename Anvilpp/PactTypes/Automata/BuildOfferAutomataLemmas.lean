@@ -364,6 +364,219 @@ theorem buildExclusiveOfferAutomaton_root_edge_cases
     obtain ⟨environment, -, hEq⟩ := hElse
     exact Or.inr (Or.inr ⟨by rw [← hEq], by rw [← hEq], by rw [← hEq]⟩)
 
+/-- An exclusive-offer root offers exactly the branch head actions: each branch
+edge exposes its own head, a wait edge exposes only heads, and the default edge
+exposes nothing. -/
+theorem buildExclusiveOfferAutomaton_offersAt_root
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst)
+    (hGuard : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    ({ states := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+         branchAutomata).states
+       edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+         branchAutomata).edges } : PendingAutomaton).offersAt
+        TypeAutomatonState.root =
+      typeBranchActions branches := by
+  classical
+  apply Finset.Subset.antisymm
+  · intro action hAction
+    simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
+      Finset.mem_filter] at hAction
+    obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hAction
+    by_cases hTock : edge.label.semantic = TypeLabel.tock
+    · rw [if_pos hTock] at hIn
+      exact absurd hIn (Finset.notMem_empty _)
+    · rw [if_neg hTock] at hIn
+      rcases buildExclusiveOfferAutomaton_root_edge_cases alphabet branches
+          elseAutomaton branchAutomata edge hEdge hSource with
+        ⟨indexed, hIndexed, hCurrent, hFuture, -, -⟩ |
+        ⟨environment, hCurrent, hFuture, -⟩ | ⟨hCurrent, hFuture, -⟩
+      · rw [hFuture, hCurrent, Finset.union_empty, Finset.mem_singleton] at hIn
+        subst hIn
+        have hGet : branchAutomata[indexed.2]? = some indexed.1 := by
+          rw [← List.mk_mem_zipIdx_iff_getElem?]
+          simpa using hIndexed
+        have hMem : indexed.1 ∈ branchAutomata := List.mem_of_getElem? hGet
+        have hHead : indexed.1.1 ∈ branchAutomata.map Prod.fst :=
+          List.mem_map_of_mem hMem
+        rw [hHeads] at hHead
+        exact List.mem_toFinset.mpr hHead
+      · rw [hFuture, hCurrent, Finset.union_empty] at hIn
+        exact (Finset.mem_inter.mp hIn).2
+      · rw [hFuture, hCurrent, Finset.union_empty] at hIn
+        exact absurd hIn (Finset.notMem_empty _)
+  · intro action hAction
+    rw [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
+    obtain ⟨branch, hBranch, rfl⟩ := hAction
+    have hHead : branch.1 ∈ branchAutomata.map Prod.fst := by
+      rw [hHeads]
+      exact List.mem_map_of_mem hBranch
+    rw [List.mem_map] at hHead
+    obtain ⟨entry, hEntry, hEntryHead⟩ := hHead
+    obtain ⟨index, hGet⟩ := List.getElem?_of_mem hEntry
+    have hIndexed : (entry, index) ∈ branchAutomata.zipIdx :=
+      List.mk_mem_zipIdx_iff_getElem?.mpr hGet
+    have hDeclared : entry.1 ∈ alphabet.actions := by
+      rw [hEntryHead]
+      exact hGuard branch hBranch
+    set environment : TypeEnvironment :=
+      { immediate := {typeNeed entry.1}, future := ∅, clock := false }
+      with hEnvironmentDef
+    set edge : PendingAutomatonEdge :=
+      { source := TypeAutomatonState.root
+        environment := environment
+        label := .visible (TypeLabel.message entry.1.1 entry.1.2)
+        current := {entry.1}
+        future := .at (childState (index + 1) entry.2.initial) {entry.1}
+        target := childState (index + 1) entry.2.initial }
+      with hEdgeDef
+    refine Finset.mem_biUnion.mpr ⟨edge, Finset.mem_filter.mpr ⟨?_, rfl⟩, ?_⟩
+    · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      refine Or.inl (Or.inl (Or.inr ?_))
+      rw [mem_foldl_union_iff]
+      refine Or.inr ⟨(entry, index), hIndexed, ?_⟩
+      rw [Finset.mem_image]
+      refine ⟨environment, Finset.mem_filter.mpr
+        ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
+          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _,
+          hGuard⟩, rfl⟩
+    · rw [if_neg (by
+        rw [hEdgeDef]
+        simp [AutomatonConstructionLabel.semantic, TypeLabel.message]), hEdgeDef]
+      simp only [Finset.union_empty, Finset.mem_singleton]
+      exact hEntryHead.symm
+
+/-- The states an exclusive-offer root can reach within the cycle: the default
+entry, the branch entries, and possibly the root itself via a wait loop. -/
+def exclusiveOfferEntries (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState :=
+  insert (childState 0 elseAutomaton.initial)
+    (branchAutomata.zipIdx.map fun indexed =>
+      childState (indexed.2 + 1) indexed.1.2.initial).toFinset
+
+/-- A root references nothing beyond itself and those entries. -/
+theorem buildExclusiveOfferAutomaton_referencedStates_root_subset
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment)) :
+    ({ states := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+         branchAutomata).states
+       edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+         branchAutomata).edges } : PendingAutomaton).referencedStates
+        TypeAutomatonState.root ⊆
+      insert TypeAutomatonState.root
+        (exclusiveOfferEntries elseAutomaton branchAutomata) := by
+  classical
+  intro state hState
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter] at hState
+  obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hState
+  by_cases hTock : edge.label.semantic = TypeLabel.tock
+  · rw [if_pos hTock] at hIn
+    exact absurd hIn (Finset.notMem_empty _)
+  · rw [if_neg hTock] at hIn
+    rcases buildExclusiveOfferAutomaton_root_edge_cases alphabet branches
+        elseAutomaton branchAutomata edge hEdge hSource with
+      ⟨indexed, hIndexed, -, hFuture, -, -⟩ |
+      ⟨environment, -, hFuture, -⟩ | ⟨-, hFuture, -⟩
+    · rw [hFuture, Finset.mem_singleton] at hIn
+      subst hIn
+      refine Finset.mem_insert_of_mem ?_
+      simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+        List.mem_map]
+      exact Or.inr ⟨indexed, hIndexed, rfl⟩
+    · rw [hFuture, Finset.mem_singleton] at hIn
+      subst hIn
+      exact Finset.mem_insert_self _ _
+    · rw [hFuture, Finset.mem_singleton] at hIn
+      subst hIn
+      exact Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
+
+/-- And it references every one of them: the default is taken by the empty
+environment, each branch by the environment demanding exactly its head. -/
+theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst)
+    (hGuard : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    exclusiveOfferEntries elseAutomaton branchAutomata ⊆
+      ({ states := (buildExclusiveOfferAutomaton alphabet branches
+           elseAutomaton branchAutomata).states
+         edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+           branchAutomata).edges } : PendingAutomaton).referencedStates
+        TypeAutomatonState.root := by
+  classical
+  intro state hState
+  simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+    List.mem_map] at hState
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter]
+  rcases hState with rfl | ⟨indexed, hIndexed, rfl⟩
+  · -- the default entry, taken when nothing is demanded or pending
+    refine ⟨{ source := TypeAutomatonState.root
+              environment := TypeEnvironment.empty
+              label := .visible TypeLabel.silent
+              current := ∅
+              future := .at (childState 0 elseAutomaton.initial) ∅
+              target := childState 0 elseAutomaton.initial },
+      ⟨?_, rfl⟩, ?_⟩
+    · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      refine Or.inr ?_
+      rw [Finset.mem_image]
+      refine ⟨TypeEnvironment.empty, Finset.mem_filter.mpr
+        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_,
+          hGuard⟩, rfl⟩
+      · simp [TypeEnvironment.empty]
+      · simp [TypeEnvironment.empty]
+    · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
+        TypeLabel.silent])]
+      exact Finset.mem_singleton_self _
+  · -- a branch entry, taken by the environment demanding exactly its head
+    have hGet : branchAutomata[indexed.2]? = some indexed.1 := by
+      rw [← List.mk_mem_zipIdx_iff_getElem?]
+      simpa using hIndexed
+    have hMem : indexed.1 ∈ branchAutomata := List.mem_of_getElem? hGet
+    have hDeclared : indexed.1.1 ∈ alphabet.actions := by
+      have hHead : indexed.1.1 ∈ branchAutomata.map Prod.fst :=
+        List.mem_map_of_mem hMem
+      rw [hHeads, List.mem_map] at hHead
+      obtain ⟨branch, hBranch, hEq⟩ := hHead
+      rw [← hEq]
+      exact hGuard branch hBranch
+    set environment : TypeEnvironment :=
+      { immediate := {typeNeed indexed.1.1}, future := ∅, clock := false }
+      with hEnvironmentDef
+    refine ⟨{ source := TypeAutomatonState.root
+              environment := environment
+              label := .visible (TypeLabel.message indexed.1.1.1 indexed.1.1.2)
+              current := {indexed.1.1}
+              future := .at (childState (indexed.2 + 1) indexed.1.2.initial)
+                {indexed.1.1}
+              target := childState (indexed.2 + 1) indexed.1.2.initial },
+      ⟨?_, rfl⟩, ?_⟩
+    · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+        Finset.mem_union]
+      refine Or.inl (Or.inl (Or.inr ?_))
+      rw [mem_foldl_union_iff]
+      refine Or.inr ⟨indexed, hIndexed, ?_⟩
+      rw [Finset.mem_image]
+      refine ⟨environment, Finset.mem_filter.mpr
+        ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
+          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _,
+          hGuard⟩, rfl⟩
+    · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
+        TypeLabel.message])]
+      exact Finset.mem_singleton_self _
+
 end
 
 end Pact

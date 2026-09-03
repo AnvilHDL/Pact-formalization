@@ -1347,7 +1347,7 @@ theorem liveEqBody_offers_forward :
         simp only [PactType.MessageActions]
         exact Finset.mem_union_right _
           (mem_branchMessageActions_of_mem (body := y.2) (by simpa using hy))
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hAliveL
       hAliveR hStepL hStepR hNotBoth hLocalL hLocalR hWFSync ihL ihR =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1452,7 +1452,7 @@ theorem liveEqBody_offers_forward :
         rTarget' leftLabel rightLabel leftCurrent leftFuture rightCurrent
         rightFuture hAliveL' hAliveR' hStepL' hStepR' hNotBoth' hLocalL'
         hLocalR' ⟨hEnvT, hWFSync.2⟩
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hStepL hStepR hLocalL
       hLocalR hWFSync hNotTock ihL ihR =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1508,7 +1508,7 @@ theorem liveEqBody_offers_forward :
           rightLabel leftCurrent leftFuture rightCurrent rightFuture hStepL'
           hStepR' hLocalL' hLocalR' ⟨hEnvT, hWFSync.2⟩ hNotTock, ?_⟩
       simp only [LiveEqBody]
-  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
+  | par_fuse_tock outer leftEnv rightEnv interface alphabet left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hStepL hStepR
       hLocalL hLocalR hWFSync hTock ihL ihR =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1564,7 +1564,7 @@ theorem liveEqBody_offers_forward :
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hStepL' hStepR' hLocalL' hLocalR' ⟨hEnvT, hWFSync.2⟩ hTock, ?_⟩
       simp only [LiveEqBody]
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hNotTock ih =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1619,7 +1619,7 @@ theorem liveEqBody_offers_forward :
       exact TypeOffers.left_complete env' rightEnv' interface l' r' rTarget'
         rightLabel rightCurrent rightFuture hSkipL' hNotSkipR' hStep'
         hNotSkipT' hRestrictC hRestrictF hLocal' hEnvT hNotTock
-  | left_complete_tock outer rightEnv interface left right right' rightLabel
+  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hTock ih =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1668,7 +1668,7 @@ theorem liveEqBody_offers_forward :
             simp only [PactType.MessageActions]
             exact Finset.Subset.trans (typeOffers_messageActions_subset hStep)
               Finset.subset_union_right)) hLive'⟩
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hNotTock ih =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
@@ -1721,7 +1721,7 @@ theorem liveEqBody_offers_forward :
       exact TypeOffers.right_complete env' leftEnv' interface l' lTarget' r'
         leftLabel leftCurrent leftFuture hSkipR' hNotSkipL' hStep' hNotSkipT'
         hRestrictC hRestrictF hLocal' hEnvT hNotTock
-  | right_complete_tock outer leftEnv interface left left' right leftLabel
+  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hTock ih =>
       intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT

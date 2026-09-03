@@ -4743,11 +4743,11 @@ theorem transition_label_supported
   --       forall_eq, ObservationOwnedBy, PactType.MessageActions,
   --       Finset.mem_union]
   --     exact Or.inr (branch_action_mem hConditions.2.1)
-  -- | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  -- | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
   --     rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftStep
   --     hLeftOffers hRightStep hRightOffers hNonFinal hConditions hLeftIH hRightIH =>
   --     exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
-  -- | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  -- | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
   --     leftCurrent leftFuture rightCurrent rightFuture hLeftStep hLeftOffers
   --     hRightStep hRightOffers hConditions hLeftIH hRightIH =>
   --     exact combine_label_supported hLeftIH hRightIH hConditions.2.2.2
@@ -4803,30 +4803,30 @@ theorem offers_label_supported
         forall_eq, ObservationOwnedBy, PactType.MessageActions,
         Finset.mem_union]
       exact Or.inr (branch_action_mem hConditions.2.1)
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _
       hLeftOffers
       hRightOffers hNonFinal hLocal1 hLocal2 hConditions =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocal1 hLocal2 hConditions hNotTock =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2
-  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel
+  | par_fuse_tock outer leftEnv rightEnv interface alphabet left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftOffers
       hRightOffers hLocal1 hLocal2 hConditions hTock =>
       have hLeftIH := offers_label_supported hLeftOffers
       have hRightIH := offers_label_supported hRightOffers
       exact combine_label_supported hLeftIH hRightIH hConditions.2
   -- Only the survivor steps, so its own support carries over to the product.
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hLocal
       hWF hNotTock
-  | left_complete_tock outer rightEnv interface left right right' rightLabel
+  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip _ hRightOffers hNotSkip _ _ hLocal
       hWF hNotTock =>
       have hRightIH := offers_label_supported hRightOffers
@@ -4841,10 +4841,10 @@ theorem offers_label_supported
               PactType.ProgressIds, PactType.FairChoiceIds,
               Finset.mem_union] at hOwned ⊢ <;>
             simp [hOwned]
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hLocal
       hWF hNotTock
-  | right_complete_tock outer leftEnv interface left left' right leftLabel
+  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip _ hLeftOffers hNotSkip _ _ hLocal
       hWF hNotTock =>
       have hLeftIH := offers_label_supported hLeftOffers

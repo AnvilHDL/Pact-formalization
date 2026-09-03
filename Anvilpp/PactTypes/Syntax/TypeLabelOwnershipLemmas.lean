@@ -272,31 +272,31 @@ theorem TypeOffers.labelOwned
   | offer_some => exact PactType.LabelOwned.silent _
   | offer_else => exact PactType.LabelOwned.silent _
   | offer_wait => exact PactType.LabelOwned.silent _
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel rightLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip hRightNotSkip
       hLeft hRight hNotBothSkip hLocalLeft hLocalRight hConditions ihLeft ihRight =>
       exact PactType.LabelOwned.combine ihLeft ihRight
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocalLeft
       hLocalRight hConditions hNotTock ihLeft ihRight =>
       exact PactType.LabelOwned.combine ihLeft ihRight
-  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse_tock outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocalLeft
       hLocalRight hConditions hTock ihLeft ihRight =>
       exact PactType.LabelOwned.combine ihLeft ihRight
-  | left_complete outer rightEnv interface left right right' rightLabel rightCurrent
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel rightCurrent
       rightFuture hLeftSkip hRightNotSkip hRight hNotSkip hCurrent hFuture hLocal
       hWF hNotTock ihRight =>
       exact PactType.LabelOwned.of_right ihRight
-  | left_complete_tock outer rightEnv interface left right right' rightLabel
+  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hRight hNotSkip hCurrent
       hFuture hLocal hWF hTock ihRight =>
       exact PactType.LabelOwned.of_right ihRight
-  | right_complete outer leftEnv interface left left' right leftLabel leftCurrent
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel leftCurrent
       leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip hCurrent hFuture hLocal
       hWF hNotTock ihLeft =>
       exact PactType.LabelOwned.of_left ihLeft
-  | right_complete_tock outer leftEnv interface left left' right leftLabel
+  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip hCurrent
       hFuture hLocal hWF hTock ihLeft =>
       exact PactType.LabelOwned.of_left ihLeft

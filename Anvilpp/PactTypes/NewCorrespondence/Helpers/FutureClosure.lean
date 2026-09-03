@@ -2078,6 +2078,55 @@ theorem stateProductInfo_fairChoice_child_right (alphabet : PactTypeAlphabet)
   exact stateProductInfoFuel_eq_of_sufficient right q
     (Nat.le_max_right _ _) (Nat.le_refl _)
 
+/-- An exclusive-offer root carries no product term of its own. -/
+theorem stateProductInfo_xoffer_root (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) :
+    stateProductInfo (.xoffer alphabet elseType branches)
+        TypeAutomatonState.root = none := by
+  obtain ⟨k, hk⟩ : ∃ k,
+      typeCompilationFuel (.xoffer alphabet elseType branches) = k + 1 :=
+    ⟨typeCompilationFuel (.xoffer alphabet elseType branches) - 1, by
+      have := typeCompilationFuel_positive (.xoffer alphabet elseType branches)
+      omega⟩
+  simp only [stateProductInfo, hk, stateProductInfoFuel]
+
+/-- The default tag peels off an exclusive offer's product information. -/
+theorem stateProductInfo_xoffer_child_else (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (q : TypeAutomatonState) :
+    stateProductInfo (.xoffer alphabet elseType branches) (.child 0 q) =
+      stateProductInfo elseType q := by
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
+      max (typeCompilationFuel elseType)
+        (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel]
+  exact stateProductInfoFuel_eq_of_sufficient elseType q
+    (Nat.le_max_left _ _) (Nat.le_refl _)
+
+/-- So does a branch tag. -/
+theorem stateProductInfo_xoffer_child_branch (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (i : Nat) (action : BareMessage) (branchType : PactType)
+    (hBranch : branches[i]? = some (action, branchType))
+    (q : TypeAutomatonState) :
+    stateProductInfo (.xoffer alphabet elseType branches) (.child (i + 1) q) =
+      stateProductInfo branchType q := by
+  have hFuelEq : typeCompilationFuel (.xoffer alphabet elseType branches) =
+      max (typeCompilationFuel elseType)
+        (typeBranchCompilationFuel branches) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  have hFuel : typeCompilationFuel branchType ≤
+      max (typeCompilationFuel elseType)
+        (typeBranchCompilationFuel branches) := by
+    have hLe := typeCompilationFuel_le_typeBranchCompilationFuel branches
+      (action, branchType) (List.mem_of_getElem? hBranch)
+    simp only at hLe
+    omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel, hBranch]
+  exact stateProductInfoFuel_eq_of_sufficient branchType q hFuel
+    (Nat.le_refl _)
+
 /-- A root's menu splits into its own offers and the menus of the states it
 references.  This is the menu equation at every non-parallel root: the root
 reaches exactly its copied child entries, and contributes no product term of

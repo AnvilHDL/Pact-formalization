@@ -243,7 +243,7 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       cases hTarget
   | par =>
       cases hTarget
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeft hRight hLocal1
       hLocal2 hConditions hNotTock ihLeft ihRight =>
       have hLeftFuture : leftFuture = ∅ := ihLeft rfl
@@ -252,7 +252,7 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       simp [hideTypeOffers]
   | par_fuse_tock =>
       simp
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hRight hNotSkip _ _
       hLocal hWF hNotTock ihRight =>
       refine absurd ?_ hNotSkip
@@ -260,7 +260,7 @@ theorem TypeOffers.future_eq_empty_of_target_skip
         simp [PactType.reannotate, PactType.alphabet] at hTarget ⊢
   | left_complete_tock =>
       simp
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip _ _
       hLocal hWF hNotTock ihLeft =>
       refine absurd ?_ hNotSkip
@@ -310,20 +310,36 @@ theorem TypeOffers.future_eq_empty_of_label_tock
   | offer_some => cases hLabel
   | offer_else => cases hLabel
   | offer_wait => cases hLabel
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip hLeft hRight hNotBothSkip hLocal1 hLocal2 hConditions
       ihLeft ihRight =>
       simp [hLabel]
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
+  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => simp
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | left_complete_tock => simp
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | right_complete_tock => simp
+
+/-- Membership in an offer's folded menu: the default's menu, or some branch's
+head or menu. -/
+theorem mem_foldl_offer_menu {action : BareMessage} :
+    ∀ (branches : List (BareMessage × PactType))
+      (initial : Finset BareMessage),
+      action ∈ branches.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffers branch.2) initial ↔
+        action ∈ initial ∨
+          ∃ branch ∈ branches,
+            action = branch.1 ∨ action ∈ typeFutureOffers branch.2
+  | [], initial => by simp
+  | branch :: rest, initial => by
+      rw [List.foldl_cons, mem_foldl_offer_menu rest]
+      simp only [Finset.mem_union, Finset.mem_singleton, List.mem_cons]
+      aesop
 
 end
 

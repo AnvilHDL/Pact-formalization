@@ -190,6 +190,7 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeLabel.silent
       (.offer alphabet elseType branches)
   | par (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
+        (alphabet : PactTypeAlphabet)
       (left left' right right' : PactType) (leftLabel rightLabel : TypeLabel)
       (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
       left ≠ .skip left.alphabet →
@@ -199,20 +200,19 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition rightEnv right rightLabel right' →
       TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
       ¬ (left' = .skip left'.alphabet ∧ right' = .skip right'.alphabet) →
-      (outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) ∧
+      (outer.WellFormed alphabet ∧
         LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
           rightFuture leftEnv ∧
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv ∧
         TypeLabel.Sync interface leftLabel rightLabel) →
       --
-      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) left right interface)
+      TypeTransition outer (.par alphabet left right interface)
       (TypeLabel.combine interface leftLabel rightLabel)
-      (.par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
+      (.par alphabet
         left' right' interface)
   | par_fuse (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
+        (alphabet : PactTypeAlphabet)
       (left right : PactType) (leftLabel rightLabel : TypeLabel)
       (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
       TypeTransition leftEnv left leftLabel (.skip left.alphabet) →
@@ -221,23 +221,20 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition rightEnv right rightLabel (.skip right.alphabet) →
       TypeOffers rightEnv right rightLabel (.skip right.alphabet) rightCurrent
         rightFuture →
-      (outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) ∧
+      (outer.WellFormed alphabet ∧
         LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
           rightFuture leftEnv ∧
         LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
           leftFuture rightEnv ∧
         TypeLabel.Sync interface leftLabel rightLabel) →
       --
-      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) left right interface)
+      TypeTransition outer (.par alphabet left right interface)
       (TypeLabel.combine interface leftLabel rightLabel)
-      (.skip (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet
-        interface))
+      (.skip alphabet)
   -- The left side is already `skip` at the source, so only the right survives
   -- and the product carries the survivor's own label.
   | left_complete (outer rightEnv : TypeEnvironment)
-      (interface : Interface)
+      (interface : Interface) (alphabet : PactTypeAlphabet)
       (left right right' : PactType) (rightLabel : TypeLabel)
       (rightCurrent rightFuture : Finset BareMessage) :
       left = .skip left.alphabet →
@@ -250,17 +247,14 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       -- The finished side has no menu, so the survivor's own environment
       -- stands in the sibling slot and the premise projects `outer` alone.
       LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
-      outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) →
+      outer.WellFormed alphabet →
       --
-      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) left right interface)
+      TypeTransition outer (.par alphabet left right interface)
       rightLabel
-      (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface))
+      (right'.reannotate alphabet)
   -- Mirror of `left_complete`: the right side is already `skip` at the source.
   | right_complete (outer leftEnv : TypeEnvironment)
-      (interface : Interface)
+      (interface : Interface) (alphabet : PactTypeAlphabet)
       (left left' right : PactType) (leftLabel : TypeLabel)
       (leftCurrent leftFuture : Finset BareMessage) :
       right = .skip right.alphabet →
@@ -271,14 +265,11 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       restrictTypeOffers interface leftCurrent = ∅ →
       restrictTypeOffers interface leftFuture = ∅ →
       LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
-      outer.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) →
+      outer.WellFormed alphabet →
       --
-      TypeTransition outer (.par (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface) left right interface)
+      TypeTransition outer (.par alphabet left right interface)
       leftLabel
-      (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
-        right.alphabet interface))
+      (left'.reannotate alphabet)
 
 structure TypeOfferSummary : Type where
   current : Finset BareMessage

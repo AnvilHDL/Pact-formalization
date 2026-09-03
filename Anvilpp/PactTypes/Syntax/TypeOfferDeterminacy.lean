@@ -1023,7 +1023,7 @@ theorem typeOffers_unique_aux :
                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
           | skip
-  | left_complete outer rightEnv interface left right right' rightLabel
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
       hRestF hLoc hOuterWF hNotTock ih =>
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
@@ -1141,7 +1141,7 @@ theorem typeOffers_unique_aux :
                     (by simpa only [PactType.shape_reannotate] using
                       congrArg PactType.shape hTarget)]))
           | skip
-  | left_complete_tock outer rightEnv interface left right right' rightLabel
+  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
       hRestF hLoc hOuterWF hIsTock ih =>
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
@@ -1259,7 +1259,7 @@ theorem typeOffers_unique_aux :
                     (by simpa only [PactType.shape_reannotate] using
                       congrArg PactType.shape hTarget)]))
           | skip
-  | right_complete outer leftEnv interface left left' right leftLabel
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
       hRestF hLoc hOuterWF hNotTock ih =>
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
@@ -1377,7 +1377,7 @@ theorem typeOffers_unique_aux :
                     (by simpa only [PactType.shape_reannotate] using
                       congrArg PactType.shape hTarget)]))
           | skip
-  | right_complete_tock outer leftEnv interface left left' right leftLabel
+  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
       hRestF hLoc hOuterWF hIsTock ih =>
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
@@ -1495,7 +1495,7 @@ theorem typeOffers_unique_aux :
                     (by simpa only [PactType.shape_reannotate] using
                       congrArg PactType.shape hTarget)]))
           | skip
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip hLeftChild hRightChild hNotBothSkip hLeftLoc hRightLoc
       hCond ihLeft ihRight =>
@@ -1693,7 +1693,7 @@ theorem typeOffers_unique_aux :
                       | rfl
                       | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff, hCur]))
           | skip
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftChild hRightChild
       hLeftLoc hRightLoc hCond hNotTock ihLeft ihRight =>
       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel

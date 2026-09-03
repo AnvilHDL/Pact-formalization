@@ -1457,7 +1457,7 @@ theorem reannotate_relation_alphabet :
               injection hEq with hResidual _
               rw [← hResidual]
               exact ih.1 target rightChild entry.1 entry.2 hEntry
-        | par a leftChild rightChild interface =>
+        | par a leftChild rightChild interface alphabet =>
             simp only [PactType.reannotate] at hMem
             exact hPar target _ _ _ residual state hMem
         | recur a name body =>

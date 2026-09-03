@@ -42,9 +42,9 @@ def sameOnInterface (interface : Interface)
     (left right : Finset BareMessage) : Prop :=
   restrictTypeOffers interface left = restrictTypeOffers interface right
 
-/-- The automaton-only part of `LocalTypeEnvironment`.  It records the exact
-projection equations using the sibling edge's resolved offer fields.  The
-semantic sibling `TypeOffers` witness is supplied later by correspondence. -/
+/-- The automaton-only part of `LocalTypeEnvironment`.  Both children carry the
+complete outer boundary environment; the interface contributions come from the
+sibling edge's resolved offer fields. -/
 inductive AutomatonLocalEnvironment
     (outer : TypeEnvironment) (interface : Interface)
     (localAlphabet : PactTypeAlphabet)
@@ -59,12 +59,10 @@ inductive AutomatonLocalEnvironment
       sibling.environment.clock = false →
       localEdge.environment.clock = false →
       localEdge.environment.immediate =
-        projectTypeEnvironmentOffers localAlphabet outer.immediate ∪
-          restrictTypeOffers interface sibling.current →
+        outer.immediate ∪ restrictTypeOffers interface sibling.current →
       localEdge.environment.future =
-        (projectTypeEnvironmentOffers localAlphabet outer.future ∪
-          restrictTypeOffers interface sibling.future) \
-            localEdge.environment.immediate →
+        (outer.future ∪ restrictTypeOffers interface sibling.future) \
+          localEdge.environment.immediate →
       AutomatonLocalEnvironment outer interface localAlphabet sibling localEdge
 
 /-- The side condition on a pair of component edges forming a product edge. -/

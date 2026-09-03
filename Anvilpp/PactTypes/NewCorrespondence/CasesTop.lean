@@ -184,7 +184,8 @@ private def ClosedGuardedRegularWith
     PactType.SameCycleMessageLinear processType ∧
     PactType.ParallelMessageOwnership processType ∧
     PactType.InterfaceScoped processType ∧
-    PactType.InterfaceAlphabetScoped processType
+    PactType.InterfaceAlphabetScoped processType ∧
+    PactType.ConjunctiveMessageOwnership processType
 
 private theorem closedGuardedRegularWith_of_closedGuardedRegular
     {processType : PactType} (h : ClosedGuardedRegular processType) :

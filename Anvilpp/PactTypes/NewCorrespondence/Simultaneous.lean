@@ -32,7 +32,8 @@ def TypeWellFormedIn (bound : List String) (processType : PactType) : Prop :=
     PactType.ParallelProgressOwnership processType ∧
     PactType.ParallelFairChoiceOwnership processType ∧
     PactType.InterfaceScoped processType ∧
-    PactType.InterfaceAlphabetScoped processType
+    PactType.InterfaceAlphabetScoped processType ∧
+    PactType.ConjunctiveMessageOwnership processType
 
 /-- Progress linearity already assigns each progress identifier to a single
 parallel component. -/
@@ -5003,6 +5004,191 @@ theorem compileTypeFuel_xoffer_eq (alphabet : PactTypeAlphabet)
         branch hBranch
       omega
     rw [compileTypeFuel_eq_of_sufficient branch.2 hFuel (Nat.le_refl _)]
+
+/-- Menus agree at an exclusive offer.  The root exposes the branch heads on its
+own edges and reaches exactly the default and branch entries. -/
+theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hGuard : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions)
+    (hWholeDisjoint :
+      (PactType.xoffer alphabet elseType branches).OfferBranchesDisjoint)
+    (hElse : FutureOffersAgree elseType)
+    (hBranches : ∀ branch ∈ branches, FutureOffersAgree branch.2) :
+    FutureOffersAgree (.xoffer alphabet elseType branches) := by
+  classical
+  set whole : PactType := .xoffer alphabet elseType branches with hWholeDef
+  have hWhole := compileTypeFuel_xoffer_eq alphabet elseType branches
+  have hDisjointParts :
+      elseType.OfferBranchesDisjoint ∧
+        PactType.OfferBranchesDisjointBranches branches := by
+    simpa only [hWholeDef, PactType.OfferBranchesDisjoint] using hWholeDisjoint
+  have hElseDisjoint : elseType.OfferBranchesDisjoint := hDisjointParts.1
+  have hBranchDisjoint : ∀ branch ∈ branches,
+      branch.2.OfferBranchesDisjoint := by
+    intro branch hBranch
+    exact offerBranchesDisjoint_of_mem hDisjointParts.2 hBranch
+  have hElseFuel :
+      typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole := by
+    simp only [hWholeDef, typeCompilationFuel]
+    omega
+  have hBranchFuel : ∀ branch ∈ branches,
+      typeCompilationFuel branch.2 + 1 ≤ typeCompilationFuel whole := by
+    intro branch hBranch
+    have hLe := typeCompilationFuel_le_typeBranchCompilationFuel branches
+      branch hBranch
+    simp only [hWholeDef, typeCompilationFuel]
+    omega
+  intro residual state hRelated hReach
+  rcases relationMembership_xoffer_cases alphabet elseType branches
+      hRelated with hRoot | ⟨q, hState, hChild⟩ |
+      ⟨i, action, branchType, q, hGet, hState, hChild⟩
+  · injection hRoot with hResidual hStateEq
+    subst hResidual
+    subst hStateEq
+    set branchAutomata :=
+      branches.map fun branch =>
+        (branch.1, compileTypeFuel (typeCompilationFuel branch.2) branch.2)
+      with hBranchAutomata
+    set elseFragment :=
+      compileTypeFuel (typeCompilationFuel elseType) elseType with hElseFragment
+    set pending : PendingAutomaton :=
+      { states := (compileTypeFuel (typeCompilationFuel whole) whole).states
+        edges := (compileTypeFuel (typeCompilationFuel whole) whole).edges }
+      with hPending
+    have hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst := by
+      rw [hBranchAutomata, List.map_map]
+      rfl
+    have hOffers : pending.offersAt TypeAutomatonState.root =
+        typeBranchActions branches := by
+      rw [hPending, hWhole]
+      exact buildExclusiveOfferAutomaton_offersAt_root alphabet branches
+        elseFragment branchAutomata hHeads hGuard
+    have hDecomp := computeFutureOf_root_decomposition whole
+      TypeAutomatonState.root
+      (exclusiveOfferEntries elseFragment branchAutomata) pending hPending
+      (referencesClosed_compileTypeFuel whole (typeCompilationFuel whole)
+        (Nat.le_refl _) hWholeDisjoint)
+      (by
+        rw [hPending]
+        show TypeAutomatonState.root ∈
+          (compileTypeFuel (typeCompilationFuel whole) whole).states
+        rw [hWhole]
+        simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment]
+        exact Finset.mem_union_left _
+          (Finset.mem_union_left _ (Finset.mem_singleton_self _)))
+      (by
+        rw [hPending, hWhole]
+        exact buildExclusiveOfferAutomaton_referencedStates_root_subset
+          alphabet branches elseFragment branchAutomata)
+      (by
+        rw [hPending, hWhole]
+        exact buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
+          alphabet branches elseFragment branchAutomata hHeads hGuard)
+      (by
+        simp only [hWholeDef]
+        exact stateProductInfo_xoffer_root alphabet elseType branches)
+    rw [hDecomp, hOffers, hWholeDef,
+      typeFutureOffers_xoffer alphabet elseType branches hGuard]
+    -- the default entry carries the default's menu
+    have hElseMenu : computeFutureOf whole
+        (childState 0 elseFragment.initial) = typeFutureOffers elseType := by
+      rw [childState, computeFutureOf_exclusiveOffer_else elseType branches
+        whole hWhole hElseFuel hElseDisjoint
+        (stateProductInfo_xoffer_child_else alphabet elseType branches)
+        elseFragment.initial
+        (compileTypeFuel_initial_mem _ elseType (Nat.le_refl _))]
+      exact hElse (buildRelationSet_initial elseType _ rfl)
+        (automatonStateReachable_initial elseType)
+    -- and each branch entry its branch's
+    have hBranchMenu : ∀ indexed ∈ branchAutomata.zipIdx,
+        ∃ branch ∈ branches,
+          computeFutureOf whole
+            (childState (indexed.2 + 1) indexed.1.2.initial) =
+            typeFutureOffers branch.2 := by
+      intro indexed hIndexed
+      have hGetAuto : branchAutomata[indexed.2]? = some indexed.1 := by
+        rw [← List.mk_mem_zipIdx_iff_getElem?]
+        simpa using hIndexed
+      rw [hBranchAutomata, List.getElem?_map, Option.map_eq_some_iff]
+        at hGetAuto
+      obtain ⟨branch, hGetBranch, hEq⟩ := hGetAuto
+      have hMem : branch ∈ branches := List.mem_of_getElem? hGetBranch
+      refine ⟨branch, hMem, ?_⟩
+      have hShape : indexed.1.2 =
+          compileTypeFuel (typeCompilationFuel branch.2) branch.2 := by
+        rw [← hEq]
+      rw [hShape, childState, computeFutureOf_exclusiveOffer_branch elseType
+        branches whole hWhole indexed.2 branch.1 branch.2 hGetBranch
+        (hBranchFuel branch hMem) (hBranchDisjoint branch hMem)
+        (stateProductInfo_xoffer_child_branch alphabet elseType branches
+          indexed.2 branch.1 branch.2 hGetBranch) _
+        (compileTypeFuel_initial_mem _ branch.2 (Nat.le_refl _))]
+      exact hBranches branch hMem (buildRelationSet_initial branch.2 _ rfl)
+        (automatonStateReachable_initial branch.2)
+    have hBranchMenu' : ∀ branch ∈ branches,
+        ∃ indexed ∈ branchAutomata.zipIdx,
+          computeFutureOf whole
+            (childState (indexed.2 + 1) indexed.1.2.initial) =
+            typeFutureOffers branch.2 := by
+      intro branch hMem
+      obtain ⟨index, hGetBranch⟩ := List.getElem?_of_mem hMem
+      have hGetAuto : branchAutomata[index]? =
+          some (branch.1, compileTypeFuel (typeCompilationFuel branch.2)
+            branch.2) := by
+        rw [hBranchAutomata, List.getElem?_map, hGetBranch]
+        rfl
+      refine ⟨((branch.1, compileTypeFuel (typeCompilationFuel branch.2)
+        branch.2), index), List.mk_mem_zipIdx_iff_getElem?.mpr hGetAuto, ?_⟩
+      rw [childState, computeFutureOf_exclusiveOffer_branch elseType branches
+        whole hWhole index branch.1 branch.2 hGetBranch
+        (hBranchFuel branch hMem) (hBranchDisjoint branch hMem)
+        (stateProductInfo_xoffer_child_branch alphabet elseType branches index
+          branch.1 branch.2 hGetBranch) _
+        (compileTypeFuel_initial_mem _ branch.2 (Nat.le_refl _))]
+      exact hBranches branch hMem (buildRelationSet_initial branch.2 _ rfl)
+        (automatonStateReachable_initial branch.2)
+    ext offer
+    rw [mem_foldl_offer_menu, Finset.mem_union, Finset.mem_biUnion,
+      typeBranchActions, List.mem_toFinset, List.mem_map]
+    simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+      List.mem_map]
+    constructor
+    · rintro (⟨branch, hMem, rfl⟩ | ⟨entry, hEntry, hIn⟩)
+      · exact Or.inr ⟨branch, hMem, Or.inl rfl⟩
+      · rcases hEntry with rfl | ⟨indexed, hIndexed, rfl⟩
+        · rw [hElseMenu] at hIn
+          exact Or.inl hIn
+        · obtain ⟨branch, hMem, hMenu⟩ := hBranchMenu indexed hIndexed
+          rw [hMenu] at hIn
+          exact Or.inr ⟨branch, hMem, Or.inr hIn⟩
+    · rintro (hElseIn | ⟨branch, hMem, rfl | hMenuIn⟩)
+      · exact Or.inr ⟨childState 0 elseFragment.initial, Or.inl rfl,
+          by rw [hElseMenu]; exact hElseIn⟩
+      · exact Or.inl ⟨branch, hMem, rfl⟩
+      · obtain ⟨indexed, hIndexed, hMenu⟩ := hBranchMenu' branch hMem
+        exact Or.inr ⟨childState (indexed.2 + 1) indexed.1.2.initial,
+          Or.inr ⟨indexed, hIndexed, rfl⟩, by rw [hMenu]; exact hMenuIn⟩
+  · subst hState
+    have hChildReach :=
+      automatonStateReachable_exclusiveOffer_child0 hWhole hReach
+    rw [computeFutureOf_exclusiveOffer_else elseType branches whole hWhole
+      hElseFuel hElseDisjoint
+      (stateProductInfo_xoffer_child_else alphabet elseType branches) q
+      (automatonStateReachable_mem_states elseType hElseDisjoint hChildReach)]
+    exact hElse hChild hChildReach
+  · subst hState
+    have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hGet
+    have hDisjoint : branchType.OfferBranchesDisjoint :=
+      hBranchDisjoint (action, branchType) hMem
+    have hChildReach :=
+      automatonStateReachable_exclusiveOffer_branch hWhole hGet hReach
+    rw [computeFutureOf_exclusiveOffer_branch elseType branches whole hWhole
+      i action branchType hGet (hBranchFuel (action, branchType) hMem)
+      hDisjoint
+      (stateProductInfo_xoffer_child_branch alphabet elseType branches i action
+        branchType hGet) q
+      (automatonStateReachable_mem_states branchType hDisjoint hChildReach)]
+    exact hBranches (action, branchType) hMem hChild hChildReach
 
 /-! ### Conjunctive-offer automaton helpers
 

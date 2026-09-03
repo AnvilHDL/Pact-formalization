@@ -45,47 +45,47 @@ theorem TypeOffers.toTransition {env : TypeEnvironment} {source : PactType}
       exact .offer_else env alphabet elseType branches hEnv hDecl
   | offer_wait env alphabet elseType branches hEnv hDecl =>
       exact .offer_wait env alphabet elseType branches hEnv hDecl
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel rightLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftLive hRightLive hLeftOffers
       hRightOffers hNotBothSkip hLocalLeft hLocalRight hSync ihLeft ihRight =>
-      exact .par outer leftEnv rightEnv interface left left' right right' leftLabel
+      exact .par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
         rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftLive hRightLive
         ihLeft hLeftOffers ihRight hRightOffers hNotBothSkip
         ⟨hSync.1, hLocalLeft, hLocalRight, hSync.2⟩
-  | par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocalLeft hLocalRight hSync _ ihLeft ihRight =>
-      exact .par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      exact .par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
         leftCurrent leftFuture rightCurrent rightFuture ihLeft hLeftOffers ihRight
         hRightOffers ⟨hSync.1, hLocalLeft, hLocalRight, hSync.2⟩
-  | par_fuse_tock outer leftEnv rightEnv interface left right leftLabel rightLabel
+  | par_fuse_tock outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hLeftOffers hRightOffers
       hLocalLeft hLocalRight hSync _ ihLeft ihRight =>
-      exact .par_fuse outer leftEnv rightEnv interface left right leftLabel rightLabel
+      exact .par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
         leftCurrent leftFuture rightCurrent rightFuture ihLeft hLeftOffers ihRight
         hRightOffers ⟨hSync.1, hLocalLeft, hLocalRight, hSync.2⟩
-  | left_complete outer rightEnv interface left right right' rightLabel rightCurrent
+  | left_complete outer rightEnv interface alphabet left right right' rightLabel rightCurrent
       rightFuture hLeftSkip hRightLive hRightOffers hTargetLive hCurrent hFuture
       hLocal hWellFormed _ ih =>
-      exact .left_complete outer rightEnv interface left right right' rightLabel
+      exact .left_complete outer rightEnv interface alphabet left right right' rightLabel
         rightCurrent rightFuture hLeftSkip hRightLive ih hRightOffers hTargetLive
         hCurrent hFuture hLocal hWellFormed
-  | left_complete_tock outer rightEnv interface left right right' rightLabel rightCurrent
+  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel rightCurrent
       rightFuture hLeftSkip hRightLive hRightOffers hTargetLive hCurrent hFuture
       hLocal hWellFormed _ ih =>
-      exact .left_complete outer rightEnv interface left right right' rightLabel
+      exact .left_complete outer rightEnv interface alphabet left right right' rightLabel
         rightCurrent rightFuture hLeftSkip hRightLive ih hRightOffers hTargetLive
         hCurrent hFuture hLocal hWellFormed
-  | right_complete outer leftEnv interface left left' right leftLabel leftCurrent
+  | right_complete outer leftEnv interface alphabet left left' right leftLabel leftCurrent
       leftFuture hRightSkip hLeftLive hLeftOffers hTargetLive hCurrent hFuture
       hLocal hWellFormed _ ih =>
-      exact .right_complete outer leftEnv interface left left' right leftLabel
+      exact .right_complete outer leftEnv interface alphabet left left' right leftLabel
         leftCurrent leftFuture hRightSkip hLeftLive ih hLeftOffers hTargetLive
         hCurrent hFuture hLocal hWellFormed
-  | right_complete_tock outer leftEnv interface left left' right leftLabel leftCurrent
+  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel leftCurrent
       leftFuture hRightSkip hLeftLive hLeftOffers hTargetLive hCurrent hFuture
       hLocal hWellFormed _ ih =>
-      exact .right_complete outer leftEnv interface left left' right leftLabel
+      exact .right_complete outer leftEnv interface alphabet left left' right leftLabel
         leftCurrent leftFuture hRightSkip hLeftLive ih hLeftOffers hTargetLive
         hCurrent hFuture hLocal hWellFormed
 

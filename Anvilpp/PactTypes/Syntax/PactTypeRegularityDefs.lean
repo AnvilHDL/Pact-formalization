@@ -448,8 +448,7 @@ namespace PactType
           .fairChoice _ _ left right =>
           ParallelMessageOwnership left ∧ ParallelMessageOwnership right
       | .par _ left right interface =>
-          Disjoint (MessageIds left \ interface) (MessageIds right \ interface) ∧
-            Disjoint (MessageActions left) (MessageActions right) ∧
+          MessageIds left ∩ MessageIds right ⊆ interface ∧
             ParallelMessageOwnership left ∧ ParallelMessageOwnership right
       | .xoffer _ elseType branches =>
           ParallelMessageOwnership elseType ∧
@@ -606,6 +605,49 @@ theorem PactType.InterfaceAlphabetScoped.avoids :
       simp only [PactType.alphabet] at hAction
       exact Finset.disjoint_left.mp hScoped.1
         (Finset.mem_image.mpr ⟨action, hAction, rfl⟩) hIn
+
+/- Every conjunctive offer keeps its branches on disjoint message identifiers,
+counting each branch's head together with its body. -/
+mutual
+  def PactType.ConjunctiveMessageOwnership : PactType → Prop
+    | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+    | .recur _ _ body => PactType.ConjunctiveMessageOwnership body
+    | .choice _ left right | .seq _ left right | .fairChoice _ _ left right
+    | .par _ left right _ =>
+        PactType.ConjunctiveMessageOwnership left ∧
+          PactType.ConjunctiveMessageOwnership right
+    | .xoffer _ elseType branches =>
+        PactType.ConjunctiveMessageOwnership elseType ∧
+          PactType.ConjunctiveMessageOwnershipBodies branches
+    | .offer _ elseType branches =>
+        PactType.ConjunctiveMessageOwnership elseType ∧
+          PactType.ConjunctiveMessageOwnershipBranches branches
+  termination_by processType => sizeOf processType
+
+  /- Branch bodies of an exclusive offer carry the condition but impose no
+  pairwise disjointness of their own. -/
+  def PactType.ConjunctiveMessageOwnershipBodies :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (_, processType) :: rest =>
+        PactType.ConjunctiveMessageOwnership processType ∧
+          PactType.ConjunctiveMessageOwnershipBodies rest
+  termination_by branches => sizeOf branches
+
+  def PactType.ConjunctiveMessageOwnershipBranches :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (action, processType) :: rest =>
+        PactType.ConjunctiveMessageOwnership processType ∧
+          Disjoint ({action.1} ∪ PactType.MessageIds processType)
+            (PactType.BranchMessageIds rest) ∧
+          PactType.ConjunctiveMessageOwnershipBranches rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
 
 /-- Two conjunctive-offer branches use disjoint declarations: disjoint head
 actions and continuation actions, disjoint progress identifiers, and disjoint

@@ -48,20 +48,20 @@ theorem TypeOffers.current_eq_empty_of_label_tock
   | offer_some => cases hLabel
   | offer_else => cases hLabel
   | offer_wait => cases hLabel
-  | par outer leftEnv rightEnv interface left left' right right' leftLabel
+  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _
       _ ihLeft ihRight =>
       obtain ⟨hLeftTock, hRightTock⟩ :=
         (TypeLabel.combine_eq_tock_iff interface leftLabel rightLabel).mp hLabel
       rw [ihLeft hLeftTock, ihRight hRightTock]
       simp [hideTypeOffers]
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
+  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => rfl
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | left_complete_tock => rfl
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
       exact absurd hLabel hNotTock
   | right_complete_tock => rfl
 
@@ -209,7 +209,7 @@ theorem TypeOffers.future_eq_sdiff_of_label_ne_tock
   | offer_some => simp
   | offer_else => rfl
   | offer_wait => rfl
-  | par _ _ _ interface _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _ _ =>
+  | par _ _ _ interface alphabet _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _ _ =>
       simp only [if_neg hLabel]
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ hLeft hRight _ _ _ _ _ _ =>
       rw [hLeft.future_eq_empty_of_target_skip rfl,

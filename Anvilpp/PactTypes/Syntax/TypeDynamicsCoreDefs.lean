@@ -35,29 +35,13 @@ namespace PactTypeAlphabet
   def remove (parent assigned : PactTypeAlphabet) : PactTypeAlphabet :=
     { actions := parent.actions \ assigned.actions }
 
-  /-- Project a new parallel boundary alphabet to one of the old children.
-  Interface actions remain local to the child even though they are hidden at
-  the parent boundary. -/
-  def projectParallelChild (parent child : PactTypeAlphabet)
+  /-- Project a new parallel alphabet onto a child: the child keeps its own
+  interface actions and receives the whole new parent alphabet. -/
+  def projectParallel (parent child : PactTypeAlphabet)
       (interface : Interface) : PactTypeAlphabet :=
-    { actions := child.actions.filter fun action =>
-        action.1 ∈ interface ∨ action ∈ parent.actions }
-
-  /-- Project a new parallel alphabet to the left child.  The left child keeps
-  its own projection, and additionally absorbs the declarations the right body
-  does not use, so either child alone reconstructs the parent alphabet. -/
-  def projectParallelLeft (parent left : PactTypeAlphabet)
-      (rightType : PactType) (interface : Interface) : PactTypeAlphabet :=
     { actions :=
-        (projectParallelChild parent left interface).actions ∪
-          (parent.actions \ PactType.MessageActions rightType) }
-
-  /-- Mirror of `projectParallelLeft` for the right child. -/
-  def projectParallelRight (parent right : PactTypeAlphabet)
-      (leftType : PactType) (interface : Interface) : PactTypeAlphabet :=
-    { actions :=
-        (projectParallelChild parent right interface).actions ∪
-          (parent.actions \ PactType.MessageActions leftType) }
+        (child.actions.filter fun action => action.1 ∈ interface) ∪
+          parent.actions }
 
 end PactTypeAlphabet
 
@@ -80,10 +64,10 @@ namespace PactType
           .seq alphabet (reannotate alphabet left)
             (reannotate alphabet right)
       | .par _ left right interface =>
-          let leftAlphabet := PactTypeAlphabet.projectParallelLeft alphabet
-            left.alphabet right interface
-          let rightAlphabet := PactTypeAlphabet.projectParallelRight alphabet
-            right.alphabet left interface
+          let leftAlphabet :=
+            PactTypeAlphabet.projectParallel alphabet left.alphabet interface
+          let rightAlphabet :=
+            PactTypeAlphabet.projectParallel alphabet right.alphabet interface
           .par alphabet (reannotate leftAlphabet left)
             (reannotate rightAlphabet right) interface
       | .var _ name => .var alphabet name
@@ -160,14 +144,12 @@ def parallelTypeBranchesWithin (alphabet : PactTypeAlphabet) :
   | [] => .skip alphabet
   | [branch] => singletonTypeXOfferAt alphabet branch
   | branch :: rest =>
-      let leftAlphabet := branch.2.alphabet
-      let rightAlphabet : PactTypeAlphabet :=
-        { actions := PactType.branchAlphabetActions rest }
-      .par alphabet (singletonTypeXOfferAt leftAlphabet branch)
-        (parallelTypeBranchesWithin rightAlphabet rest) ∅
+      .par alphabet (singletonTypeXOfferAt alphabet branch)
+        (parallelTypeBranchesWithin alphabet rest) ∅
 
-/-- Rewrite a conjunctive type offer into parallel singleton exclusive offers
-whose component alphabets partition the enclosing offer alphabet. -/
+/-- Rewrite a conjunctive type offer into parallel singleton exclusive offers.
+Commitment places the branches in parallel with an empty interface, so every
+component carries the complete enclosing alphabet. -/
 def parallelTypeBranches (alphabet : PactTypeAlphabet) :
     List (BareMessage × PactType) → PactType
   | [] => .skip PactTypeAlphabet.empty
@@ -185,15 +167,12 @@ def parallelTypeBranchesSelectingWithin (alphabet : PactTypeAlphabet)
       if branch = selected then selectedTypeBranchAt alphabet branch
       else singletonTypeXOfferAt alphabet branch
   | branch :: rest =>
-      let leftAlphabet := branch.2.alphabet
-      let rightAlphabet : PactTypeAlphabet :=
-        { actions := PactType.branchAlphabetActions rest }
       if branch = selected then
-        .par alphabet (selectedTypeBranchAt leftAlphabet branch)
-          (parallelTypeBranchesWithin rightAlphabet rest) ∅
+        .par alphabet (selectedTypeBranchAt alphabet branch)
+          (parallelTypeBranchesWithin alphabet rest) ∅
       else
-        .par alphabet (singletonTypeXOfferAt leftAlphabet branch)
-          (parallelTypeBranchesSelectingWithin rightAlphabet selected rest) ∅
+        .par alphabet (singletonTypeXOfferAt alphabet branch)
+          (parallelTypeBranchesSelectingWithin alphabet selected rest) ∅
 
 def parallelTypeBranchesSelecting (alphabet : PactTypeAlphabet)
     (selected : BareMessage × PactType) :
