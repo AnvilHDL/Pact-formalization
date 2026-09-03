@@ -1321,6 +1321,7 @@ private lemma var_guard (alphabet : PactTypeAlphabet) (name : String) :
     obtain ⟨environment, -, rfl⟩ := hPending
     simp at hLabel
 
+
 /-! ### Current-offer correspondence at the base fragments -/
 
 /-- The full step correspondence is stronger than its current-offer half, once
@@ -1849,129 +1850,6 @@ theorem PactType.reannotate_binderHygienic (bound : List String) :
           simp only [PactType.BinderHygienic] at hHolds
           simp only [PactType.reannotate, PactType.BinderHygienic]
           exact ⟨ih (sizeOf e) hE bound e rfl alphabet hHolds.1,
-            hOfferBranches bs alphabet ∅ hBs hHolds.2⟩
-
-theorem PactType.reannotate_interfaceScoped :
-    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
-      PactType.InterfaceScoped processType →
-        PactType.InterfaceScoped (processType.reannotate alphabet) := by
-  intro processType
-  induction hSize : sizeOf processType using Nat.strong_induction_on
-      generalizing processType with
-  | _ n ih =>
-      intro alphabet hHolds
-      have hBranches : ∀ (branches : List (BareMessage × PactType))
-          (branchAlphabet : PactTypeAlphabet),
-          sizeOf branches < n →
-          PactType.InterfaceScopedBranches branches →
-          PactType.InterfaceScopedBranches
-            (PactType.reannotateBranches branchAlphabet branches) := by
-        intro branches branchAlphabet hBranchesSize hHold
-        induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.InterfaceScopedBranches]
-        | cons branch rest restIH =>
-            rcases branch with ⟨action, branchType⟩
-            simp only [PactType.InterfaceScopedBranches] at hHold
-            have hBranchSize : sizeOf branchType < n := by
-              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
-                simp_wf; omega
-              have h2 : sizeOf (action, branchType) <
-                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
-              omega
-            have hRestSize : sizeOf rest < n := by
-              have h3 : sizeOf rest <
-                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
-              omega
-            simp only [PactType.reannotateBranches,
-              PactType.InterfaceScopedBranches]
-            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl
-                branchAlphabet hHold.1,
-              restIH hRestSize hHold.2⟩
-      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
-          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
-          sizeOf branches < n →
-          PactType.InterfaceScopedBranches branches →
-          PactType.InterfaceScopedBranches
-            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
-        intro branches branchAlphabet
-        induction branches with
-        | nil =>
-            intro seen _ _
-            simp [PactType.reannotateOfferBranches_nil,
-              PactType.InterfaceScopedBranches]
-        | cons branch rest restIH =>
-            intro seen hBranchesSize hHold
-            rcases branch with ⟨action, branchType⟩
-            simp only [PactType.InterfaceScopedBranches] at hHold
-            have hBranchSize : sizeOf branchType < n := by
-              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
-                simp_wf; omega
-              have h2 : sizeOf (action, branchType) <
-                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
-              omega
-            have hRestSize : sizeOf rest < n := by
-              have h3 : sizeOf rest <
-                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
-              omega
-            simp only [PactType.reannotateOfferBranches_cons,
-              PactType.InterfaceScopedBranches]
-            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
-                hHold.1,
-              restIH _ hRestSize hHold.2⟩
-      cases processType with
-      | message a m d => simp [PactType.reannotate, PactType.InterfaceScoped]
-      | progress a p => simp [PactType.reannotate, PactType.InterfaceScoped]
-      | tock a => simp [PactType.reannotate, PactType.InterfaceScoped]
-      | skip a => simp [PactType.reannotate, PactType.InterfaceScoped]
-      | var a name => simp [PactType.reannotate, PactType.InterfaceScoped]
-      | recur a name body =>
-          have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ih (sizeOf body) hB body rfl alphabet hHolds
-      | choice a l r =>
-          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
-          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
-            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
-      | fairChoice a bid l r =>
-          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
-          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
-            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
-      | seq a l r =>
-          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
-          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
-            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
-      | par a l r i =>
-          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
-          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped,
-            PactType.reannotate_parallelInterfaces]
-          exact ⟨hHolds.1, ih (sizeOf l) hL l rfl _ hHolds.2.1,
-            ih (sizeOf r) hR r rfl _ hHolds.2.2⟩
-      | xoffer a e bs =>
-          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
-          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
-            hBranches bs alphabet hBs hHolds.2⟩
-      | offer a e bs =>
-          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
-          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.InterfaceScoped] at hHolds
-          simp only [PactType.reannotate, PactType.InterfaceScoped]
-          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
             hOfferBranches bs alphabet ∅ hBs hHolds.2⟩
 
 theorem reannotateBranches_progressIds (alphabet : PactTypeAlphabet) :

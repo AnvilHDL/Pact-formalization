@@ -1751,6 +1751,25 @@ theorem correspondence_seq_stepIff
           ⟨q', hChildEdge, hRightTargetRelated⟩
 
 
+/-- Branch bodies of a conjunctive offer whose branches are disjoint inherit
+the property. -/
+private theorem offerBranchesDisjoint_of_mem_local
+    {branches : List (BareMessage × PactType)}
+    (hDisjoint : PactType.OfferBranchesDisjointBranches branches)
+    {action : BareMessage} {branchType : PactType}
+    (hMem : (action, branchType) ∈ branches) :
+    branchType.OfferBranchesDisjoint := by
+  induction branches with
+  | nil => cases hMem
+  | cons head tail ih =>
+      rcases head with ⟨headAction, headType⟩
+      simp only [PactType.OfferBranchesDisjointBranches] at hDisjoint
+      simp only [List.mem_cons] at hMem
+      rcases hMem with hEq | hTail
+      · cases hEq
+        exact hDisjoint.1
+      · exact ih hDisjoint.2 hTail
+
 set_option maxHeartbeats 4000000 in
 /-- Step correspondence for exclusive offer `⨁(τ0,B)`. -/
 theorem correspondence_xoffer_stepIff
@@ -1761,16 +1780,39 @@ theorem correspondence_xoffer_stepIff
     (hBranchAlphabet : ∀ action branchType,
       (action, branchType) ∈ branches → branchType.alphabet = alphabet)
     (hBranchActions : ∀ b ∈ branches, b.1 ∈ alphabet.actions)
+    (hWholeDisjoint : (PactType.xoffer alphabet elseType branches).OfferBranchesDisjoint)
     (hElseIH : StepIffStatement elseType)
     (hBranchesIH :
       ∀ action branchType, (action, branchType) ∈ branches →
         StepIffStatement branchType)
-    (hWholeMenu : FutureOffersAgree (.xoffer alphabet elseType branches))
-    (hElseMenu : FutureOffersAgree elseType)
+    (hWholeMenu :
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+        relationMembership
+          (buildRelationSet (.xoffer alphabet elseType branches)
+            (compileType (.xoffer alphabet elseType branches)))
+          residual state →
+        computeFutureOf (.xoffer alphabet elseType branches) state =
+          typeFutureOffers residual)
+    (hElseMenu :
+      ∀ {residual : PactType} {state : TypeAutomatonState},
+        relationMembership (buildRelationSet elseType (compileType elseType))
+          residual state →
+        computeFutureOf elseType state = typeFutureOffers residual)
     (hBranchesMenu :
       ∀ action branchType, (action, branchType) ∈ branches →
-        FutureOffersAgree branchType) :
+        ∀ {residual : PactType} {state : TypeAutomatonState},
+          relationMembership
+            (buildRelationSet branchType (compileType branchType))
+            residual state →
+          computeFutureOf branchType state = typeFutureOffers residual) :
     StepIffStatement (.xoffer alphabet elseType branches) := by
+  simp only [PactType.OfferBranchesDisjoint] at hWholeDisjoint
+  have hElseDisjoint : elseType.OfferBranchesDisjoint := hWholeDisjoint.1
+  have hBranchesDisjoint : PactType.OfferBranchesDisjointBranches branches :=
+    hWholeDisjoint.2
+  have hBranchDisjoint : ∀ action branchType, (action, branchType) ∈ branches →
+      branchType.OfferBranchesDisjoint := fun action branchType hMem =>
+    offerBranchesDisjoint_of_mem_local hBranchesDisjoint hMem
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove the root's fire/else/wait edges match
   -- the three offer rules, and `hElseIH`/`hBranchesIH` handle the rest.
@@ -1863,7 +1905,7 @@ theorem correspondence_xoffer_stepIff
         (.child 0 (compileTypeFuel (typeCompilationFuel elseType)
           elseType).initial) = typeFutureOffers elseType := by
       rw [computeFutureOf_exclusiveOffer_else elseType branches
-        (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+        (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
         hElseProductInfo
         (compileTypeFuel (typeCompilationFuel elseType) elseType).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel elseType) elseType
@@ -1871,7 +1913,6 @@ theorem correspondence_xoffer_stepIff
       show computeFutureOf elseType (compileType elseType).initial =
         typeFutureOffers elseType
       exact hElseMenu (buildRelationSet_initial elseType (compileType elseType))
-        (automatonStateReachable_initial elseType)
     have hEnvMem : env ∈ alphabet.localEnvironments :=
       hSymbol.1
     have hWF := PactTypeAlphabet.environment_wellFormed hEnvMem
@@ -1883,7 +1924,6 @@ theorem correspondence_xoffer_stepIff
     have hRootFuture : computeFutureOf (.xoffer alphabet elseType branches)
         TypeAutomatonState.root = typeFutureOffers (.xoffer alphabet elseType branches) :=
       hWholeMenu hRootRelated
-        (automatonStateReachable_initial (.xoffer alphabet elseType branches))
     constructor
     · intro hStep
       obtain ⟨-, hOffers⟩ := hStep
@@ -1910,19 +1950,15 @@ theorem correspondence_xoffer_stepIff
           rw [computeFutureOf_exclusiveOffer_branch elseType branches
             (.xoffer alphabet elseType branches) hWhole index branchAction actualTarget hBranchGet
             (hBranchFuelStrict (branchAction, actualTarget) hBranchMem)
+            (hBranchDisjoint branchAction actualTarget hBranchMem)
             (hBranchProductInfo index branchAction actualTarget hBranchGet)
             (compileTypeFuel (typeCompilationFuel actualTarget)
               actualTarget).initial (compileTypeFuel_initial_mem
               (typeCompilationFuel actualTarget) actualTarget le_rfl)]
           show computeFutureOf actualTarget (compileType
             actualTarget).initial = typeFutureOffers actualTarget
-          exact helper_h15_future_offers_agree
+          exact hBranchesMenu branchAction actualTarget hBranchMem
             (buildRelationSet_initial actualTarget (compileType actualTarget))
-        have hSignatureSymbol' :
-            SymbolGuard (PactType.xoffer alphabet elseType branches) env
-              (TypeOfferSummary.mk {branchAction} (typeFutureOffers actualTarget)) := by
-            rw [hCurrentEq, hFutureEq] at hSymbol
-            exact hSymbol
         have hBranchPending :
             ({ source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible
@@ -1930,7 +1966,7 @@ theorem correspondence_xoffer_stepIff
                 current := {branchAction},
                 future := FutureSpec.at (childState (index + 1)
                   (compileTypeFuel (typeCompilationFuel actualTarget)
-                    actualTarget).initial) ∅,
+                    actualTarget).initial) {branchAction},
                 target := childState (index + 1) (compileTypeFuel
                   (typeCompilationFuel actualTarget) actualTarget).initial } :
               PendingAutomatonEdge) ∈
@@ -1951,20 +1987,24 @@ theorem correspondence_xoffer_stepIff
             exact ⟨env, ⟨hEnvMem, hEnabled, hResolvedNeeds, hBranchActions⟩, rfl⟩
         have hEdgeFact : (compileType (.xoffer alphabet elseType branches)).HasEdge
             TypeAutomatonState.root env (TypeLabel.message branchAction.1 branchAction.2)
-            (TypeOfferSummary.mk {branchAction} (typeFutureOffers actualTarget))
+            (TypeOfferSummary.mk {branchAction}
+              (typeFutureOffers actualTarget \ {branchAction}))
             (.child (index + 1) (compileTypeFuel
               (typeCompilationFuel actualTarget) actualTarget).initial) := by
           rw [compileType_hasEdge_iff_hasResolvedEdge (.xoffer alphabet elseType branches)
             TypeAutomatonState.root (.child (index + 1) (compileTypeFuel
               (typeCompilationFuel actualTarget) actualTarget).initial) env
             (TypeLabel.message branchAction.1 branchAction.2)
-            (TypeOfferSummary.mk {branchAction} (typeFutureOffers actualTarget))]
+            (TypeOfferSummary.mk {branchAction}
+              (typeFutureOffers actualTarget \ {branchAction}))]
           rw [hWhole]
           refine ⟨_, hBranchPending, rfl, rfl, rfl, rfl, ?_, rfl⟩
-          simpa [childState] using hFutureBranchEq
+          simp only [childState]
+          rw [hFutureBranchEq]
         have hBranchStep : DecoratedTypeTransition env (.xoffer alphabet elseType branches)
             (TypeLabel.message branchAction.1 branchAction.2)
-            (TypeOfferSummary.mk {branchAction} (typeFutureOffers actualTarget))
+            (TypeOfferSummary.mk {branchAction}
+              (typeFutureOffers actualTarget \ {branchAction}))
             actualTarget :=
           ⟨TypeTransition.xoffer_branch env alphabet elseType branches branchAction actualTarget
             ⟨hWF, hBranchMem, hEnabled, hResolvedNeeds⟩ hBranchActions,
@@ -1977,11 +2017,6 @@ theorem correspondence_xoffer_stepIff
           (buildRelationSet_initial actualTarget (compileType actualTarget))
       | xoffer_else _ _ _ _ hPremise =>
         obtain ⟨hWF', hNoImmediate, hResolvedNeeds⟩ := hPremise
-        have hSignatureSymbol' :
-            SymbolGuard (PactType.xoffer alphabet elseType branches) env
-              (TypeOfferSummary.mk ∅ (typeFutureOffers elseType)) := by
-            rw [hCurrentEq, hFutureEq] at hSymbol
-            exact hSymbol
         have hElsePending :
             ({ source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
@@ -2024,14 +2059,6 @@ theorem correspondence_xoffer_stepIff
           (buildRelationSet_initial elseType (compileType elseType))
       | xoffer_wait _ _ _ _ hPremise =>
         obtain ⟨hWF', hUnresolved, hClock⟩ := hPremise
-        have hSignatureSymbol' :
-            TypeAutomatonSymbol.mk env TypeLabel.silent
-              (TypeOfferSummary.mk (typeWaitingOffers env branches)
-                (typeFutureOffers (.xoffer alphabet elseType branches) \
-                  typeWaitingOffers env branches)) ∈
-              (PactType.xoffer alphabet elseType branches).transitionAlphabet := by
-          rw [hLabelEq, hCurrentEq, hFutureEq] at hSignatureSymbol
-          exact hSignatureSymbol
         have hWaitPending :
             ({ source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
@@ -2126,18 +2153,21 @@ theorem correspondence_xoffer_stepIff
                 branchType').initial := by
             rw [← hPTarget, ← hAutEq]
           rw [hTargetEq] at hTargetRelated
-          have hFutureEq : future = typeFutureOffers branchType' := by
-            rw [← hPFuture, Finset.sdiff_empty, ← hAutEq]
+          have hFutureEq : future =
+              typeFutureOffers branchType' \ {branchAction} := by
+            rw [← hPFuture, ← hAutEq]
+            congr 1
             rw [computeFutureOf_exclusiveOffer_branch elseType branches
               (.xoffer alphabet elseType branches) hWhole index branchAction branchType' hBranchGet
               (hBranchFuelStrict (branchAction, branchType') hBranchMem)
+              (hBranchDisjoint branchAction branchType' hBranchMem)
               (hBranchProductInfo index branchAction branchType' hBranchGet)
               (compileTypeFuel (typeCompilationFuel branchType')
                 branchType').initial (compileTypeFuel_initial_mem
                 (typeCompilationFuel branchType') branchType' le_rfl)]
             show computeFutureOf branchType' (compileType
               branchType').initial = typeFutureOffers branchType'
-            exact helper_h15_future_offers_agree
+            exact hBranchesMenu branchAction branchType' hBranchMem
               (buildRelationSet_initial branchType' (compileType branchType'))
           rcases relationMembership_xoffer_cases alphabet elseType branches hTargetRelated
             with hRootAgain | ⟨qAgain, hStateEqAgain, hElseRelatedAgain⟩ |
@@ -2219,7 +2249,7 @@ theorem correspondence_xoffer_stepIff
         have hFutureEq : future = typeFutureOffers elseType := by
           rw [← hPFuture, Finset.sdiff_empty]
           rw [computeFutureOf_exclusiveOffer_else elseType branches
-            (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+            (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
             hElseProductInfo
             (compileTypeFuel (typeCompilationFuel elseType) elseType).initial
             (compileTypeFuel_initial_mem (typeCompilationFuel elseType) elseType
@@ -2280,10 +2310,11 @@ theorem correspondence_xoffer_stepIff
           | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
           | «at» t r =>
               have hStateMem := compileTypeFuel_futureTargetsInStates
-                (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
+                (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
+                hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
                 hElseProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -2317,10 +2348,11 @@ theorem correspondence_xoffer_stepIff
           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
           | «at» t r =>
               have hStateMem := compileTypeFuel_futureTargetsInStates
-                (typeCompilationFuel elseType) elseType le_rfl childEdge hChildEdgeMem t r hSpec
+                (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
+                hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
                 hElseProductInfo t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
@@ -2385,12 +2417,14 @@ theorem correspondence_xoffer_stepIff
           | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
           | «at» t r =>
               have hStateMem := compileTypeFuel_futureTargetsInStates
-                (typeCompilationFuel branchType) branchType le_rfl childEdge hChildEdgeMem t r
+                (typeCompilationFuel branchType) branchType le_rfl
+                (hBranchDisjoint action branchType hBranchMem) childEdge hChildEdgeMem t r
                 hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_branch elseType branches
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
                 (hBranchFuelStrict (action, branchType) hBranchMem)
+                (hBranchDisjoint action branchType hBranchMem)
                 (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -2433,12 +2467,14 @@ theorem correspondence_xoffer_stepIff
           | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
           | «at» t r =>
               have hStateMem := compileTypeFuel_futureTargetsInStates
-                (typeCompilationFuel branchType) branchType le_rfl childEdge hChildEdgeMem t r
+                (typeCompilationFuel branchType) branchType le_rfl
+                (hBranchDisjoint action branchType hBranchMem) childEdge hChildEdgeMem t r
                 hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_branch elseType branches
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
                 (hBranchFuelStrict (action, branchType) hBranchMem)
+                (hBranchDisjoint action branchType hBranchMem)
                 (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
       have hTargetEq : state' = .child (i + 1) childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl

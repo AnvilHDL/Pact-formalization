@@ -560,13 +560,13 @@ private theorem branch_body_alphabetWellFormed_of_mem
 
 /-- For alphabet-well-formed syntax, its future menu is contained in the
 fixed alphabet carried by that syntax node. -/
-private theorem typeFutureOffersFuel_subset_fixedAlphabet :
+theorem typeFutureOffersFuel_subset_fixedAlphabet :
     ∀ fuel processType, processType.AlphabetWellFormed →
       typeFutureOffersFuel fuel processType ⊆ processType.alphabet.actions := by
   -- TODO: proof invalidated by the 2026-09-01 spec change (re-stamped parallel children / new offer law).
   sorry
 
-private theorem typeFutureOffers_subset_fixedAlphabet
+theorem typeFutureOffers_subset_fixedAlphabet
     (processType : PactType) (hWF : processType.AlphabetWellFormed) :
     typeFutureOffers processType ⊆ processType.alphabet.actions := by
   exact typeFutureOffersFuel_subset_fixedAlphabet _ processType hWF

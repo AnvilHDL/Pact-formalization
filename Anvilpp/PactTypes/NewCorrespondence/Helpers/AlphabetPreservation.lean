@@ -48,6 +48,144 @@ decreasing_by
     omega
 end
 
+/-- Alphabet well-formedness contains the equal-alphabet facts needed by the
+compiled relation, independently of its additional compatibility clauses. -/
+theorem PactType.alphabetCoherent_of_wellFormed :
+    ∀ processType : PactType, processType.AlphabetWellFormed →
+      processType.AlphabetCoherent := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ alphabet branches,
+          sizeOf branches < n →
+          PactType.BranchesAlphabetWellFormed alphabet branches →
+          PactType.BranchesAlphabetCoherent alphabet branches := by
+        intro alphabet branches hBranchesSize hWellFormed
+        induction branches with
+        | nil => simp [PactType.BranchesAlphabetCoherent]
+        | cons entry rest restIH =>
+            obtain ⟨action, branchType⟩ := entry
+            simp only [PactType.BranchesAlphabetWellFormed] at hWellFormed
+            simp only [PactType.BranchesAlphabetCoherent]
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            exact ⟨hWellFormed.1,
+              ih (sizeOf branchType) hBranchSize branchType rfl
+                hWellFormed.2.1,
+              restIH hRestSize hWellFormed.2.2⟩
+      have hOfferBranches : ∀ alphabet seen branches,
+          sizeOf branches < n →
+          PactType.OfferBranchesWellFormed alphabet seen branches →
+          PactType.BranchesAlphabetCoherent alphabet branches := by
+        intro alphabet seen branches hBranchesSize hWellFormed
+        induction branches with
+        | nil => simp [PactType.BranchesAlphabetCoherent]
+        | cons entry rest restIH =>
+            obtain ⟨action, branchType⟩ := entry
+            simp only [PactType.OfferBranchesWellFormed] at hWellFormed
+            simp only [PactType.BranchesAlphabetCoherent]
+            have hBranchSize : sizeOf branchType < n := by
+              have hPair : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf
+                omega
+              have hHead : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have hTail : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by
+                simp_wf
+                omega
+              omega
+            exact ⟨hWellFormed.1,
+              ih (sizeOf branchType) hBranchSize branchType rfl
+                hWellFormed.2.1,
+              restIH hRestSize hWellFormed.2.2⟩
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          intro _
+          simp [PactType.AlphabetCoherent]
+      | choice alphabet left right | seq alphabet left right =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hWellFormed.2.1, hWellFormed.2.2.1,
+            ih (sizeOf left) hLeftSize left rfl hWellFormed.2.2.2.1,
+            ih (sizeOf right) hRightSize right rfl hWellFormed.2.2.2.2⟩
+      | fairChoice alphabet bid left right =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hWellFormed.2.1, hWellFormed.2.2.1,
+            ih (sizeOf left) hLeftSize left rfl hWellFormed.2.2.2.1,
+            ih (sizeOf right) hRightSize right rfl hWellFormed.2.2.2.2⟩
+      | par alphabet left right interface =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
+          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨ih (sizeOf left) hLeftSize left rfl hWellFormed.2.2.1,
+            ih (sizeOf right) hRightSize right rfl hWellFormed.2.2.2⟩
+      | recur alphabet name body =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          exact ⟨hWellFormed.2.1,
+            ih (sizeOf body) hBodySize body rfl hWellFormed.2.2⟩
+      | xoffer alphabet elseType branches =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          exact ⟨hWellFormed.2.1,
+            ih (sizeOf elseType) hElseSize elseType rfl hWellFormed.2.2.1,
+            hBranches alphabet branches hBranchesSize hWellFormed.2.2.2⟩
+      | offer alphabet elseType branches =>
+          intro hWellFormed
+          simp only [PactType.AlphabetWellFormed] at hWellFormed
+          simp only [PactType.AlphabetCoherent]
+          have hElseSize : sizeOf elseType < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          have hBranchesSize : sizeOf branches < n := by
+            rw [← hSize]
+            simp_wf
+            omega
+          exact ⟨hWellFormed.2.1,
+            ih (sizeOf elseType) hElseSize elseType rfl hWellFormed.2.2.1,
+            hOfferBranches alphabet ∅ branches hBranchesSize
+              hWellFormed.2.2.2⟩
+
 
 /-- One alphabet declares no more than another. -/
 def PactTypeAlphabet.Subalphabet (small large : PactTypeAlphabet) : Prop :=
@@ -795,6 +933,129 @@ theorem PactType.reannotate_interfaceAlphabetScoped :
           · exact ih (sizeOf right) hRightSize right rfl _ hScoped.2.2
               hRightAvoid
 
+theorem PactType.reannotate_interfaceScoped :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
+      PactType.InterfaceScoped processType →
+        PactType.InterfaceScoped (processType.reannotate alphabet) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro alphabet hHolds
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet),
+          sizeOf branches < n →
+          PactType.InterfaceScopedBranches branches →
+          PactType.InterfaceScopedBranches
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro branches branchAlphabet hBranchesSize hHold
+        induction branches with
+        | nil => simp [PactType.reannotateBranches,
+            PactType.InterfaceScopedBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.InterfaceScopedBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateBranches,
+              PactType.InterfaceScopedBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl
+                branchAlphabet hHold.1,
+              restIH hRestSize hHold.2⟩
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          PactType.InterfaceScopedBranches branches →
+          PactType.InterfaceScopedBranches
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.InterfaceScopedBranches]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize hHold
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.InterfaceScopedBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateOfferBranches_cons,
+              PactType.InterfaceScopedBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                hHold.1,
+              restIH _ hRestSize hHold.2⟩
+      cases processType with
+      | message a m d => simp [PactType.reannotate, PactType.InterfaceScoped]
+      | progress a p => simp [PactType.reannotate, PactType.InterfaceScoped]
+      | tock a => simp [PactType.reannotate, PactType.InterfaceScoped]
+      | skip a => simp [PactType.reannotate, PactType.InterfaceScoped]
+      | var a name => simp [PactType.reannotate, PactType.InterfaceScoped]
+      | recur a name body =>
+          have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ih (sizeOf body) hB body rfl alphabet hHolds
+      | choice a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | fairChoice a bid l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | seq a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | par a l r i =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped,
+            PactType.reannotate_parallelInterfaces]
+          exact ⟨hHolds.1, ih (sizeOf l) hL l rfl _ hHolds.2.1,
+            ih (sizeOf r) hR r rfl _ hHolds.2.2⟩
+      | xoffer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
+            hBranches bs alphabet hBs hHolds.2⟩
+      | offer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.InterfaceScoped] at hHolds
+          simp only [PactType.reannotate, PactType.InterfaceScoped]
+          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
+            hOfferBranches bs alphabet ∅ hBs hHolds.2⟩
+
 /-- `branchPart` only removes declarations, so it keeps `OnePolarity`. -/
 theorem PactTypeAlphabet.branchPart_wellFormed
     {parent : PactTypeAlphabet} (hParentWF : parent.WellFormed)
@@ -838,6 +1099,36 @@ theorem branch_body_alphabetWellFormed_of_mem
       · cases hEq
         exact hBranches.2.1
       · exact ih hBranches.2.2 hTail
+
+theorem interfaceScoped_of_mem_scopedBranches
+    {branches : List (BareMessage × PactType)} {branch : BareMessage × PactType}
+    (hScoped : PactType.InterfaceScopedBranches branches)
+    (hMem : branch ∈ branches) :
+    branch.2.InterfaceScoped := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      simp only [PactType.InterfaceScopedBranches] at hScoped
+      simp only [List.mem_cons] at hMem
+      rcases hMem with rfl | hMem
+      · exact hScoped.1
+      · exact ih hScoped.2 hMem
+
+theorem interfaceAlphabetScoped_of_mem_scopedBranches
+    {branches : List (BareMessage × PactType)} {branch : BareMessage × PactType}
+    (hScoped : PactType.InterfaceAlphabetScopedBranches branches)
+    (hMem : branch ∈ branches) :
+    branch.2.InterfaceAlphabetScoped := by
+  induction branches with
+  | nil => cases hMem
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
+      simp only [List.mem_cons] at hMem
+      rcases hMem with rfl | hMem
+      · exact hScoped.1
+      · exact ih hScoped.2 hMem
 
 /-- Branch action labels distinct from a head branch's own label and disjoint
 from its body's syntactic actions survive that head's `branchPart`/`remove`
@@ -2409,22 +2700,375 @@ theorem committedOfferAlphabetWellFormed_holds :
     CommittedOfferAlphabetWellFormed :=
   committedOffer_alphabetWellFormed
 
+/-- The offer-commit obligation for the two interface-scoping clauses needed
+when the generated product is used as a recursive source. -/
+def CommittedOfferScoping : Prop :=
+  ∀ (alphabet : PactTypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    (selected : BareMessage × PactType),
+    (PactType.offer alphabet elseType branches).InterfaceScoped →
+    (PactType.offer alphabet elseType branches).InterfaceAlphabetScoped →
+    selected ∈ branches →
+    (parallelTypeBranchesSelecting alphabet selected branches).InterfaceScoped ∧
+      (parallelTypeBranchesSelecting alphabet selected branches).InterfaceAlphabetScoped
+
 /-- Every residual represented by a compiled state is alphabet-well-formed
 whenever the source type is.  Tail recursion is needed because a recursion
 variable below a `.par` would be substituted with a type carrying the wrong
 alphabet. -/
 theorem relationMembership_alphabetWellFormed
-     (hCommitted : CommittedOfferAlphabetWellFormed) :
+    (hCommitted : CommittedOfferAlphabetWellFormed)
+    (hCommittedScoped : CommittedOfferScoping) :
     ∀ (source residual : PactType) (state : TypeAutomatonState),
       source.AlphabetWellFormed →
+      source.InterfaceScoped →
+      source.InterfaceAlphabetScoped →
       source.TailRecursive →
       source.OfferBranchesDisjoint →
       relationMembership (buildRelationSet source (compileType source))
         residual state →
       residual.AlphabetWellFormed := by
-  -- Open: `hCommitted` and `reannotate_alphabetWellFormed` both hold now; only
-  -- the induction over the relation is missing.
-  sorry
+  intro source
+  induction hFuel : typeCompilationFuel source using Nat.strong_induction_on
+      generalizing source with
+  | _ n ih =>
+      intro residual state hWF hScoped hAlphaScoped hTailRec hDisjoint hRelated
+      have hCoherent := PactType.alphabetCoherent_of_wellFormed source hWF
+      cases source with
+      | skip alphabet =>
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
+          exact hWF
+      | message alphabet msg dir =>
+          rcases relationMembership_message_cases alphabet msg dir hRelated with
+            hRoot | hFinal
+          · rw [hRoot.1]
+            exact hWF
+          · rw [hFinal.1]
+            simp only [PactType.AlphabetWellFormed] at hWF ⊢
+            exact hWF
+      | tock alphabet =>
+          rcases relationMembership_tock_cases alphabet hRelated with
+            hRoot | hFinal
+          · rw [hRoot.1]
+            exact hWF
+          · rw [hFinal.1]
+            simpa [PactType.AlphabetWellFormed] using hWF
+      | progress alphabet pid =>
+          rcases relationMembership_progress_cases alphabet pid hRelated with
+            hRoot | hFinal
+          · rw [hRoot.1]
+            exact hWF
+          · rw [hFinal.1]
+            simp only [PactType.AlphabetWellFormed] at hWF ⊢
+            exact hWF
+      | var alphabet name =>
+          rw [(relationMembership_var_cases alphabet name hRelated).1]
+          exact hWF
+      | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_choice_cases alphabet left right hRelated with
+            hRoot | hLeft | hRight
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF
+          · rcases hLeft with ⟨q, _, hLeftRelated⟩
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel left) hLeftFuel left rfl residual q
+              hWF.2.2.2.1 hScoped.1 hAlphaScoped.2.1 hTailRec.1 hDisjoint.1
+              hLeftRelated
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              hWF.2.2.2.2 hScoped.2 hAlphaScoped.2.2 hTailRec.2 hDisjoint.2
+              hRightRelated
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_fairChoice_cases alphabet bid left right
+              hRelated with hRoot | hLeft | hRight
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF
+          · rcases hLeft with ⟨q, _, hLeftRelated⟩
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel left) hLeftFuel left rfl residual q
+              hWF.2.2.2.1 hScoped.1 hAlphaScoped.2.1 hTailRec.1 hDisjoint.1
+              hLeftRelated
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              hWF.2.2.2.2 hScoped.2 hAlphaScoped.2.2 hTailRec.2 hDisjoint.2
+              hRightRelated
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_seq_cases alphabet left right hRelated with
+            hLeft | hRight
+          · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            have hLeftResidualWF := ih (typeCompilationFuel left) hLeftFuel left
+              rfl leftResidual q hWF.2.2.2.1 hScoped.1 hAlphaScoped.2.1
+              hTailRec.1 hDisjoint.1 hLeftRelated
+            have hLeftResidualAlphabet := relationMembership_alphabet_eq left
+              leftResidual q
+              (PactType.alphabetCoherent_of_wellFormed left hWF.2.2.2.1)
+              hLeftRelated
+            simp only [PactType.AlphabetWellFormed]
+            exact ⟨hWF.1, hLeftResidualAlphabet.trans hWF.2.1, hWF.2.2.1,
+              hLeftResidualWF, hWF.2.2.2.2⟩
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              hWF.2.2.2.2 hScoped.2 hAlphaScoped.2.2 hTailRec.2 hDisjoint.2
+              hRightRelated
+      | par alphabet left right interface =>
+          have hAvoidAll := PactType.InterfaceAlphabetScoped.avoids hAlphaScoped
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_par_cases alphabet left right interface
+              hRelated with hPair | hSurvL | hSurvR | hFinal
+          · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
+              hEntry, hLeftRelated, hRightRelated⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            have hLeftAlphabet := relationMembership_alphabet_eq left
+              leftResidual q1
+              (PactType.alphabetCoherent_of_wellFormed left hWF.2.2.1)
+              hLeftRelated
+            have hRightAlphabet := relationMembership_alphabet_eq right
+              rightResidual q2
+              (PactType.alphabetCoherent_of_wellFormed right hWF.2.2.2)
+              hRightRelated
+            simp only [PactType.AlphabetWellFormed]
+            refine ⟨hWF.1, ?_,
+              ih (typeCompilationFuel left) hLeftFuel left rfl leftResidual q1
+                hWF.2.2.1 hScoped.2.1 hAlphaScoped.2.1 hTailRec.1
+                hDisjoint.1 hLeftRelated,
+              ih (typeCompilationFuel right) hRightFuel right rfl rightResidual
+                q2 hWF.2.2.2 hScoped.2.2 hAlphaScoped.2.2 hTailRec.2
+                hDisjoint.2 hRightRelated⟩
+            rw [hLeftAlphabet, hRightAlphabet]
+            exact hWF.2.1
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel :
+                typeCompilationFuel (left.reannotate alphabet) < n := by
+              rw [← hFuel, typeCompilationFuel_reannotate]
+              simp only [typeCompilationFuel]
+              omega
+            have hLeftAvoid : ∀ action ∈ alphabet.actions,
+                action.1 ∉ PactType.ParallelInterfaces left := by
+              intro action hAction hIn
+              exact hAvoidAll action hAction (by
+                simp [PactType.ParallelInterfaces, hIn])
+            exact ih (typeCompilationFuel (left.reannotate alphabet)) hLeftFuel
+              (left.reannotate alphabet) rfl residualLeft q1
+              (PactType.reannotate_alphabetWellFormed_avoiding left alphabet
+                hWF.2.2.1 hWF.1 hScoped.2.1 hLeftAvoid)
+              (PactType.reannotate_interfaceScoped left alphabet hScoped.2.1)
+              (PactType.reannotate_interfaceAlphabetScoped left alphabet
+                hAlphaScoped.2.1 hLeftAvoid)
+              (PactType.reannotate_tailRecursive left alphabet hTailRec.1)
+              (reannotate_offerBranchesDisjoint left alphabet hDisjoint.1)
+              hLeftRelated
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, hRightRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hRightFuel :
+                typeCompilationFuel (right.reannotate alphabet) < n := by
+              rw [← hFuel, typeCompilationFuel_reannotate]
+              simp only [typeCompilationFuel]
+              omega
+            have hRightAvoid : ∀ action ∈ alphabet.actions,
+                action.1 ∉ PactType.ParallelInterfaces right := by
+              intro action hAction hIn
+              exact hAvoidAll action hAction (by
+                simp [PactType.ParallelInterfaces, hIn])
+            exact ih (typeCompilationFuel (right.reannotate alphabet))
+              hRightFuel (right.reannotate alphabet) rfl residualRight q2
+              (PactType.reannotate_alphabetWellFormed_avoiding right alphabet
+                hWF.2.2.2 hWF.1 hScoped.2.2 hRightAvoid)
+              (PactType.reannotate_interfaceScoped right alphabet hScoped.2.2)
+              (PactType.reannotate_interfaceAlphabetScoped right alphabet
+                hAlphaScoped.2.2 hRightAvoid)
+              (PactType.reannotate_tailRecursive right alphabet hTailRec.2)
+              (reannotate_offerBranchesDisjoint right alphabet hDisjoint.2)
+              hRightRelated
+          · injection hFinal with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF.1
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_recur_cases alphabet name body hRelated with
+            hRoot | hBody
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF
+          · rcases hBody with ⟨q, bodyResidual, hEntry, hBodyRelated⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hBodyFuel : typeCompilationFuel body < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            have hBodyResidualWF := ih (typeCompilationFuel body) hBodyFuel body
+              rfl bodyResidual q hWF.2.2 hScoped hAlphaScoped.2 hTailRec.2
+              hDisjoint hBodyRelated
+            have hBodyResidualAlphabet := relationMembership_alphabet_eq body
+              bodyResidual q
+              (PactType.alphabetCoherent_of_wellFormed body hWF.2.2)
+              hBodyRelated
+            have hBodyResidualTail :
+                bodyResidual.TailOccurrences name True :=
+              relationMembership_tailOccurrences body bodyResidual q name True
+                hTailRec.2 hTailRec.1 hBodyRelated
+            refine PactType.replaceVar_alphabetWellFormed name ?_ bodyResidual
+              hBodyResidualWF ?_ hBodyResidualTail
+            · simpa only [PactType.AlphabetWellFormed] using
+                ⟨hWF.1, hWF.2.1, hWF.2.2⟩
+            · simpa [PactType.alphabet] using
+                (hBodyResidualAlphabet.trans hWF.2.1).symm
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_xoffer_cases alphabet elseType branches
+              hRelated with hRoot | hElse | hBranch
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF
+          · rcases hElse with ⟨q, _, hElseRelated⟩
+            have hElseFuel : typeCompilationFuel elseType < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
+              residual q hWF.2.2.1 hScoped.1 hAlphaScoped.2.1 hTailRec.1
+              hDisjoint.1 hElseRelated
+          · rcases hBranch with ⟨i, action, branchType, q, hGet, _,
+              hBranchRelated⟩
+            have hMember : (action, branchType) ∈ branches :=
+              List.mem_of_getElem? hGet
+            have hBranchWF := branch_body_alphabetWellFormed_of_mem hWF.2.2.2
+              hMember
+            have hBranchFuel : typeCompilationFuel branchType < n := by
+              have hLe : typeCompilationFuel branchType ≤
+                  typeBranchCompilationFuel branches := by
+                simpa using typeCompilationFuel_le_typeBranchCompilationFuel
+                  branches (action, branchType) hMember
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel branchType) hBranchFuel branchType rfl
+              residual q hBranchWF
+              (interfaceScoped_of_mem_scopedBranches hScoped.2 hMember)
+              (interfaceAlphabetScoped_of_mem_scopedBranches hAlphaScoped.2.2
+                hMember)
+              (tailRecursive_of_mem_branches (branch := (action, branchType))
+                hTailRec.2 hMember)
+              (offerBranchesDisjoint_of_mem hDisjoint.2 hMember)
+              hBranchRelated
+      | offer alphabet elseType branches =>
+          have hOfferWF : (PactType.offer alphabet elseType branches
+              : PactType).AlphabetWellFormed := hWF
+          have hOfferScoped : (PactType.offer alphabet elseType branches
+              : PactType).InterfaceScoped := hScoped
+          have hOfferAlphaScoped : (PactType.offer alphabet elseType branches
+              : PactType).InterfaceAlphabetScoped := hAlphaScoped
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.InterfaceScoped] at hScoped
+          simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+          simp only [PactType.TailRecursive] at hTailRec
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
+          rcases relationMembership_offer_cases alphabet elseType branches
+              hRelated with hRoot | hElse | hSelected
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            simpa [PactType.AlphabetWellFormed] using hWF
+          · rcases hElse with ⟨q, _, hElseRelated⟩
+            have hElseFuel : typeCompilationFuel elseType < n := by
+              rw [← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
+              residual q hWF.2.2.1 hScoped.1 hAlphaScoped.2.1 hTailRec.1
+              hDisjoint.1 hElseRelated
+          · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
+            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
+            have hSelectedFuel : typeCompilationFuel
+                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
+              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
+              simp only [typeCompilationFuel]
+              omega
+            have hGeneratedScoped := hCommittedScoped alphabet elseType branches
+              selected hOfferScoped hOfferAlphaScoped hMember
+            exact ih (typeCompilationFuel
+                (parallelTypeBranchesSelecting alphabet selected branches))
+              hSelectedFuel
+              (parallelTypeBranchesSelecting alphabet selected branches) rfl
+              residual q
+              (hCommitted alphabet elseType branches selected hOfferWF
+                hOfferScoped hOfferAlphaScoped hMember)
+              hGeneratedScoped.1 hGeneratedScoped.2
+              (parallelTypeBranchesSelecting_tailRecursive alphabet selected
+                branches
+                (fun branch hBranch =>
+                  tailRecursive_of_mem_branches hTailRec.2 hBranch)
+                (tailRecursive_of_mem_branches hTailRec.2 hMember))
+              (parallelTypeBranchesSelecting_offerBranchesDisjoint selected
+                branches
+                (fun branch hBranch =>
+                  offerBranchesDisjoint_of_mem (action := branch.1)
+                    hDisjoint.2.2 (by simpa using hBranch)))
+              hSelectedRelated
 
 /-- Every residual represented by a compiled state keeps offer-branch
 disjointness.  Tail recursion is what makes the unfolding case go through: the
@@ -2662,6 +3306,9 @@ invariant whenever the source does. -/
 theorem relationMembership_residualInvariant
     (source residual : PactType) (state : TypeAutomatonState)
     (hSource : source.ResidualInvariant)
+    (hScoped : source.InterfaceScoped)
+    (hAlphaScoped : source.InterfaceAlphabetScoped)
+    (hCommittedScoped : CommittedOfferScoping)
     (hRelated :
       relationMembership (buildRelationSet source (compileType source))
         residual state) :
@@ -2669,8 +3316,8 @@ theorem relationMembership_residualInvariant
   have hTail := relationMembership_tailRecursive source residual state
     hSource.2.1 hSource.2.2.1 hRelated
   ⟨relationMembership_alphabetWellFormed
-      committedOfferAlphabetWellFormed_holds source residual state hSource.1
-      hSource.2.1 hSource.2.2.2 hRelated,
+      committedOfferAlphabetWellFormed_holds hCommittedScoped source residual
+      state hSource.1 hScoped hAlphaScoped hSource.2.1 hSource.2.2.2 hRelated,
     hTail.1, hTail.2,
     relationMembership_offerBranchesDisjoint source residual state
       hSource.2.1 hSource.2.2.2 hRelated⟩
@@ -2698,6 +3345,85 @@ theorem DecoratedTypeTransition.preserves_alphabetWellFormed
     target.AlphabetWellFormed :=
   TypeTransition.preserves_alphabetWellFormed transition.1 hSource hTailRec
     hDisjoint
+
+/-- The unselected branch product preserves the interface scoping of its
+branch bodies. -/
+theorem parallelTypeBranchesWithin_interfaceScoped
+    (alphabet : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.InterfaceScopedBranches branches →
+      PactType.InterfaceScoped
+        (parallelTypeBranchesWithin alphabet branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      simp [parallelTypeBranchesWithin, PactType.InterfaceScoped]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro hScoped
+      simp only [PactType.InterfaceScopedBranches] at hScoped
+      have hBody : PactType.InterfaceScoped (body.reannotate alphabet) :=
+        PactType.reannotate_interfaceScoped body alphabet hScoped.1
+      have hLeaf : PactType.InterfaceScoped
+          (singletonTypeXOfferAt alphabet (action, body)) := by
+        simpa [singletonTypeXOfferAt, PactType.InterfaceScoped,
+          PactType.InterfaceScopedBranches] using hBody
+      cases rest with
+      | nil => simpa [parallelTypeBranchesWithin] using hLeaf
+      | cons next tail =>
+          simp only [parallelTypeBranchesWithin, PactType.InterfaceScoped]
+          exact ⟨by simp, hLeaf, ih hScoped.2⟩
+
+/-- The committed branch product preserves the interface scoping of its
+branch bodies.  Its synthetic parallel nodes all use the empty interface. -/
+theorem parallelTypeBranchesSelecting_interfaceScoped
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hScoped : PactType.InterfaceScopedBranches branches) :
+    PactType.InterfaceScoped
+      (parallelTypeBranchesSelecting alphabet selected branches) := by
+  have hWithin : ∀ list : List (BareMessage × PactType),
+      PactType.InterfaceScopedBranches list →
+      PactType.InterfaceScoped
+        (parallelTypeBranchesSelectingWithin alphabet selected list) := by
+    intro list
+    induction list with
+    | nil =>
+        simp [parallelTypeBranchesSelectingWithin,
+          PactType.InterfaceScoped]
+    | cons head rest ih =>
+        rcases head with ⟨action, body⟩
+        intro hList
+        simp only [PactType.InterfaceScopedBranches] at hList
+        have hBody : PactType.InterfaceScoped (body.reannotate alphabet) :=
+          PactType.reannotate_interfaceScoped body alphabet hList.1
+        have hSelected : PactType.InterfaceScoped
+            (selectedTypeBranchAt alphabet (action, body)) := by
+          simpa [selectedTypeBranchAt, PactType.InterfaceScoped] using hBody
+        have hSingleton : PactType.InterfaceScoped
+            (singletonTypeXOfferAt alphabet (action, body)) := by
+          simpa [singletonTypeXOfferAt, PactType.InterfaceScoped,
+            PactType.InterfaceScopedBranches] using hBody
+        cases rest with
+        | nil =>
+            by_cases hSel : (action, body) = selected
+            · simpa [parallelTypeBranchesSelectingWithin, hSel] using hSelected
+            · simpa [parallelTypeBranchesSelectingWithin, hSel] using hSingleton
+        | cons next tail =>
+            by_cases hSel : (action, body) = selected
+            · simp only [parallelTypeBranchesSelectingWithin,
+                List.cons_ne_nil, if_pos hSel, PactType.InterfaceScoped]
+              refine ⟨by simp, hSelected, ?_⟩
+              exact parallelTypeBranchesWithin_interfaceScoped alphabet
+                (next :: tail) hList.2
+            · simp only [parallelTypeBranchesSelectingWithin,
+                List.cons_ne_nil, if_neg hSel, PactType.InterfaceScoped]
+              exact ⟨by simp, hSingleton, ih hList.2⟩
+  cases branches with
+  | nil =>
+      simp [parallelTypeBranchesSelecting, PactType.InterfaceScoped]
+  | cons head rest =>
+      exact hWithin (head :: rest) hScoped
 
 /-- Every component of the branch product carries the enclosing alphabet, and
 the interfaces below it are exactly the branches' own, so the offer's scoping
@@ -2890,6 +3616,22 @@ theorem parallelTypeBranchesSelecting_interfaceAlphabetScoped
       simp [parallelTypeBranchesSelecting, PactType.InterfaceAlphabetScoped]
   | cons head rest =>
       exact hWithin (head :: rest) (Finset.Subset.refl _) hScoped
+
+/-- The generated committed-offer product satisfies both interface-scoping
+obligations required by the relation induction. -/
+theorem committedOfferScoping_holds : CommittedOfferScoping := by
+  intro alphabet elseType branches selected hScoped hAlphaScoped _
+  have hAvoidAll :=
+    PactType.InterfaceAlphabetScoped.avoids hAlphaScoped
+  simp only [PactType.InterfaceScoped] at hScoped
+  simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+  refine ⟨parallelTypeBranchesSelecting_interfaceScoped alphabet selected
+      branches hScoped.2,
+    parallelTypeBranchesSelecting_interfaceAlphabetScoped alphabet selected
+      branches hAlphaScoped.2.2 ?_⟩
+  intro action hAction hIn
+  exact hAvoidAll action hAction (by
+    simp [PactType.ParallelInterfaces, hIn])
 
 end
 
