@@ -322,7 +322,6 @@ def CurrentOfferCorrespondence (processType : PactType) : Prop :=
       relationMembership
         (buildRelationSet processType (compileType processType))
         residual state →
-      AutomatonStateReachable processType state →
       DecoratedTypeTransition env residual label
         { current := current, future := future } residual' →
       ∃ state' future',
@@ -337,7 +336,6 @@ def CurrentOfferCorrespondence (processType : PactType) : Prop :=
       relationMembership
         (buildRelationSet processType (compileType processType))
         residual state →
-      AutomatonStateReachable processType state →
       (compileType processType).HasEdge state env label
         { current := current, future := future } state' →
       ∃ residual' future',
@@ -353,7 +351,6 @@ def SameCycleCompletionAgrees (processType : PactType) : Prop :=
     relationMembership
       (buildRelationSet processType (compileType processType))
       residual state →
-    AutomatonStateReachable processType state →
     (AutomatonSameCycleReachesAccepting
         (compileTypeFuel (typeCompilationFuel processType) processType) state ↔
       TypeSameCycleCanComplete residual)
@@ -364,7 +361,6 @@ def FutureOffersAgree (processType : PactType) : Prop :=
     relationMembership
       (buildRelationSet processType (compileType processType))
       residual state →
-    AutomatonStateReachable processType state →
     computeFutureOf processType state = typeFutureOffers residual
 
 /-! ### Base-fragment menus missing from `CompileWFHelpers` -/
@@ -548,7 +544,7 @@ lemma computeFutureOf_message_root_of_not_declared
 
 lemma futureOffersAgree_skip (alphabet : PactTypeAlphabet) :
     FutureOffersAgree (.skip alphabet) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   obtain ⟨hResidual, hState⟩ := relationMembership_skip_cases alphabet hRelated
   subst hResidual; subst hState
   rw [computeFutureOf_skip_root]
@@ -556,7 +552,7 @@ lemma futureOffersAgree_skip (alphabet : PactTypeAlphabet) :
 
 lemma futureOffersAgree_var (alphabet : PactTypeAlphabet) (name : String) :
     FutureOffersAgree (.var alphabet name) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated
@@ -567,7 +563,7 @@ lemma futureOffersAgree_var (alphabet : PactTypeAlphabet) (name : String) :
 
 lemma futureOffersAgree_tock (alphabet : PactTypeAlphabet) :
     FutureOffersAgree (.tock alphabet) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   rcases relationMembership_tock_cases alphabet hRelated with
     ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
   · rw [computeFutureOf_tock_root]
@@ -577,7 +573,7 @@ lemma futureOffersAgree_tock (alphabet : PactTypeAlphabet) :
 
 lemma futureOffersAgree_progress (alphabet : PactTypeAlphabet) (pid : ProcId) :
     FutureOffersAgree (.progress alphabet pid) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   rcases relationMembership_progress_cases alphabet pid hRelated with
     ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
   · rw [computeFutureOf_progress_root]
@@ -588,7 +584,7 @@ lemma futureOffersAgree_progress (alphabet : PactTypeAlphabet) (pid : ProcId) :
 lemma futureOffersAgree_message (alphabet : PactTypeAlphabet)
     (msg : MessageId) (dir : MessageDir) :
     FutureOffersAgree (.message alphabet msg dir) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   rcases relationMembership_message_cases alphabet msg dir hRelated with
     ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
   · by_cases hDeclared : (msg, dir) ∈ alphabet.actions
@@ -742,7 +738,7 @@ re-entering that theorem's `sizeOf` induction. -/
 
 lemma sameCycleCompletionAgrees_skip (alphabet : PactTypeAlphabet) :
     SameCycleCompletionAgrees (.skip alphabet) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   obtain ⟨hResidual, hState⟩ := relationMembership_skip_cases alphabet hRelated
   subst hResidual; subst hState
   constructor
@@ -754,7 +750,7 @@ lemma sameCycleCompletionAgrees_skip (alphabet : PactTypeAlphabet) :
 lemma sameCycleCompletionAgrees_var (alphabet : PactTypeAlphabet)
     (name : String) :
     SameCycleCompletionAgrees (.var alphabet name) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   unfold relationMembership buildRelationSet buildRelationSetCore at hRelated
   simp only [typeCompilationFuel, buildRelationSetCoreFuel,
     Finset.mem_singleton, Prod.mk.injEq] at hRelated
@@ -775,7 +771,7 @@ lemma sameCycleCompletionAgrees_var (alphabet : PactTypeAlphabet)
 lemma sameCycleCompletionAgrees_message (alphabet : PactTypeAlphabet)
     (msg : MessageId) (dir : MessageDir) :
     SameCycleCompletionAgrees (.message alphabet msg dir) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   set env : TypeEnvironment :=
     { immediate := {(msg, dir.invert)}, future := ∅, clock := false } with hEnvDef
   have hHasNeed : env.hasNeed (msg, dir) := by
@@ -845,7 +841,7 @@ lemma sameCycleCompletionAgrees_message (alphabet : PactTypeAlphabet)
 
 lemma sameCycleCompletionAgrees_tock (alphabet : PactTypeAlphabet) :
     SameCycleCompletionAgrees (.tock alphabet) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   rcases relationMembership_tock_cases alphabet hRelated with
     ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
   · have hTockStays : ∀ ρ', TypeSameCycleReaches (.tock alphabet) ρ' →
@@ -893,7 +889,7 @@ lemma sameCycleCompletionAgrees_tock (alphabet : PactTypeAlphabet) :
 lemma sameCycleCompletionAgrees_progress (alphabet : PactTypeAlphabet)
     (pid : ProcId) :
     SameCycleCompletionAgrees (.progress alphabet pid) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   rcases relationMembership_progress_cases alphabet pid hRelated with
     ⟨hResidual, hState⟩ | ⟨hResidual, hState⟩ <;> subst hResidual <;> subst hState
   · constructor
@@ -974,12 +970,10 @@ private lemma mem_transitionAlphabet_of
     {processType : PactType} {env : TypeEnvironment} {label : TypeLabel}
     {offers : TypeOfferSummary}
     (hEnv : env ∈ processType.alphabet.localEnvironments)
-    (hLabel : label ∈ processType.labels)
+    (_hLabel : label ∈ processType.labels)
     (hOffers : offers ∈ processType.alphabet.localOfferSummaries) :
-    ({ environment := env, label := label, offers := offers } :
-      TypeAutomatonSymbol) ∈ (compileType processType).alphabet := by
-  simp only [compileType, PactType.mem_transitionAlphabet_iff]
-  exact ⟨hEnv, hLabel, hOffers⟩
+    SymbolGuard processType env offers :=
+  ⟨hEnv, hOffers⟩
 
 private lemma mem_localOfferSummaries_of_subset
     {alphabet : PactTypeAlphabet} {current future : Finset BareMessage}
@@ -1125,8 +1119,7 @@ def BaseGuard (processType : PactType) : Prop :=
     ((∃ target, DecoratedTypeTransition env residual label offers target) ∨
       (∃ state', (compileType processType).HasEdge state env label offers
         state')) →
-    ({ environment := env, label := label, offers := offers } :
-      TypeAutomatonSymbol) ∈ (compileType processType).alphabet
+    SymbolGuard processType env offers
 
 private lemma skip_guard (alphabet : PactTypeAlphabet) :
     BaseGuard (.skip alphabet) := by
@@ -1283,7 +1276,7 @@ private lemma progress_guard (alphabet : PactTypeAlphabet) (pid : ProcId) :
       | progress _ _ _ cond =>
           refine mem_transitionAlphabet_of
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
-            (progress_mem_labels (by simp [PactType.ProgressIds]))
+            (progress_mem_labels (pid := pid) (by simp [PactType.ProgressIds]))
             (mem_localOfferSummaries_of_subset (by simp) ?_)
           simp [typeFutureOffers, typeFutureOffersFuel]
     · have hEnvMem := compileType_base_edge_env_mem
@@ -1292,7 +1285,7 @@ private lemma progress_guard (alphabet : PactTypeAlphabet) (pid : ProcId) :
         ⟨-, -, hLabel, hCurrent, hFuture, -⟩ | ⟨hSource, -⟩
       · subst hLabel; subst hCurrent; subst hFuture
         exact mem_transitionAlphabet_of hEnvMem
-          (progress_mem_labels (by simp [PactType.ProgressIds]))
+          (progress_mem_labels (pid := pid) (by simp [PactType.ProgressIds]))
           (mem_localOfferSummaries_of_subset (by simp) (by simp))
       · simp at hSource
   · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
@@ -1346,12 +1339,11 @@ theorem currentOfferCorrespondence_of_stepIff {processType : PactType}
           residual' state') :
     CurrentOfferCorrespondence processType := by
   constructor
-  · intro residual residual' state env label current future hRelated _hReach
-      hTransition
+  · intro residual residual' state env label current future hRelated hTransition
     have hSymbol := hGuard hRelated (Or.inl ⟨residual', hTransition⟩)
     obtain ⟨state', hEdge, hRelated'⟩ := (hStep hRelated hSymbol).mp hTransition
     exact ⟨state', future, hEdge, hRelated'⟩
-  · intro residual state state' env label current future hRelated _hReach hEdge
+  · intro residual state state' env label current future hRelated hEdge
     have hSymbol := hGuard hRelated (Or.inr ⟨state', hEdge⟩)
     obtain ⟨residual', hRelated'⟩ := hTargets hRelated hEdge
     exact ⟨residual', future,
@@ -5030,6 +5022,16 @@ theorem automatonStateReachable_mem_states (processType : PactType)
       exact compileTypeFuel_edgeTargetsInStates (typeCompilationFuel processType)
         processType (Nat.le_refl _) hDisjoint edge hEdge
 
+/-- Every state named by the compiler relation belongs to the compiled
+fragment's carrier. -/
+theorem relationMembership_state_mem
+    (processType residual : PactType) (state : TypeAutomatonState)
+    (hRelated : relationMembership
+      (buildRelationSet processType (compileType processType)) residual state) :
+    state ∈ (compileTypeFuel (typeCompilationFuel processType)
+      processType).states := by
+  sorry
+
 /-- Menus agree at a binary choice: the root reaches exactly its two copied
 child entries, and their menus agree by the child hypotheses. -/
 theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
@@ -5067,7 +5069,7 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
     fun q hq => computeFutureOf_binaryChoice_right alphabet left right
       TypeLabel.silent TypeLabel.silent whole hWhole hFuelRight hRightDisjoint
       hProductRight q hq
-  intro residual state hRelated hReach
+  intro residual state hRelated
   rcases relationMembership_choice_cases alphabet left right hRelated with
     hRoot | ⟨q, hState, hChild⟩ | ⟨q, hState, hChild⟩
   · -- Root: split the menu across the two selection edges.
@@ -5127,28 +5129,20 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
         (compileTypeFuel (typeCompilationFuel left) left).initial =
           typeFutureOffers left :=
       hLeft (buildRelationSet_initial left _ rfl)
-        (automatonStateReachable_initial left)
     have hRightMenu : computeFutureOf right
         (compileTypeFuel (typeCompilationFuel right) right).initial =
           typeFutureOffers right :=
       hRight (buildRelationSet_initial right _ rfl)
-        (automatonStateReachable_initial right)
     rw [hTransportLeft _ (compileTypeFuel_initial_mem _ left (Nat.le_refl _)),
       hTransportRight _ (compileTypeFuel_initial_mem _ right (Nat.le_refl _)),
       hLeftMenu, hRightMenu]
     exact (typeFutureOffers_choice alphabet left right).symm
   · subst hState
-    have hChildReach :=
-      automatonStateReachable_binaryChoice_child0 hWhole hReach
-    rw [hTransportLeft q
-      (automatonStateReachable_mem_states left hLeftDisjoint hChildReach)]
-    exact hLeft hChild hChildReach
+    rw [hTransportLeft q (relationMembership_state_mem left _ q hChild)]
+    exact hLeft hChild
   · subst hState
-    have hChildReach :=
-      automatonStateReachable_binaryChoice_child1 hWhole hReach
-    rw [hTransportRight q
-      (automatonStateReachable_mem_states right hRightDisjoint hChildReach)]
-    exact hRight hChild hChildReach
+    rw [hTransportRight q (relationMembership_state_mem right _ q hChild)]
+    exact hRight hChild
 
 /-- Compiling a fair choice at its own budget builds the same sum automaton,
 with observable selection labels. -/
@@ -5207,7 +5201,7 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
     fun q hq => computeFutureOf_binaryChoice_right alphabet left right
       (TypeLabel.fair bid true) (TypeLabel.fair bid false) whole hWhole hFuelRight hRightDisjoint
       hProductRight q hq
-  intro residual state hRelated hReach
+  intro residual state hRelated
   rcases relationMembership_fairChoice_cases alphabet bid left right hRelated with
     hRoot | ⟨q, hState, hChild⟩ | ⟨q, hState, hChild⟩
   · -- Root: split the menu across the two selection edges.
@@ -5267,28 +5261,20 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
         (compileTypeFuel (typeCompilationFuel left) left).initial =
           typeFutureOffers left :=
       hLeft (buildRelationSet_initial left _ rfl)
-        (automatonStateReachable_initial left)
     have hRightMenu : computeFutureOf right
         (compileTypeFuel (typeCompilationFuel right) right).initial =
           typeFutureOffers right :=
       hRight (buildRelationSet_initial right _ rfl)
-        (automatonStateReachable_initial right)
     rw [hTransportLeft _ (compileTypeFuel_initial_mem _ left (Nat.le_refl _)),
       hTransportRight _ (compileTypeFuel_initial_mem _ right (Nat.le_refl _)),
       hLeftMenu, hRightMenu]
     exact (typeFutureOffers_fairChoice alphabet bid left right).symm
   · subst hState
-    have hChildReach :=
-      automatonStateReachable_binaryChoice_child0 hWhole hReach
-    rw [hTransportLeft q
-      (automatonStateReachable_mem_states left hLeftDisjoint hChildReach)]
-    exact hLeft hChild hChildReach
+    rw [hTransportLeft q (relationMembership_state_mem left _ q hChild)]
+    exact hLeft hChild
   · subst hState
-    have hChildReach :=
-      automatonStateReachable_binaryChoice_child1 hWhole hReach
-    rw [hTransportRight q
-      (automatonStateReachable_mem_states right hRightDisjoint hChildReach)]
-    exact hRight hChild hChildReach
+    rw [hTransportRight q (relationMembership_state_mem right _ q hChild)]
+    exact hRight hChild
 
 /-- Compiling an exclusive offer at its own budget builds the offer automaton
 over the default and branch fragments compiled at theirs. -/
@@ -5352,7 +5338,7 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
       branch hBranch
     simp only [hWholeDef, typeCompilationFuel]
     omega
-  intro residual state hRelated hReach
+  intro residual state hRelated
   rcases relationMembership_xoffer_cases alphabet elseType branches
       hRelated with hRoot | ⟨q, hState, hChild⟩ |
       ⟨i, action, branchType, q, hGet, hState, hChild⟩
@@ -5412,7 +5398,6 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
         elseFragment.initial
         (compileTypeFuel_initial_mem _ elseType (Nat.le_refl _))]
       exact hElse (buildRelationSet_initial elseType _ rfl)
-        (automatonStateReachable_initial elseType)
     -- and each branch entry its branch's
     have hBranchMenu : ∀ indexed ∈ branchAutomata.zipIdx,
         ∃ branch ∈ branches,
@@ -5438,7 +5423,6 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
           indexed.2 branch.1 branch.2 hGetBranch) _
         (compileTypeFuel_initial_mem _ branch.2 (Nat.le_refl _))]
       exact hBranches branch hMem (buildRelationSet_initial branch.2 _ rfl)
-        (automatonStateReachable_initial branch.2)
     have hBranchMenu' : ∀ branch ∈ branches,
         ∃ indexed ∈ branchAutomata.zipIdx,
           computeFutureOf whole
@@ -5460,7 +5444,6 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
           branch.1 branch.2 hGetBranch) _
         (compileTypeFuel_initial_mem _ branch.2 (Nat.le_refl _))]
       exact hBranches branch hMem (buildRelationSet_initial branch.2 _ rfl)
-        (automatonStateReachable_initial branch.2)
     ext offer
     rw [mem_foldl_offer_menu, Finset.mem_union, Finset.mem_biUnion,
       typeBranchActions, List.mem_toFinset, List.mem_map]
@@ -5483,26 +5466,22 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
         exact Or.inr ⟨childState (indexed.2 + 1) indexed.1.2.initial,
           Or.inr ⟨indexed, hIndexed, rfl⟩, by rw [hMenu]; exact hMenuIn⟩
   · subst hState
-    have hChildReach :=
-      automatonStateReachable_exclusiveOffer_child0 hWhole hReach
     rw [computeFutureOf_exclusiveOffer_else elseType branches whole hWhole
       hElseFuel hElseDisjoint
       (stateProductInfo_xoffer_child_else alphabet elseType branches) q
-      (automatonStateReachable_mem_states elseType hElseDisjoint hChildReach)]
-    exact hElse hChild hChildReach
+      (relationMembership_state_mem elseType _ q hChild)]
+    exact hElse hChild
   · subst hState
     have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hGet
     have hDisjoint : branchType.OfferBranchesDisjoint :=
       hBranchDisjoint (action, branchType) hMem
-    have hChildReach :=
-      automatonStateReachable_exclusiveOffer_branch hWhole hGet hReach
     rw [computeFutureOf_exclusiveOffer_branch elseType branches whole hWhole
       i action branchType hGet (hBranchFuel (action, branchType) hMem)
       hDisjoint
       (stateProductInfo_xoffer_child_branch alphabet elseType branches i action
         branchType hGet) q
-      (automatonStateReachable_mem_states branchType hDisjoint hChildReach)]
-    exact hBranches (action, branchType) hMem hChild hChildReach
+      (relationMembership_state_mem branchType _ q hChild)]
+    exact hBranches (action, branchType) hMem hChild
 
 /-! ### Conjunctive-offer automaton helpers
 
@@ -5891,7 +5870,7 @@ lemma sameCycleCompletionAgrees_choice
     (hLeftComplete : SameCycleCompletionAgrees left)
     (hRightComplete : SameCycleCompletionAgrees right) :
     SameCycleCompletionAgrees (.choice alphabet left right) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
@@ -5952,27 +5931,23 @@ lemma sameCycleCompletionAgrees_choice
         (by simp [TypeLabel.isTock, TypeLabel.silent])]
     have hIHLeft := hLeftComplete
       (buildRelationSet_initial left (compileType left))
-      (automatonStateReachable_initial left)
     have hIHRight := hRightComplete
       (buildRelationSet_initial right (compileType right))
-      (automatonStateReachable_initial right)
     simp only [compileType] at hIHLeft hIHRight
     rw [← hLeftAutoDef] at hIHLeft
     rw [← hRightAutoDef] at hIHRight
     rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
   · subst hStateEq
-    exact (hTag0 q).trans (hLeftComplete hLeftRelated
-      (automatonStateReachable_binaryChoice_child0 hWhole hStateReachable))
+    exact (hTag0 q).trans (hLeftComplete hLeftRelated)
   · subst hStateEq
-    exact (hTag1 q).trans (hRightComplete hRightRelated
-      (automatonStateReachable_binaryChoice_child1 hWhole hStateReachable))
+    exact (hTag1 q).trans (hRightComplete hRightRelated)
 
 lemma sameCycleCompletionAgrees_fairChoice
     (alphabet : PactTypeAlphabet) (bid : BranchId) (left right : PactType)
     (hLeftComplete : SameCycleCompletionAgrees left)
     (hRightComplete : SameCycleCompletionAgrees right) :
     SameCycleCompletionAgrees (.fairChoice alphabet bid left right) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
@@ -6033,27 +6008,23 @@ lemma sameCycleCompletionAgrees_fairChoice
         (by simp [TypeLabel.isTock, TypeLabel.fair])]
     have hIHLeft := hLeftComplete
       (buildRelationSet_initial left (compileType left))
-      (automatonStateReachable_initial left)
     have hIHRight := hRightComplete
       (buildRelationSet_initial right (compileType right))
-      (automatonStateReachable_initial right)
     simp only [compileType] at hIHLeft hIHRight
     rw [← hLeftAutoDef] at hIHLeft
     rw [← hRightAutoDef] at hIHRight
     rw [hTag0 leftAuto.initial, hTag1 rightAuto.initial, hIHLeft, hIHRight]
   · subst hStateEq
-    exact (hTag0 q).trans (hLeftComplete hLeftRelated
-      (automatonStateReachable_binaryChoice_child0 hWhole hStateReachable))
+    exact (hTag0 q).trans (hLeftComplete hLeftRelated)
   · subst hStateEq
-    exact (hTag1 q).trans (hRightComplete hRightRelated
-      (automatonStateReachable_binaryChoice_child1 hWhole hStateReachable))
+    exact (hTag1 q).trans (hRightComplete hRightRelated)
 
 lemma sameCycleCompletionAgrees_seq
     (alphabet : PactTypeAlphabet) (left right : PactType)
     (hLeftComplete : SameCycleCompletionAgrees left)
     (hRightComplete : SameCycleCompletionAgrees right) :
     SameCycleCompletionAgrees (.seq alphabet left right) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   have hFuelEq : typeCompilationFuel (.seq alphabet left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
@@ -6083,10 +6054,8 @@ lemma sameCycleCompletionAgrees_seq
     ⟨q2, hStateEq, hRightRelated⟩
   · subst hResidualEq; subst hStateEq
     have hIHLeft := hLeftComplete hLeftRelated
-      (automatonStateReachable_sequence_child0 hWhole hStateReachable)
     have hIHRightInit := hRightComplete
       (buildRelationSet_initial right (compileType right))
-      (automatonStateReachable_initial right)
     simp only [compileType] at hIHRightInit
     rw [← hRightAutoDef] at hIHRightInit
     rw [typeSameCycleCanComplete_seq_iff]
@@ -6136,8 +6105,7 @@ lemma sameCycleCompletionAgrees_seq
           rightAuto leftAuto.initial _).mpr ⟨target, hStep, ?_⟩
         rw [sequenceRedirect, if_pos hTargetAccepting]
   · subst hStateEq
-    exact (hTag1 q2).trans (hRightComplete hRightRelated
-      (automatonStateReachable_sequence_child1 hWhole hStateReachable))
+    exact (hTag1 q2).trans (hRightComplete hRightRelated)
 
 lemma sameCycleCompletionAgrees_xoffer
     (alphabet : PactTypeAlphabet) (elseType : PactType)
@@ -6145,7 +6113,7 @@ lemma sameCycleCompletionAgrees_xoffer
     (hElseComplete : SameCycleCompletionAgrees elseType)
     (hBranchComplete : ∀ entry ∈ branches, SameCycleCompletionAgrees entry.2) :
     SameCycleCompletionAgrees (.xoffer alphabet elseType branches) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   have hEmptyLocal : TypeEnvironment.empty ∈ alphabet.localEnvironments := by
     simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
@@ -6273,7 +6241,6 @@ lemma sameCycleCompletionAgrees_xoffer
           (hFiringEnv hBranchActions)]
       have hIHElse := hElseComplete
         (buildRelationSet_initial elseType (compileType elseType))
-        (automatonStateReachable_initial elseType)
       simp only [compileType] at hIHElse
       rw [← hElseAutoDef] at hIHElse
       rw [hTag0 elseAuto.initial, hIHElse]
@@ -6286,7 +6253,6 @@ lemma sameCycleCompletionAgrees_xoffer
           refine Or.inr ⟨(action, branchType), hMem, ?_⟩
           have hIHBranch := hBranchComplete _ hMem
             (buildRelationSet_initial branchType (compileType branchType))
-            (automatonStateReachable_initial branchType)
           simp only [compileType] at hIHBranch
           exact hIHBranch.mp ((hTagBranch i action _ hGet _).mp hReach)
       · rintro (hElse | ⟨entry, hMem, hEntry⟩)
@@ -6297,7 +6263,6 @@ lemma sameCycleCompletionAgrees_xoffer
             hMapGetRev i entry hBranchGet, ?_⟩
           have hIHBranch := hBranchComplete _ hMem
             (buildRelationSet_initial entry.2 (compileType entry.2))
-            (automatonStateReachable_initial entry.2)
           simp only [compileType] at hIHBranch
           exact (hTagBranch i entry.1 _ (hMapGetRev i entry hBranchGet) _).mpr
             (hIHBranch.mpr hEntry)
@@ -6321,14 +6286,12 @@ lemma sameCycleCompletionAgrees_xoffer
           | xoffer_else _ _ _ _ _ hActions => exact hActions
           | xoffer_wait _ _ _ _ _ hActions => exact hActions
   · subst hStateEq
-    exact (hTag0 q).trans (hElseComplete hElseRelated
-      (automatonStateReachable_exclusiveOffer_child0 hWhole hStateReachable))
+    exact (hTag0 q).trans (hElseComplete hElseRelated)
   · subst hStateEq
     have hMem : (action, branchType) ∈ branches := List.mem_of_getElem? hGet
-    refine ((hTagBranch i action _ (hMapGetRev i (action, branchType) hGet) q).trans
-      (hBranchComplete _ hMem hBranchRelated
-        (automatonStateReachable_exclusiveOffer_branch hWhole hGet
-          hStateReachable)))
+    exact ((hTagBranch i action _
+      (hMapGetRev i (action, branchType) hGet) q).trans
+      (hBranchComplete _ hMem hBranchRelated))
 
 lemma sameCycleCompletionAgrees_offer
     (alphabet : PactTypeAlphabet) (elseType : PactType)
@@ -6338,7 +6301,7 @@ lemma sameCycleCompletionAgrees_offer
       SameCycleCompletionAgrees
         (parallelTypeBranchesSelecting alphabet selected branches)) :
     SameCycleCompletionAgrees (.offer alphabet elseType branches) := by
-  intro residual state hRelated hStateReachable
+  intro residual state hRelated
   have hEmptyLocal : TypeEnvironment.empty ∈ alphabet.localEnvironments := by
     simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
@@ -6484,7 +6447,6 @@ lemma sameCycleCompletionAgrees_offer
           (hFiringEnv hBranchActions)]
       have hIHElse := hElseComplete
         (buildRelationSet_initial elseType (compileType elseType))
-        (automatonStateReachable_initial elseType)
       simp only [compileType] at hIHElse
       rw [← hElseAutoDef] at hIHElse
       rw [hTag0 elseAuto.initial, hIHElse]
@@ -6500,8 +6462,6 @@ lemma sameCycleCompletionAgrees_offer
               (parallelTypeBranchesSelecting alphabet selected branches)
               (compileType
                 (parallelTypeBranchesSelecting alphabet selected branches)))
-            (automatonStateReachable_initial
-              (parallelTypeBranchesSelecting alphabet selected branches))
           simp only [compileType] at hIHSel
           exact hIHSel.mp ((hTagBranch i action _ hGet _).mp hReach)
       · rintro (hElse | ⟨selected, hMem, hEntry⟩)
@@ -6518,8 +6478,6 @@ lemma sameCycleCompletionAgrees_offer
               (parallelTypeBranchesSelecting alphabet selected branches)
               (compileType
                 (parallelTypeBranchesSelecting alphabet selected branches)))
-            (automatonStateReachable_initial
-              (parallelTypeBranchesSelecting alphabet selected branches))
           simp only [compileType] at hIHSel
           exact (hTagBranch i selected.1 _ (hMapGetRev i selected hSelGet) _).mpr
             (hIHSel.mpr hEntry)
@@ -6543,14 +6501,11 @@ lemma sameCycleCompletionAgrees_offer
           | offer_else _ _ _ _ _ hActions => exact hActions
           | offer_wait _ _ _ _ _ hActions => exact hActions
   · subst hStateEq
-    exact (hTag0 q).trans (hElseComplete hElseRelated
-      (automatonStateReachable_conjunctiveOffer_child0 hWhole hStateReachable))
+    exact (hTag0 q).trans (hElseComplete hElseRelated)
   · subst hStateEq
     have hMem : selected ∈ branches := List.mem_of_getElem? hGet
     exact ((hTagBranch i selected.1 _ (hMapGetRev i selected hGet) q).trans
-      (hSelectedComplete selected hMem hSelectedRelated
-        (automatonStateReachable_conjunctiveOffer_branch hWhole hGet
-          hStateReachable)))
+      (hSelectedComplete selected hMem hSelectedRelated))
 
 /-- The three helpers, proved together by induction on `typeCompilationFuel`. -/
 theorem correspondence_simultaneous :

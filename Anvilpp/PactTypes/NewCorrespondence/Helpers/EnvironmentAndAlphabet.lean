@@ -172,6 +172,43 @@ theorem transitionAlphabetFor_of_typeOffers_target_subset
   · simpa [Finset.mem_union] using hTarget hFuture
   · exact Or.inr hCurrent
 
+/-- The guard survives replacing the future component by anything the current
+offers and the old future already cover. -/
+theorem symbolGuard_change_future_of_subset_union
+     (processType : PactType)
+    {env : TypeEnvironment}
+    {current future future' : Finset BareMessage}
+    (hGuard : SymbolGuard processType env (TypeOfferSummary.mk current future))
+    (hFuture' : future' ⊆ future ∪ current) :
+    SymbolGuard processType env (TypeOfferSummary.mk current future') := by
+  refine ⟨hGuard.1, ?_⟩
+  have hOffers := hGuard.2
+  rw [PactTypeAlphabet.mem_localOfferSummaries_iff] at hOffers ⊢
+  exact ⟨hOffers.1, hFuture'.trans
+    (Finset.union_subset hOffers.2 hOffers.1)⟩
+
+/-- Guard-level form of `transitionAlphabetFor_of_typeOffers_target_subset`. -/
+theorem symbolGuard_of_typeOffers_target_subset
+     (processType : PactType)
+    {env : TypeEnvironment} {source target : PactType}
+    {label : TypeLabel} {current parentFuture childFuture : Finset BareMessage}
+    (hGuard :
+      SymbolGuard processType env
+        (TypeOfferSummary.mk current parentFuture))
+    (hOffers : TypeOffers env source label target current childFuture)
+    (hTarget :
+      typeFutureOffers target ⊆ parentFuture ∪ current) :
+    SymbolGuard processType env
+      (TypeOfferSummary.mk current childFuture) := by
+  apply symbolGuard_change_future_of_subset_union processType hGuard
+  intro action hAction
+  have hStepFuture :=
+    typeOffers_future_subset_target_union_current hOffers hAction
+  rw [Finset.mem_union] at hStepFuture ⊢
+  rcases hStepFuture with hFuture | hCurrent
+  · simpa [Finset.mem_union] using hTarget hFuture
+  · exact Or.inr hCurrent
+
 theorem subset_sdiff_union_self {α : Type} [DecidableEq α]
     (future current : Finset α) :
     future ⊆ (future \ current) ∪ current := by

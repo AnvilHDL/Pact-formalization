@@ -19,54 +19,6 @@ noncomputable section
 
 /-! ### Uniform offer law -/
 
-/-- Clock half of the uniform offer law: a clock step advertises nothing now. -/
-theorem TypeOffers.current_eq_empty_of_label_tock
-    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
-    {current future : Finset BareMessage}
-    (hOffers : TypeOffers env source label target current future)
-    (hLabel : label = TypeLabel.tock) :
-    current = ∅ := by
-  induction hOffers using TypeOffers.rec with
-  | action => cases hLabel
-  | action_wait => cases hLabel
-  | choice_left => cases hLabel
-  | choice_right => cases hLabel
-  | fair_left => cases hLabel
-  | fair_right => cases hLabel
-  | cycle => rfl
-  | cycle_wait => cases hLabel
-  | skip => cases hLabel
-  | progress => cases hLabel
-  | recur => cases hLabel
-  | seq _ _ _ _ _ _ _ _ _ _ hNotTock _ => exact absurd hLabel hNotTock
-  | seq_tock => rfl
-  | seq_fuse _ _ _ _ _ _ _ _ _ hNotTock _ => exact absurd hLabel hNotTock
-  | seq_fuse_tock => rfl
-  | xoffer_branch => cases hLabel
-  | xoffer_else => cases hLabel
-  | xoffer_wait => cases hLabel
-  | offer_some => cases hLabel
-  | offer_else => cases hLabel
-  | offer_wait => cases hLabel
-  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _
-      _ ihLeft ihRight =>
-      obtain ⟨hLeftTock, hRightTock⟩ :=
-        (TypeLabel.combine_eq_tock_iff interface leftLabel rightLabel).mp hLabel
-      rw [ihLeft hLeftTock, ihRight hRightTock]
-      simp [hideTypeOffers]
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
-      exact absurd hLabel hNotTock
-  | par_fuse_tock => rfl
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | left_complete_tock => rfl
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | right_complete_tock => rfl
-
-/-- Non-clock half of the uniform offer law, in the form the case analysis
-uses: a step's future is contained in the menu at its own target. -/
 theorem uniform_offer_law_future_subset
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
     {current future : Finset BareMessage}

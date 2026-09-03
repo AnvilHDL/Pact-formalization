@@ -929,15 +929,19 @@ theorem compileType_seq_lift_left_step_tock
         (TypeOfferSummary.mk current childFuture) q') :
     (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env TypeLabel.tock
-        (TypeOfferSummary.mk current ∅)
+        (TypeOfferSummary.mk ∅ ∅)
         (.child 0 q') ∧
       relationMembership
         (buildRelationSet (.seq alphabet left right)
           (compileType (.seq alphabet left right)))
         (.seq alphabet leftTarget right) (.child 0 q') := by
+  -- A clock step offers nothing now, so the child's current offer is empty.
+  have hCurrentEmpty : current = ∅ :=
+    TypeOffers.current_eq_empty_of_label_tock hChildStep.2 rfl
+  subst hCurrentEmpty
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge left q q' env TypeLabel.tock
-      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
+      (TypeOfferSummary.mk ∅ childFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -952,12 +956,12 @@ theorem compileType_seq_lift_left_step_tock
   have hParentEdge :
       (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env TypeLabel.tock
-        (TypeOfferSummary.mk current ∅)
+        (TypeOfferSummary.mk ∅ ∅)
         (.child 0 q') := by
     rw [compileType_hasEdge_iff_hasResolvedEdge
       (.seq alphabet left right)
       (.child 0 q) (.child 0 q') env TypeLabel.tock
-      (TypeOfferSummary.mk current ∅)]
+      (TypeOfferSummary.mk ∅ ∅)]
     rw [compileTypeFuel_sequence_eq_build alphabet left right]
     have hNotAcceptingPending :
         pendingEdge.target ∉

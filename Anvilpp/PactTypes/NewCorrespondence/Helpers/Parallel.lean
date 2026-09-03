@@ -2286,7 +2286,10 @@ private theorem compiledEdge_current_subset_messageActions
       offers target) :
     offers.current ⊆ processType.MessageActions :=
   (typeOffers_current_subset_messageActions
-      ((hStepIff hSource (by simpa [compileType] using hSymbol)).mpr
+      ((hStepIff hSource (by
+          have h := hSymbol
+          simp only [PactType.mem_transitionAlphabet_iff] at h
+          exact ⟨h.1, h.2.2⟩)).mpr
         ⟨target, hEdge, hTarget⟩).2).trans
     (relationMembership_messageActions_subset processType hSource)
 

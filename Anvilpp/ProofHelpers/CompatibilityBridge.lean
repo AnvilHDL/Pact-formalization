@@ -49,7 +49,7 @@ lemma helper_h19_readiness_matches_automaton_readiness
     (hRelated : correspondence.relation residual state) :
     TypeReady env residual ↔
       ∃ label state', compiledTypeEdge automaton state env label state' := by
-  sorry -- TODO(section7): use both directions of correspondence.stepIff.
+  sorry -- TODO(section7): use `correspondence.forward` and `.backward`.
 
 /-- Helper Lemma H20: semantic strategy prefixes and compatibility-game plays
 can be matched. -/

@@ -1463,9 +1463,19 @@ def buildRelationSet (ty : PactType) (auto : TypeAutomaton) :
     Finset (PactType × TypeAutomatonState) :=
   buildRelationSetCore ty
 
-/-- The one-step obligation shared by every constructor case of the
-type--automaton correspondence proof.  It lives with the relation core so
-individual constructor cases can be checked in separate modules. -/
+/-- The guard a compiled symbol carries into a constructor case: its
+environment and its offers are drawn from the type's own alphabet.  The paper's
+`Corr` quantifies over every environment and every label public in the context,
+with no condition on the label itself, and a child's label set is not contained
+in its parent's — the interfaces of a sibling enlarge the parent's
+observations — so the label component of `transitionAlphabet` membership is not
+available to a child and is not asked for. -/
+def SymbolGuard (processType : PactType) (env : TypeEnvironment)
+    (offers : TypeOfferSummary) : Prop :=
+  env ∈ processType.alphabet.localEnvironments ∧
+    offers ∈ processType.alphabet.localOfferSummaries
+
+/-- The fixed-target obligation used internally by constructor proofs. -/
 def StepIffStatement
      (processType : PactType) : Prop :=
   ∀ {residual residual' : PactType} {state : TypeAutomatonState}
@@ -1473,12 +1483,39 @@ def StepIffStatement
     relationMembership
       (buildRelationSet processType (compileType processType))
       residual state →
-    ({ environment := env, label := label, offers := offers } :
-        TypeAutomatonSymbol) ∈ (compileType processType).alphabet →
+    SymbolGuard processType env offers →
     (DecoratedTypeTransition env residual label offers residual' ↔
       ∃ state',
         (compileType processType).HasEdge state env label offers
           state' ∧
+        relationMembership
+          (buildRelationSet processType (compileType processType))
+          residual' state')
+
+/-- The two simulations in the statement of Lemma 4.5. Targets are
+existentially quantified in both directions. -/
+def TypeAutomatonStepCorrespondence (processType : PactType) : Prop :=
+  (∀ {residual residual' : PactType} {state : TypeAutomatonState}
+      {env : TypeEnvironment} {label : TypeLabel}
+      {offers : TypeOfferSummary},
+      relationMembership
+        (buildRelationSet processType (compileType processType))
+        residual state →
+      DecoratedTypeTransition env residual label offers residual' →
+      ∃ state',
+        (compileType processType).HasEdge state env label offers state' ∧
+        relationMembership
+          (buildRelationSet processType (compileType processType))
+          residual' state') ∧
+  (∀ {residual : PactType} {state state' : TypeAutomatonState}
+      {env : TypeEnvironment} {label : TypeLabel}
+      {offers : TypeOfferSummary},
+      relationMembership
+        (buildRelationSet processType (compileType processType))
+        residual state →
+      (compileType processType).HasEdge state env label offers state' →
+      ∃ residual',
+        DecoratedTypeTransition env residual label offers residual' ∧
         relationMembership
           (buildRelationSet processType (compileType processType))
           residual' state')

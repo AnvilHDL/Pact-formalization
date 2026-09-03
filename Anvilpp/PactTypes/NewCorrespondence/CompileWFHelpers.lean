@@ -219,9 +219,7 @@ lemma compileType_message_action_edge
     {env : TypeEnvironment}
     (hLocal : env ∈ alphabet.localEnvironments)
     (hNeed : env.hasNeed (msg, dir))
-    (hSymbol : TypeAutomatonSymbol.mk env (TypeLabel.message msg dir)
-      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈
-        (PactType.message alphabet msg dir).transitionAlphabet) :
+    (hAction : (msg, dir) ∈ alphabet.actions) :
     (compileType (.message alphabet msg dir)).HasEdge .root env
       (TypeLabel.message msg dir) (TypeOfferSummary.mk {(msg, dir)} ∅)
       .final := by
@@ -230,9 +228,6 @@ lemma compileType_message_action_edge
     (.message alphabet msg dir)
     .root .final env (TypeLabel.message msg dir)
     (TypeOfferSummary.mk {(msg, dir)} ∅)]
-  -- The alphabet gate is recovered from the symbol's own current offers.
-  have hAction : (msg, dir) ∈ alphabet.actions :=
-    transitionAlphabetFor_current_mem (.message alphabet msg dir) hSymbol (by simp)
   refine ⟨
     { source := .root
       environment := env
@@ -383,9 +378,7 @@ lemma compileType_message_wait_edge
     (hLocal : env ∈ alphabet.localEnvironments)
     (hNoNeed : ¬ env.hasNeed (msg, dir))
     (hClock : env.clock = false)
-    (hSymbol : TypeAutomatonSymbol.mk env TypeLabel.silent
-      (TypeOfferSummary.mk {(msg, dir)} ∅) ∈
-        (PactType.message alphabet msg dir).transitionAlphabet) :
+    (hDeclared : (msg, dir) ∈ alphabet.actions) :
     (compileType (.message alphabet msg dir)).HasEdge .root env
       TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅) .root := by
   classical
@@ -393,9 +386,6 @@ lemma compileType_message_wait_edge
     (.message alphabet msg dir)
     .root .root env TypeLabel.silent
     (TypeOfferSummary.mk {(msg, dir)} ∅)]
-  -- The alphabet gate is recovered from the symbol's own current offers.
-  have hDeclared : (msg, dir) ∈ alphabet.actions :=
-    transitionAlphabetFor_current_mem (.message alphabet msg dir) hSymbol (by simp)
   refine ⟨
     { source := .root
       environment := env

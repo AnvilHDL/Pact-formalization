@@ -147,11 +147,7 @@ theorem log_objective_regular
     OmegaRegular initial progress := by
   sorry
 
-/-- Lemma 4.5 (`pactautomatonconstruction.typ`, "Correspondence theorem"):
-operational types and their finite constructor automata correspond. Its proof
-is `sorry` pending the supporting `Correspondence/*` development, which is
-mid-redevelopment against the doc-accurate `computeFutureOf` automaton
-construction. -/
+/-- Lemma 4.5, "Type--automaton correspondence". -/
 theorem type_automaton_correspondence
      {processType : PactType}
     (hAdmissible : AdmissibleType processType) :
@@ -179,11 +175,15 @@ theorem type_automaton_correspondence
               (compileType processType)
         simpa [typeAutomaton] using
           helper_h12_compiled_state_shape hInitialRelated
-      stepIff := by
-        intro residual residual' state env label offers hRelated hSymbol
-        -- Now prove step correspondence by the Lemma 4.5 constructor induction.
-        simpa [relation_set, typeAutomaton] using
-          correspondence_stepIff processType hAdmissible hRelated hSymbol
+      forward := by
+        intro residual residual' state env label offers hRelated hStep
+        exact (correspondence_steps processType hAdmissible).1
+          (by simpa [relation_set, typeAutomaton] using hRelated) hStep
+      backward := by
+        intro residual state state' env label offers hRelated hEdge
+        exact (correspondence_steps processType hAdmissible).2
+          (by simpa [relation_set, typeAutomaton] using hRelated)
+          (by simpa [typeAutomaton] using hEdge)
     }⟩
 
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes

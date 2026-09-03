@@ -31,22 +31,28 @@ def parallelProcessBranchesSelecting
           (parallelProcessBranchesSelecting selected rest) ∅
 
 
-/-- The step-for-step relation of Lemma 4.5. -/
+/-- The two step simulations of Lemma 4.5. -/
 structure TypeAutomatonCorrespondence
     (processType : PactType) (automaton : TypeAutomaton) : Type where
   relation : PactType → TypeAutomatonState → Prop
   initial : relation processType automaton.initial
   initial_mem : automaton.initial ∈ automaton.states
-  stepIff :
+  forward :
     ∀ {residual residual' : PactType} {state : TypeAutomatonState}
       {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
       relation residual state →
-      ({ environment := env, label := label, offers := offers } :
-          TypeAutomatonSymbol) ∈ automaton.alphabet →
-      (DecoratedTypeTransition env residual label offers residual' ↔
-        ∃ state',
-          automaton.HasEdge state env label offers state' ∧
-          relation residual' state')
+      DecoratedTypeTransition env residual label offers residual' →
+      ∃ state',
+        automaton.HasEdge state env label offers state' ∧
+        relation residual' state'
+  backward :
+    ∀ {residual : PactType} {state state' : TypeAutomatonState}
+      {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
+      relation residual state →
+      automaton.HasEdge state env label offers state' →
+      ∃ residual',
+        DecoratedTypeTransition env residual label offers residual' ∧
+        relation residual' state'
 
 structure ProcessAutomatonCorrespondence
     (process : Proc) (processType : PactType) (automaton : TypeAutomaton) : Type where
