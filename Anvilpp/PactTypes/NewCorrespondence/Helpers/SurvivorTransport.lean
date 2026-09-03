@@ -460,6 +460,824 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
         (PactType.reannotateBranches target branches) hGet' hMem
 
 
+
+
+/-- Synchronising on nothing leaves the parent alphabet unchanged. -/
+@[simp] theorem PactTypeAlphabet.projectParallel_empty
+    (parent child : PactTypeAlphabet) :
+    PactTypeAlphabet.projectParallel parent child ∅ = parent := by
+  refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
+  simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+    Finset.mem_filter, Finset.notMem_empty, and_false, false_or]
+
+/-- Re-signing a singleton exclusive offer re-signs its head and body. -/
+theorem reannotate_singletonTypeXOfferAt
+    (source target : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (hWF : branch.2.AlphabetWellFormed)
+    (hWF' : (branch.2.reannotate source).AlphabetWellFormed) :
+    (singletonTypeXOfferAt source branch).reannotate target =
+      singletonTypeXOfferAt target branch := by
+  rcases branch with ⟨action, body⟩
+  simp only [singletonTypeXOfferAt, PactType.reannotate,
+    PactType.reannotateBranches_cons, PactType.reannotateBranches_nil]
+  rw [PactType.reannotate_reannotate body source target hWF hWF']
+
+/-- Re-signing a committed branch re-signs its head message and continuation. -/
+theorem reannotate_selectedTypeBranchAt
+    (source target : PactTypeAlphabet) (branch : BareMessage × PactType)
+    (hWF : branch.2.AlphabetWellFormed)
+    (hWF' : (branch.2.reannotate source).AlphabetWellFormed) :
+    (selectedTypeBranchAt source branch).reannotate target =
+      selectedTypeBranchAt target branch := by
+  rcases branch with ⟨action, body⟩
+  simp only [selectedTypeBranchAt, PactType.reannotate]
+  rw [PactType.reannotate_reannotate body source target hWF hWF']
+
+
+/-- Every component of the branch product already carries the enclosing
+alphabet, so re-signing the product rebuilds it at the new alphabet. -/
+theorem reannotate_parallelTypeBranchesWithin
+    (source target : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ b ∈ branches, b.2.AlphabetWellFormed) →
+      (∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) →
+      (parallelTypeBranchesWithin source branches).reannotate target =
+        parallelTypeBranchesWithin target branches := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _
+      simp [parallelTypeBranchesWithin, PactType.reannotate]
+  | cons head rest ih =>
+      intro hWF hWF'
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesWithin]
+          exact reannotate_singletonTypeXOfferAt source target head
+            (hWF head (by simp)) (hWF' head (by simp))
+      | cons next tail =>
+          simp only [parallelTypeBranchesWithin, PactType.reannotate,
+            PactTypeAlphabet.projectParallel_empty]
+          rw [reannotate_singletonTypeXOfferAt source target head
+              (hWF head (by simp)) (hWF' head (by simp)),
+            ih (fun b hb => hWF b (by simp [hb]))
+              (fun b hb => hWF' b (by simp [hb]))]
+
+/-- The committed product re-signs the same way. -/
+theorem reannotate_parallelTypeBranchesSelectingWithin
+    (source target : PactTypeAlphabet) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ b ∈ branches, b.2.AlphabetWellFormed) →
+      (∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) →
+      (parallelTypeBranchesSelectingWithin source selected branches).reannotate
+          target =
+        parallelTypeBranchesSelectingWithin target selected branches := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _
+      simp [parallelTypeBranchesSelectingWithin, PactType.reannotate]
+  | cons head rest ih =>
+      intro hWF hWF'
+      cases rest with
+      | nil =>
+          by_cases hSel : head = selected
+          · simp only [parallelTypeBranchesSelectingWithin, if_pos hSel]
+            exact reannotate_selectedTypeBranchAt source target head
+              (hWF head (by simp)) (hWF' head (by simp))
+          · simp only [parallelTypeBranchesSelectingWithin, if_neg hSel]
+            exact reannotate_singletonTypeXOfferAt source target head
+              (hWF head (by simp)) (hWF' head (by simp))
+      | cons next tail =>
+          by_cases hSel : head = selected
+          · simp only [parallelTypeBranchesSelectingWithin, if_pos hSel,
+              PactType.reannotate, PactTypeAlphabet.projectParallel_empty]
+            rw [reannotate_selectedTypeBranchAt source target head
+                (hWF head (by simp)) (hWF' head (by simp)),
+              reannotate_parallelTypeBranchesWithin source target (next :: tail)
+                (fun b hb => hWF b (by simp [hb]))
+                (fun b hb => hWF' b (by simp [hb]))]
+          · simp only [parallelTypeBranchesSelectingWithin, if_neg hSel,
+              PactType.reannotate, PactTypeAlphabet.projectParallel_empty]
+            rw [reannotate_singletonTypeXOfferAt source target head
+                (hWF head (by simp)) (hWF' head (by simp)),
+              ih (fun b hb => hWF b (by simp [hb]))
+                (fun b hb => hWF' b (by simp [hb]))]
+
+/-- Re-signing commutes with committing to a branch.  An offer with no branches
+never commits, so the statement is about a non-empty branch list. -/
+theorem reannotate_parallelTypeBranchesSelecting
+    (source target : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (head : BareMessage × PactType) (tail : List (BareMessage × PactType))
+    (hWF : ∀ b ∈ head :: tail, b.2.AlphabetWellFormed)
+    (hWF' : ∀ b ∈ head :: tail, (b.2.reannotate source).AlphabetWellFormed) :
+    (parallelTypeBranchesSelecting source selected
+        (head :: tail)).reannotate target =
+      parallelTypeBranchesSelecting target selected (head :: tail) := by
+  simp only [parallelTypeBranchesSelecting]
+  exact reannotate_parallelTypeBranchesSelectingWithin source target selected
+    (head :: tail) hWF hWF'
+
+
+/-- Re-signing a type by the alphabet it already carries changes nothing. -/
+theorem PactType.reannotate_own_alphabet :
+    ∀ processType : PactType,
+      processType.AlphabetWellFormed →
+      processType.reannotate processType.alphabet = processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hXBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ alphabet : PactTypeAlphabet,
+          PactType.BranchesAlphabetWellFormed alphabet branches →
+          PactType.reannotateBranches alphabet branches = branches := by
+        intro branches
+        induction branches with
+        | nil => intro _ _ _; rw [PactType.reannotateBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons alphabet hWF
+            rcases head with ⟨action, body⟩
+            simp only [PactType.BranchesAlphabetWellFormed] at hWF
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            rw [PactType.reannotateBranches_cons, ← hWF.1,
+              ih (sizeOf body) hBodySize body rfl hWF.2.1,
+              hWF.1, restIH hTailSize alphabet hWF.2.2]
+      have hOBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ (alphabet : PactTypeAlphabet)
+            (seen : Finset BareMessage),
+          PactType.OfferBranchesWellFormed alphabet seen branches →
+          PactType.reannotateOfferBranches alphabet seen branches = branches := by
+        intro branches
+        induction branches with
+        | nil => intro _ _ _ _; rw [PactType.reannotateOfferBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons alphabet seen hWF
+            rcases head with ⟨action, body⟩
+            simp only [PactType.OfferBranchesWellFormed] at hWF
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons, ← hWF.1,
+              ih (sizeOf body) hBodySize body rfl hWF.2.1,
+              hWF.1, restIH hTailSize alphabet seen hWF.2.2]
+      intro hWF
+      subst hSize
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.alphabet]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hB : sizeOf body < sizeOf
+              (PactType.recur alphabet name body) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf body) hB body rfl hWF.2.2, hWF.2.1]
+      | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          have hAlphaPar : (PactType.par alphabet left right interface).alphabet
+              = alphabet := rfl
+          simp only [PactType.reannotate, hAlphaPar]
+          have hProjL : alphabet.projectParallel left.alphabet interface =
+              left.alphabet := by
+            rw [← hWF.2.1.parent_eq_left]
+            refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
+            simp only [PactTypeAlphabet.projectParallel,
+              PactTypeAlphabet.hideInterface, Finset.mem_union,
+              Finset.mem_filter]
+            constructor
+            · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)
+              · exact hMem
+              · exact hMem
+            · intro hMem
+              by_cases hIface : action.1 ∈ interface
+              · exact Or.inl ⟨hMem, hIface⟩
+              · exact Or.inr ⟨hMem, hIface⟩
+          have hProjR : alphabet.projectParallel right.alphabet interface =
+              right.alphabet := by
+            rw [← hWF.2.1.parent_eq_right]
+            refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
+            simp only [PactTypeAlphabet.projectParallel,
+              PactTypeAlphabet.hideInterface, Finset.mem_union,
+              Finset.mem_filter]
+            constructor
+            · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)
+              · exact hMem
+              · exact hMem
+            · intro hMem
+              by_cases hIface : action.1 ∈ interface
+              · exact Or.inl ⟨hMem, hIface⟩
+              · exact Or.inr ⟨hMem, hIface⟩
+          rw [hProjL, hProjR, ih (sizeOf left) hL left rfl hWF.2.2.1,
+            ih (sizeOf right) hR right rfl hWF.2.2.2]
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf elseType) hE elseType rfl hWF.2.2.1,
+            hWF.2.1, hXBranches branches hB alphabet hWF.2.2.2]
+      | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf elseType) hE elseType rfl hWF.2.2.1,
+            hWF.2.1, hOBranches branches hB alphabet ∅ hWF.2.2.2]
+
+/-- Each branch of a well-formed conjunctive offer carries the enclosing
+alphabet and is itself well formed. -/
+theorem offerBranches_wellFormed_of_mem
+    {alphabet : PactTypeAlphabet} {seen : Finset BareMessage}
+    {branches : List (BareMessage × PactType)}
+    (h : PactType.OfferBranchesWellFormed alphabet seen branches) :
+    ∀ b ∈ branches, b.2.alphabet = alphabet ∧ b.2.AlphabetWellFormed := by
+  induction branches with
+  | nil => intro b hb; cases hb
+  | cons head tail ih =>
+      rcases head with ⟨action, body⟩
+      simp only [PactType.OfferBranchesWellFormed] at h
+      intro b hb
+      rcases List.mem_cons.mp hb with rfl | hTail
+      · exact ⟨h.1, h.2.1⟩
+      · exact ih h.2.2 b hTail
+
+/-- Re-signing a conjunctive offer's branches gives each branch the enclosing
+alphabet, so the list is a map. -/
+theorem reannotateOfferBranches_eq_map' (alphabet : PactTypeAlphabet)
+    (seen : Finset BareMessage) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.reannotateOfferBranches alphabet seen branches =
+        branches.map fun branch => (branch.1, branch.2.reannotate alphabet) := by
+  intro branches
+  induction branches with
+  | nil => rw [PactType.reannotateOfferBranches_nil, List.map_nil]
+  | cons head tail ih =>
+      rcases head with ⟨action, body⟩
+      rw [PactType.reannotateOfferBranches_cons, List.map_cons, ih]
+
+/-- The product only re-signs each branch body by the enclosing alphabet, so
+pre-re-signing the branches changes nothing. -/
+theorem parallelTypeBranchesWithin_map_reannotate
+    (alphabet source : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ b ∈ branches, b.2.AlphabetWellFormed) →
+      (∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) →
+      parallelTypeBranchesWithin alphabet
+          (branches.map fun b => (b.1, b.2.reannotate source)) =
+        parallelTypeBranchesWithin alphabet branches := by
+  intro branches
+  induction branches with
+  | nil => intro _ _; rfl
+  | cons head rest ih =>
+      intro hWF hWF'
+      have hHead : singletonTypeXOfferAt alphabet
+          (head.1, head.2.reannotate source) =
+            singletonTypeXOfferAt alphabet head := by
+        rcases head with ⟨action, body⟩
+        simp only [singletonTypeXOfferAt]
+        rw [PactType.reannotate_reannotate body source alphabet
+          (hWF (action, body) (by simp)) (hWF' (action, body) (by simp))]
+      cases rest with
+      | nil =>
+          simp only [List.map_cons, List.map_nil,
+            parallelTypeBranchesWithin]
+          exact hHead
+      | cons next tail =>
+          have hRest := ih (fun b hb => hWF b (by simp [hb]))
+            (fun b hb => hWF' b (by simp [hb]))
+          simp only [List.map_cons] at hRest
+          simp only [List.map_cons, parallelTypeBranchesWithin]
+          rw [hHead, hRest]
+
+/-- The committed product likewise ignores pre-re-signing, provided the chosen
+branch is re-signed the same way. -/
+theorem parallelTypeBranchesSelectingWithin_map_reannotate
+    (alphabet source : PactTypeAlphabet) (selected : BareMessage × PactType) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ b ∈ branches, b.2.AlphabetWellFormed) →
+      (∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) →
+      List.Pairwise (fun x y => x.1 ≠ y.1) branches →
+      selected ∈ branches →
+      parallelTypeBranchesSelectingWithin alphabet
+          (selected.1, selected.2.reannotate source)
+          (branches.map fun b => (b.1, b.2.reannotate source)) =
+        parallelTypeBranchesSelectingWithin alphabet selected branches := by
+  intro branches
+  induction branches with
+  | nil => intro _ _ _ hMem; cases hMem
+  | cons head rest ih =>
+      intro hWF hWF' hPair hMem
+      have hHeadWF := hWF head (by simp)
+      have hHeadWF' := hWF' head (by simp)
+      have hSelIff : (head.1, head.2.reannotate source) =
+          (selected.1, selected.2.reannotate source) ↔ head = selected := by
+        constructor
+        · intro hEq
+          have hFst : head.1 = selected.1 := by
+            simpa using congrArg Prod.fst hEq
+          rcases List.mem_cons.mp hMem with hHd | hTail
+          · exact hHd.symm
+          · exact absurd hFst (List.rel_of_pairwise_cons hPair hTail)
+        · intro hEq; rw [hEq]
+      have hHead : singletonTypeXOfferAt alphabet
+          (head.1, head.2.reannotate source) =
+            singletonTypeXOfferAt alphabet head := by
+        rcases head with ⟨action, body⟩
+        simp only [singletonTypeXOfferAt]
+        rw [PactType.reannotate_reannotate body source alphabet hHeadWF hHeadWF']
+      have hSelHead : selectedTypeBranchAt alphabet
+          (head.1, head.2.reannotate source) =
+            selectedTypeBranchAt alphabet head := by
+        rcases head with ⟨action, body⟩
+        simp only [selectedTypeBranchAt]
+        rw [PactType.reannotate_reannotate body source alphabet
+          hHeadWF hHeadWF']
+      cases rest with
+      | nil =>
+          simp only [List.map_cons, List.map_nil,
+            parallelTypeBranchesSelectingWithin]
+          by_cases hSel : head = selected
+          · subst hSel
+            rw [if_pos rfl, if_pos rfl, hSelHead]
+          · rw [if_neg (fun h => hSel (hSelIff.mp h)), if_neg hSel, hHead]
+      | cons next tail =>
+          simp only [List.map_cons, parallelTypeBranchesSelectingWithin]
+          by_cases hSel : head = selected
+          · subst hSel
+            have hRest := parallelTypeBranchesWithin_map_reannotate alphabet
+              source (next :: tail) (fun b hb => hWF b (by simp [hb]))
+              (fun b hb => hWF' b (by simp [hb]))
+            simp only [List.map_cons] at hRest
+            rw [if_pos rfl, if_pos rfl, hSelHead, hRest]
+          · have hRest := ih (fun b hb => hWF b (by simp [hb]))
+              (fun b hb => hWF' b (by simp [hb]))
+              (List.pairwise_cons.mp hPair).2
+              ((List.mem_cons.mp hMem).resolve_left (fun h => hSel h.symm))
+            simp only [List.map_cons] at hRest
+            rw [if_neg (fun h => hSel (hSelIff.mp h)), if_neg hSel, hHead,
+              hRest]
+
+/-- Interface scoping passes to every branch of an offer. -/
+theorem interfaceScoped_of_mem_branches
+    {branches : List (BareMessage × PactType)}
+    (h : PactType.InterfaceScopedBranches branches) :
+    ∀ b ∈ branches, b.2.InterfaceScoped := by
+  induction branches with
+  | nil => intro b hb; cases hb
+  | cons head tail ih =>
+      rcases head with ⟨action, body⟩
+      simp only [PactType.InterfaceScopedBranches] at h
+      intro b hb
+      rcases List.mem_cons.mp hb with rfl | hTail
+      · exact h.1
+      · exact ih h.2 b hTail
+
+/-- Conjunctive ownership separates branch heads, so no two branches share one. -/
+theorem branchHeadsPairwise_of_conjunctive
+    {branches : List (BareMessage × PactType)}
+    (h : PactType.ConjunctiveMessageOwnershipBranches branches) :
+    List.Pairwise (fun x y => x.1 ≠ y.1) branches := by
+  induction branches with
+  | nil => exact List.Pairwise.nil
+  | cons head tail ih =>
+      rcases head with ⟨action, body⟩
+      simp only [PactType.ConjunctiveMessageOwnershipBranches] at h
+      refine List.Pairwise.cons ?_ (ih h.2.2)
+      intro other hOther hEq
+      have hOtherMem : other.1.1 ∈ PactType.BranchMessageIds tail :=
+        branch_subset_branchMessageIds hOther
+          (Finset.mem_union_left _ (Finset.mem_singleton_self _))
+      rw [← hEq] at hOtherMem
+      exact Finset.disjoint_left.mp h.2.1
+        (Finset.mem_union_left _ (Finset.mem_singleton_self _)) hOtherMem
+
+/-- Substitution touches no alphabet annotation, so re-signing a substituted
+type is the same as substituting the re-signed replacement into the re-signed
+body. -/
+theorem PactType.reannotate_replaceVar (name : String) :
+    ∀ (processType : PactType) (target : PactTypeAlphabet)
+      (replacement : PactType),
+      processType.AlphabetWellFormed →
+      replacement.alphabet = processType.alphabet →
+      processType.TailOccurrences name True →
+      (processType.replaceVar name replacement).reannotate target =
+        (processType.reannotate target).replaceVar name
+          (replacement.reannotate target) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hReplaceBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ (target : PactTypeAlphabet)
+            (replacement : PactType) (alphabet : PactTypeAlphabet),
+          PactType.BranchesAlphabetWellFormed alphabet branches →
+          replacement.alphabet = alphabet →
+          PactType.TailBranchOccurrences name True branches →
+          PactType.reannotateBranches target
+              (PactType.replaceBranches branches name replacement) =
+            PactType.replaceBranches (PactType.reannotateBranches target branches)
+              name (replacement.reannotate target) := by
+        intro branches
+        induction branches with
+        | nil =>
+            intro _ _ _ _ _ _ _
+            simp [PactType.replaceBranches, PactType.reannotateBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons target replacement alphabet hWFB hAlphaR hTailB
+            rcases head with ⟨action, body⟩
+            simp only [PactType.BranchesAlphabetWellFormed] at hWFB
+            simp only [PactType.TailBranchOccurrences] at hTailB
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            simp only [PactType.replaceBranches,
+              PactType.reannotateBranches_cons]
+            rw [ih (sizeOf body) hBodySize body rfl target replacement
+                hWFB.2.1 (by rw [hAlphaR, hWFB.1]) hTailB.1,
+              restIH hTailSize target replacement alphabet hWFB.2.2 hAlphaR
+                hTailB.2]
+      have hReplaceOfferBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ (target : PactTypeAlphabet)
+            (replacement : PactType) (alphabet : PactTypeAlphabet)
+            (seen : Finset BareMessage),
+          PactType.OfferBranchesWellFormed alphabet seen branches →
+          replacement.alphabet = alphabet →
+          PactType.TailBranchOccurrences name True branches →
+          PactType.reannotateOfferBranches target seen
+              (PactType.replaceBranches branches name replacement) =
+            PactType.replaceBranches
+              (PactType.reannotateOfferBranches target seen branches)
+              name (replacement.reannotate target) := by
+        intro branches
+        induction branches with
+        | nil =>
+            intro _ _ _ _ _ _ _ _
+            simp [PactType.replaceBranches,
+              PactType.reannotateOfferBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons target replacement alphabet seen hWFB hAlphaR
+              hTailB
+            rcases head with ⟨action, body⟩
+            simp only [PactType.OfferBranchesWellFormed] at hWFB
+            simp only [PactType.TailBranchOccurrences] at hTailB
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            simp only [PactType.replaceBranches,
+              PactType.reannotateOfferBranches_cons]
+            rw [ih (sizeOf body) hBodySize body rfl target replacement
+                hWFB.2.1 (by rw [hAlphaR, hWFB.1]) hTailB.1,
+              restIH hTailSize target replacement alphabet seen hWFB.2.2
+                hAlphaR hTailB.2]
+      intro target replacement hWF hAlpha hTail
+      subst hSize
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ =>
+          simp [PactType.replaceVar, PactType.reannotate]
+      | var alphabet other =>
+          by_cases hName : name = other
+          · subst hName
+            simp [PactType.replaceVar, PactType.reannotate]
+          · simp [PactType.replaceVar, PactType.reannotate, hName]
+      | recur alphabet other body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hB : sizeOf body < sizeOf
+              (PactType.recur alphabet other body) := by simp_wf; omega
+          by_cases hName : name = other
+          · subst hName
+            simp [PactType.replaceVar, PactType.reannotate]
+          · simp only [PactType.replaceVar, PactType.reannotate, if_neg hName]
+            simp only [PactType.TailOccurrences,
+              if_neg (Ne.symm hName)] at hTail
+            rw [ih (sizeOf body) hB body rfl target replacement hWF.2.2
+              (by rw [hAlpha, hWF.2.1]; rfl) hTail]
+      | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          simp only [PactType.replaceVar, PactType.reannotate]
+          simp only [PactType.TailOccurrences] at hTail
+          rw [ih (sizeOf left) hL left rfl target replacement hWF.2.2.2.1
+              (by rw [hAlpha, hWF.2.1]; rfl) hTail.1,
+            ih (sizeOf right) hR right rfl target replacement hWF.2.2.2.2
+              (by rw [hAlpha, hWF.2.2.1]; rfl) hTail.2]
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          simp only [PactType.replaceVar, PactType.reannotate]
+          simp only [PactType.TailOccurrences] at hTail
+          rw [ih (sizeOf left) hL left rfl target replacement hWF.2.2.2.1
+              (by rw [hAlpha, hWF.2.1]; rfl)
+              (PactType.tailOccurrences_mono name False.elim left hTail.1),
+            ih (sizeOf right) hR right rfl target replacement hWF.2.2.2.2
+              (by rw [hAlpha, hWF.2.2.1]; rfl) hTail.2]
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          simp only [PactType.replaceVar, PactType.reannotate]
+          simp only [PactType.TailOccurrences] at hTail
+          rw [ih (sizeOf left) hL left rfl target replacement hWF.2.2.2.1
+              (by rw [hAlpha, hWF.2.1]; rfl) hTail.1,
+            ih (sizeOf right) hR right rfl target replacement hWF.2.2.2.2
+              (by rw [hAlpha, hWF.2.2.1]; rfl) hTail.2]
+      | par alphabet left right interface =>
+          -- No call occurs below a parallel node, so substitution is inert.
+          simp only [PactType.TailOccurrences] at hTail
+          simp only [PactType.replaceVar, PactType.reannotate]
+          rw [PactType.replaceVar_eq_self_of_tailOccurrences_false name
+              replacement left hTail.1,
+            PactType.replaceVar_eq_self_of_tailOccurrences_false name
+              replacement right hTail.2]
+          rw [PactType.replaceVar_eq_self_of_tailOccurrences_false name
+              (replacement.reannotate _)
+              (left.reannotate (target.projectParallel left.alphabet interface))
+              (PactType.reannotate_tailOccurrences name left _ False hTail.1),
+            PactType.replaceVar_eq_self_of_tailOccurrences_false name
+              (replacement.reannotate _)
+              (right.reannotate
+                (target.projectParallel right.alphabet interface))
+              (PactType.reannotate_tailOccurrences name right _ False
+                hTail.2)]
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.replaceVar, PactType.reannotate]
+          simp only [PactType.TailOccurrences] at hTail
+          rw [ih (sizeOf elseType) hE elseType rfl target replacement
+            hWF.2.2.1 (by rw [hAlpha, hWF.2.1]; rfl) hTail.1]
+          congr 1
+          exact hReplaceBranches branches hB target replacement alphabet
+            hWF.2.2.2 (by rw [hAlpha]; rfl) hTail.2
+      | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.replaceVar, PactType.reannotate]
+          simp only [PactType.TailOccurrences] at hTail
+          rw [ih (sizeOf elseType) hE elseType rfl target replacement
+            hWF.2.2.1 (by rw [hAlpha, hWF.2.1]; rfl) hTail.1]
+          congr 1
+          exact hReplaceOfferBranches branches hB target replacement alphabet ∅
+            hWF.2.2.2 (by rw [hAlpha]; rfl)
+            (PactType.tailBranchOccurrences_mono name False.elim branches
+              hTail.2)
+
+/-- Conjunctive offer.  The root and the default alternative mirror `xoffer`;
+a committed state lives in the branch product, which re-signing rebuilds at the
+new alphabet. -/
+theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    (hElse : SurvivorTransport elseType)
+    (hProduct : ∀ selected ∈ branches,
+      SurvivorTransport (parallelTypeBranchesSelecting a selected branches)) :
+    SurvivorTransport (.offer a elseType branches) := by
+  intro bound hWF target hTargetWF hAvoid rho q hRelated
+  obtain ⟨hWFE, hWFB⟩ := typeWellFormedIn_offer hWF
+  obtain ⟨hAlphaWF, -, -, -, -, -, -, -, -, -, -, -, hIScopAll, -, hCOwn⟩ :=
+    id hWF
+  simp only [PactType.AlphabetWellFormed] at hAlphaWF
+  simp only [PactType.InterfaceScoped] at hIScopAll
+  simp only [PactType.ConjunctiveMessageOwnership] at hCOwn
+  have hIScop := hIScopAll.2
+  simp only [PactType.ParallelInterfaces, Finset.mem_union, not_or] at hAvoid
+  have hBodyData : ∀ b ∈ branches,
+      b.2.alphabet = a ∧ b.2.AlphabetWellFormed :=
+    offerBranches_wellFormed_of_mem hAlphaWF.2.2.2
+  have hBodyWF : ∀ b ∈ branches, b.2.AlphabetWellFormed := fun b hb =>
+    (hBodyData b hb).2
+  have hBodyWF' : ∀ b ∈ branches, (b.2.reannotate a).AlphabetWellFormed := by
+    intro b hb
+    rw [← (hBodyData b hb).1,
+      PactType.reannotate_own_alphabet b.2 (hBodyData b hb).2]
+    exact (hBodyData b hb).2
+  have hBodyWFTarget : ∀ b ∈ branches,
+      (b.2.reannotate target).AlphabetWellFormed := by
+    intro b hb
+    refine PactType.reannotate_alphabetWellFormed_avoiding b.2 target
+      (hBodyData b hb).2 hTargetWF ?_ ?_
+    · exact interfaceScoped_of_mem_branches hIScop b hb
+    · intro act hAct hIn
+      exact (hAvoid act hAct).2
+        (parallelInterfaces_subset_branches branches b hb hIn)
+  have hPairHeads : List.Pairwise (fun x y => x.1 ≠ y.1) branches :=
+    branchHeadsPairwise_of_conjunctive hCOwn.2
+  rcases relationMembership_offer_cases a elseType branches hRelated with
+    hRoot | ⟨q', hState, hChild⟩ |
+    ⟨i, selected, q', hGet, hState, hChild⟩
+  · rw [Prod.ext_iff] at hRoot
+    obtain ⟨rfl, rfl⟩ := hRoot
+    exact ⟨(PactType.offer a elseType branches).reannotate target,
+      by simpa only [PactType.reannotate] using
+        relationMembership_offer_root target (elseType.reannotate target)
+          (PactType.reannotateOfferBranches target ∅ branches),
+      PactType.liveEq_refl _⟩
+  · simp only at hState hChild
+    subst hState
+    obtain ⟨theta, hMem, hLive⟩ := hElse bound hWFE target hTargetWF
+      (fun act hAct => (hAvoid act hAct).1) rho q' hChild
+    refine ⟨theta, ?_, hLive⟩
+    simpa only [PactType.reannotate] using
+      relationMembership_offer_else target (elseType.reannotate target)
+        (PactType.reannotateOfferBranches target ∅ branches) hMem
+  · simp only at hState hChild
+    subst hState
+    have hMemSelected : selected ∈ branches :=
+      List.mem_iff_getElem?.mpr ⟨i, hGet⟩
+    have hAvoidProduct : ∀ act ∈ target.actions,
+        act.1 ∉ PactType.ParallelInterfaces
+          (parallelTypeBranchesSelecting a selected branches) := by
+      intro act hAct hIn
+      exact (hAvoid act hAct).2 (by
+        cases branches with
+        | nil => cases hMemSelected
+        | cons head tail =>
+            rw [parallelTypeBranchesSelecting,
+              parallelTypeBranchesSelectingWithin_parallelInterfaces] at hIn
+            exact hIn)
+    obtain ⟨theta, hMem, hLive⟩ := hProduct selected hMemSelected bound
+      (hWFB selected hMemSelected) target hTargetWF hAvoidProduct rho q' hChild
+    refine ⟨theta, ?_, hLive⟩
+    have hGet' : (PactType.reannotateOfferBranches target ∅ branches)[i]? =
+        some (selected.1, selected.2.reannotate target) := by
+      rw [reannotateOfferBranches_eq_map', List.getElem?_map, hGet]
+      rfl
+    have hProductEq :
+        parallelTypeBranchesSelecting target
+            (selected.1, selected.2.reannotate target)
+            (PactType.reannotateOfferBranches target ∅ branches) =
+          (parallelTypeBranchesSelecting a selected branches).reannotate
+            target := by
+      rw [reannotateOfferBranches_eq_map']
+      cases branches with
+      | nil => cases hMemSelected
+      | cons head tail =>
+          rw [reannotate_parallelTypeBranchesSelecting a target selected head
+            tail hBodyWF hBodyWF']
+          simp only [parallelTypeBranchesSelecting, List.map_cons]
+          exact parallelTypeBranchesSelectingWithin_map_reannotate target target
+            selected (head :: tail) hBodyWF hBodyWFTarget hPairHeads
+            hMemSelected
+    rw [← hProductEq] at hMem
+    simpa only [PactType.reannotate] using
+      relationMembership_offer_selected target (elseType.reannotate target)
+        (PactType.reannotateOfferBranches target ∅ branches) hGet' hMem
+
+
+/-- Recursion.  The fresh root re-signs to itself; a body state carries a
+substituted residual, and re-signing commutes with that substitution. -/
+theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
+    (body : PactType) (hBody : SurvivorTransport body)
+    (hResiduals : ∀ (source residual : PactType) (state : TypeAutomatonState),
+      relationMembership (buildRelationSet source (compileType source))
+        residual state →
+      residual.AlphabetWellFormed ∧ residual.InterfaceScoped ∧
+        residual.TailOccurrences name True ∧
+        PactType.ParallelInterfaces residual ⊆
+          PactType.ParallelInterfaces source ∧
+        residual.alphabet = source.alphabet) :
+    SurvivorTransport (.recur a name body) := by
+  intro bound hWF target hTargetWF hAvoid rho q hRelated
+  have hWFBody := typeWellFormedIn_recur hWF
+  obtain ⟨hAlphaWF, -, -, hTC, -, -, -, -, -, -, -, -, -, -, -⟩ := id hWF
+  simp only [PactType.AlphabetWellFormed] at hAlphaWF
+  simp only [PactType.ParallelInterfaces] at hAvoid
+  rcases relationMembership_recur_cases a name body hRelated with
+    hRoot | ⟨q', residual, hEntry, hChild⟩
+  · rw [Prod.ext_iff] at hRoot
+    obtain ⟨rfl, rfl⟩ := hRoot
+    exact ⟨(PactType.recur a name body).reannotate target,
+      by simpa only [PactType.reannotate] using
+        relationMembership_recur_root target name (body.reannotate target),
+      PactType.liveEq_refl _⟩
+  · rw [Prod.ext_iff] at hEntry
+    obtain ⟨hResidual, hState⟩ := hEntry
+    subst hResidual
+    subst hState
+    obtain ⟨theta, hMem, hLive⟩ := hBody (name :: bound) hWFBody target
+      hTargetWF hAvoid residual q' hChild
+    refine ⟨theta.replaceVar name (.recur target name (body.reannotate target)),
+      ?_, ?_⟩
+    · simpa only [PactType.reannotate] using
+        relationMembership_recur_child target name (body.reannotate target)
+          theta hMem
+    · have hCommute :
+          (residual.replaceVar name (.recur a name body)).reannotate target =
+            (residual.reannotate target).replaceVar name
+              ((PactType.recur a name body).reannotate target) :=
+        PactType.reannotate_replaceVar name residual target
+          (.recur a name body)
+          (hResiduals body residual q' hChild).1
+          (by
+            rw [(hResiduals body residual q' hChild).2.2.2.2]
+            simp only [PactType.alphabet]
+            exact hAlphaWF.2.1.symm)
+          (hResiduals body residual q' hChild).2.2.1
+      rw [hCommute]
+      have hAlphaRes : (residual.reannotate target).alphabet = target :=
+        PactType.reannotate_alphabet target residual
+      have hAlphaTheta : theta.alphabet = target := by
+        rw [← hLive.1, hAlphaRes]
+      have hReplAlpha :
+          ((PactType.recur a name body).reannotate target).alphabet =
+            (residual.reannotate target).alphabet := by
+        simp only [PactType.reannotate_alphabet, hAlphaRes]
+      have hReplAlpha' :
+          (PactType.recur target name (body.reannotate target)).alphabet =
+            theta.alphabet := by
+        rw [hAlphaTheta]
+        rfl
+      refine ⟨?_, ?_⟩
+      · rw [PactType.replaceVar_alphabet_eq_of_replacement _ name hReplAlpha,
+          PactType.replaceVar_alphabet_eq_of_replacement _ name hReplAlpha',
+          hAlphaRes, hAlphaTheta]
+      · refine PactType.liveEqBody_replaceVar hLive.2
+          (by
+            simp only [PactType.reannotate]
+            exact PactType.liveEq_refl _)
+          ?_ ?_ (by rw [hAlphaRes, hAlphaTheta]) ?_
+        · exact PactType.reannotate_alphabetWellFormed_avoiding residual target
+            (hResiduals body residual q' hChild).1 hTargetWF
+            (hResiduals body residual q' hChild).2.1
+            (fun act hAct hIn => hAvoid act hAct
+              ((hResiduals body residual q' hChild).2.2.2.1 hIn))
+        · exact (hResiduals (body.reannotate target) theta q' hMem).1
+        · exact PactType.reannotate_tailOccurrences name residual target True
+            (hResiduals body residual q' hChild).2.2.1
+
 /-- Offer-branch disjointness is one of the ownership consequences carried by
 `TypeWellFormedIn`. -/
 theorem offerBranchesDisjoint_of_wellFormedIn {bound : List String}
@@ -975,5 +1793,74 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
         (PactType.skip target)
 
 end
+
+
+/-- Survivor target transport, for every type.  The induction runs on
+`typeCompilationFuel` rather than `sizeOf`: re-signing preserves it, which the
+parallel case needs, and the conjunctive branch product sits strictly below the
+offer that generates it, which the conjunctive case needs. -/
+theorem survivorTransport_all
+    (hResiduals : ∀ (name : String) (source residual : PactType)
+      (state : TypeAutomatonState),
+      relationMembership (buildRelationSet source (compileType source))
+        residual state →
+      residual.AlphabetWellFormed ∧ residual.InterfaceScoped ∧
+        residual.TailOccurrences name True ∧
+        PactType.ParallelInterfaces residual ⊆
+          PactType.ParallelInterfaces source ∧
+        residual.alphabet = source.alphabet) :
+    ∀ processType : PactType, SurvivorTransport processType := by
+  intro processType
+  induction hFuel : typeCompilationFuel processType
+      using Nat.strong_induction_on generalizing processType with
+  | _ n ih =>
+      subst hFuel
+      cases processType with
+      | skip alphabet => exact survivorTransport_skip alphabet
+      | var alphabet name => exact survivorTransport_var alphabet name
+      | message alphabet msg dir =>
+          exact survivorTransport_message alphabet msg dir
+      | tock alphabet => exact survivorTransport_tock alphabet
+      | progress alphabet pid => exact survivorTransport_progress alphabet pid
+      | choice alphabet left right =>
+          refine survivorTransport_choice alphabet left right
+            (ih _ ?_ left rfl) (ih _ ?_ right rfl) <;>
+            simp only [typeCompilationFuel] <;> omega
+      | fairChoice alphabet bid left right =>
+          refine survivorTransport_fairChoice alphabet bid left right
+            (ih _ ?_ left rfl) (ih _ ?_ right rfl) <;>
+            simp only [typeCompilationFuel] <;> omega
+      | seq alphabet left right =>
+          refine survivorTransport_seq alphabet left right
+            (ih _ ?_ left rfl) (ih _ ?_ right rfl) <;>
+            simp only [typeCompilationFuel] <;> omega
+      | recur alphabet name body =>
+          refine survivorTransport_recur alphabet name body
+            (ih _ ?_ body rfl) (hResiduals name)
+          simp only [typeCompilationFuel]; omega
+      | par alphabet left right interface =>
+          refine survivorTransport_par alphabet left right interface
+            (ih _ ?_ left rfl) (ih _ ?_ right rfl)
+            (ih _ ?_ (left.reannotate alphabet) rfl)
+            (ih _ ?_ (right.reannotate alphabet) rfl) <;>
+            simp only [typeCompilationFuel, typeCompilationFuel_reannotate] <;>
+            omega
+      | xoffer alphabet elseType branches =>
+          refine survivorTransport_xoffer alphabet elseType branches
+            (ih _ ?_ elseType rfl) (fun entry hEntry => ih _ ?_ entry.2 rfl)
+          · simp only [typeCompilationFuel]; omega
+          · have hLe : typeCompilationFuel entry.2 ≤
+                typeBranchCompilationFuel branches :=
+              typeCompilationFuel_le_typeBranchCompilationFuel branches entry hEntry
+            simp only [typeCompilationFuel]
+            omega
+      | offer alphabet elseType branches =>
+          refine survivorTransport_offer alphabet elseType branches
+            (ih _ ?_ elseType rfl) (fun selected hSelected => ih _ ?_ _ rfl)
+          · simp only [typeCompilationFuel]; omega
+          · rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            simp only [typeCompilationFuel]
+            omega
+
 
 end Pact
