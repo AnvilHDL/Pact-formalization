@@ -48,6 +48,31 @@ namespace PactTypeAlphabet
         simp only [mergeHidden] at hExt ⊢
         exact congrArg PactTypeAlphabet.mk hExt
 
+  /-- Each child declares everything the parent does: away from the interface
+  the two agree, and the parent declares no interface action. -/
+  theorem parent_actions_subset_left
+      {parent left right : PactTypeAlphabet} {interface : Interface}
+      (h : ParallelCompatible parent left right interface) :
+      parent.actions ⊆ left.actions := by
+    intro action hAction
+    have hMem : action ∈ (hideInterface left interface).actions := by
+      rw [h.parent_eq_left]
+      exact hAction
+    simp only [hideInterface, Finset.mem_filter] at hMem
+    exact hMem.1
+
+  /-- Mirror for the right child. -/
+  theorem parent_actions_subset_right
+      {parent left right : PactTypeAlphabet} {interface : Interface}
+      (h : ParallelCompatible parent left right interface) :
+      parent.actions ⊆ right.actions := by
+    intro action hAction
+    have hMem : action ∈ (hideInterface right interface).actions := by
+      rw [h.parent_eq_right]
+      exact hAction
+    simp only [hideInterface, Finset.mem_filter] at hMem
+    exact hMem.1
+
 end PactTypeAlphabet
 
 namespace PactType

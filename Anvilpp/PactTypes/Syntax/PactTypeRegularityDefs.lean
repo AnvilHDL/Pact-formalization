@@ -455,7 +455,7 @@ namespace PactType
             ParallelMessageOwnershipBodies branches
       | .offer _ elseType branches =>
           ParallelMessageOwnership elseType ∧
-            ParallelMessageOwnershipBranches branches
+            ParallelMessageOwnershipBodies branches
     termination_by processType => sizeOf processType
 
     def ParallelMessageOwnershipBodies :
@@ -465,22 +465,27 @@ namespace PactType
           ParallelMessageOwnership processType ∧
             ParallelMessageOwnershipBodies rest
     termination_by branches => sizeOf branches
-
-    def ParallelMessageOwnershipBranches :
-        List (BareMessage × PactType) → Prop
-      | [] => True
-      | (action, processType) :: rest =>
-          ParallelMessageOwnership processType ∧
-            Disjoint ({action.1} ∪ MessageIds processType) (BranchMessageIds rest) ∧
-            Disjoint ({action} ∪ MessageActions processType)
-              (BranchMessageActions rest) ∧
-            ParallelMessageOwnershipBranches rest
-    termination_by branches => sizeOf branches
   decreasing_by
     all_goals
       simp_wf
       omega
   end
+
+  /- Pointwise ownership together with the separation a conjunctive offer's
+  branches enjoy.  This bundle is what the branch product consumes. -/
+  def ParallelMessageOwnershipBranches :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (action, processType) :: rest =>
+        ParallelMessageOwnership processType ∧
+          Disjoint ({action.1} ∪ MessageIds processType) (BranchMessageIds rest) ∧
+          Disjoint ({action} ∪ MessageActions processType)
+            (BranchMessageActions rest) ∧
+          ParallelMessageOwnershipBranches rest
+  termination_by branches => sizeOf branches
+  decreasing_by
+    simp_wf
+    omega
 
   /- All synchronization interfaces occurring below a type.  This is used by
   the compositional proof only; it does not alter operational future offers. -/

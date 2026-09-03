@@ -355,23 +355,23 @@ theorem typeOffers_messageActions_subset :
       rw [parallelTypeBranchesSelecting_messageActions]
       simp only [PactType.MessageActions]
       exact Finset.subset_union_right
-  | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
+  | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
       simp only [PactType.MessageActions]
       exact Finset.union_subset_union ihL ihR
   | par_fuse | par_fuse_tock => simp [PactType.MessageActions]
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       rw [(PactType.reannotate_ownership_data _ _).2.1]
       simp only [PactType.MessageActions]
       exact Finset.Subset.trans ih Finset.subset_union_right
-  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       rw [(PactType.reannotate_ownership_data _ _).2.1]
       simp only [PactType.MessageActions]
       exact Finset.Subset.trans ih Finset.subset_union_right
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       rw [(PactType.reannotate_ownership_data _ _).2.1]
       simp only [PactType.MessageActions]
       exact Finset.Subset.trans ih Finset.subset_union_left
-  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       rw [(PactType.reannotate_ownership_data _ _).2.1]
       simp only [PactType.MessageActions]
       exact Finset.Subset.trans ih Finset.subset_union_left
@@ -444,25 +444,25 @@ theorem typeOffers_current_subset :
       intro x hx
       exact Finset.mem_union_right _
         (typeBranchActions_subset_branchMessageActions branches hx)
-  | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
+  | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
       simp only [PactType.MessageActions, hideTypeOffers]
       intro x hx
       rcases Finset.mem_union.mp (Finset.mem_filter.mp hx).1 with h | h
       · exact Finset.mem_union_left _ (ihL h)
       · exact Finset.mem_union_right _ (ihR h)
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
+  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihL ihR =>
       simp only [PactType.MessageActions, hideTypeOffers]
       intro x hx
       rcases Finset.mem_union.mp (Finset.mem_filter.mp hx).1 with h | h
       · exact Finset.mem_union_left _ (ihL h)
       · exact Finset.mem_union_right _ (ihR h)
   | par_fuse_tock => simp
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       simp only [PactType.MessageActions, hideTypeOffers]
       intro x hx
       exact Finset.mem_union_right _ (ih (Finset.mem_filter.mp hx).1)
   | left_complete_tock => simp
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ih =>
       simp only [PactType.MessageActions, hideTypeOffers]
       intro x hx
       exact Finset.mem_union_left _ (ih (Finset.mem_filter.mp hx).1)
@@ -495,18 +495,12 @@ theorem mem_project_typeNeed {alphabet : PactTypeAlphabet}
 /-- One child's local environment, re-projected onto a live-equivalent child's
 alphabet, is an environment that child cannot tell apart. -/
 theorem localEnvAgree {l l' : PactType} {current current' : Finset BareMessage}
-    (hAgree : PactTypeAlphabet.AgreeOn l.alphabet l'.alphabet
+    (_hAgree : PactTypeAlphabet.AgreeOn l.alphabet l'.alphabet
       (PactType.MessageActions l))
     (hOffers : ∀ action ∈ PactType.MessageActions l,
       (typeNeed action ∈ current ↔ typeNeed action ∈ current')) :
     ∀ action ∈ PactType.MessageActions l,
-      (typeNeed action ∈
-          projectTypeEnvironmentOffers l.alphabet current ↔
-        typeNeed action ∈
-          projectTypeEnvironmentOffers l'.alphabet current') := by
-  intro action hAction
-  simp only [mem_project_typeNeed]
-  exact and_congr (hOffers action hAction) (hAgree action hAction)
+      (typeNeed action ∈ current ↔ typeNeed action ∈ current') := hOffers
 
 /-- Both parallel children's local environments transport together: the two
 premises of the parallel rule are cross-linked, so they are rebuilt as a pair. -/
@@ -547,19 +541,19 @@ theorem parLocalEnvs_transport
       | clock _ _ _ _ hClock => exact absurd hClock (by rw [hOuterClock]; simp)
       | ordinary _ _ _ _ _ _ _ hSibClockR hLocalClockR hImmR hFutR =>
           refine ⟨TypeEnvironment.mk
-              (projectTypeEnvironmentOffers l'.alphabet outer'.immediate ∪
+              (outer'.immediate ∪
                 restrictTypeOffers interface rc)
-              ((projectTypeEnvironmentOffers l'.alphabet outer'.future ∪
+              ((outer'.future ∪
                 restrictTypeOffers interface rf) \
-                (projectTypeEnvironmentOffers l'.alphabet outer'.immediate ∪
+                (outer'.immediate ∪
                   restrictTypeOffers interface rc))
               false,
             TypeEnvironment.mk
-              (projectTypeEnvironmentOffers r'.alphabet outer'.immediate ∪
+              (outer'.immediate ∪
                 restrictTypeOffers interface lc)
-              ((projectTypeEnvironmentOffers r'.alphabet outer'.future ∪
+              ((outer'.future ∪
                 restrictTypeOffers interface lf) \
-                (projectTypeEnvironmentOffers r'.alphabet outer'.immediate ∪
+                (outer'.immediate ∪
                   restrictTypeOffers interface lc))
               false,
             LocalTypeOfferEnvironment.ordinary outer' _ _ interface l' rc rf
@@ -614,11 +608,11 @@ theorem localEnv_transport_solo
         TypeEnvironment.AgreeOnNeeds.refl _ _⟩
   | ordinary _ _ _ _ _ _ hOuterClock hSibClock hLocalClock hImm hFut =>
       refine ⟨TypeEnvironment.mk
-          (projectTypeEnvironmentOffers l'.alphabet outer'.immediate ∪
+          (outer'.immediate ∪
             restrictTypeOffers interface ∅)
-          ((projectTypeEnvironmentOffers l'.alphabet outer'.future ∪
+          ((outer'.future ∪
             restrictTypeOffers interface ∅) \
-            (projectTypeEnvironmentOffers l'.alphabet outer'.immediate ∪
+            (outer'.immediate ∪
               restrictTypeOffers interface ∅))
           false,
         LocalTypeOfferEnvironment.ordinary outer' _ _ interface l' ∅ ∅
@@ -651,15 +645,15 @@ theorem localEnv_wellFormed_interface
     (hCurrent : outer.clock = false → ∀ x ∈ c, x.1 ∈ interface →
       x ∈ sibling.alphabet.actions)
     (hFuture : outer.clock = false → ∀ x ∈ f, x.1 ∈ interface →
-      x ∈ sibling.alphabet.actions) :
+      x ∈ sibling.alphabet.actions)
+    (hOuterWF : ∀ x ∈ outer.immediate ∪ outer.future,
+      x ∈ l.alphabet.actions.image typeNeed) :
     localEnv.WellFormed l.alphabet := by
   classical
   have hProject : ∀ (offers : Finset BareMessage),
-      ∀ x ∈ projectTypeEnvironmentOffers l.alphabet offers,
-        x ∈ l.alphabet.actions.image typeNeed := by
-    intro offers x hx
-    simp only [projectTypeEnvironmentOffers, Finset.mem_filter] at hx
-    exact hx.2
+      offers ⊆ outer.immediate ∪ outer.future →
+      ∀ x ∈ offers, x ∈ l.alphabet.actions.image typeNeed :=
+    fun _ hSub x hx => hOuterWF x (hSub hx)
   cases hLocal with
   | clock =>
       refine ⟨fun _ => ⟨rfl, rfl⟩, fun _ => by simp [TypeEnvironment.tock],
@@ -679,11 +673,12 @@ theorem localEnv_wellFormed_interface
         fun _ => ?_, ?_, ?_⟩
       · rw [hFut]; exact Finset.inter_sdiff_self _ _
       · rw [hImm]
-        exact Finset.union_subset (hProject _)
+        exact Finset.union_subset
+          (hProject _ Finset.subset_union_left)
           (hRestrict _ (hCurrent hOuterClock))
       · rw [hFut]
         exact Finset.Subset.trans Finset.sdiff_subset
-          (Finset.union_subset (hProject _)
+          (Finset.union_subset (hProject _ Finset.subset_union_right)
             (hRestrict _ (hFuture hOuterClock)))
 
 /-- Offers inside the sibling's whole alphabet are in particular inside it on
@@ -696,10 +691,12 @@ theorem localEnv_wellFormed
       interface)
     (hOneL : l.alphabet.WellFormed) (hOne : sibling.alphabet.WellFormed)
     (hCurrent : c ⊆ sibling.alphabet.actions)
-    (hFuture : f ⊆ sibling.alphabet.actions) :
+    (hFuture : f ⊆ sibling.alphabet.actions)
+    (hOuterWF : ∀ x ∈ outer.immediate ∪ outer.future,
+      x ∈ l.alphabet.actions.image typeNeed) :
     localEnv.WellFormed l.alphabet :=
   localEnv_wellFormed_interface hLocal hComp hOneL hOne
-    (fun _ _ hx _ => hCurrent hx) (fun _ _ hx _ => hFuture hx)
+    (fun _ _ hx _ => hCurrent hx) (fun _ _ hx _ => hFuture hx) hOuterWF
 
 /-! ### The offer side conditions read branch heads only, so they transport -/
 
@@ -1005,6 +1002,8 @@ theorem liveEqBody_offers_forward :
         rho.AlphabetWellFormed → theta.AlphabetWellFormed →
         PactType.ParallelMessageOwnership rho →
         PactType.ParallelMessageOwnership theta →
+        PactType.ConjunctiveMessageOwnership rho →
+        PactType.ConjunctiveMessageOwnership theta →
         PactType.TailRecursive rho → PactType.TailRecursive theta →
         LiveEqBody rho theta →
         TypeEnvironment.AgreeOnNeeds env env'
@@ -1015,7 +1014,7 @@ theorem liveEqBody_offers_forward :
   intro env rho label rho' current future hOffers
   induction hOffers with
   | action env alphabet msg dir hEnv hMem =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl, hA⟩ := liveEqBody_message_inv hLive
       have hSkip : LiveEqBody (.skip alphabet) (.skip b) := by
         simp only [LiveEqBody]
@@ -1026,7 +1025,7 @@ theorem liveEqBody_offers_forward :
         ⟨hEnvT, (hAgree.hasNeed (by simp [PactType.MessageActions])).mp hEnv.2⟩
         ((hA _ (Finset.mem_singleton_self _)).mp hMem)
   | action_wait env alphabet msg dir hEnv hMem =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl, hA⟩ := liveEqBody_message_inv hLive
       refine ⟨.message b msg dir, ?_, hLive⟩
       rw [liveEqBody_preserves_futOff hLive]
@@ -1038,28 +1037,28 @@ theorem liveEqBody_offers_forward :
           by rw [← hAgree.1]; exact hEnv.2.2⟩
         ((hA _ (Finset.mem_singleton_self _)).mp hMem)
   | cycle env alphabet hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl⟩ := liveEqBody_tock_inv hLive
       simp only [PactType.alphabet] at hEnvT
       exact ⟨.skip b,
         TypeOffers.cycle env' b ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩,
         by simp only [LiveEqBody]⟩
   | cycle_wait env alphabet hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl⟩ := liveEqBody_tock_inv hLive
       refine ⟨.tock b, ?_, hLive⟩
       rw [liveEqBody_preserves_futOff hLive]
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.cycle_wait env' b ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | skip env alphabet hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl⟩ := liveEqBody_skip_inv hLive
       refine ⟨.skip b, ?_, hLive⟩
       rw [liveEqBody_preserves_futOff hLive]
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.skip env' b ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | progress env alphabet pid hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, rfl⟩ := liveEqBody_progress_inv hLive
       have hSkip : LiveEqBody (.skip alphabet) (.skip b) := by
         simp only [LiveEqBody]
@@ -1068,28 +1067,28 @@ theorem liveEqBody_offers_forward :
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.progress env' b pid ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | choice_left env alphabet left right hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, -⟩ := liveEqBody_choice_inv hLive
       refine ⟨l', ?_, hl⟩
       rw [liveEqBody_preserves_futOff hl]
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.choice_left env' b l' r' ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | choice_right env alphabet left right hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, -, hr⟩ := liveEqBody_choice_inv hLive
       refine ⟨r', ?_, hr⟩
       rw [liveEqBody_preserves_futOff hr]
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.choice_right env' b l' r' ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | fair_left env alphabet bid left right hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, -⟩ := liveEqBody_fairChoice_inv hLive
       refine ⟨l', ?_, hl⟩
       rw [liveEqBody_preserves_futOff hl]
       simp only [PactType.alphabet] at hEnvT
       exact TypeOffers.fair_left env' b bid l' r' ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | fair_right env alphabet bid left right hEnv =>
-      intro theta env' _ _ _ _ _ _ hLive hAgree hEnvT
+      intro theta env' _ _ _ _ _ _ _ _ hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, -, hr⟩ := liveEqBody_fairChoice_inv hLive
       refine ⟨r', ?_, hr⟩
       rw [liveEqBody_preserves_futOff hr]
@@ -1097,7 +1096,7 @@ theorem liveEqBody_offers_forward :
       exact TypeOffers.fair_right env' b bid l' r' ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | seq env alphabet left left' right label current childFuture hChild hNotSkip
       hNotTock ihChild =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, hr⟩ := liveEqBody_seq_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
@@ -1108,6 +1107,8 @@ theorem liveEqBody_offers_forward :
         ihChild hWF.2.2.2.1 hWFt.2.2.2.1
           (by rw [PactType.ParallelMessageOwnership] at hOwn; exact hOwn.1)
           (by rw [PactType.ParallelMessageOwnership] at hOwnT; exact hOwnT.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConj; exact hConj.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConjT; exact hConjT.1)
           (by rw [PactType.TailRecursive] at hTail; exact hTail.1)
           (by rw [PactType.TailRecursive] at hTailT; exact hTailT.1)
           hl (TypeEnvironment.AgreeOnNeeds.mono hAgree (by
@@ -1133,7 +1134,7 @@ theorem liveEqBody_offers_forward :
         hSkip' hNotTock
   | seq_tock env alphabet left left' right current childFuture hChild hNotSkip
       ihChild =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, hr⟩ := liveEqBody_seq_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
@@ -1144,6 +1145,8 @@ theorem liveEqBody_offers_forward :
         ihChild hWF.2.2.2.1 hWFt.2.2.2.1
           (by rw [PactType.ParallelMessageOwnership] at hOwn; exact hOwn.1)
           (by rw [PactType.ParallelMessageOwnership] at hOwnT; exact hOwnT.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConj; exact hConj.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConjT; exact hConjT.1)
           (by rw [PactType.TailRecursive] at hTail; exact hTail.1)
           (by rw [PactType.TailRecursive] at hTailT; exact hTailT.1)
           hl (TypeEnvironment.AgreeOnNeeds.mono hAgree (by
@@ -1166,7 +1169,7 @@ theorem liveEqBody_offers_forward :
         (typeOffers_messageActions_subset hChild) (Finset.Subset.refl _)
   | seq_fuse env alphabet skipAlphabet left right label current childFuture
       hChild hNotTock ihChild =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, hr⟩ := liveEqBody_seq_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
@@ -1174,6 +1177,8 @@ theorem liveEqBody_offers_forward :
         ihChild hWF.2.2.2.1 hWFt.2.2.2.1
           (by rw [PactType.ParallelMessageOwnership] at hOwn; exact hOwn.1)
           (by rw [PactType.ParallelMessageOwnership] at hOwnT; exact hOwnT.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConj; exact hConj.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConjT; exact hConjT.1)
           (by rw [PactType.TailRecursive] at hTail; exact hTail.1)
           (by rw [PactType.TailRecursive] at hTailT; exact hTailT.1)
           hl (TypeEnvironment.AgreeOnNeeds.mono hAgree (by
@@ -1186,7 +1191,7 @@ theorem liveEqBody_offers_forward :
       exact TypeOffers.seq_fuse env' b a l' r' label current _ hChild' hNotTock
   | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
       hChild ihChild =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hl, hr⟩ := liveEqBody_seq_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
@@ -1194,6 +1199,8 @@ theorem liveEqBody_offers_forward :
         ihChild hWF.2.2.2.1 hWFt.2.2.2.1
           (by rw [PactType.ParallelMessageOwnership] at hOwn; exact hOwn.1)
           (by rw [PactType.ParallelMessageOwnership] at hOwnT; exact hOwnT.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConj; exact hConj.1)
+          (by rw [PactType.ConjunctiveMessageOwnership] at hConjT; exact hConjT.1)
           (by rw [PactType.TailRecursive] at hTail; exact hTail.1)
           (by rw [PactType.TailRecursive] at hTailT; exact hTailT.1)
           hl (TypeEnvironment.AgreeOnNeeds.mono hAgree (by
@@ -1204,7 +1211,7 @@ theorem liveEqBody_offers_forward :
       exact ⟨r', TypeOffers.seq_fuse_tock env' b a l' r' current _ hChild', hr⟩
   | xoffer_branch env alphabet elseType branches action processType hConds
       hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, -, hbs⟩ := liveEqBody_xoffer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       obtain ⟨body', hMem', hBodyLive⟩ := liveEqBranches_mem hbs hConds.2.1
@@ -1233,7 +1240,7 @@ theorem liveEqBody_offers_forward :
         exact Finset.mem_union_right _
           (mem_branchMessageActions_of_mem (body := y.2) (by simpa using hy))
   | xoffer_else env alphabet elseType branches hConds hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, he, hbs⟩ := liveEqBody_xoffer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       refine ⟨e', ?_, he⟩
@@ -1260,7 +1267,7 @@ theorem liveEqBody_offers_forward :
         exact Finset.mem_union_right _
           (mem_branchMessageActions_of_mem (body := y.2) (by simpa using hy))
   | xoffer_wait env alphabet elseType branches hConds hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, he, hbs⟩ := liveEqBody_xoffer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       have hHeadSubEarly : typeBranchActions branches ⊆
@@ -1294,7 +1301,7 @@ theorem liveEqBody_offers_forward :
         exact Finset.mem_union_right _
           (mem_branchMessageActions_of_mem (body := y.2) (by simpa using hy))
   | offer_else env alphabet elseType branches hConds hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, he, hbs⟩ := liveEqBody_offer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       refine ⟨e', ?_, he⟩
@@ -1321,7 +1328,7 @@ theorem liveEqBody_offers_forward :
         exact Finset.mem_union_right _
           (mem_branchMessageActions_of_mem (body := y.2) (by simpa using hy))
   | offer_wait env alphabet elseType branches hConds hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, he, hbs⟩ := liveEqBody_offer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       refine ⟨.offer b e' bs', ?_, hLive⟩
@@ -1350,12 +1357,12 @@ theorem liveEqBody_offers_forward :
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hAliveL
       hAliveR hStepL hStepR hNotBoth hLocalL hLocalR hWFSync ihL ihR =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeL := liveEqBody_agreeOn hl
       have hAgreeR := liveEqBody_agreeOn hr
@@ -1395,25 +1402,51 @@ theorem liveEqBody_offers_forward :
           (sibling_offer_declared hLocalR
             (typeOffers_env_wellFormed hStepR hWF.2.2.2) hCompSwap
             hWF.2.2.2.alphabet_wellFormed hClock hx hIface)
+      -- the parent alphabet sits inside each child's, so the outer environment
+      -- is well formed for both
+      have hOuterL : ∀ x ∈ env'.immediate ∪ env'.future,
+          x ∈ l'.alphabet.actions.image typeNeed := by
+        intro x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ :=
+            Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action,
+            PactTypeAlphabet.parent_actions_subset_left hWFt.2.1 hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ :=
+            Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action,
+            PactTypeAlphabet.parent_actions_subset_left hWFt.2.1 hAction, rfl⟩
+      have hOuterR : ∀ x ∈ env'.immediate ∪ env'.future,
+          x ∈ r'.alphabet.actions.image typeNeed := by
+        intro x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ :=
+            Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action,
+            PactTypeAlphabet.parent_actions_subset_right hWFt.2.1 hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ :=
+            Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action,
+            PactTypeAlphabet.parent_actions_subset_right hWFt.2.1 hAction, rfl⟩
       have hWFL : leftEnv'.WellFormed l'.alphabet :=
         localEnv_wellFormed_interface hLocalL' hWFt.2.1.complementary
           hWFt.2.2.1.alphabet_wellFormed hWFt.2.2.2.alphabet_wellFormed
           (fun hClock x hx => hDeclR (hAgree.1.trans hClock) x
             (Finset.mem_union_left _ hx))
           (fun hClock x hx => hDeclR (hAgree.1.trans hClock) x
-            (Finset.mem_union_right _ hx))
+            (Finset.mem_union_right _ hx)) hOuterL
       have hWFR : rightEnv'.WellFormed r'.alphabet :=
         localEnv_wellFormed_interface hLocalR' hCompSwapT
           hWFt.2.2.2.alphabet_wellFormed hWFt.2.2.1.alphabet_wellFormed
           (fun hClock x hx => hDeclL (hAgree.1.trans hClock) x
             (Finset.mem_union_left _ hx))
           (fun hClock x hx => hDeclL (hAgree.1.trans hClock) x
-            (Finset.mem_union_right _ hx))
+            (Finset.mem_union_right _ hx)) hOuterR
       obtain ⟨lTarget', hStepL', hLiveL'⟩ :=
-        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.2.1 hOwnT.2.2.1 hTail.1 hTailT.1 hl
+        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.1 hOwnT.2.1 hConj.1 hConjT.1 hTail.1 hTailT.1 hl
           hEnvL hWFL
       obtain ⟨rTarget', hStepR', hLiveR'⟩ :=
-        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2.2 hOwnT.2.2.2 hTail.2 hTailT.2 hr
+        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2 hOwnT.2.2 hConj.2 hConjT.2 hTail.2 hTailT.2 hr
           hEnvR hWFR
       have hAliveL' : l' ≠ PactType.skip l'.alphabet := by
         intro hEq
@@ -1434,10 +1467,8 @@ theorem liveEqBody_offers_forward :
         · obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hLiveR').mpr ⟨_, hR⟩
           rw [ha]; simp [PactType.alphabet]
       have hTargetLive : LiveEqBody
-          (.par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet
-            interface) left' right' interface)
-          (.par (PactTypeAlphabet.mergeHidden l'.alphabet r'.alphabet
-            interface) lTarget' rTarget' interface) := by
+          (.par alphabet left' right' interface)
+          (.par b lTarget' rTarget' interface) := by
         simp only [LiveEqBody]
         refine ⟨trivial, ?_, hLiveL', hLiveR'⟩
         refine hA.mono ?_
@@ -1445,22 +1476,21 @@ theorem liveEqBody_offers_forward :
         exact Finset.union_subset_union
           (typeOffers_messageActions_subset hStepL)
           (typeOffers_messageActions_subset hStepR)
-      refine ⟨.par (PactTypeAlphabet.mergeHidden l'.alphabet r'.alphabet
-        interface) lTarget' rTarget' interface, ?_, hTargetLive⟩
+      refine ⟨.par b lTarget' rTarget' interface, ?_, hTargetLive⟩
       rw [liveEqBody_preserves_futOff hTargetLive]
-      exact TypeOffers.par env' leftEnv' rightEnv' interface l' lTarget' r'
+      exact TypeOffers.par env' leftEnv' rightEnv' interface b l' lTarget' r'
         rTarget' leftLabel rightLabel leftCurrent leftFuture rightCurrent
         rightFuture hAliveL' hAliveR' hStepL' hStepR' hNotBoth' hLocalL'
         hLocalR' ⟨hEnvT, hWFSync.2⟩
   | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture hStepL hStepR hLocalL
       hLocalR hWFSync hNotTock ihL ihR =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeL := liveEqBody_agreeOn hl
       have hAgreeR := liveEqBody_agreeOn hr
@@ -1477,22 +1507,34 @@ theorem liveEqBody_offers_forward :
       have hCurR : rightCurrent ⊆ r'.alphabet.actions := fun x hx =>
         (hAgreeR x (typeOffers_current_subset hStepR hx)).mp
           (typeOffers_current_subset_alphabet hWF.2.2.2 hStepR hx)
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hComp := hWFt.2.1.complementary
       have hWFL : leftEnv'.WellFormed l'.alphabet :=
         localEnv_wellFormed hLocalL' hComp hWFt.2.2.1.alphabet_wellFormed
           hWFt.2.2.2.alphabet_wellFormed hCurR
           (by rw [hFutR]; exact Finset.empty_subset _)
+          (hOuterIn l' (PactTypeAlphabet.parent_actions_subset_left hWFt.2.1))
       have hWFR : rightEnv'.WellFormed r'.alphabet :=
         localEnv_wellFormed hLocalR'
           (fun m hm => (hComp m hm).elim (fun h => Or.inr ⟨h.2, h.1⟩)
             (fun h => Or.inl ⟨h.2, h.1⟩))
           hWFt.2.2.2.alphabet_wellFormed hWFt.2.2.1.alphabet_wellFormed hCurL
           (by rw [hFutL]; exact Finset.empty_subset _)
+          (hOuterIn r' (PactTypeAlphabet.parent_actions_subset_right hWFt.2.1))
       obtain ⟨lTarget', hStepL', hLiveL'⟩ :=
-        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.2.1 hOwnT.2.2.1 hTail.1 hTailT.1 hl
+        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.1 hOwnT.2.1 hConj.1 hConjT.1 hTail.1 hTailT.1 hl
           hEnvL hWFL
       obtain ⟨rTarget', hStepR', hLiveR'⟩ :=
-        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2.2 hOwnT.2.2.2 hTail.2 hTailT.2 hr
+        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2 hOwnT.2.2 hConj.2 hConjT.2 hTail.2 hTailT.2 hr
           hEnvR hWFR
       obtain ⟨aL, rfl⟩ := liveEqBody_skip_inv hLiveL'
       obtain ⟨aR, rfl⟩ := liveEqBody_skip_inv hLiveR'
@@ -1502,21 +1544,20 @@ theorem liveEqBody_offers_forward :
       obtain rfl : aR = r'.alphabet := by
         simpa only [PactType.alphabet] using
           TypeOffers.preserves_alphabet hWFt.2.2.2 hStepR'
-      refine ⟨.skip (PactTypeAlphabet.mergeHidden l'.alphabet r'.alphabet
-          interface),
-        TypeOffers.par_fuse env' leftEnv' rightEnv' interface l' r' leftLabel
+      refine ⟨.skip b,
+        TypeOffers.par_fuse env' leftEnv' rightEnv' interface b l' r' leftLabel
           rightLabel leftCurrent leftFuture rightCurrent rightFuture hStepL'
           hStepR' hLocalL' hLocalR' ⟨hEnvT, hWFSync.2⟩ hNotTock, ?_⟩
       simp only [LiveEqBody]
   | par_fuse_tock outer leftEnv rightEnv interface alphabet left right leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hStepL hStepR
       hLocalL hLocalR hWFSync hTock ihL ihR =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeL := liveEqBody_agreeOn hl
       have hAgreeR := liveEqBody_agreeOn hr
@@ -1533,22 +1574,34 @@ theorem liveEqBody_offers_forward :
       have hCurR : rightCurrent ⊆ r'.alphabet.actions := fun x hx =>
         (hAgreeR x (typeOffers_current_subset hStepR hx)).mp
           (typeOffers_current_subset_alphabet hWF.2.2.2 hStepR hx)
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hComp := hWFt.2.1.complementary
       have hWFL : leftEnv'.WellFormed l'.alphabet :=
         localEnv_wellFormed hLocalL' hComp hWFt.2.2.1.alphabet_wellFormed
           hWFt.2.2.2.alphabet_wellFormed hCurR
           (by rw [hFutR]; exact Finset.empty_subset _)
+          (hOuterIn l' (PactTypeAlphabet.parent_actions_subset_left hWFt.2.1))
       have hWFR : rightEnv'.WellFormed r'.alphabet :=
         localEnv_wellFormed hLocalR'
           (fun m hm => (hComp m hm).elim (fun h => Or.inr ⟨h.2, h.1⟩)
             (fun h => Or.inl ⟨h.2, h.1⟩))
           hWFt.2.2.2.alphabet_wellFormed hWFt.2.2.1.alphabet_wellFormed hCurL
           (by rw [hFutL]; exact Finset.empty_subset _)
+          (hOuterIn r' (PactTypeAlphabet.parent_actions_subset_right hWFt.2.1))
       obtain ⟨lTarget', hStepL', hLiveL'⟩ :=
-        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.2.1 hOwnT.2.2.1 hTail.1 hTailT.1 hl
+        ihL hWF.2.2.1 hWFt.2.2.1 hOwn.2.1 hOwnT.2.1 hConj.1 hConjT.1 hTail.1 hTailT.1 hl
           hEnvL hWFL
       obtain ⟨rTarget', hStepR', hLiveR'⟩ :=
-        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2.2 hOwnT.2.2.2 hTail.2 hTailT.2 hr
+        ihR hWF.2.2.2 hWFt.2.2.2 hOwn.2.2 hOwnT.2.2 hConj.2 hConjT.2 hTail.2 hTailT.2 hr
           hEnvR hWFR
       obtain ⟨aL, rfl⟩ := liveEqBody_skip_inv hLiveL'
       obtain ⟨aR, rfl⟩ := liveEqBody_skip_inv hLiveR'
@@ -1558,21 +1611,20 @@ theorem liveEqBody_offers_forward :
       obtain rfl : aR = r'.alphabet := by
         simpa only [PactType.alphabet] using
           TypeOffers.preserves_alphabet hWFt.2.2.2 hStepR'
-      refine ⟨.skip (PactTypeAlphabet.mergeHidden l'.alphabet r'.alphabet
-          interface),
-        TypeOffers.par_fuse_tock env' leftEnv' rightEnv' interface l' r'
+      refine ⟨.skip b,
+        TypeOffers.par_fuse_tock env' leftEnv' rightEnv' interface b l' r'
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hStepL' hStepR' hLocalL' hLocalR' ⟨hEnvT, hWFSync.2⟩ hTock, ?_⟩
       simp only [LiveEqBody]
   | left_complete outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hNotTock ih =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeR := liveEqBody_agreeOn hr
       obtain ⟨rightEnv', hLocal', hEnvR⟩ :=
@@ -1580,6 +1632,16 @@ theorem liveEqBody_offers_forward :
           (hAgree.mono (by
             simp only [PactType.MessageActions]
             exact Finset.subset_union_right)) hAgreeR
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hComp := hWFt.2.1.complementary
       have hWFR : rightEnv'.WellFormed r'.alphabet :=
         localEnv_wellFormed hLocal'
@@ -1587,8 +1649,9 @@ theorem liveEqBody_offers_forward :
             (fun h => Or.inl ⟨h.2, h.1⟩))
           hWFt.2.2.2.alphabet_wellFormed hWFt.2.2.1.alphabet_wellFormed
           (Finset.empty_subset _) (Finset.empty_subset _)
+          (hOuterIn r' (PactTypeAlphabet.parent_actions_subset_right hWFt.2.1))
       obtain ⟨rTarget', hStep', hLive'⟩ :=
-        ih hWF.2.2.2 hWFt.2.2.2 hOwn.2.2.2 hOwnT.2.2.2 hTail.2 hTailT.2 hr
+        ih hWF.2.2.2 hWFt.2.2.2 hOwn.2.2 hOwnT.2.2 hConj.2 hConjT.2 hTail.2 hTailT.2 hr
           hEnvR hWFR
       have hSkipL' : l' = PactType.skip l'.alphabet := by
         obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hl).mp ⟨left.alphabet, hLeftSkip⟩
@@ -1604,30 +1667,27 @@ theorem liveEqBody_offers_forward :
           obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hLive').mpr ⟨_, hEq⟩
           rw [ha]; simp [PactType.alphabet])
       have hReann : LiveEqBody
-          (right'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
-            right.alphabet interface))
-          (rTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-            r'.alphabet interface)) :=
+          (right'.reannotate alphabet)
+          (rTarget'.reannotate b) :=
         liveEqBody_reannotate
           (hA.mono (by
             simp only [PactType.MessageActions]
             exact Finset.Subset.trans (typeOffers_messageActions_subset hStep)
               Finset.subset_union_right)) hLive'
-      refine ⟨rTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-        r'.alphabet interface), ?_, hReann⟩
+      refine ⟨rTarget'.reannotate b, ?_, hReann⟩
       rw [liveEqBody_preserves_futOff hReann]
-      exact TypeOffers.left_complete env' rightEnv' interface l' r' rTarget'
+      exact TypeOffers.left_complete env' rightEnv' interface b l' r' rTarget'
         rightLabel rightCurrent rightFuture hSkipL' hNotSkipR' hStep'
         hNotSkipT' hRestrictC hRestrictF hLocal' hEnvT hNotTock
   | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
       rightCurrent rightFuture hLeftSkip hRightNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hTock ih =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeR := liveEqBody_agreeOn hr
       obtain ⟨rightEnv', hLocal', hEnvR⟩ :=
@@ -1635,6 +1695,16 @@ theorem liveEqBody_offers_forward :
           (hAgree.mono (by
             simp only [PactType.MessageActions]
             exact Finset.subset_union_right)) hAgreeR
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hComp := hWFt.2.1.complementary
       have hWFR : rightEnv'.WellFormed r'.alphabet :=
         localEnv_wellFormed hLocal'
@@ -1642,8 +1712,9 @@ theorem liveEqBody_offers_forward :
             (fun h => Or.inl ⟨h.2, h.1⟩))
           hWFt.2.2.2.alphabet_wellFormed hWFt.2.2.1.alphabet_wellFormed
           (Finset.empty_subset _) (Finset.empty_subset _)
+          (hOuterIn r' (PactTypeAlphabet.parent_actions_subset_right hWFt.2.1))
       obtain ⟨rTarget', hStep', hLive'⟩ :=
-        ih hWF.2.2.2 hWFt.2.2.2 hOwn.2.2.2 hOwnT.2.2.2 hTail.2 hTailT.2 hr
+        ih hWF.2.2.2 hWFt.2.2.2 hOwn.2.2 hOwnT.2.2 hConj.2 hConjT.2 hTail.2 hTailT.2 hr
           hEnvR hWFR
       have hSkipL' : l' = PactType.skip l'.alphabet := by
         obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hl).mp ⟨left.alphabet, hLeftSkip⟩
@@ -1658,9 +1729,8 @@ theorem liveEqBody_offers_forward :
         exact hTargetNotSkip (by
           obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hLive').mpr ⟨_, hEq⟩
           rw [ha]; simp [PactType.alphabet])
-      exact ⟨rTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-          r'.alphabet interface),
-        TypeOffers.left_complete_tock env' rightEnv' interface l' r' rTarget'
+      exact ⟨rTarget'.reannotate b,
+        TypeOffers.left_complete_tock env' rightEnv' interface b l' r' rTarget'
           rightLabel rightCurrent rightFuture hSkipL' hNotSkipR' hStep'
           hNotSkipT' hRestrictC hRestrictF hLocal' hEnvT hTock,
         liveEqBody_reannotate
@@ -1671,12 +1741,12 @@ theorem liveEqBody_offers_forward :
   | right_complete outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hNotTock ih =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeL := liveEqBody_agreeOn hl
       obtain ⟨leftEnv', hLocal', hEnvL⟩ :=
@@ -1684,12 +1754,23 @@ theorem liveEqBody_offers_forward :
           (hAgree.mono (by
             simp only [PactType.MessageActions]
             exact Finset.subset_union_left)) hAgreeL
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hWFL : leftEnv'.WellFormed l'.alphabet :=
         localEnv_wellFormed hLocal' hWFt.2.1.complementary
           hWFt.2.2.1.alphabet_wellFormed hWFt.2.2.2.alphabet_wellFormed
           (Finset.empty_subset _) (Finset.empty_subset _)
+          (hOuterIn l' (PactTypeAlphabet.parent_actions_subset_left hWFt.2.1))
       obtain ⟨lTarget', hStep', hLive'⟩ :=
-        ih hWF.2.2.1 hWFt.2.2.1 hOwn.2.2.1 hOwnT.2.2.1 hTail.1 hTailT.1 hl
+        ih hWF.2.2.1 hWFt.2.2.1 hOwn.2.1 hOwnT.2.1 hConj.1 hConjT.1 hTail.1 hTailT.1 hl
           hEnvL hWFL
       have hSkipR' : r' = PactType.skip r'.alphabet := by
         obtain ⟨a, ha⟩ :=
@@ -1706,30 +1787,27 @@ theorem liveEqBody_offers_forward :
           obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hLive').mpr ⟨_, hEq⟩
           rw [ha]; simp [PactType.alphabet])
       have hReann : LiveEqBody
-          (left'.reannotate (PactTypeAlphabet.mergeHidden left.alphabet
-            right.alphabet interface))
-          (lTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-            r'.alphabet interface)) :=
+          (left'.reannotate alphabet)
+          (lTarget'.reannotate b) :=
         liveEqBody_reannotate
           (hA.mono (by
             simp only [PactType.MessageActions]
             exact Finset.Subset.trans (typeOffers_messageActions_subset hStep)
               Finset.subset_union_left)) hLive'
-      refine ⟨lTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-        r'.alphabet interface), ?_, hReann⟩
+      refine ⟨lTarget'.reannotate b, ?_, hReann⟩
       rw [liveEqBody_preserves_futOff hReann]
-      exact TypeOffers.right_complete env' leftEnv' interface l' lTarget' r'
+      exact TypeOffers.right_complete env' leftEnv' interface b l' lTarget' r'
         leftLabel leftCurrent leftFuture hSkipR' hNotSkipL' hStep' hNotSkipT'
         hRestrictC hRestrictF hLocal' hEnvT hNotTock
   | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
       leftCurrent leftFuture hRightSkip hLeftNotSkip hStep hTargetNotSkip
       hRestrictC hRestrictF hLocal hOuterWF hTock ih =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, l', r', rfl, hA, hl, hr⟩ := liveEqBody_par_inv hLive
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       simp only [PactType.TailRecursive] at hTail hTailT
-      obtain rfl := PactTypeAlphabet.parent_eq_mergeHidden hWFt.2.1 hOwnT.2.1
       simp only [PactType.alphabet] at hEnvT
       have hAgreeL := liveEqBody_agreeOn hl
       obtain ⟨leftEnv', hLocal', hEnvL⟩ :=
@@ -1737,12 +1815,23 @@ theorem liveEqBody_offers_forward :
           (hAgree.mono (by
             simp only [PactType.MessageActions]
             exact Finset.subset_union_left)) hAgreeL
+      have hOuterIn : ∀ (child : PactType),
+          b.actions ⊆ child.alphabet.actions →
+          ∀ x ∈ env'.immediate ∪ env'.future,
+            x ∈ child.alphabet.actions.image typeNeed := by
+        intro child hSub x hx
+        rcases Finset.mem_union.mp hx with hx | hx
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.1 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
+        · obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp (hEnvT.2.2.2 hx)
+          exact Finset.mem_image.mpr ⟨action, hSub hAction, rfl⟩
       have hWFL : leftEnv'.WellFormed l'.alphabet :=
         localEnv_wellFormed hLocal' hWFt.2.1.complementary
           hWFt.2.2.1.alphabet_wellFormed hWFt.2.2.2.alphabet_wellFormed
           (Finset.empty_subset _) (Finset.empty_subset _)
+          (hOuterIn l' (PactTypeAlphabet.parent_actions_subset_left hWFt.2.1))
       obtain ⟨lTarget', hStep', hLive'⟩ :=
-        ih hWF.2.2.1 hWFt.2.2.1 hOwn.2.2.1 hOwnT.2.2.1 hTail.1 hTailT.1 hl
+        ih hWF.2.2.1 hWFt.2.2.1 hOwn.2.1 hOwnT.2.1 hConj.1 hConjT.1 hTail.1 hTailT.1 hl
           hEnvL hWFL
       have hSkipR' : r' = PactType.skip r'.alphabet := by
         obtain ⟨a, ha⟩ :=
@@ -1758,9 +1847,8 @@ theorem liveEqBody_offers_forward :
         exact hTargetNotSkip (by
           obtain ⟨a, ha⟩ := (liveEqBody_skip_iff hLive').mpr ⟨_, hEq⟩
           rw [ha]; simp [PactType.alphabet])
-      exact ⟨lTarget'.reannotate (PactTypeAlphabet.mergeHidden l'.alphabet
-          r'.alphabet interface),
-        TypeOffers.right_complete_tock env' leftEnv' interface l' lTarget' r'
+      exact ⟨lTarget'.reannotate b,
+        TypeOffers.right_complete_tock env' leftEnv' interface b l' lTarget' r'
           leftLabel leftCurrent leftFuture hSkipR' hNotSkipL' hStep' hNotSkipT'
           hRestrictC hRestrictF hLocal' hEnvT hTock,
         liveEqBody_reannotate
@@ -1769,7 +1857,7 @@ theorem liveEqBody_offers_forward :
             exact Finset.Subset.trans (typeOffers_messageActions_subset hStep)
               Finset.subset_union_left)) hLive'⟩
   | recur env alphabet name body hEnv =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, body', rfl, hA, hBody⟩ := liveEqBody_recur_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
@@ -1789,11 +1877,12 @@ theorem liveEqBody_offers_forward :
       exact TypeOffers.recur env' b name body'
         ⟨hEnvT, by rw [← hAgree.1]; exact hEnv.2⟩
   | offer_some env alphabet elseType branches enabled hConds hHeads =>
-      intro theta env' hWF hWFt hOwn hOwnT hTail hTailT hLive hAgree hEnvT
+      intro theta env' hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive hAgree hEnvT
       obtain ⟨b, e', bs', rfl, hA, he, hbs⟩ := liveEqBody_offer_inv hLive
       simp only [PactType.alphabet] at hEnvT
       simp only [PactType.AlphabetWellFormed] at hWF hWFt
       simp only [PactType.ParallelMessageOwnership] at hOwn hOwnT
+      simp only [PactType.ConjunctiveMessageOwnership] at hConj hConjT
       obtain ⟨eAction, eBody⟩ := enabled
       obtain ⟨body', hMem', hBodyLive⟩ := liveEqBranches_mem hbs hConds.2.1
       have hHeadSub : typeBranchActions branches ⊆
@@ -1809,7 +1898,12 @@ theorem liveEqBody_offers_forward :
           (hA.mono (by
             simp only [PactType.MessageActions]
             exact Finset.subset_union_right))
-          hWF.2.2.2 hWFt.2.2.2 hOwn.2 hOwnT.2 hConds.2.1 hMem' rfl
+          hWF.2.2.2 hWFt.2.2.2
+          (PactType.parallelMessageOwnershipBranches_of_conjuncts branches
+            hOwn.2 hConj.2)
+          (PactType.parallelMessageOwnershipBranches_of_conjuncts bs'
+            hOwnT.2 hConjT.2)
+          hConds.2.1 hMem' rfl
       refine ⟨parallelTypeBranchesSelecting b (eAction, body') bs', ?_, hProd⟩
       rw [liveEqBody_preserves_futOff hProd]
       refine TypeOffers.offer_some env' b e' bs' (eAction, body')
@@ -1835,12 +1929,15 @@ theorem liveEq_step_forward {env : TypeEnvironment} {rho theta rho' : PactType}
     (hWF : rho.AlphabetWellFormed) (hWFt : theta.AlphabetWellFormed)
     (hOwn : PactType.ParallelMessageOwnership rho)
     (hOwnT : PactType.ParallelMessageOwnership theta)
+    (hConj : PactType.ConjunctiveMessageOwnership rho)
+    (hConjT : PactType.ConjunctiveMessageOwnership theta)
     (hTail : rho.TailRecursive) (hTailT : theta.TailRecursive)
     (hLive : LiveEq rho theta)
     (hStep : TypeOffers env rho label rho' current future) :
     ∃ theta', TypeOffers env theta label theta' current future ∧
       LiveEqBody rho' theta' :=
-  liveEqBody_offers_forward hStep hWF hWFt hOwn hOwnT hTail hTailT hLive.2
+  liveEqBody_offers_forward hStep hWF hWFt hOwn hOwnT hConj hConjT hTail
+    hTailT hLive.2
     (TypeEnvironment.AgreeOnNeeds.refl _ _)
     (by rw [← hLive.1]; exact typeOffers_env_wellFormed hStep hWF)
 
@@ -1850,12 +1947,15 @@ theorem liveEq_step_backward {env : TypeEnvironment} {rho theta theta' : PactTyp
     (hWF : rho.AlphabetWellFormed) (hWFt : theta.AlphabetWellFormed)
     (hOwn : PactType.ParallelMessageOwnership rho)
     (hOwnT : PactType.ParallelMessageOwnership theta)
+    (hConj : PactType.ConjunctiveMessageOwnership rho)
+    (hConjT : PactType.ConjunctiveMessageOwnership theta)
     (hTail : rho.TailRecursive) (hTailT : theta.TailRecursive)
     (hLive : LiveEq rho theta)
     (hStep : TypeOffers env theta label theta' current future) :
     ∃ rho', TypeOffers env rho label rho' current future ∧
       LiveEqBody theta' rho' :=
-  liveEq_step_forward hWFt hWF hOwnT hOwn hTailT hTail (liveEq_symm hLive) hStep
+  liveEq_step_forward hWFt hWF hOwnT hOwn hConjT hConj hTailT hTail
+    (liveEq_symm hLive) hStep
 
 /-- The decorated form of the transfer: the underlying transition moves with the
 offers. -/
@@ -1864,13 +1964,16 @@ theorem liveEq_decorated_forward {env : TypeEnvironment} {rho theta rho' : PactT
     (hWF : rho.AlphabetWellFormed) (hWFt : theta.AlphabetWellFormed)
     (hOwn : PactType.ParallelMessageOwnership rho)
     (hOwnT : PactType.ParallelMessageOwnership theta)
+    (hConj : PactType.ConjunctiveMessageOwnership rho)
+    (hConjT : PactType.ConjunctiveMessageOwnership theta)
     (hTail : rho.TailRecursive) (hTailT : theta.TailRecursive)
     (hLive : LiveEq rho theta)
     (hStep : DecoratedTypeTransition env rho label offers rho') :
     ∃ theta', DecoratedTypeTransition env theta label offers theta' ∧
       LiveEqBody rho' theta' := by
   obtain ⟨theta', hOffers, hLive'⟩ :=
-    liveEq_step_forward hWF hWFt hOwn hOwnT hTail hTailT hLive hStep.2
+    liveEq_step_forward hWF hWFt hOwn hOwnT hConj hConjT hTail hTailT hLive
+      hStep.2
   exact ⟨theta', hOffers.toDecorated, hLive'⟩
 
 /-- The same implication with the two residuals exchanged. -/
@@ -1879,12 +1982,15 @@ theorem liveEq_decorated_backward {env : TypeEnvironment} {rho theta theta' : Pa
     (hWF : rho.AlphabetWellFormed) (hWFt : theta.AlphabetWellFormed)
     (hOwn : PactType.ParallelMessageOwnership rho)
     (hOwnT : PactType.ParallelMessageOwnership theta)
+    (hConj : PactType.ConjunctiveMessageOwnership rho)
+    (hConjT : PactType.ConjunctiveMessageOwnership theta)
     (hTail : rho.TailRecursive) (hTailT : theta.TailRecursive)
     (hLive : LiveEq rho theta)
     (hStep : DecoratedTypeTransition env theta label offers theta') :
     ∃ rho', DecoratedTypeTransition env rho label offers rho' ∧
       LiveEqBody theta' rho' :=
-  liveEq_decorated_forward hWFt hWF hOwnT hOwn hTailT hTail (liveEq_symm hLive) hStep
+  liveEq_decorated_forward hWFt hWF hOwnT hOwn hConjT hConj hTailT hTail
+    (liveEq_symm hLive) hStep
 
 end PactType
 

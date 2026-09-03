@@ -116,6 +116,7 @@ theorem typeOffers_current_subset_alphabet
       intro a ha
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union] at ha
       simp only [PactType.alphabet]
+      rw [← PactTypeAlphabet.mergeHidden_eq_parent hWF.2.1]
       exact mem_mergeHidden_actions (ha.1.imp (fun hx => hL hx) (fun hx => hR hx))
         ha.2
   | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
@@ -126,6 +127,7 @@ theorem typeOffers_current_subset_alphabet
       intro a ha
       simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union] at ha
       simp only [PactType.alphabet]
+      rw [← PactTypeAlphabet.mergeHidden_eq_parent hWF.2.1]
       exact mem_mergeHidden_actions (ha.1.imp (fun hx => hL hx) (fun hx => hR hx))
         ha.2
   | par_fuse_tock => exact Finset.empty_subset _
@@ -136,6 +138,7 @@ theorem typeOffers_current_subset_alphabet
       intro a ha
       simp only [hideTypeOffers, Finset.mem_filter] at ha
       simp only [PactType.alphabet]
+      rw [← PactTypeAlphabet.mergeHidden_eq_parent hWF.2.1]
       exact mem_mergeHidden_actions (Or.inr (hR ha.1)) ha.2
   | left_complete_tock => exact Finset.empty_subset _
   | right_complete outer leftEnv interface alphabet left left' right leftLabel
@@ -145,6 +148,7 @@ theorem typeOffers_current_subset_alphabet
       intro a ha
       simp only [hideTypeOffers, Finset.mem_filter] at ha
       simp only [PactType.alphabet]
+      rw [← PactTypeAlphabet.mergeHidden_eq_parent hWF.2.1]
       exact mem_mergeHidden_actions (Or.inl (hL ha.1)) ha.2
   | right_complete_tock => exact Finset.empty_subset _
 

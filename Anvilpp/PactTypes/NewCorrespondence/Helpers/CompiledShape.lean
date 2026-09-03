@@ -70,9 +70,7 @@ theorem reannotateOfferBranches_mem (alphabet : PactTypeAlphabet) :
       intro seen item hMem
       rw [PactType.reannotateOfferBranches_cons, List.mem_cons] at hMem
       rcases hMem with hEq | hTail
-      · exact ⟨(action, branchType), by simp,
-          { actions := alphabet.actions \
-              (seen ∪ PactType.BranchMessageActions tail) }, hEq⟩
+      · exact ⟨(action, branchType), by simp, alphabet, hEq⟩
       · obtain ⟨source, hSource, branchAlphabet, hEq⟩ := ih _ _ hTail
         exact ⟨source, List.mem_cons_of_mem _ hSource, branchAlphabet, hEq⟩
 
@@ -620,62 +618,28 @@ theorem reannotateBranches_eq_map (alphabet : PactTypeAlphabet) :
       simp [PactType.reannotateBranches_cons, reannotateBranches_eq_map alphabet rest]
 
 /-- The alphabet `reannotateOfferBranches` hands to the branch whose head
-action is `target`. -/
+action is `target`: every branch carries the whole enclosing alphabet. -/
 def offerBranchAlphabet (alphabet : PactTypeAlphabet) :
     Finset BareMessage → List (BareMessage × PactType) → BareMessage →
       PactTypeAlphabet
-  | _, [], _ => alphabet
-  | seen, (action, processType) :: rest, target =>
-      if action = target then
-        { actions :=
-            alphabet.actions \ (seen ∪ PactType.BranchMessageActions rest) }
-      else
-        offerBranchAlphabet alphabet
-          (seen ∪ ({action} ∪ PactType.MessageActions processType)) rest target
+  | _, _, _ => alphabet
 
-/-- With distinct branch heads the per-branch alphabets are recoverable from
-the head action, so re-signing a conjunctive offer is a map. -/
+/-- Every branch carries the enclosing alphabet, so re-signing a conjunctive
+offer is a map. -/
 theorem reannotateOfferBranches_eq_map (alphabet : PactTypeAlphabet) :
     ∀ (branches : List (BareMessage × PactType)) (seen : Finset BareMessage),
       List.Pairwise (fun first second => first.1 ≠ second.1) branches →
       PactType.reannotateOfferBranches alphabet seen branches =
         branches.map fun branch =>
-          (branch.1,
-            branch.2.reannotate
-              (offerBranchAlphabet alphabet seen branches branch.1)) := by
-  intro branches
-  induction branches with
-  | nil =>
-      intro seen _
-      rw [PactType.reannotateOfferBranches_nil]
-      simp
-  | cons head tail ih =>
-      rcases head with ⟨action, branchType⟩
-      intro seen hPairwise
-      rw [List.pairwise_cons] at hPairwise
-      have hHeadAlpha : offerBranchAlphabet alphabet seen
-          ((action, branchType) :: tail) action =
-          { actions :=
-              alphabet.actions \ (seen ∪ PactType.BranchMessageActions tail) } := by
-        simp [offerBranchAlphabet]
-      have hTailMap :
-          tail.map (fun branch =>
-              (branch.1, branch.2.reannotate
-                (offerBranchAlphabet alphabet
-                  (seen ∪ ({action} ∪ PactType.MessageActions branchType)) tail
-                  branch.1))) =
-            tail.map (fun branch =>
-              (branch.1, branch.2.reannotate
-                (offerBranchAlphabet alphabet seen
-                  ((action, branchType) :: tail) branch.1))) := by
-        refine List.map_congr_left ?_
-        intro branch hBranch
-        have hNe : action ≠ branch.1 := hPairwise.1 branch hBranch
-        simp [offerBranchAlphabet, hNe]
+          (branch.1, branch.2.reannotate
+            (offerBranchAlphabet alphabet seen branches branch.1))
+  | [], seen, _ => by
+      simp [PactType.reannotateOfferBranches_nil]
+  | (action, branchType) :: tail, seen, hPairwise => by
       rw [PactType.reannotateOfferBranches_cons, List.map_cons,
-        ih (seen ∪ ({action} ∪ PactType.MessageActions branchType))
-          hPairwise.2, hTailMap]
-      simp [hHeadAlpha]
+        reannotateOfferBranches_eq_map alphabet tail seen
+          (List.pairwise_cons.mp hPairwise).2]
+      simp [offerBranchAlphabet]
 
 theorem shapeEq_singletonTypeXOfferAt (fuel : Nat) (a1 a2 : PactTypeAlphabet)
     (action : BareMessage) (t1 t2 : PactType)

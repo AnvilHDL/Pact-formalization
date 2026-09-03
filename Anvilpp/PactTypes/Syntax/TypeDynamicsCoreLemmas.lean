@@ -34,13 +34,8 @@ namespace PactType
       (action : BareMessage) (processType : PactType)
       (rest : List (BareMessage × PactType)) :
       reannotateOfferBranches alphabet seen ((action, processType) :: rest) =
-        (action,
-          reannotate
-            { actions :=
-                alphabet.actions \ (seen ∪ BranchMessageActions rest) }
-            processType) ::
-          reannotateOfferBranches alphabet
-            (seen ∪ ({action} ∪ MessageActions processType)) rest := by
+        (action, reannotate alphabet processType) ::
+          reannotateOfferBranches alphabet seen rest := by
     rw [reannotateOfferBranches.eq_def]
 
 end PactType

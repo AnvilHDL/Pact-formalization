@@ -48,59 +48,18 @@ decreasing_by
     omega
 end
 
-/-- Every case of `AlphabetWellFormed` opens with the node alphabet's own
-well-formedness. -/
-theorem PactType.AlphabetWellFormed.alphabet_wellFormed
-    {processType : PactType} (hWF : processType.AlphabetWellFormed) :
-    processType.alphabet.WellFormed := by
-  cases processType <;>
-    simp only [PactType.AlphabetWellFormed] at hWF <;>
-    first
-      | exact hWF
-      | exact hWF.1
 
 /-- One alphabet declares no more than another. -/
 def PactTypeAlphabet.Subalphabet (small large : PactTypeAlphabet) : Prop :=
   small.actions ⊆ large.actions
 
-/-- Restricted to a target it already covers, the child projection keeps the
-child's interface actions and its declarations shared with the target. -/
-theorem PactTypeAlphabet.projectParallelChild_actions
+/-- The projection keeps the child's interface actions and adds the whole new
+parent alphabet. -/
+theorem PactTypeAlphabet.projectParallel_actions
     (target child : PactTypeAlphabet) (interface : Interface) :
-    (projectParallelChild target child interface).actions =
-      child.actions.filter fun action =>
-        action.1 ∈ interface ∨ action ∈ target.actions := rfl
-
-/-- The left projection keeps the left child's own projection and whatever the
-target declares outside the right child. -/
-theorem PactTypeAlphabet.projectParallelLeft_actions
-    (target left : PactTypeAlphabet) (rightType : PactType)
-    (interface : Interface) :
-    (projectParallelLeft target left rightType interface).actions =
-      (left.actions.filter fun action =>
-          action.1 ∈ interface ∨ action ∈ target.actions) ∪
-        (target.actions \ PactType.MessageActions rightType) := rfl
-
-/-- The right projection keeps the right child's own projection and whatever
-the target declares outside the left child. -/
-theorem PactTypeAlphabet.projectParallelRight_actions
-    (target right : PactTypeAlphabet) (leftType : PactType)
-    (interface : Interface) :
-    (projectParallelRight target right leftType interface).actions =
-      (right.actions.filter fun action =>
-          action.1 ∈ interface ∨ action ∈ target.actions) ∪
-        (target.actions \ PactType.MessageActions leftType) := rfl
-
-/-- The child projection only filters, so it inherits the child's own
-one-polarity property. -/
-theorem PactTypeAlphabet.projectParallelChild_wellFormed
-    {target child : PactTypeAlphabet} {interface : Interface}
-    (hChildWF : child.WellFormed) :
-    (projectParallelChild target child interface).WellFormed := by
-  intro msg ⟨hSend, hRecv⟩
-  rw [projectParallelChild_actions] at hSend hRecv
-  exact hChildWF msg
-    ⟨(Finset.mem_filter.mp hSend).1, (Finset.mem_filter.mp hRecv).1⟩
+    (projectParallel target child interface).actions =
+      (child.actions.filter fun action => action.1 ∈ interface) ∪
+        target.actions := rfl
 
 /-- An empty interface hides nothing. -/
 theorem PactTypeAlphabet.hideInterface_empty_actions
@@ -114,382 +73,80 @@ theorem PactTypeAlphabet.wellFormed_of_subset {small large : PactTypeAlphabet}
     small.WellFormed :=
   fun msg h => hLarge msg ⟨hSub h.1, hSub h.2⟩
 
-/-- Compatibility mentions the two child types only through their message
-actions, so types with the same actions may be swapped in. -/
-theorem PactTypeAlphabet.parallelCompatible_congr_types
-    {parent left right : PactTypeAlphabet}
-    {leftType leftType' rightType rightType' : PactType}
-    {interface : Interface}
-    (hLeft : PactType.MessageActions leftType =
-      PactType.MessageActions leftType')
-    (hRight : PactType.MessageActions rightType =
-      PactType.MessageActions rightType')
-    (h : PactTypeAlphabet.ParallelCompatible parent left right leftType
-      rightType interface) :
-    PactTypeAlphabet.ParallelCompatible parent left right leftType' rightType'
-      interface :=
-  ⟨h.parent_hides_interface, h.complementary, hRight ▸ h.parent_left,
-    hLeft ▸ h.parent_right⟩
+/-- Every case of `AlphabetWellFormed` opens with the node alphabet's own
+well-formedness. -/
+theorem PactType.AlphabetWellFormed.alphabet_wellFormed
+    {processType : PactType} (hWF : processType.AlphabetWellFormed) :
+    processType.alphabet.WellFormed := by
+  cases processType <;>
+    simp only [PactType.AlphabetWellFormed] at hWF <;>
+    first
+      | exact hWF
+      | exact hWF.1
 
-/-- Re-signing conjunctive-offer branches leaves their actions alone. -/
-theorem PactType.branchMessageActions_reannotateOfferBranches :
-    ∀ (alphabet : PactTypeAlphabet) (seen : Finset BareMessage)
-      (branches : List (BareMessage × PactType)),
-      PactType.BranchMessageActions
-          (PactType.reannotateOfferBranches alphabet seen branches) =
-        PactType.BranchMessageActions branches
-  | _, _, [] => by rw [PactType.reannotateOfferBranches_nil]
-  | alphabet, seen, (action, body) :: rest => by
-      rw [PactType.reannotateOfferBranches_cons]
-      simp only [PactType.BranchMessageActions,
-        PactType.messageActions_reannotate,
-        PactType.branchMessageActions_reannotateOfferBranches alphabet
-          (seen ∪ ({action} ∪ PactType.MessageActions body)) rest]
-
-/-- The left projection mixes the left child's declarations with the target's
-own.  A target that hides the interface keeps the two halves from colliding. -/
-theorem PactTypeAlphabet.projectParallelLeft_wellFormed
-    {target left : PactTypeAlphabet} {rightType : PactType}
-    {interface : Interface}
-    (hLeftWF : left.WellFormed) (hTargetWF : target.WellFormed)
+/-- The projection mixes the child's interface actions with the target's own.
+A target that declares no interface action keeps the two halves apart. -/
+theorem PactTypeAlphabet.projectParallel_wellFormed
+    {target child : PactTypeAlphabet} {interface : Interface}
+    (hChildWF : child.WellFormed) (hTargetWF : target.WellFormed)
     (hTargetHidden : ∀ action ∈ target.actions, action.1 ∉ interface) :
-    (projectParallelLeft target left rightType interface).WellFormed := by
+    (projectParallel target child interface).WellFormed := by
   intro msg ⟨hSend, hRecv⟩
-  rw [projectParallelLeft_actions] at hSend hRecv
-  simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_sdiff]
-    at hSend hRecv
-  rcases hSend with ⟨hSendL, hSendI⟩ | ⟨hSendT, _⟩ <;>
-    rcases hRecv with ⟨hRecvL, hRecvI⟩ | ⟨hRecvT, _⟩
-  · exact hLeftWF msg ⟨hSendL, hRecvL⟩
-  · rcases hSendI with hI | hSendT
-    · exact hTargetHidden _ hRecvT hI
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-  · rcases hRecvI with hI | hRecvT
-    · exact hTargetHidden _ hSendT hI
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
+  rw [projectParallel_actions] at hSend hRecv
+  simp only [Finset.mem_union, Finset.mem_filter] at hSend hRecv
+  rcases hSend with ⟨hSendC, hSendI⟩ | hSendT <;>
+    rcases hRecv with ⟨hRecvC, hRecvI⟩ | hRecvT
+  · exact hChildWF msg ⟨hSendC, hRecvC⟩
+  · exact hTargetHidden _ hRecvT hSendI
+  · exact hTargetHidden _ hSendT hRecvI
   · exact hTargetWF msg ⟨hSendT, hRecvT⟩
 
-/-- Mirror of `projectParallelLeft_wellFormed`. -/
-theorem PactTypeAlphabet.projectParallelRight_wellFormed
-    {target right : PactTypeAlphabet} {leftType : PactType}
-    {interface : Interface}
-    (hRightWF : right.WellFormed) (hTargetWF : target.WellFormed)
-    (hTargetHidden : ∀ action ∈ target.actions, action.1 ∉ interface) :
-    (projectParallelRight target right leftType interface).WellFormed := by
-  intro msg ⟨hSend, hRecv⟩
-  rw [projectParallelRight_actions] at hSend hRecv
-  simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_sdiff]
-    at hSend hRecv
-  rcases hSend with ⟨hSendR, hSendI⟩ | ⟨hSendT, _⟩ <;>
-    rcases hRecv with ⟨hRecvR, hRecvI⟩ | ⟨hRecvT, _⟩
-  · exact hRightWF msg ⟨hSendR, hRecvR⟩
-  · rcases hSendI with hI | hSendT
-    · exact hTargetHidden _ hRecvT hI
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-  · rcases hRecvI with hI | hRecvT
-    · exact hTargetHidden _ hSendT hI
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-  · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-
-/-- A target declaring no interface action splits into two projected children
-compatible with it.  Each child keeps its own interface actions and absorbs
-whatever the sibling body does not use. -/
+/-- Splitting a target that declares no interface action gives two projected
+children compatible with it: each keeps its own interface polarity, and hiding
+the interface returns exactly the target. -/
 theorem PactTypeAlphabet.projectParallel_compatible
-    {parent left right target : PactTypeAlphabet}
-    {leftType rightType : PactType} {interface : Interface}
-    (hCompatible : ParallelCompatible parent left right leftType rightType
-      interface)
+    {parent left right target : PactTypeAlphabet} {interface : Interface}
+    (hCompatible : ParallelCompatible parent left right interface)
     (hTargetHidden : ∀ action ∈ target.actions, action.1 ∉ interface) :
-    ParallelCompatible target
-      (projectParallelLeft target left rightType interface)
-      (projectParallelRight target right leftType interface) leftType rightType
-      interface := by
-  have hLeftEq := hCompatible.parent_left
-  have hRightEq := hCompatible.parent_right
-  rw [Finset.ext_iff] at hLeftEq hRightEq
-  simp only [Finset.mem_sdiff, hideInterface, Finset.mem_filter]
-    at hLeftEq hRightEq
+    ParallelCompatible target (projectParallel target left interface)
+      (projectParallel target right interface) interface := by
+  classical
   refine ⟨hTargetHidden, ?_, ?_, ?_⟩
   · intro msg hmsg
     rcases hCompatible.complementary msg hmsg with ⟨hl, hr⟩ | ⟨hl, hr⟩
     · exact Or.inl ⟨Finset.mem_union_left _
-          (Finset.mem_filter.mpr ⟨hl, Or.inl hmsg⟩),
-        Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hr, Or.inl hmsg⟩)⟩
+          (Finset.mem_filter.mpr ⟨hl, hmsg⟩),
+        Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hr, hmsg⟩)⟩
     · exact Or.inr ⟨Finset.mem_union_left _
-          (Finset.mem_filter.mpr ⟨hl, Or.inl hmsg⟩),
-        Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hr, Or.inl hmsg⟩)⟩
-  · apply Finset.ext
-    intro a
-    simp only [Finset.mem_sdiff, hideInterface, Finset.mem_filter,
-      projectParallelLeft_actions, Finset.mem_union]
-    constructor
-    · rintro ⟨haT, haR⟩
-      exact ⟨Or.inr ⟨haT, haR⟩, hTargetHidden a haT⟩
-    · rintro ⟨hcase | hcase, hI⟩
-      · rcases hcase with ⟨haL, hOr⟩
-        rcases hOr with hIn | haT
-        · exact absurd hIn hI
-        · exact ⟨haT, ((hLeftEq a).mpr ⟨haL, hI⟩).2⟩
-      · exact hcase
-  · apply Finset.ext
-    intro a
-    simp only [Finset.mem_sdiff, hideInterface, Finset.mem_filter,
-      projectParallelRight_actions, Finset.mem_union]
-    constructor
-    · rintro ⟨haT, haL⟩
-      exact ⟨Or.inr ⟨haT, haL⟩, hTargetHidden a haT⟩
-    · rintro ⟨hcase | hcase, hI⟩
-      · rcases hcase with ⟨haR, hOr⟩
-        rcases hOr with hIn | haT
-        · exact absurd hIn hI
-        · exact ⟨haT, ((hRightEq a).mpr ⟨haR, hI⟩).2⟩
-      · exact hcase
+          (Finset.mem_filter.mpr ⟨hl, hmsg⟩),
+        Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hr, hmsg⟩)⟩
+  · cases target with
+    | mk targetActions =>
+        simp only [hideInterface, projectParallel_actions]
+        congr 1
+        apply Finset.ext
+        intro action
+        simp only [Finset.mem_filter, Finset.mem_union]
+        constructor
+        · rintro ⟨hIn | hIn, hHidden⟩
+          · exact absurd hIn.2 hHidden
+          · exact hIn
+        · intro hIn
+          exact ⟨Or.inr hIn, hTargetHidden action hIn⟩
+  · cases target with
+    | mk targetActions =>
+        simp only [hideInterface, projectParallel_actions]
+        congr 1
+        apply Finset.ext
+        intro action
+        simp only [Finset.mem_filter, Finset.mem_union]
+        constructor
+        · rintro ⟨hIn | hIn, hHidden⟩
+          · exact absurd hIn.2 hHidden
+          · exact hIn
+        · intro hIn
+          exact ⟨Or.inr hIn, hTargetHidden action hIn⟩
 
-/-- Once the target is compatible with its own projections, the left one keeps
-one polarity per message: its target half carries no interface action. -/
-theorem PactTypeAlphabet.projectParallelLeft_wellFormed_of_compatible
-    {target left right : PactTypeAlphabet}
-    {leftType rightType : PactType} {interface : Interface}
-    (hTargetWF : target.WellFormed) (hLeftWF : left.WellFormed)
-    (hCompatible : ParallelCompatible target
-      (projectParallelLeft target left rightType interface)
-      (projectParallelChild target right interface) leftType rightType
-      interface) :
-    (projectParallelLeft target left rightType interface).WellFormed := by
-  have hHidden : ∀ a ∈ target.actions, a ∉ PactType.MessageActions rightType →
-      a.1 ∉ interface := by
-    intro a haT haR
-    have hEq := hCompatible.parent_left
-    rw [Finset.ext_iff] at hEq
-    simp only [Finset.mem_sdiff, hideInterface, Finset.mem_filter] at hEq
-    exact ((hEq a).mp ⟨haT, haR⟩).2
-  intro msg ⟨hSend, hRecv⟩
-  rw [projectParallelLeft_actions, Finset.mem_union] at hSend hRecv
-  simp only [Finset.mem_filter, Finset.mem_sdiff] at hSend hRecv
-  rcases hSend with ⟨hSendL, hSendC⟩ | ⟨hSendT, hSendR⟩ <;>
-    rcases hRecv with ⟨hRecvL, hRecvC⟩ | ⟨hRecvT, hRecvR⟩
-  · exact hLeftWF msg ⟨hSendL, hRecvL⟩
-  · have hI : (msg, MessageDir.recv).1 ∉ interface := hHidden _ hRecvT hRecvR
-    rcases hSendC with hIn | hSendT
-    · exact hI hIn
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-  · have hI : (msg, MessageDir.send).1 ∉ interface := hHidden _ hSendT hSendR
-    rcases hRecvC with hIn | hRecvT
-    · exact hI hIn
-    · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-  · exact hTargetWF msg ⟨hSendT, hRecvT⟩
-
-/-- The alphabet-preservation core.  Re-signing keeps well-formedness whenever
-the target sits inside the type's own alphabet: every `.par` projection is then
-explained by the node's own compatibility, and the offer arm hands each branch
-a slice of the target that the branch's own alphabet still covers. -/
-theorem PactType.reannotate_alphabetWellFormed_general :
-    ∀ (processType : PactType) (target : PactTypeAlphabet),
-      processType.AlphabetWellFormed → target.WellFormed →
-      PactTypeAlphabet.Subalphabet target processType.alphabet →
-      (processType.reannotate target).AlphabetWellFormed := by
-  intro processType
-  induction hSize : sizeOf processType using Nat.strong_induction_on
-      generalizing processType with
-  | _ n ih =>
-      have hXBranches : ∀ branches : List (BareMessage × PactType),
-          sizeOf branches < n → ∀ source target : PactTypeAlphabet,
-          target.WellFormed →
-          PactType.BranchesAlphabetWellFormed source branches →
-          PactTypeAlphabet.Subalphabet target source →
-          PactType.BranchesAlphabetWellFormed target
-            (PactType.reannotateBranches target branches) := by
-        intro branches
-        induction branches with
-        | nil =>
-            intro _ _ _ _ _ _
-            rw [PactType.reannotateBranches_nil]
-            simp [PactType.BranchesAlphabetWellFormed]
-        | cons head tail restIH =>
-            intro hSizeCons source target hTargetWF hWF hSub
-            rcases head with ⟨action, body⟩
-            have hBodySize : sizeOf body < n := by
-              have hPair : sizeOf body < sizeOf (action, body) := by
-                simp_wf; omega
-              have hHead : sizeOf (action, body) <
-                  sizeOf ((action, body) :: tail) := by simp_wf; omega
-              omega
-            have hTailSize : sizeOf tail < n := by
-              have hRest : sizeOf tail <
-                  sizeOf ((action, body) :: tail) := by simp_wf; omega
-              omega
-            rw [PactType.reannotateBranches_cons]
-            simp only [PactType.BranchesAlphabetWellFormed] at hWF ⊢
-            refine ⟨PactType.reannotate_alphabet target body, ?_, ?_⟩
-            · exact ih (sizeOf body) hBodySize body rfl target hWF.2.1
-                hTargetWF (by rw [hWF.1]; exact hSub)
-            · exact restIH hTailSize source target hTargetWF hWF.2.2 hSub
-      have hOBranches : ∀ branches : List (BareMessage × PactType),
-          sizeOf branches < n → ∀ (source target : PactTypeAlphabet)
-            (seen : Finset BareMessage),
-          target.WellFormed →
-          PactType.OfferBranchesWellFormed source seen branches →
-          PactTypeAlphabet.Subalphabet target source →
-          PactType.OfferBranchesWellFormed target seen
-            (PactType.reannotateOfferBranches target seen branches) := by
-        intro branches
-        induction branches with
-        | nil =>
-            intro _ _ _ _ _ _ _
-            rw [PactType.reannotateOfferBranches_nil]
-            simp [PactType.OfferBranchesWellFormed]
-        | cons head tail restIH =>
-            intro hSizeCons source target seen hTargetWF hWF hSub
-            rcases head with ⟨action, body⟩
-            have hBodySize : sizeOf body < n := by
-              have hPair : sizeOf body < sizeOf (action, body) := by
-                simp_wf; omega
-              have hHead : sizeOf (action, body) <
-                  sizeOf ((action, body) :: tail) := by simp_wf; omega
-              omega
-            have hTailSize : sizeOf tail < n := by
-              have hRest : sizeOf tail <
-                  sizeOf ((action, body) :: tail) := by simp_wf; omega
-              omega
-            rw [PactType.reannotateOfferBranches_cons]
-            simp only [PactType.OfferBranchesWellFormed] at hWF ⊢
-            refine ⟨?_, ?_, ?_⟩
-            · rw [PactType.reannotate_alphabet,
-                PactType.branchMessageActions_reannotateOfferBranches]
-            · refine ih (sizeOf body) hBodySize body rfl _ hWF.2.1
-                (PactTypeAlphabet.wellFormed_of_subset
-                  (Finset.sdiff_subset) hTargetWF) ?_
-              show target.actions \ _ ⊆ body.alphabet.actions
-              rw [hWF.1]
-              exact Finset.sdiff_subset_sdiff hSub (Finset.Subset.refl _)
-            · rw [PactType.messageActions_reannotate]
-              exact restIH hTailSize source target _ hTargetWF hWF.2.2 hSub
-      intro target hWF hTargetWF hSub
-      cases processType with
-      | message a msg dir | progress a pid | tock a | skip a | var a name =>
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          exact hTargetWF
-      | choice a left right | seq a left right =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, PactType.reannotate_alphabet target left,
-            PactType.reannotate_alphabet target right, ?_, ?_⟩
-          · exact ih (sizeOf left) hLeftSize left rfl target hWF.2.2.2.1
-              hTargetWF (by rw [hWF.2.1]; exact hSub)
-          · exact ih (sizeOf right) hRightSize right rfl target hWF.2.2.2.2
-              hTargetWF (by rw [hWF.2.2.1]; exact hSub)
-      | fairChoice a bid left right =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, PactType.reannotate_alphabet target left,
-            PactType.reannotate_alphabet target right, ?_, ?_⟩
-          · exact ih (sizeOf left) hLeftSize left rfl target hWF.2.2.2.1
-              hTargetWF (by rw [hWF.2.1]; exact hSub)
-          · exact ih (sizeOf right) hRightSize right rfl target hWF.2.2.2.2
-              hTargetWF (by rw [hWF.2.2.1]; exact hSub)
-      | recur a name body =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hBodySize : sizeOf body < n := by rw [← hSize]; simp_wf; omega
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, PactType.reannotate_alphabet target body, ?_⟩
-          exact ih (sizeOf body) hBodySize body rfl target hWF.2.2 hTargetWF
-            (by rw [hWF.2.1]; exact hSub)
-      | xoffer a elseType branches =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
-          have hBranchesSize : sizeOf branches < n := by
-            rw [← hSize]; simp_wf; omega
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, PactType.reannotate_alphabet target elseType, ?_, ?_⟩
-          · exact ih (sizeOf elseType) hElseSize elseType rfl target hWF.2.2.1
-              hTargetWF (by rw [hWF.2.1]; exact hSub)
-          · exact hXBranches branches hBranchesSize a target hTargetWF
-              hWF.2.2.2 hSub
-      | offer a elseType branches =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hElseSize : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
-          have hBranchesSize : sizeOf branches < n := by
-            rw [← hSize]; simp_wf; omega
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, PactType.reannotate_alphabet target elseType, ?_, ?_⟩
-          · exact ih (sizeOf elseType) hElseSize elseType rfl target hWF.2.2.1
-              hTargetWF (by rw [hWF.2.1]; exact hSub)
-          · exact hOBranches branches hBranchesSize a target ∅ hTargetWF
-              hWF.2.2.2 hSub
-      | par a left right interface =>
-          simp only [PactType.AlphabetWellFormed] at hWF
-          simp only [PactType.alphabet] at hSub
-          have hLeftSize : sizeOf left < n := by rw [← hSize]; simp_wf; omega
-          have hRightSize : sizeOf right < n := by rw [← hSize]; simp_wf; omega
-          have hLAlphaWF : left.alphabet.WellFormed :=
-            PactType.AlphabetWellFormed.alphabet_wellFormed hWF.2.2.1
-          have hRAlphaWF : right.alphabet.WellFormed :=
-            PactType.AlphabetWellFormed.alphabet_wellFormed hWF.2.2.2
-          -- Compatibility now states outright that the node alphabet hides the
-          -- interface, so a target inside it hides the interface too.
-          have hTargetHidden : ∀ action ∈ target.actions,
-              action.1 ∉ interface := fun act hAct =>
-            hWF.2.1.parent_hides_interface act (hSub hAct)
-          have hCompat : PactTypeAlphabet.ParallelCompatible target
-              (PactTypeAlphabet.projectParallelLeft target left.alphabet right
-                interface)
-              (PactTypeAlphabet.projectParallelRight target right.alphabet left
-                interface) left right interface :=
-            PactTypeAlphabet.projectParallel_compatible hWF.2.1 hTargetHidden
-          have hLTWF : (PactTypeAlphabet.projectParallelLeft target
-              left.alphabet right interface).WellFormed :=
-            PactTypeAlphabet.projectParallelLeft_wellFormed hLAlphaWF hTargetWF
-              hTargetHidden
-          have hRTWF : (PactTypeAlphabet.projectParallelRight target
-              right.alphabet left interface).WellFormed :=
-            PactTypeAlphabet.projectParallelRight_wellFormed hRAlphaWF
-              hTargetWF hTargetHidden
-          have hLeftSub : PactTypeAlphabet.Subalphabet
-              (PactTypeAlphabet.projectParallelLeft target left.alphabet right
-                interface) left.alphabet := by
-            intro x hx
-            rw [PactTypeAlphabet.projectParallelLeft_actions,
-              Finset.mem_union] at hx
-            rcases hx with hx | hx
-            · exact (Finset.mem_filter.mp hx).1
-            · have hParent := hWF.2.1.parent_left
-              rw [Finset.ext_iff] at hParent
-              simp only [Finset.mem_sdiff, PactTypeAlphabet.hideInterface,
-                Finset.mem_filter] at hParent
-              rw [Finset.mem_sdiff] at hx
-              exact ((hParent x).mp ⟨hSub hx.1, hx.2⟩).1
-          have hRightSub : PactTypeAlphabet.Subalphabet
-              (PactTypeAlphabet.projectParallelRight target right.alphabet left
-                interface) right.alphabet := by
-            intro x hx
-            rw [PactTypeAlphabet.projectParallelRight_actions,
-              Finset.mem_union] at hx
-            rcases hx with hx | hx
-            · exact (Finset.mem_filter.mp hx).1
-            · have hParent := hWF.2.1.parent_right
-              rw [Finset.ext_iff] at hParent
-              simp only [Finset.mem_sdiff, PactTypeAlphabet.hideInterface,
-                Finset.mem_filter] at hParent
-              rw [Finset.mem_sdiff] at hx
-              exact ((hParent x).mp ⟨hSub hx.1, hx.2⟩).1
-          simp only [PactType.reannotate, PactType.AlphabetWellFormed]
-          refine ⟨hTargetWF, ?_, ?_, ?_⟩
-          · rw [PactType.reannotate_alphabet, PactType.reannotate_alphabet]
-            exact PactTypeAlphabet.parallelCompatible_congr_types
-              (PactType.messageActions_reannotate _ _).symm
-              (PactType.messageActions_reannotate _ _).symm hCompat
-          · exact ih (sizeOf left) hLeftSize left rfl _ hWF.2.2.1 hLTWF hLeftSub
-          · exact ih (sizeOf right) hRightSize right rfl _ hWF.2.2.2 hRTWF
-              hRightSub
 
 /-- Re-signing by a target that need not sit inside the type's own alphabet.
 The target must declare none of the interfaces occurring in the type; that
@@ -578,16 +235,11 @@ theorem PactType.reannotate_alphabetWellFormed_avoiding :
               Finset.mem_union] at hAvoid
             rw [PactType.reannotateOfferBranches_cons]
             simp only [PactType.OfferBranchesWellFormed] at hWF ⊢
-            refine ⟨?_, ?_, ?_⟩
-            · rw [PactType.reannotate_alphabet,
-                PactType.branchMessageActions_reannotateOfferBranches]
-            · refine ih (sizeOf body) hBodySize body rfl _ hWF.2.1
-                (PactTypeAlphabet.wellFormed_of_subset
-                  (Finset.sdiff_subset) hTargetWF) hScoped.1 ?_
-              intro act hAct hIn
-              exact hAvoid act (Finset.mem_sdiff.mp hAct).1 (Or.inl hIn)
-            · rw [PactType.messageActions_reannotate]
-              exact restIH hTailSize source target _ hTargetWF hWF.2.2
+            refine ⟨PactType.reannotate_alphabet target body, ?_, ?_⟩
+            · exact ih (sizeOf body) hBodySize body rfl target hWF.2.1
+                hTargetWF hScoped.1
+                (fun act hAct hIn => hAvoid act hAct (Or.inl hIn))
+            · exact restIH hTailSize source target seen hTargetWF hWF.2.2
                 hScoped.2 (fun act hAct hIn => hAvoid act hAct (Or.inr hIn))
       intro target hWF hTargetWF hScoped hAvoid
       cases processType with
@@ -687,49 +339,40 @@ theorem PactType.reannotate_alphabetWellFormed_avoiding :
             exact ⟨fun h => hNot (Finset.mem_union_left _ h),
               fun h => hNot (Finset.mem_union_right _ h)⟩
           have hCompat : PactTypeAlphabet.ParallelCompatible target
-              (PactTypeAlphabet.projectParallelLeft target left.alphabet right
-                interface)
-              (PactTypeAlphabet.projectParallelRight target right.alphabet left
-                interface) left right interface :=
+              (PactTypeAlphabet.projectParallel target left.alphabet interface)
+              (PactTypeAlphabet.projectParallel target right.alphabet interface)
+              interface :=
             PactTypeAlphabet.projectParallel_compatible hWF.2.1 hTargetHidden
-          have hLTWF : (PactTypeAlphabet.projectParallelLeft target
-              left.alphabet right interface).WellFormed :=
-            PactTypeAlphabet.projectParallelLeft_wellFormed hLAlphaWF hTargetWF
+          have hLTWF : (PactTypeAlphabet.projectParallel target left.alphabet
+              interface).WellFormed :=
+            PactTypeAlphabet.projectParallel_wellFormed hLAlphaWF hTargetWF
               hTargetHidden
-          have hRTWF : (PactTypeAlphabet.projectParallelRight target
-              right.alphabet left interface).WellFormed :=
-            PactTypeAlphabet.projectParallelRight_wellFormed hRAlphaWF
-              hTargetWF hTargetHidden
-          have hLeftAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallelLeft
-              target left.alphabet right interface).actions,
+          have hRTWF : (PactTypeAlphabet.projectParallel target right.alphabet
+              interface).WellFormed :=
+            PactTypeAlphabet.projectParallel_wellFormed hRAlphaWF hTargetWF
+              hTargetHidden
+          have hLeftAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallel
+              target left.alphabet interface).actions,
               action.1 ∉ PactType.ParallelInterfaces left := by
             intro act hAct
-            rw [PactTypeAlphabet.projectParallelLeft_actions,
+            rw [PactTypeAlphabet.projectParallel_actions,
               Finset.mem_union] at hAct
             rcases hAct with hAct | hAct
-            · rcases (Finset.mem_filter.mp hAct).2 with hIn | hTarget
-              · exact (hInterfaceAvoid act.1 hIn).1
-              · exact fun h => hAvoid act hTarget (Or.inl (Or.inr h))
-            · exact fun h =>
-                hAvoid act (Finset.mem_sdiff.mp hAct).1 (Or.inl (Or.inr h))
-          have hRightAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallelRight
-              target right.alphabet left interface).actions,
+            · exact (hInterfaceAvoid act.1 (Finset.mem_filter.mp hAct).2).1
+            · exact fun h => hAvoid act hAct (Or.inl (Or.inr h))
+          have hRightAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallel
+              target right.alphabet interface).actions,
               action.1 ∉ PactType.ParallelInterfaces right := by
             intro act hAct
-            rw [PactTypeAlphabet.projectParallelRight_actions,
+            rw [PactTypeAlphabet.projectParallel_actions,
               Finset.mem_union] at hAct
             rcases hAct with hAct | hAct
-            · rcases (Finset.mem_filter.mp hAct).2 with hIn | hTarget
-              · exact (hInterfaceAvoid act.1 hIn).2
-              · exact fun h => hAvoid act hTarget (Or.inr h)
-            · exact fun h =>
-                hAvoid act (Finset.mem_sdiff.mp hAct).1 (Or.inr h)
+            · exact (hInterfaceAvoid act.1 (Finset.mem_filter.mp hAct).2).2
+            · exact fun h => hAvoid act hAct (Or.inr h)
           simp only [PactType.reannotate, PactType.AlphabetWellFormed]
           refine ⟨hTargetWF, ?_, ?_, ?_⟩
           · rw [PactType.reannotate_alphabet, PactType.reannotate_alphabet]
-            exact PactTypeAlphabet.parallelCompatible_congr_types
-              (PactType.messageActions_reannotate _ _).symm
-              (PactType.messageActions_reannotate _ _).symm hCompat
+            exact hCompat
           · exact ih (sizeOf left) hLeftSize left rfl _ hWF.2.2.1 hLTWF
               hScoped.2.1 hLeftAvoid
           · exact ih (sizeOf right) hRightSize right rfl _ hWF.2.2.2 hRTWF
@@ -863,8 +506,7 @@ theorem parallelTypeBranchesWithin_parallelInterfaces :
           simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
             PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
             PactType.reannotate_parallelInterfaces,
-            ih ⟨PactType.branchAlphabetActions (next :: tail)⟩,
-            Finset.union_assoc]
+            ih alphabet, Finset.union_assoc]
 
 theorem parallelTypeBranchesSelectingWithin_parallelInterfaces
     (selected : BareMessage × PactType) :
@@ -898,14 +540,14 @@ theorem parallelTypeBranchesSelectingWithin_parallelInterfaces
             simp [parallelTypeBranchesSelectingWithin, selectedTypeBranchAt,
               PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
               PactType.reannotate_parallelInterfaces,
-              parallelTypeBranchesWithin_parallelInterfaces (next :: tail),
+              parallelTypeBranchesWithin_parallelInterfaces (next :: tail)
+                alphabet,
               Finset.union_assoc]
           · simp [parallelTypeBranchesSelectingWithin, if_neg hSel,
               singletonTypeXOfferAt, PactType.ParallelInterfaces,
               PactType.ParallelBranchInterfaces,
               PactType.reannotate_parallelInterfaces,
-              ih ⟨PactType.branchAlphabetActions (next :: tail)⟩,
-              Finset.union_assoc]
+              ih alphabet, Finset.union_assoc]
 
 /-- Branch-list form of `reannotate_parallelInterfaces`. -/
 theorem PactType.parallelBranchInterfaces_reannotateBranches
@@ -933,8 +575,8 @@ theorem PactType.parallelBranchInterfaces_reannotateOfferBranches
       rw [PactType.reannotateOfferBranches_cons]
       simp only [PactType.ParallelBranchInterfaces,
         PactType.reannotate_parallelInterfaces,
-        PactType.parallelBranchInterfaces_reannotateOfferBranches target
-          (seen ∪ ({action} ∪ PactType.MessageActions body)) rest]
+        PactType.parallelBranchInterfaces_reannotateOfferBranches target seen
+          rest]
 
 /-- A target avoiding the interfaces below a type re-signs it into a type whose
 alphabets still avoid the interfaces below them. -/
@@ -1023,11 +665,11 @@ theorem PactType.reannotate_interfaceAlphabetScoped :
               Finset.mem_union] at hAvoid
             rw [PactType.reannotateOfferBranches_cons]
             simp only [PactType.InterfaceAlphabetScopedBranches]
-            refine ⟨ih (sizeOf body) hBodySize body rfl _ hScoped.1 ?_,
-              restIH hTailSize target _ hScoped.2
+            refine ⟨ih (sizeOf body) hBodySize body rfl target hScoped.1 ?_,
+              restIH hTailSize target seen hScoped.2
                 (fun act hAct hIn => hAvoid act hAct (Or.inr hIn))⟩
             intro act hAct hIn
-            exact hAvoid act (Finset.mem_sdiff.mp hAct).1 (Or.inl hIn)
+            exact hAvoid act hAct (Or.inl hIn)
       intro target hScoped hAvoid
       cases processType with
       | message a msg dir | progress a pid | tock a | skip a | var a name =>
@@ -1123,30 +765,29 @@ theorem PactType.reannotate_interfaceAlphabetScoped :
               exact hIn)
           -- A projected child alphabet lies in the child's own alphabet or in
           -- the target, and both avoid that child's interfaces.
-          have hLeftAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallelLeft
-              target left.alphabet right interface).actions,
+          have hLeftAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallel
+              target left.alphabet interface).actions,
               action.1 ∉ PactType.ParallelInterfaces left := by
             intro act hAct
-            rw [PactTypeAlphabet.projectParallelLeft_actions,
+            rw [PactTypeAlphabet.projectParallel_actions,
               Finset.mem_union] at hAct
             rcases hAct with hAct | hAct
             · exact PactType.InterfaceAlphabetScoped.avoids hScoped.2.1 act
                 (Finset.mem_filter.mp hAct).1
             · intro hIn
-              exact hUnion act (Finset.mem_sdiff.mp hAct).1
+              exact hUnion act hAct
                 (Finset.mem_union_left _ (Finset.mem_union_right _ hIn))
-          have hRightAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallelRight
-              target right.alphabet left interface).actions,
+          have hRightAvoid : ∀ action ∈ (PactTypeAlphabet.projectParallel
+              target right.alphabet interface).actions,
               action.1 ∉ PactType.ParallelInterfaces right := by
             intro act hAct
-            rw [PactTypeAlphabet.projectParallelRight_actions,
+            rw [PactTypeAlphabet.projectParallel_actions,
               Finset.mem_union] at hAct
             rcases hAct with hAct | hAct
             · exact PactType.InterfaceAlphabetScoped.avoids hScoped.2.2 act
                 (Finset.mem_filter.mp hAct).1
             · intro hIn
-              exact hUnion act (Finset.mem_sdiff.mp hAct).1
-                (Finset.mem_union_right _ hIn)
+              exact hUnion act hAct (Finset.mem_union_right _ hIn)
           simp only [PactType.reannotate, PactType.InterfaceAlphabetScoped,
             PactType.reannotate_parallelInterfaces]
           refine ⟨hDisj target _ hUnion, ?_, ?_⟩
@@ -1457,7 +1098,7 @@ theorem reannotate_relation_alphabet :
               injection hEq with hResidual _
               rw [← hResidual]
               exact ih.1 target rightChild entry.1 entry.2 hEntry
-        | par a leftChild rightChild interface alphabet =>
+        | par a leftChild rightChild interface =>
             simp only [PactType.reannotate] at hMem
             exact hPar target _ _ _ residual state hMem
         | recur a name body =>
@@ -2478,486 +2119,166 @@ theorem sdiff_union_sdiff_of_disjoint {A seen X Y : Finset BareMessage}
         (fun h => (Finset.disjoint_left.mp hDisjoint h) hIn)⟩
     · exact Or.inl ⟨hx, fun hmem => hmem.elim hn (fun h => hIn h)⟩
 
-/-- The branch alphabets of a well-formed conjunctive offer partition what is
-left of the offer alphabet: their union is exactly the unseen part. -/
-theorem branchAlphabetActions_eq_sdiff {alphabet : PactTypeAlphabet} :
-    ∀ (branches : List (BareMessage × PactType)) (seen : Finset BareMessage),
-      branches ≠ [] →
-      PactType.OfferBranchesWellFormed alphabet seen branches →
-      List.Pairwise BranchDeclarationsDisjoint branches →
-      PactType.branchAlphabetActions branches = alphabet.actions \ seen
-  | [], _, hNe, _, _ => absurd rfl hNe
-  | [(action, body)], seen, _, hOB, _ => by
-      simp only [PactType.OfferBranchesWellFormed] at hOB
-      simp only [PactType.branchAlphabetActions, hOB.1,
-        PactType.BranchMessageActions]
-      simp
-  | (a1, b1) :: next :: rest, seen, _, hOB, hPW => by
-      simp only [PactType.OfferBranchesWellFormed] at hOB
-      have hDisjoint : Disjoint ({a1} ∪ PactType.MessageActions b1)
-          (PactType.BranchMessageActions (next :: rest)) :=
-        branchMessageActions_disjoint_of_head (branch := (a1, b1)) (next :: rest)
-          (List.pairwise_cons.mp hPW).1
-      have hRest := branchAlphabetActions_eq_sdiff (next :: rest)
-        (seen ∪ ({a1} ∪ PactType.MessageActions b1)) (by simp) hOB.2.2
-        (List.pairwise_cons.mp hPW).2
-      rw [show PactType.branchAlphabetActions ((a1, b1) :: next :: rest) =
-          b1.alphabet.actions ∪
-            PactType.branchAlphabetActions (next :: rest) from rfl,
-        hOB.1, hRest]
-      exact sdiff_union_sdiff_of_disjoint hDisjoint
+/-- A node whose two components carry the enclosing alphabet and synchronise on
+nothing is compatible with it. -/
+theorem PactTypeAlphabet.parallelCompatible_self_empty
+    (alphabet : PactTypeAlphabet) :
+    PactTypeAlphabet.ParallelCompatible alphabet alphabet alphabet ∅ := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro action _ hInterface
+    simp at hInterface
+  · intro msg hMsg
+    simp at hMsg
+  · cases alphabet with
+    | mk actions => simp [PactTypeAlphabet.hideInterface]
+  · cases alphabet with
+    | mk actions => simp [PactTypeAlphabet.hideInterface]
 
-/-- Removing the seen part from the offer alphabet lets the remaining branches
-be read against the smaller alphabet with the accumulator reset. -/
-theorem offerBranchesWellFormed_shift {alphabet target : PactTypeAlphabet}
-    (s : Finset BareMessage) (hEq : target.actions = alphabet.actions \ s) :
-    ∀ (branches : List (BareMessage × PactType)) (t : Finset BareMessage),
-      PactType.OfferBranchesWellFormed alphabet (s ∪ t) branches →
-      PactType.OfferBranchesWellFormed target t branches
-  | [], _, _ => by simp [PactType.OfferBranchesWellFormed]
-  | (action, body) :: rest, t, hOB => by
-      simp only [PactType.OfferBranchesWellFormed] at hOB ⊢
-      refine ⟨?_, hOB.2.1, ?_⟩
-      · rw [hOB.1, hEq, sdiff_sdiff_eq_sdiff_union, Finset.union_assoc]
-      · refine offerBranchesWellFormed_shift s hEq rest
-          (t ∪ ({action} ∪ PactType.MessageActions body)) ?_
-        rw [← Finset.union_assoc]
-        exact hOB.2.2
-
-/-- The singleton expansion is well formed whenever the alphabet it is built at
-sits inside the branch body's own; re-signing then needs no safety side
-condition. -/
-theorem singletonTypeXOfferAt_alphabetWellFormed_of_subalphabet
+/-- The singleton expansion is well formed at the alphabet its branch carries. -/
+theorem singletonTypeXOfferAt_alphabetWellFormed
     (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed)
     {branch : BareMessage × PactType} (hBody : branch.2.AlphabetWellFormed)
-    (hSub : PactTypeAlphabet.Subalphabet alphabet branch.2.alphabet) :
+    (hScoped : branch.2.InterfaceScoped)
+    (hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelInterfaces branch.2) :
     (singletonTypeXOfferAt alphabet branch).AlphabetWellFormed := by
   rcases branch with ⟨action, body⟩
   simp only [singletonTypeXOfferAt, PactType.AlphabetWellFormed,
     PactType.BranchesAlphabetWellFormed, PactType.alphabet]
   exact ⟨hAlphaWF, trivial, hAlphaWF, PactType.reannotate_alphabet _ _,
-    PactType.reannotate_alphabetWellFormed_general body alphabet hBody hAlphaWF
-      hSub, trivial⟩
+    PactType.reannotate_alphabetWellFormed_avoiding body alphabet hBody
+      hAlphaWF hScoped hAvoid, trivial⟩
 
 /-- Same for the committed branch, whose head action becomes mandatory. -/
-theorem selectedTypeBranchAt_alphabetWellFormed_of_subalphabet
+theorem selectedTypeBranchAt_alphabetWellFormed
     (alphabet : PactTypeAlphabet) (hAlphaWF : alphabet.WellFormed)
     {branch : BareMessage × PactType} (hBody : branch.2.AlphabetWellFormed)
-    (hSub : PactTypeAlphabet.Subalphabet alphabet branch.2.alphabet) :
+    (hScoped : branch.2.InterfaceScoped)
+    (hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelInterfaces branch.2) :
     (selectedTypeBranchAt alphabet branch).AlphabetWellFormed := by
   rcases branch with ⟨action, body⟩
   simp only [selectedTypeBranchAt, PactType.AlphabetWellFormed,
     PactType.alphabet]
   exact ⟨hAlphaWF, trivial, PactType.reannotate_alphabet _ _, hAlphaWF,
-    PactType.reannotate_alphabetWellFormed_general body alphabet hBody hAlphaWF
-      hSub⟩
+    PactType.reannotate_alphabetWellFormed_avoiding body alphabet hBody
+      hAlphaWF hScoped hAvoid⟩
 
-/-- The singleton expansion mentions the branch's head action and body. -/
-theorem messageActions_singletonTypeXOfferAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    PactType.MessageActions (singletonTypeXOfferAt alphabet branch) =
-      {branch.1} ∪ PactType.MessageActions branch.2 := by
-  rcases branch with ⟨action, body⟩
-  simp [singletonTypeXOfferAt, PactType.MessageActions,
-    PactType.BranchMessageActions]
-
-/-- So does the committed branch. -/
-theorem messageActions_selectedTypeBranchAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    PactType.MessageActions (selectedTypeBranchAt alphabet branch) =
-      {branch.1} ∪ PactType.MessageActions branch.2 := by
-  rcases branch with ⟨action, body⟩
-  simp [selectedTypeBranchAt, PactType.MessageActions]
-
-/-- The compatibility obligation at one step of the generated product: the head
-branch owns the offer alphabet minus what its siblings mention, and the
-siblings own the rest. -/
-theorem branchProduct_parallelCompatible {alphabet : PactTypeAlphabet}
-    {a1 : BareMessage} {b1 : PactType}
-    {rest : List (BareMessage × PactType)} {leftChild rightChild : PactType}
-    (hHead : b1.alphabet.actions =
-      alphabet.actions \ (∅ ∪ PactType.BranchMessageActions rest))
-    (hBAA : PactType.branchAlphabetActions rest =
-      alphabet.actions \ (∅ ∪ ({a1} ∪ PactType.MessageActions b1)))
-    (hLeftMA : PactType.MessageActions leftChild =
-      {a1} ∪ PactType.MessageActions b1)
-    (hRightMA : PactType.MessageActions rightChild =
-      PactType.BranchMessageActions rest) :
-    PactTypeAlphabet.ParallelCompatible alphabet b1.alphabet
-      ⟨PactType.branchAlphabetActions rest⟩ leftChild rightChild ∅ := by
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · intro action _ hInterface
-    simp at hInterface
-  · intro msg hmsg
-    simp at hmsg
-  · rw [hRightMA, PactTypeAlphabet.hideInterface_empty_actions, hHead]
-    simp
-  · rw [hLeftMA, PactTypeAlphabet.hideInterface_empty_actions, hBAA]
-    simp
-
-/-- The generated branch product of a well-formed conjunctive offer is well
-formed.  The partition `OfferBranchesWellFormed` records is exactly what each
-generated `.par` node needs. -/
-theorem parallelTypeBranchesWithin_alphabetWellFormed_of_offerBranches :
+/-- The generated branch product of a conjunctive offer is well formed.  Every
+component carries the enclosing alphabet and the products synchronise on
+nothing, so compatibility is immediate. -/
+theorem parallelTypeBranchesWithin_alphabetWellFormed :
     ∀ (branches : List (BareMessage × PactType)) (alphabet : PactTypeAlphabet),
       alphabet.WellFormed →
       PactType.OfferBranchesWellFormed alphabet ∅ branches →
-      List.Pairwise BranchDeclarationsDisjoint branches →
+      PactType.InterfaceScopedBranches branches →
+      (∀ action ∈ alphabet.actions,
+        action.1 ∉ PactType.ParallelBranchInterfaces branches) →
       (parallelTypeBranchesWithin alphabet branches).AlphabetWellFormed
-  | [], alphabet, hAlphaWF, _, _ => by
+  | [], alphabet, hAlphaWF, _, _, _ => by
       simp only [parallelTypeBranchesWithin, PactType.AlphabetWellFormed]
       exact hAlphaWF
-  | [(a1, b1)], alphabet, hAlphaWF, hOB, _ => by
+  | [(a1, b1)], alphabet, hAlphaWF, hOB, hScoped, hAvoid => by
       simp only [PactType.OfferBranchesWellFormed] at hOB
-      refine singletonTypeXOfferAt_alphabetWellFormed_of_subalphabet alphabet hAlphaWF
-        hOB.2.1 ?_
-      show alphabet.actions ⊆ b1.alphabet.actions
-      rw [hOB.1]
-      simp [PactType.BranchMessageActions]
-  | (a1, b1) :: next :: tl, alphabet, hAlphaWF, hOB, hPW => by
+      simp only [PactType.InterfaceScopedBranches] at hScoped
+      simp only [PactType.ParallelBranchInterfaces, Finset.union_empty]
+        at hAvoid
+      exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF hOB.2.1
+        hScoped.1 hAvoid
+  | (a1, b1) :: next :: tl, alphabet, hAlphaWF, hOB, hScoped, hAvoid => by
       simp only [PactType.OfferBranchesWellFormed] at hOB
-      have hSubHead : b1.alphabet.actions ⊆ alphabet.actions := by
-        rw [hOB.1]; exact Finset.sdiff_subset
-      have hBAA := branchAlphabetActions_eq_sdiff (next :: tl)
-        (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) (by simp) hOB.2.2
-        (List.pairwise_cons.mp hPW).2
-      have hRestWF : (⟨PactType.branchAlphabetActions (next :: tl)⟩ :
-          PactTypeAlphabet).WellFormed := by
-        refine PactTypeAlphabet.wellFormed_of_subset ?_ hAlphaWF
-        show PactType.branchAlphabetActions (next :: tl) ⊆ alphabet.actions
-        rw [hBAA]
-        exact Finset.sdiff_subset
-      have hRestOB : PactType.OfferBranchesWellFormed
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ ∅ (next :: tl) := by
-        refine offerBranchesWellFormed_shift
-          (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) hBAA (next :: tl) ∅ ?_
-        simpa using hOB.2.2
-      have hLA : (singletonTypeXOfferAt b1.alphabet (a1, b1)).alphabet =
-          b1.alphabet := rfl
-      have hRA : (parallelTypeBranchesWithin
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ (next :: tl)).alphabet =
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ :=
-        parallelTypeBranchesWithin_alphabet _ _
-      simp only [parallelTypeBranchesWithin, PactType.AlphabetWellFormed]
-      refine ⟨hAlphaWF, ?_, ?_, ?_⟩
-      · rw [hLA, hRA]
-        exact branchProduct_parallelCompatible hOB.1 hBAA
-          (messageActions_singletonTypeXOfferAt _ _)
-          (parallelTypeBranchesWithin_messageActions _ _)
-      · exact singletonTypeXOfferAt_alphabetWellFormed_of_subalphabet b1.alphabet
-          (PactTypeAlphabet.wellFormed_of_subset hSubHead hAlphaWF) hOB.2.1
-          (Finset.Subset.refl _)
-      · exact parallelTypeBranchesWithin_alphabetWellFormed_of_offerBranches
-          (next :: tl) _ hRestWF hRestOB (List.pairwise_cons.mp hPW).2
+      simp only [PactType.InterfaceScopedBranches] at hScoped
+      simp only [PactType.ParallelBranchInterfaces, Finset.mem_union] at hAvoid
+      simp only [parallelTypeBranchesWithin, PactType.AlphabetWellFormed,
+        parallelTypeBranchesWithin_alphabet]
+      refine ⟨hAlphaWF, PactTypeAlphabet.parallelCompatible_self_empty _, ?_, ?_⟩
+      · exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF hOB.2.1
+          hScoped.1 (fun act hAct hIn => hAvoid act hAct (Or.inl hIn))
+      · exact parallelTypeBranchesWithin_alphabetWellFormed (next :: tl) alphabet
+          hAlphaWF hOB.2.2 hScoped.2
+          (fun act hAct hIn => hAvoid act hAct (Or.inr hIn))
 
 /-- Same after one branch has been committed. -/
-theorem parallelTypeBranchesSelectingWithin_alphabetWellFormed_of_offerBranches
+theorem parallelTypeBranchesSelectingWithin_alphabetWellFormed
     (selected : BareMessage × PactType) :
     ∀ (branches : List (BareMessage × PactType)) (alphabet : PactTypeAlphabet),
       alphabet.WellFormed →
       PactType.OfferBranchesWellFormed alphabet ∅ branches →
-      List.Pairwise BranchDeclarationsDisjoint branches →
+      PactType.InterfaceScopedBranches branches →
+      (∀ action ∈ alphabet.actions,
+        action.1 ∉ PactType.ParallelBranchInterfaces branches) →
       (parallelTypeBranchesSelectingWithin alphabet selected
         branches).AlphabetWellFormed
-  | [], alphabet, hAlphaWF, _, _ => by
+  | [], alphabet, hAlphaWF, _, _, _ => by
       simp only [parallelTypeBranchesSelectingWithin,
         PactType.AlphabetWellFormed]
       exact hAlphaWF
-  | [(a1, b1)], alphabet, hAlphaWF, hOB, _ => by
+  | [(a1, b1)], alphabet, hAlphaWF, hOB, hScoped, hAvoid => by
       simp only [PactType.OfferBranchesWellFormed] at hOB
-      have hSub : PactTypeAlphabet.Subalphabet alphabet b1.alphabet := by
-        show alphabet.actions ⊆ b1.alphabet.actions
-        rw [hOB.1]
-        simp [PactType.BranchMessageActions]
-      by_cases hSelected : ((a1, b1) : BareMessage × PactType) = selected
-      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected]
-        exact selectedTypeBranchAt_alphabetWellFormed_of_subalphabet alphabet hAlphaWF
-          hOB.2.1 hSub
-      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected]
-        exact singletonTypeXOfferAt_alphabetWellFormed_of_subalphabet alphabet hAlphaWF
-          hOB.2.1 hSub
-  | (a1, b1) :: next :: tl, alphabet, hAlphaWF, hOB, hPW => by
-      simp only [PactType.OfferBranchesWellFormed] at hOB
-      have hSubHead : b1.alphabet.actions ⊆ alphabet.actions := by
-        rw [hOB.1]; exact Finset.sdiff_subset
-      have hHeadWF : b1.alphabet.WellFormed :=
-        PactTypeAlphabet.wellFormed_of_subset hSubHead hAlphaWF
-      have hBAA := branchAlphabetActions_eq_sdiff (next :: tl)
-        (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) (by simp) hOB.2.2
-        (List.pairwise_cons.mp hPW).2
-      have hRestWF : (⟨PactType.branchAlphabetActions (next :: tl)⟩ :
-          PactTypeAlphabet).WellFormed := by
-        refine PactTypeAlphabet.wellFormed_of_subset ?_ hAlphaWF
-        show PactType.branchAlphabetActions (next :: tl) ⊆ alphabet.actions
-        rw [hBAA]
-        exact Finset.sdiff_subset
-      have hRestOB : PactType.OfferBranchesWellFormed
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ ∅ (next :: tl) := by
-        refine offerBranchesWellFormed_shift
-          (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) hBAA (next :: tl) ∅ ?_
-        simpa using hOB.2.2
-      by_cases hSelected : ((a1, b1) : BareMessage × PactType) = selected
-      · have hLA : (selectedTypeBranchAt b1.alphabet (a1, b1)).alphabet =
-            b1.alphabet := rfl
-        have hRA : (parallelTypeBranchesWithin
-            ⟨PactType.branchAlphabetActions (next :: tl)⟩
-            (next :: tl)).alphabet =
-            ⟨PactType.branchAlphabetActions (next :: tl)⟩ :=
-          parallelTypeBranchesWithin_alphabet _ _
-        simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected,
-          PactType.AlphabetWellFormed]
-        refine ⟨hAlphaWF, ?_, ?_, ?_⟩
-        · rw [hLA, hRA]
-          exact branchProduct_parallelCompatible hOB.1 hBAA
-            (messageActions_selectedTypeBranchAt _ _)
-            (parallelTypeBranchesWithin_messageActions _ _)
-        · exact selectedTypeBranchAt_alphabetWellFormed_of_subalphabet b1.alphabet hHeadWF
-            hOB.2.1 (Finset.Subset.refl _)
-        · exact parallelTypeBranchesWithin_alphabetWellFormed_of_offerBranches
-            (next :: tl) _ hRestWF hRestOB (List.pairwise_cons.mp hPW).2
-      · have hLA : (singletonTypeXOfferAt b1.alphabet (a1, b1)).alphabet =
-            b1.alphabet := rfl
-        have hRA : (parallelTypeBranchesSelectingWithin
-            ⟨PactType.branchAlphabetActions (next :: tl)⟩ selected
-            (next :: tl)).alphabet =
-            ⟨PactType.branchAlphabetActions (next :: tl)⟩ :=
-          parallelTypeBranchesSelectingWithin_alphabet _ _ _
-        simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected,
-          PactType.AlphabetWellFormed]
-        refine ⟨hAlphaWF, ?_, ?_, ?_⟩
-        · rw [hLA, hRA]
-          exact branchProduct_parallelCompatible hOB.1 hBAA
-            (messageActions_singletonTypeXOfferAt _ _)
-            ((parallelTypeBranchesSelectingWithin_ownershipData _ selected
-              (next :: tl)).2.1)
-        · exact singletonTypeXOfferAt_alphabetWellFormed_of_subalphabet b1.alphabet hHeadWF
-            hOB.2.1 (Finset.Subset.refl _)
-        · exact
-            parallelTypeBranchesSelectingWithin_alphabetWellFormed_of_offerBranches
-              selected (next :: tl) _ hRestWF hRestOB
-              (List.pairwise_cons.mp hPW).2
-
-/-- The singleton expansion introduces no interface of its own. -/
-theorem parallelInterfaces_singletonTypeXOfferAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    PactType.ParallelInterfaces (singletonTypeXOfferAt alphabet branch) =
-      PactType.ParallelInterfaces branch.2 := by
-  simp [singletonTypeXOfferAt, PactType.ParallelInterfaces,
-    PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces]
-
-/-- Nor does the committed branch. -/
-theorem parallelInterfaces_selectedTypeBranchAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    PactType.ParallelInterfaces (selectedTypeBranchAt alphabet branch) =
-      PactType.ParallelInterfaces branch.2 := by
-  simp [selectedTypeBranchAt, PactType.ParallelInterfaces,
-    PactType.reannotate_parallelInterfaces]
-
-/-- The singleton expansion keeps the second interface-scoping clause. -/
-theorem singletonTypeXOfferAt_interfaceAlphabetScoped
-    (alphabet : PactTypeAlphabet) {branch : BareMessage × PactType}
-    (hScoped : branch.2.InterfaceAlphabetScoped)
-    (hAvoid : ∀ action ∈ alphabet.actions,
-      action.1 ∉ PactType.ParallelInterfaces branch.2) :
-    (singletonTypeXOfferAt alphabet branch).InterfaceAlphabetScoped := by
-  rcases branch with ⟨action, body⟩
-  simp only [singletonTypeXOfferAt, PactType.InterfaceAlphabetScoped,
-    PactType.InterfaceAlphabetScopedBranches, PactType.ParallelInterfaces,
-    PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces]
-  refine ⟨?_, trivial, PactType.reannotate_interfaceAlphabetScoped body
-      alphabet hScoped hAvoid, trivial⟩
-  refine Finset.disjoint_left.mpr ?_
-  intro msg hMsg hIn
-  obtain ⟨act, hAct, rfl⟩ := Finset.mem_image.mp hMsg
-  simp only [Finset.empty_union, Finset.union_empty] at hIn
-  exact hAvoid act hAct hIn
-
-/-- Same for the committed branch. -/
-theorem selectedTypeBranchAt_interfaceAlphabetScoped
-    (alphabet : PactTypeAlphabet) {branch : BareMessage × PactType}
-    (hScoped : branch.2.InterfaceAlphabetScoped)
-    (hAvoid : ∀ action ∈ alphabet.actions,
-      action.1 ∉ PactType.ParallelInterfaces branch.2) :
-    (selectedTypeBranchAt alphabet branch).InterfaceAlphabetScoped := by
-  rcases branch with ⟨action, body⟩
-  simp only [selectedTypeBranchAt, PactType.InterfaceAlphabetScoped,
-    PactType.ParallelInterfaces, PactType.reannotate_parallelInterfaces]
-  refine ⟨?_, trivial, PactType.reannotate_interfaceAlphabetScoped body
-      alphabet hScoped hAvoid⟩
-  refine Finset.disjoint_left.mpr ?_
-  intro msg hMsg hIn
-  obtain ⟨act, hAct, rfl⟩ := Finset.mem_image.mp hMsg
-  simp only [Finset.empty_union] at hIn
-  exact hAvoid act hAct hIn
-
-/-- The generated branch product keeps the second interface-scoping clause. -/
-theorem parallelTypeBranchesWithin_interfaceAlphabetScoped :
-    ∀ (branches : List (BareMessage × PactType)) (alphabet : PactTypeAlphabet),
-      PactType.OfferBranchesWellFormed alphabet ∅ branches →
-      List.Pairwise BranchDeclarationsDisjoint branches →
-      PactType.InterfaceAlphabetScopedBranches branches →
-      (∀ action ∈ alphabet.actions,
-        action.1 ∉ PactType.ParallelBranchInterfaces branches) →
-      (parallelTypeBranchesWithin alphabet branches).InterfaceAlphabetScoped
-  | [], alphabet, _, _, _, _ => by
-      simp only [parallelTypeBranchesWithin]
-      simp only [PactType.InterfaceAlphabetScoped]
-  | [(a1, b1)], alphabet, hOB, _, hScoped, hAvoid => by
-      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
+      simp only [PactType.InterfaceScopedBranches] at hScoped
       simp only [PactType.ParallelBranchInterfaces, Finset.union_empty]
         at hAvoid
-      exact singletonTypeXOfferAt_interfaceAlphabetScoped alphabet hScoped.1
-        hAvoid
-  | (a1, b1) :: next :: tl, alphabet, hOB, hPW, hScoped, hAvoid => by
+      by_cases hSel : ((a1, b1) : BareMessage × PactType) = selected
+      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSel]
+        exact selectedTypeBranchAt_alphabetWellFormed alphabet hAlphaWF hOB.2.1
+          hScoped.1 hAvoid
+      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSel]
+        exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF hOB.2.1
+          hScoped.1 hAvoid
+  | (a1, b1) :: next :: tl, alphabet, hAlphaWF, hOB, hScoped, hAvoid => by
       simp only [PactType.OfferBranchesWellFormed] at hOB
-      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
+      simp only [PactType.InterfaceScopedBranches] at hScoped
       simp only [PactType.ParallelBranchInterfaces, Finset.mem_union] at hAvoid
-      have hSubHead : b1.alphabet.actions ⊆ alphabet.actions := by
-        rw [hOB.1]; exact Finset.sdiff_subset
-      have hBAA := branchAlphabetActions_eq_sdiff (next :: tl)
-        (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) (by simp) hOB.2.2
-        (List.pairwise_cons.mp hPW).2
-      have hSubRest : PactType.branchAlphabetActions (next :: tl) ⊆
-          alphabet.actions := by rw [hBAA]; exact Finset.sdiff_subset
-      have hRestOB : PactType.OfferBranchesWellFormed
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ ∅ (next :: tl) := by
-        refine offerBranchesWellFormed_shift
-          (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) hBAA (next :: tl) ∅ ?_
-        simpa using hOB.2.2
-      simp only [parallelTypeBranchesWithin, PactType.InterfaceAlphabetScoped,
-        parallelInterfaces_singletonTypeXOfferAt,
-        parallelTypeBranchesWithin_parallelInterfaces]
-      refine ⟨?_, ?_, ?_⟩
-      · refine Finset.disjoint_left.mpr ?_
-        intro msg hMsg hIn
-        obtain ⟨act, hAct, rfl⟩ := Finset.mem_image.mp hMsg
-        simp only [Finset.empty_union, Finset.mem_union] at hIn
-        exact hAvoid act hAct hIn
-      · exact singletonTypeXOfferAt_interfaceAlphabetScoped b1.alphabet
-          hScoped.1 (fun act hAct hIn =>
-            hAvoid act (hSubHead hAct) (Or.inl hIn))
-      · exact parallelTypeBranchesWithin_interfaceAlphabetScoped (next :: tl) _
-          hRestOB (List.pairwise_cons.mp hPW).2 hScoped.2
-          (fun act hAct hIn => hAvoid act (hSubRest hAct) (Or.inr hIn))
+      by_cases hSel : ((a1, b1) : BareMessage × PactType) = selected
+      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSel,
+          PactType.AlphabetWellFormed, parallelTypeBranchesWithin_alphabet]
+        refine ⟨hAlphaWF, PactTypeAlphabet.parallelCompatible_self_empty _, ?_, ?_⟩
+        · exact selectedTypeBranchAt_alphabetWellFormed alphabet hAlphaWF
+            hOB.2.1 hScoped.1
+            (fun act hAct hIn => hAvoid act hAct (Or.inl hIn))
+        · exact parallelTypeBranchesWithin_alphabetWellFormed (next :: tl)
+            alphabet hAlphaWF hOB.2.2 hScoped.2
+            (fun act hAct hIn => hAvoid act hAct (Or.inr hIn))
+      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSel,
+          PactType.AlphabetWellFormed, parallelTypeBranchesSelectingWithin_alphabet]
+        refine ⟨hAlphaWF, PactTypeAlphabet.parallelCompatible_self_empty _, ?_, ?_⟩
+        · exact singletonTypeXOfferAt_alphabetWellFormed alphabet hAlphaWF
+            hOB.2.1 hScoped.1
+            (fun act hAct hIn => hAvoid act hAct (Or.inl hIn))
+        · exact parallelTypeBranchesSelectingWithin_alphabetWellFormed selected
+            (next :: tl) alphabet hAlphaWF hOB.2.2 hScoped.2
+            (fun act hAct hIn => hAvoid act hAct (Or.inr hIn))
 
-/-- Same after one branch has been committed. -/
-theorem parallelTypeBranchesSelectingWithin_interfaceAlphabetScoped
-    (selected : BareMessage × PactType) :
-    ∀ (branches : List (BareMessage × PactType)) (alphabet : PactTypeAlphabet),
-      PactType.OfferBranchesWellFormed alphabet ∅ branches →
-      List.Pairwise BranchDeclarationsDisjoint branches →
-      PactType.InterfaceAlphabetScopedBranches branches →
-      (∀ action ∈ alphabet.actions,
-        action.1 ∉ PactType.ParallelBranchInterfaces branches) →
-      (parallelTypeBranchesSelectingWithin alphabet selected
-        branches).InterfaceAlphabetScoped
-  | [], alphabet, _, _, _, _ => by
-      simp only [parallelTypeBranchesSelectingWithin]
-      simp only [PactType.InterfaceAlphabetScoped]
-  | [(a1, b1)], alphabet, hOB, _, hScoped, hAvoid => by
-      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
-      simp only [PactType.ParallelBranchInterfaces, Finset.union_empty]
-        at hAvoid
-      by_cases hSelected : ((a1, b1) : BareMessage × PactType) = selected
-      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected]
-        exact selectedTypeBranchAt_interfaceAlphabetScoped alphabet hScoped.1
-          hAvoid
-      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected]
-        exact singletonTypeXOfferAt_interfaceAlphabetScoped alphabet hScoped.1
-          hAvoid
-  | (a1, b1) :: next :: tl, alphabet, hOB, hPW, hScoped, hAvoid => by
-      simp only [PactType.OfferBranchesWellFormed] at hOB
-      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
-      simp only [PactType.ParallelBranchInterfaces, Finset.mem_union] at hAvoid
-      have hSubHead : b1.alphabet.actions ⊆ alphabet.actions := by
-        rw [hOB.1]; exact Finset.sdiff_subset
-      have hBAA := branchAlphabetActions_eq_sdiff (next :: tl)
-        (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) (by simp) hOB.2.2
-        (List.pairwise_cons.mp hPW).2
-      have hSubRest : PactType.branchAlphabetActions (next :: tl) ⊆
-          alphabet.actions := by rw [hBAA]; exact Finset.sdiff_subset
-      have hRestOB : PactType.OfferBranchesWellFormed
-          ⟨PactType.branchAlphabetActions (next :: tl)⟩ ∅ (next :: tl) := by
-        refine offerBranchesWellFormed_shift
-          (∅ ∪ ({a1} ∪ PactType.MessageActions b1)) hBAA (next :: tl) ∅ ?_
-        simpa using hOB.2.2
-      have hHeadAvoid : ∀ action ∈ b1.alphabet.actions,
-          action.1 ∉ PactType.ParallelInterfaces b1 := fun act hAct hIn =>
-        hAvoid act (hSubHead hAct) (Or.inl hIn)
-      have hRestAvoid : ∀ action ∈ PactType.branchAlphabetActions (next :: tl),
-          action.1 ∉ PactType.ParallelBranchInterfaces (next :: tl) :=
-        fun act hAct hIn => hAvoid act (hSubRest hAct) (Or.inr hIn)
-      have hOuter : Disjoint (PactTypeAlphabet.messageIds alphabet)
-          (∅ ∪ PactType.ParallelInterfaces b1 ∪
-            PactType.ParallelBranchInterfaces (next :: tl)) := by
-        refine Finset.disjoint_left.mpr ?_
-        intro msg hMsg hIn
-        obtain ⟨act, hAct, rfl⟩ := Finset.mem_image.mp hMsg
-        simp only [Finset.empty_union, Finset.mem_union] at hIn
-        exact hAvoid act hAct hIn
-      by_cases hSelected : ((a1, b1) : BareMessage × PactType) = selected
-      · simp only [parallelTypeBranchesSelectingWithin, if_pos hSelected,
-          PactType.InterfaceAlphabetScoped,
-          parallelInterfaces_selectedTypeBranchAt,
-          parallelTypeBranchesWithin_parallelInterfaces]
-        exact ⟨hOuter,
-          selectedTypeBranchAt_interfaceAlphabetScoped b1.alphabet hScoped.1
-            hHeadAvoid,
-          parallelTypeBranchesWithin_interfaceAlphabetScoped (next :: tl) _
-            hRestOB (List.pairwise_cons.mp hPW).2 hScoped.2 hRestAvoid⟩
-      · simp only [parallelTypeBranchesSelectingWithin, if_neg hSelected,
-          PactType.InterfaceAlphabetScoped,
-          parallelInterfaces_singletonTypeXOfferAt,
-          parallelTypeBranchesSelectingWithin_parallelInterfaces]
-        exact ⟨hOuter,
-          singletonTypeXOfferAt_interfaceAlphabetScoped b1.alphabet hScoped.1
-            hHeadAvoid,
-          parallelTypeBranchesSelectingWithin_interfaceAlphabetScoped selected
-            (next :: tl) _ hRestOB (List.pairwise_cons.mp hPW).2 hScoped.2
-            hRestAvoid⟩
-
-/-- Committing a conjunctive offer keeps the second interface-scoping clause. -/
-theorem parallelTypeBranchesSelecting_interfaceAlphabetScoped
-    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
-    (branches : List (BareMessage × PactType))
-    (hOB : PactType.OfferBranchesWellFormed alphabet ∅ branches)
-    (hPairwise : List.Pairwise BranchDeclarationsDisjoint branches)
-    (hScoped : PactType.InterfaceAlphabetScopedBranches branches)
-    (hAvoid : ∀ action ∈ alphabet.actions,
-      action.1 ∉ PactType.ParallelBranchInterfaces branches) :
-    (parallelTypeBranchesSelecting alphabet selected
-      branches).InterfaceAlphabetScoped := by
-  cases branches with
-  | nil =>
-      simp only [parallelTypeBranchesSelecting,
-        parallelTypeBranchesSelectingWithin]
-      simp only [PactType.InterfaceAlphabetScoped]
-  | cons branch rest =>
-      simp only [parallelTypeBranchesSelecting]
-      exact parallelTypeBranchesSelectingWithin_interfaceAlphabetScoped selected
-        (branch :: rest) alphabet hOB hPairwise hScoped hAvoid
-
-/-- Committing a conjunctive offer keeps the alphabet well-formed.  Unlike the
-`AlphabetCoherent` counterpart this is not free: the generated product
-reannotates each branch body to its own part of the offer alphabet, so it
-needs the branch declarations to survive that partition. -/
+/-- Committing a conjunctive offer keeps the alphabet well-formed: every
+generated component carries the offer's own alphabet. -/
 theorem committedOffer_alphabetWellFormed
     (alphabet : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
     (selected : BareMessage × PactType)
     (hOfferWF : (PactType.offer alphabet elseType branches).AlphabetWellFormed)
-    (hPairwise : List.Pairwise BranchDeclarationsDisjoint branches)
+    (hScoped : (PactType.offer alphabet elseType branches).InterfaceScoped)
+    (hAlphaScoped :
+      (PactType.offer alphabet elseType branches).InterfaceAlphabetScoped)
     (hSelected : selected ∈ branches) :
     (parallelTypeBranchesSelecting alphabet selected branches).AlphabetWellFormed := by
+  classical
   simp only [PactType.AlphabetWellFormed] at hOfferWF
+  simp only [PactType.InterfaceScoped] at hScoped
+  simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
+  have hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelBranchInterfaces branches := by
+    intro action hAction hIn
+    exact Finset.disjoint_left.mp hAlphaScoped.1
+      (Finset.mem_image.mpr ⟨action, hAction, rfl⟩)
+      (Finset.mem_union_right _ hIn)
   cases branches with
   | nil => cases hSelected
   | cons branch rest =>
       simp only [parallelTypeBranchesSelecting]
       exact
-        parallelTypeBranchesSelectingWithin_alphabetWellFormed_of_offerBranches
+        parallelTypeBranchesSelectingWithin_alphabetWellFormed
           selected (branch :: rest) alphabet hOfferWF.1 hOfferWF.2.2.2
-          hPairwise
+          hScoped.2 hAvoid
 
 /-- Substituting for a variable confined to tail positions preserves offer-branch
 disjointness.  A conjunctive offer's branches are non-tail, so substitution is
@@ -3071,13 +2392,14 @@ theorem PactType.replaceVar_offerBranchesDisjoint (name : String)
             hDisjoint.2.1, hDisjoint.2.2⟩
 
 /-- The offer-commit obligation of `relationMembership_alphabetWellFormed`,
-carrying the branch-disjointness the generated product needs. -/
+carrying the interface scoping the generated product needs. -/
 def CommittedOfferAlphabetWellFormed : Prop :=
   ∀ (alphabet : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
     (selected : BareMessage × PactType),
     (PactType.offer alphabet elseType branches).AlphabetWellFormed →
-    List.Pairwise BranchDeclarationsDisjoint branches →
+    (PactType.offer alphabet elseType branches).InterfaceScoped →
+    (PactType.offer alphabet elseType branches).InterfaceAlphabetScoped →
     selected ∈ branches →
     (parallelTypeBranchesSelecting alphabet selected branches).AlphabetWellFormed
 
@@ -3376,6 +2698,198 @@ theorem DecoratedTypeTransition.preserves_alphabetWellFormed
     target.AlphabetWellFormed :=
   TypeTransition.preserves_alphabetWellFormed transition.1 hSource hTailRec
     hDisjoint
+
+/-- Every component of the branch product carries the enclosing alphabet, and
+the interfaces below it are exactly the branches' own, so the offer's scoping
+condition transfers to the product. -/
+theorem parallelTypeBranchesWithin_interfaceAlphabetScoped
+    (alphabet : PactTypeAlphabet)
+    (hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelBranchInterfaces branchesAll) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.ParallelBranchInterfaces branches ⊆
+        PactType.ParallelBranchInterfaces branchesAll →
+      PactType.InterfaceAlphabetScopedBranches branches →
+      PactType.InterfaceAlphabetScoped
+        (parallelTypeBranchesWithin alphabet branches) := by
+  have hDisj : ∀ blocked : Finset MessageId,
+      blocked ⊆ PactType.ParallelBranchInterfaces branchesAll →
+      Disjoint (PactTypeAlphabet.messageIds alphabet) blocked := by
+    intro blocked hSub
+    refine Finset.disjoint_left.mpr ?_
+    intro msg hMsg hBlocked
+    obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp hMsg
+    exact hAvoid action hAction (hSub hBlocked)
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _
+      simp [parallelTypeBranchesWithin, PactType.InterfaceAlphabetScoped]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro hSub hScoped
+      simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
+      have hBodySub : PactType.ParallelInterfaces body ⊆
+          PactType.ParallelBranchInterfaces branchesAll := by
+        refine Finset.Subset.trans ?_ hSub
+        simp only [PactType.ParallelBranchInterfaces]
+        exact Finset.subset_union_left
+      have hRestSub : PactType.ParallelBranchInterfaces rest ⊆
+          PactType.ParallelBranchInterfaces branchesAll := by
+        refine Finset.Subset.trans ?_ hSub
+        simp only [PactType.ParallelBranchInterfaces]
+        exact Finset.subset_union_right
+      have hLeaf : PactType.InterfaceAlphabetScoped
+          (singletonTypeXOfferAt alphabet (action, body)) := by
+        simp only [singletonTypeXOfferAt, PactType.InterfaceAlphabetScoped,
+          PactType.InterfaceAlphabetScopedBranches,
+          PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
+          PactType.reannotate_parallelInterfaces]
+        refine ⟨?_, trivial, ?_, trivial⟩
+        · simpa using hDisj (PactType.ParallelInterfaces body) hBodySub
+        · exact PactType.reannotate_interfaceAlphabetScoped body alphabet
+            hScoped.1 (fun act hAct hIn => hAvoid act hAct (hBodySub hIn))
+      cases rest with
+      | nil =>
+          simpa only [parallelTypeBranchesWithin] using hLeaf
+      | cons next tail =>
+          simp only [parallelTypeBranchesWithin,
+            PactType.InterfaceAlphabetScoped]
+          refine ⟨?_, hLeaf, ih hRestSub hScoped.2⟩
+          rw [singletonTypeXOfferAt, PactType.ParallelInterfaces]
+          rw [parallelTypeBranchesWithin_parallelInterfaces (next :: tail)
+            alphabet]
+          refine hDisj _ ?_
+          intro msg hMsg
+          rcases Finset.mem_union.mp hMsg with hMsg | hMsg
+          · rcases Finset.mem_union.mp hMsg with hMsg | hMsg
+            · exact absurd hMsg (Finset.notMem_empty msg)
+            · simp only [PactType.ParallelInterfaces,
+                PactType.ParallelBranchInterfaces,
+                PactType.reannotate_parallelInterfaces,
+                Finset.union_empty, Finset.empty_union] at hMsg
+              exact hBodySub hMsg
+          · exact hRestSub hMsg
+
+/-- The committed branch product of a conjunctive offer inherits the offer's
+interface-alphabet scoping. -/
+theorem parallelTypeBranchesSelecting_interfaceAlphabetScoped
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hScoped : PactType.InterfaceAlphabetScopedBranches branches)
+    (hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelBranchInterfaces branches) :
+    PactType.InterfaceAlphabetScoped
+      (parallelTypeBranchesSelecting alphabet selected branches) := by
+  have hDisj : ∀ blocked : Finset MessageId,
+      blocked ⊆ PactType.ParallelBranchInterfaces branches →
+      Disjoint (PactTypeAlphabet.messageIds alphabet) blocked := by
+    intro blocked hSub
+    refine Finset.disjoint_left.mpr ?_
+    intro msg hMsg hBlocked
+    obtain ⟨action, hAction, rfl⟩ := Finset.mem_image.mp hMsg
+    exact hAvoid action hAction (hSub hBlocked)
+  have hWithin : ∀ list : List (BareMessage × PactType),
+      PactType.ParallelBranchInterfaces list ⊆
+        PactType.ParallelBranchInterfaces branches →
+      PactType.InterfaceAlphabetScopedBranches list →
+      PactType.InterfaceAlphabetScoped
+        (parallelTypeBranchesSelectingWithin alphabet selected list) := by
+    intro list
+    induction list with
+    | nil =>
+        intro _ _
+        simp [parallelTypeBranchesSelectingWithin,
+          PactType.InterfaceAlphabetScoped]
+    | cons head rest ih =>
+        rcases head with ⟨action, body⟩
+        intro hSub hList
+        simp only [PactType.InterfaceAlphabetScopedBranches] at hList
+        have hBodySub : PactType.ParallelInterfaces body ⊆
+            PactType.ParallelBranchInterfaces branches := by
+          refine Finset.Subset.trans ?_ hSub
+          simp only [PactType.ParallelBranchInterfaces]
+          exact Finset.subset_union_left
+        have hRestSub : PactType.ParallelBranchInterfaces rest ⊆
+            PactType.ParallelBranchInterfaces branches := by
+          refine Finset.Subset.trans ?_ hSub
+          simp only [PactType.ParallelBranchInterfaces]
+          exact Finset.subset_union_right
+        have hBodyScoped : PactType.InterfaceAlphabetScoped
+            (body.reannotate alphabet) :=
+          PactType.reannotate_interfaceAlphabetScoped body alphabet hList.1
+            (fun act hAct hIn => hAvoid act hAct (hBodySub hIn))
+        have hSelectedLeaf : PactType.InterfaceAlphabetScoped
+            (selectedTypeBranchAt alphabet (action, body)) := by
+          simp only [selectedTypeBranchAt, PactType.InterfaceAlphabetScoped,
+            PactType.ParallelInterfaces, PactType.reannotate_parallelInterfaces]
+          refine ⟨?_, trivial, hBodyScoped⟩
+          simpa using hDisj (PactType.ParallelInterfaces body) hBodySub
+        have hSingleLeaf : PactType.InterfaceAlphabetScoped
+            (singletonTypeXOfferAt alphabet (action, body)) := by
+          simp only [singletonTypeXOfferAt, PactType.InterfaceAlphabetScoped,
+            PactType.InterfaceAlphabetScopedBranches,
+            PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
+            PactType.reannotate_parallelInterfaces]
+          refine ⟨?_, trivial, hBodyScoped, trivial⟩
+          simpa using hDisj (PactType.ParallelInterfaces body) hBodySub
+        have hHeadInterfaces : ∀ leafInterfaces : Finset MessageId,
+            leafInterfaces ⊆ PactType.ParallelInterfaces body →
+            ∀ tailInterfaces : Finset MessageId,
+            tailInterfaces ⊆ PactType.ParallelBranchInterfaces rest →
+            Disjoint (PactTypeAlphabet.messageIds alphabet)
+              (∅ ∪ leafInterfaces ∪ tailInterfaces) := by
+          intro leafInterfaces hLeafSub tailInterfaces hTailSub
+          refine hDisj _ ?_
+          intro msg hMsg
+          rcases Finset.mem_union.mp hMsg with hMsg | hMsg
+          · rcases Finset.mem_union.mp hMsg with hMsg | hMsg
+            · exact absurd hMsg (Finset.notMem_empty msg)
+            · exact hBodySub (hLeafSub hMsg)
+          · exact hRestSub (hTailSub hMsg)
+        cases rest with
+        | nil =>
+            by_cases hSel : (action, body) = selected
+            · simpa only [parallelTypeBranchesSelectingWithin, if_pos hSel]
+                using hSel ▸ hSelectedLeaf
+            · simpa only [parallelTypeBranchesSelectingWithin, if_neg hSel]
+                using hSingleLeaf
+        | cons next tail =>
+            have hRestScoped : PactType.InterfaceAlphabetScoped
+                (parallelTypeBranchesWithin alphabet (next :: tail)) :=
+              parallelTypeBranchesWithin_interfaceAlphabetScoped
+                (branchesAll := branches) alphabet hAvoid (next :: tail)
+                hRestSub hList.2
+            by_cases hSel : (action, body) = selected
+            · rw [parallelTypeBranchesSelectingWithin, if_pos hSel]
+              simp only [PactType.InterfaceAlphabetScoped]
+              refine ⟨?_, hSel ▸ hSelectedLeaf, hRestScoped⟩
+              rw [selectedTypeBranchAt, PactType.ParallelInterfaces,
+                parallelTypeBranchesWithin_parallelInterfaces (next :: tail)
+                  alphabet]
+              refine hHeadInterfaces _ ?_ _ (Finset.Subset.refl _)
+              simp only [PactType.ParallelInterfaces,
+                PactType.reannotate_parallelInterfaces, Finset.empty_union]
+              · exact Finset.Subset.refl _
+              · exact List.cons_ne_nil _ _
+            · rw [parallelTypeBranchesSelectingWithin, if_neg hSel]
+              simp only [PactType.InterfaceAlphabetScoped]
+              refine ⟨?_, hSingleLeaf, ih hRestSub hList.2⟩
+              rw [singletonTypeXOfferAt, PactType.ParallelInterfaces,
+                parallelTypeBranchesSelectingWithin_parallelInterfaces selected
+                  (next :: tail) alphabet]
+              refine hHeadInterfaces _ ?_ _ (Finset.Subset.refl _)
+              simp only [PactType.ParallelInterfaces,
+                PactType.ParallelBranchInterfaces,
+                PactType.reannotate_parallelInterfaces, Finset.union_empty,
+                Finset.empty_union]
+              · exact Finset.Subset.refl _
+              · exact List.cons_ne_nil _ _
+  cases branches with
+  | nil =>
+      simp [parallelTypeBranchesSelecting, PactType.InterfaceAlphabetScoped]
+  | cons head rest =>
+      exact hWithin (head :: rest) (Finset.Subset.refl _) hScoped
 
 end
 

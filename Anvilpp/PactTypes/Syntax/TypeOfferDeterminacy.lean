@@ -225,1763 +225,1728 @@ theorem typeOffers_unique_aux :
       (PactType.shape t₁ = PactType.shape t₂ →
           hideTypeOffers H c₁ = hideTypeOffers H c₂) ∧
         (t₁ = t₂ → hideTypeOffers H f₁ = hideTypeOffers H f₂) := by
-  intro e₁ s₁ l₁ t₁ c₁ f₁ h₁
-  induction h₁ with
-  | seq env alphabet left left' right label current childFuture hChild
-      hNotSkip hNotTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {lt : PactType} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro lt c f hOff hSh
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
-             first
-               | (refine key (by assumption) ?_
-                  simp only [PactType.shape, PactShape.seq.injEq] at hShape
-                  exact hShape.1)
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption) rfl])
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [key (by assumption) rfl]))
-          | skip
-  | seq_tock env alphabet left left' right current childFuture hChild
-      hNotSkip ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {lt : PactType} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro lt c f hOff hSh
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
-             first
-               | (refine key (by assumption) ?_
-                  simp only [PactType.shape, PactShape.seq.injEq] at hShape
-                  exact hShape.1)
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption) rfl])
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [key (by assumption) rfl]))
-          | skip
-  | seq_fuse env alphabet skipAlphabet left right label current childFuture
-      hChild hNotTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ (PactType.skip beta) c f →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro beta c f hOff
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1
-                 (by simp [PactType.shape])
-             first
-               | exact key (by assumption)
-               | (rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption)])
-               | rw [key (by assumption)])
-          | skip
-  | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
-      hChild ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ (PactType.skip beta) c f →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro beta c f hOff
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1
-                 (by simp [PactType.shape])
-             first
-               | exact key (by assumption)
-               | (rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption)])
-               | rw [key (by assumption)])
-          | skip
-  | xoffer_wait env alphabet elseType branches hCond hGate =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hElse hBranches
-             subst hAlpha
-             subst hElse
-             subst hBranches
-             first
-               | exact typeWaitingOffers_agree_outside hAgree.future _
-               | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                   typeWaitingOffers_agree_outside hAgree.future branches])
-          | skip
-  | offer_some env alphabet elseType branches enabled hCond hGate =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hElse hBranches
-             subst hAlpha
-             subst hElse
-             subst hBranches
-             exfalso
-             have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled hCond
-             have hLinBr : ∀ b ∈ branches,
-                 b.1.1 ∉ PactType.PrefixMessageIds elseType := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2.2
-             cases hCons : branches with
-             | nil => exact hNonempty hCons
-             | cons b r =>
-                 subst hCons
-                 try simp only [PactType.shape] at hShape
-                 first
-                   | exact absurd hShape
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact absurd hShape.symm
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
-          | skip
-  | offer_else env alphabet elseType branches hCond hGate =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hElse hBranches
-             subst hAlpha
-             subst hElse
-             subst hBranches
-             exfalso
-             have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled (by assumption)
-             have hLinBr : ∀ b ∈ branches,
-                 b.1.1 ∉ PactType.PrefixMessageIds elseType := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2.2
-             cases hCons : branches with
-             | nil => exact hNonempty hCons
-             | cons b r =>
-                 subst hCons
-                 try simp only [PactType.shape] at hShape
-                 first
-                   | exact absurd hShape
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact absurd hShape.symm
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
-          | skip
-  | offer_wait env alphabet elseType branches hCond hGate =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hElse hBranches
-             subst hAlpha
-             subst hElse
-             subst hBranches
-             exfalso
-             have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled (by assumption)
-             have hLinBr : ∀ b ∈ branches,
-                 b.1.1 ∉ PactType.PrefixMessageIds elseType := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2.2
-             cases hCons : branches with
-             | nil => exact hNonempty hCons
-             | cons b r =>
-                 subst hCons
-                 try simp only [PactType.shape] at hShape
-                 first
-                   | exact absurd hShape
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact absurd hShape.symm
-                       (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
-                   | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
-          | skip
-  | left_complete outer rightEnv interface alphabet left right right' rightLabel
-      rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
-      hRestF hLoc hOuterWF hNotTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFRight : right.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2
-             have hLinRight : right.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2
-             have hMsgRight : right.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.2
-             have hProgRight : right.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.2
-             have hFairRight : right.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.2
-             have hScopRight : right.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {senv : TypeEnvironment} {st : PactType}
-                 {sc sf : Finset BareMessage},
-                 TypeOffers senv right l₂ st sc sf →
-                 LocalTypeOfferEnvironment e₂ interface right senv ∅ ∅ senv →
-                 right'.shape = st.shape →
-                 hideTypeOffers H (hideTypeOffers interface rightCurrent) =
-                   hideTypeOffers H (hideTypeOffers interface sc) := by
-               intro senv st sc sf hOff hLoc₂ hSh
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
-               exact (ih hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight (H ∪ interface) hOff
-                 (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
-                 rfl hLabel).1 hSh
-             first
-               | (exact key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using hShape))
-               | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
-                  rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)])
-               | (rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)]))
-          | skip
-  | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
-      rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
-      hRestF hLoc hOuterWF hIsTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFRight : right.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2
-             have hLinRight : right.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2
-             have hMsgRight : right.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.2
-             have hProgRight : right.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.2
-             have hFairRight : right.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.2
-             have hScopRight : right.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {senv : TypeEnvironment} {st : PactType}
-                 {sc sf : Finset BareMessage},
-                 TypeOffers senv right l₂ st sc sf →
-                 LocalTypeOfferEnvironment e₂ interface right senv ∅ ∅ senv →
-                 right'.shape = st.shape →
-                 hideTypeOffers H (hideTypeOffers interface rightCurrent) =
-                   hideTypeOffers H (hideTypeOffers interface sc) := by
-               intro senv st sc sf hOff hLoc₂ hSh
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
-               exact (ih hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight (H ∪ interface) hOff
-                 (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
-                 rfl hLabel).1 hSh
-             first
-               | (exact key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using hShape))
-               | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
-                  rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)])
-               | (rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)]))
-          | skip
-  | right_complete outer leftEnv interface alphabet left left' right leftLabel
-      leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
-      hRestF hLoc hOuterWF hNotTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {senv : TypeEnvironment} {st : PactType}
-                 {sc sf : Finset BareMessage},
-                 TypeOffers senv left l₂ st sc sf →
-                 LocalTypeOfferEnvironment e₂ interface left senv ∅ ∅ senv →
-                 left'.shape = st.shape →
-                 hideTypeOffers H (hideTypeOffers interface leftCurrent) =
-                   hideTypeOffers H (hideTypeOffers interface sc) := by
-               intro senv st sc sf hOff hLoc₂ hSh
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft (H ∪ interface) hOff
-                 (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
-                 rfl hLabel).1 hSh
-             first
-               | (exact key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using hShape))
-               | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
-                  rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)])
-               | (rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)]))
-          | skip
-  | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
-      leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
-      hRestF hLoc hOuterWF hIsTock ih =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {senv : TypeEnvironment} {st : PactType}
-                 {sc sf : Finset BareMessage},
-                 TypeOffers senv left l₂ st sc sf →
-                 LocalTypeOfferEnvironment e₂ interface left senv ∅ ∅ senv →
-                 left'.shape = st.shape →
-                 hideTypeOffers H (hideTypeOffers interface leftCurrent) =
-                   hideTypeOffers H (hideTypeOffers interface sc) := by
-               intro senv st sc sf hOff hLoc₂ hSh
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft (H ∪ interface) hOff
-                 (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
-                 rfl hLabel).1 hSh
-             first
-               | (exact key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using hShape))
-               | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
-                  rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)])
-               | (rw [key (by assumption) (by assumption)
-                    (by simpa only [PactType.shape_reannotate] using
-                      congrArg PactType.shape hTarget)]))
-          | skip
-  | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
-      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
-      hRightNotSkip hLeftChild hRightChild hNotBothSkip hLeftLoc hRightLoc
-      hCond ihLeft ihRight =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {lt : PactType} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro lt c f hOff hSh
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
-             first
-               | (refine key (by assumption) ?_
-                  simp only [PactType.shape, PactShape.seq.injEq] at hShape
-                  exact hShape.1)
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption) rfl])
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [key (by assumption) rfl]))
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have hWFRight : right.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2
-             have hLinRight : right.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2
-             have hMsgRight : right.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.2
-             have hProgRight : right.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.2
-             have hFairRight : right.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.2
-             have hScopRight : right.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have keyC : ∀ {lenv renv : TypeEnvironment} {lt rt : PactType} {ll rl : TypeLabel}
-                 {lc lf rc rf : Finset BareMessage},
-                 TypeOffers lenv left ll lt lc lf →
-                 TypeOffers renv right rl rt rc rf →
-                 LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
-                 LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
-                 (e₂.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-                     right.alphabet interface) ∧ TypeLabel.Sync interface ll rl) →
-                 TypeLabel.combine interface leftLabel rightLabel =
-                   TypeLabel.combine interface ll rl →
-                 PactType.shape left' = PactType.shape lt →
-                 PactType.shape right' = PactType.shape rt →
-                 hideTypeOffers H (hideTypeOffers interface (leftCurrent ∪ rightCurrent)) =
-                   hideTypeOffers H (hideTypeOffers interface (lc ∪ rc)) := by
-               intro lenv renv lt rt ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb hShL hShR
-               obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
-                 TypeOffers.par_combine_inj_hypotheses hMsg hProg hFair hScop
-                   hLeftChild hRightChild hL hR
-               obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
-                 hOwnB hCrossA hCrossB hFreshA hFreshB hComb
-               subst hLLeq
-               subst hRLeq
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
-                 hideTypeOffers_union, hideTypeOffers_union,
-                 (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
-                   (H ∪ interface) hL
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
-                   rfl rfl).1 hShL,
-                 (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
-                   (H ∪ interface) hR
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
-                   rfl rfl).1 hShR]
-             first
-               | (simp only [PactType.shape, PactShape.par.injEq] at hShape
-                  exact keyC (by assumption) (by assumption) (by assumption)
-                    (by assumption) (by assumption) hLabel hShape.1 hShape.2.1)
-               | (simp only [PactType.shape, PactShape.par.injEq] at hShape
-                  have hCur := keyC (by assumption) (by assumption) (by assumption)
-                    (by assumption) (by assumption) hLabel hShape.1 hShape.2.1
-                  simp only [hLabel, hTarget]
-                  try split_ifs with hIfTock
-                  all_goals
-                    first
-                      | rfl
-                      | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff, hCur]))
-          | skip
-  | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
-      leftCurrent leftFuture rightCurrent rightFuture hLeftChild hRightChild
-      hLeftLoc hRightLoc hCond hNotTock ihLeft ihRight =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | (injection hSource with hAlpha hLeftEq hRightEq
-             subst hAlpha
-             subst hLeftEq
-             subst hRightEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have key : ∀ {lt : PactType} {c f : Finset BareMessage},
-                 TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
-                 hideTypeOffers H current = hideTypeOffers H c := by
-               intro lt c f hOff hSh
-               exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
-             first
-               | (refine key (by assumption) ?_
-                  simp only [PactType.shape, PactShape.seq.injEq] at hShape
-                  exact hShape.1)
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
-                    key (by assumption) rfl])
-               | (injection hTarget with _ hChildTarget _
-                  subst hChildTarget
-                  rw [key (by assumption) rfl]))
-          | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
-             subst hLeftEq
-             subst hRightEq
-             subst hIfaceEq
-             have hWFLeft : left.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.1
-             have hLinLeft : left.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.1
-             have hMsgLeft : left.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.1
-             have hProgLeft : left.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.1
-             have hFairLeft : left.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.1
-             have hScopLeft : left.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have hWFRight : right.AlphabetWellFormed := by
-               simp only [PactType.AlphabetWellFormed] at hWF
-               exact hWF.2.2.2
-             have hLinRight : right.SameCycleMessageLinear := by
-               simp only [PactType.SameCycleMessageLinear] at hLin
-               exact hLin.2
-             have hMsgRight : right.ParallelMessageOwnership := by
-               simp only [PactType.ParallelMessageOwnership] at hMsg
-               exact hMsg.2.2.2
-             have hProgRight : right.ParallelProgressOwnership := by
-               simp only [PactType.ParallelProgressOwnership] at hProg
-               exact hProg.2.2
-             have hFairRight : right.ParallelFairChoiceOwnership := by
-               simp only [PactType.ParallelFairChoiceOwnership] at hFair
-               exact hFair.2.2
-             have hScopRight : right.InterfaceScoped := by
-               simp only [PactType.InterfaceScoped] at hScop
-               tauto
-             have keyC : ∀ {lenv renv : TypeEnvironment} {ll rl : TypeLabel}
-                 {lc lf rc rf : Finset BareMessage},
-                 TypeOffers lenv left ll (PactType.skip left.alphabet) lc lf →
-                 TypeOffers renv right rl (PactType.skip right.alphabet) rc rf →
-                 LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
-                 LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
-                 (e₂.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-                     right.alphabet interface) ∧ TypeLabel.Sync interface ll rl) →
-                 TypeLabel.combine interface leftLabel rightLabel =
-                   TypeLabel.combine interface ll rl →
-                 hideTypeOffers H (hideTypeOffers interface (leftCurrent ∪ rightCurrent)) =
-                   hideTypeOffers H (hideTypeOffers interface (lc ∪ rc)) := by
-               intro lenv renv ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb
-               obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
-                 TypeOffers.par_combine_inj_hypotheses hMsg hProg hFair hScop
-                   hLeftChild hRightChild hL hR
-               obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
-                 hOwnB hCrossA hCrossB hFreshA hFreshB hComb
-               subst hLLeq
-               subst hRLeq
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
-                 hideTypeOffers_union, hideTypeOffers_union,
-                 (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
-                   (H ∪ interface) hL
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
-                   rfl rfl).1 rfl,
-                 (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
-                   (H ∪ interface) hR
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
-                   rfl rfl).1 rfl]
-             have keyF : ∀ {lenv renv : TypeEnvironment} {ll rl : TypeLabel}
-                 {lc lf rc rf : Finset BareMessage},
-                 TypeOffers lenv left ll (PactType.skip left.alphabet) lc lf →
-                 TypeOffers renv right rl (PactType.skip right.alphabet) rc rf →
-                 LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
-                 LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
-                 (e₂.WellFormed (PactTypeAlphabet.mergeHidden left.alphabet
-                     right.alphabet interface) ∧ TypeLabel.Sync interface ll rl) →
-                 TypeLabel.combine interface leftLabel rightLabel =
-                   TypeLabel.combine interface ll rl →
-                 hideTypeOffers H (hideTypeOffers interface (leftFuture ∪ rightFuture)) =
-                   hideTypeOffers H (hideTypeOffers interface (lf ∪ rf)) := by
-               intro lenv renv ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb
-               obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
-                 TypeOffers.par_combine_inj_hypotheses hMsg hProg hFair hScop
-                   hLeftChild hRightChild hL hR
-               obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
-                 hOwnB hCrossA hCrossB hFreshA hFreshB hComb
-               subst hLLeq
-               subst hRLeq
-               rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
-                 hideTypeOffers_union, hideTypeOffers_union,
-                 (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
-                   (H ∪ interface) hL
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
-                   rfl rfl).2 rfl,
-                 (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
-                   (H ∪ interface) hR
-                   (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
-                   rfl rfl).2 rfl]
-             first
-               | (exact keyC (by assumption) (by assumption) (by assumption)
-                    (by assumption) (by assumption) hLabel)
-               | (exact keyF (by assumption) (by assumption) (by assumption)
-                    (by assumption) (by assumption) hLabel))
-          | skip
-  | _ =>
-      intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
-      cases h₂ <;>
-        (try (first
-                | (exfalso; cases hSource; done)
-                | (injection hSource; subst_vars; contradiction)
-                | (refine absurd hLabel ?_; simp; done))) <;>
-        (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
-        (try (have hShape := congrArg PactType.shape hTarget)) <;>
-        first
-          | rfl
-          | (subst hTarget; rfl)
-          | (injection hSource; subst_vars; rfl)
-          | exact absurd hTarget (seq_ne_right _ _ _)
-          | exact absurd hTarget.symm (seq_ne_right _ _ _)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
-          | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
-          | (exfalso
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             try clear hTarget
-             injection hSource
-             subst_vars
-             simp only [PactType.shape_reannotate, PactType.shape] at hShape
-             first
-               | exact absurd hShape (shape_seq_ne_right _ _)
-               | exact absurd hShape.symm (shape_seq_ne_right _ _)
-               | exact absurd hShape (shape_xoffer_ne_else _ _)
-               | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
-               | exact absurd hShape (shape_offer_ne_else _ _)
-               | exact absurd hShape.symm (shape_offer_ne_else _ _)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
-               | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
-               | (simp at hShape; done))
-          | (exfalso
-             injection hSource with _ hElseEq hBranchEq
-             try rw [hElseEq] at hTarget
-             try rw [hBranchEq] at hTarget
-             first
-               | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
-               | exact absurd hTarget (xoffer_ne_else _ _ _)
-               | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
-               | exact absurd hTarget (offer_ne_else _ _ _))
-          | (exfalso
-             injection hSource with hSA hSL hSR
-             try rw [hSA] at hTarget
-             try rw [hSL] at hTarget
-             try rw [hSR] at hTarget
-             first
-               | exact absurd hTarget (seq_ne_right _ _ _)
-               | exact absurd hTarget.symm (seq_ne_right _ _ _))
-          | (obtain rfl := bareMessage_of_message_label hLabel
-             first
-               | rfl
-               | (subst hTarget; rfl)
-               | (injection hSource; subst_vars; rfl))
-          | (refine absurd hSource ?_; simp; done)
-          | (refine absurd hLabel ?_; simp; done)
-          | (refine absurd hTarget ?_; simp; done)
-          | (injection hSource; subst_vars; contradiction)
-          | (injection hSource; subst_vars; simp_all; done)
-          | skip
+   intro e₁ s₁ l₁ t₁ c₁ f₁ h₁
+   induction h₁ with
+   | seq env alphabet left left' right label current childFuture hChild
+       hNotSkip hNotTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
+                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
+                  hideTypeOffers H current = hideTypeOffers H c := by
+                intro lt c f hOff hSh
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
+              first
+                | (refine key (by assumption) ?_
+                   simp only [PactType.shape, PactShape.seq.injEq] at hShape
+                   exact hShape.1)
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                     key (by assumption) rfl])
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [key (by assumption) rfl]))
+           | skip
+   | seq_tock env alphabet left left' right current childFuture hChild
+       hNotSkip ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
+                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
+                  hideTypeOffers H current = hideTypeOffers H c := by
+                intro lt c f hOff hSh
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
+              first
+                | (refine key (by assumption) ?_
+                   simp only [PactType.shape, PactShape.seq.injEq] at hShape
+                   exact hShape.1)
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                     key (by assumption) rfl])
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [key (by assumption) rfl]))
+           | skip
+   | seq_fuse env alphabet skipAlphabet left right label current childFuture
+       hChild hNotTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
+                  TypeOffers e₂ left l₂ (PactType.skip beta) c f →
+                  hideTypeOffers H current = hideTypeOffers H c := by
+                intro beta c f hOff
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1
+                  (by simp [PactType.shape])
+              first
+                | exact key (by assumption)
+                | (rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                     key (by assumption)])
+                | rw [key (by assumption)])
+           | skip
+   | seq_fuse_tock env alphabet skipAlphabet left right current childFuture
+       hChild ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
+                  TypeOffers e₂ left l₂ (PactType.skip beta) c f →
+                  hideTypeOffers H current = hideTypeOffers H c := by
+                intro beta c f hOff
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1
+                  (by simp [PactType.shape])
+              first
+                | exact key (by assumption)
+                | (rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                     key (by assumption)])
+                | rw [key (by assumption)])
+           | skip
+   | xoffer_wait env alphabet elseType branches hCond hGate =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hElse hBranches
+              subst hAlpha
+              subst hElse
+              subst hBranches
+              first
+                | exact typeWaitingOffers_agree_outside hAgree.future _
+                | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                    typeWaitingOffers_agree_outside hAgree.future branches])
+           | skip
+   | offer_some env alphabet elseType branches enabled hCond hGate =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hElse hBranches
+              subst hAlpha
+              subst hElse
+              subst hBranches
+              exfalso
+              have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled hCond
+              have hLinBr : ∀ b ∈ branches,
+                  b.1.1 ∉ PactType.PrefixMessageIds elseType := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2.2
+              cases hCons : branches with
+              | nil => exact hNonempty hCons
+              | cons b r =>
+                  subst hCons
+                  try simp only [PactType.shape] at hShape
+                  first
+                    | exact absurd hShape
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact absurd hShape.symm
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
+           | skip
+   | offer_else env alphabet elseType branches hCond hGate =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hElse hBranches
+              subst hAlpha
+              subst hElse
+              subst hBranches
+              exfalso
+              have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled (by assumption)
+              have hLinBr : ∀ b ∈ branches,
+                  b.1.1 ∉ PactType.PrefixMessageIds elseType := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2.2
+              cases hCons : branches with
+              | nil => exact hNonempty hCons
+              | cons b r =>
+                  subst hCons
+                  try simp only [PactType.shape] at hShape
+                  first
+                    | exact absurd hShape
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact absurd hShape.symm
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
+           | skip
+   | offer_wait env alphabet elseType branches hCond hGate =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hElse hBranches
+              subst hAlpha
+              subst hElse
+              subst hBranches
+              exfalso
+              have hNonempty : branches ≠ [] := branches_ne_nil_of_someEnabled (by assumption)
+              have hLinBr : ∀ b ∈ branches,
+                  b.1.1 ∉ PactType.PrefixMessageIds elseType := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2.2
+              cases hCons : branches with
+              | nil => exact hNonempty hCons
+              | cons b r =>
+                  subst hCons
+                  try simp only [PactType.shape] at hShape
+                  first
+                    | exact absurd hShape
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact absurd hShape.symm
+                        (shape_parallelTypeBranchesSelecting_ne_elseType hLinBr hNonempty)
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape
+                    | exact shape_parallelTypeBranchesSelecting_ne_offer _ _ b r _ _ hShape.symm)
+           | skip
+   | left_complete outer rightEnv interface alphabet left right right' rightLabel
+       rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
+       hRestF hLoc hOuterWF hNotTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFRight : right.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2
+              have hLinRight : right.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2
+              have hMsgRight : right.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.2
+              have hProgRight : right.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.2
+              have hFairRight : right.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.2
+              have hScopRight : right.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {senv : TypeEnvironment} {st : PactType}
+                  {sc sf : Finset BareMessage},
+                  TypeOffers senv right l₂ st sc sf →
+                  LocalTypeOfferEnvironment e₂ interface right senv ∅ ∅ senv →
+                  right'.shape = st.shape →
+                  hideTypeOffers H (hideTypeOffers interface rightCurrent) =
+                    hideTypeOffers H (hideTypeOffers interface sc) := by
+                intro senv st sc sf hOff hLoc₂ hSh
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
+                exact (ih hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight (H ∪ interface) hOff
+                  (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
+                  rfl hLabel).1 hSh
+              first
+                | (exact key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using hShape))
+                | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
+                   rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)])
+                | (rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)]))
+           | skip
+   | left_complete_tock outer rightEnv interface alphabet left right right' rightLabel
+       rightCurrent rightFuture hLeftSkip hRightNotSkip hChild hResNotSkip hRestC
+       hRestF hLoc hOuterWF hIsTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFRight : right.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2
+              have hLinRight : right.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2
+              have hMsgRight : right.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.2
+              have hProgRight : right.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.2
+              have hFairRight : right.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.2
+              have hScopRight : right.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {senv : TypeEnvironment} {st : PactType}
+                  {sc sf : Finset BareMessage},
+                  TypeOffers senv right l₂ st sc sf →
+                  LocalTypeOfferEnvironment e₂ interface right senv ∅ ∅ senv →
+                  right'.shape = st.shape →
+                  hideTypeOffers H (hideTypeOffers interface rightCurrent) =
+                    hideTypeOffers H (hideTypeOffers interface sc) := by
+                intro senv st sc sf hOff hLoc₂ hSh
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
+                exact (ih hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight (H ∪ interface) hOff
+                  (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
+                  rfl hLabel).1 hSh
+              first
+                | (exact key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using hShape))
+                | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
+                   rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)])
+                | (rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)]))
+           | skip
+   | right_complete outer leftEnv interface alphabet left left' right leftLabel
+       leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
+       hRestF hLoc hOuterWF hNotTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {senv : TypeEnvironment} {st : PactType}
+                  {sc sf : Finset BareMessage},
+                  TypeOffers senv left l₂ st sc sf →
+                  LocalTypeOfferEnvironment e₂ interface left senv ∅ ∅ senv →
+                  left'.shape = st.shape →
+                  hideTypeOffers H (hideTypeOffers interface leftCurrent) =
+                    hideTypeOffers H (hideTypeOffers interface sc) := by
+                intro senv st sc sf hOff hLoc₂ hSh
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft (H ∪ interface) hOff
+                  (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
+                  rfl hLabel).1 hSh
+              first
+                | (exact key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using hShape))
+                | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
+                   rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)])
+                | (rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)]))
+           | skip
+   | right_complete_tock outer leftEnv interface alphabet left left' right leftLabel
+       leftCurrent leftFuture hRightSkip hLeftNotSkip hChild hResNotSkip hRestC
+       hRestF hLoc hOuterWF hIsTock ih =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {senv : TypeEnvironment} {st : PactType}
+                  {sc sf : Finset BareMessage},
+                  TypeOffers senv left l₂ st sc sf →
+                  LocalTypeOfferEnvironment e₂ interface left senv ∅ ∅ senv →
+                  left'.shape = st.shape →
+                  hideTypeOffers H (hideTypeOffers interface leftCurrent) =
+                    hideTypeOffers H (hideTypeOffers interface sc) := by
+                intro senv st sc sf hOff hLoc₂ hSh
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union]
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft (H ∪ interface) hOff
+                  (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLoc hLoc₂)
+                  rfl hLabel).1 hSh
+              first
+                | (exact key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using hShape))
+                | (rw [hTarget, hideTypeOffers_sdiff, hideTypeOffers_sdiff]
+                   rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)])
+                | (rw [key (by assumption) (by assumption)
+                     (by simpa only [PactType.shape_reannotate] using
+                       congrArg PactType.shape hTarget)]))
+           | skip
+   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
+       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
+       hRightNotSkip hLeftChild hRightChild hNotBothSkip hLeftLoc hRightLoc
+       hCond ihLeft ihRight =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have hWFRight : right.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2
+              have hLinRight : right.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2
+              have hMsgRight : right.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.2
+              have hProgRight : right.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.2
+              have hFairRight : right.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.2
+              have hScopRight : right.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have keyC : ∀ {lenv renv : TypeEnvironment} {lt rt : PactType} {ll rl : TypeLabel}
+                  {lc lf rc rf : Finset BareMessage},
+                  TypeOffers lenv left ll lt lc lf →
+                  TypeOffers renv right rl rt rc rf →
+                  LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
+                  LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
+                  (e₂.WellFormed alphabet ∧ TypeLabel.Sync interface ll rl) →
+                  TypeLabel.combine interface leftLabel rightLabel =
+                    TypeLabel.combine interface ll rl →
+                  PactType.shape left' = PactType.shape lt →
+                  PactType.shape right' = PactType.shape rt →
+                  hideTypeOffers H (hideTypeOffers interface (leftCurrent ∪ rightCurrent)) =
+                    hideTypeOffers H (hideTypeOffers interface (lc ∪ rc)) := by
+                intro lenv renv lt rt ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb hShL hShR
+                obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
+                  TypeOffers.par_combine_inj_hypotheses hMsg hWF hProg hFair hScop
+                    hLeftChild hRightChild hL hR
+                obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
+                  hOwnB hCrossA hCrossB hFreshA hFreshB hComb
+                subst hLLeq
+                subst hRLeq
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
+                  hideTypeOffers_union, hideTypeOffers_union,
+                  (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
+                    (H ∪ interface) hL
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
+                    rfl rfl).1 hShL,
+                  (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
+                    (H ∪ interface) hR
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
+                    rfl rfl).1 hShR]
+              first
+                | (simp only [PactType.shape, PactShape.par.injEq] at hShape
+                   exact keyC (by assumption) (by assumption) (by assumption)
+                     (by assumption) (by assumption) hLabel hShape.1 hShape.2.1)
+                | (simp only [PactType.shape, PactShape.par.injEq] at hShape
+                   have hCur := keyC (by assumption) (by assumption) (by assumption)
+                     (by assumption) (by assumption) hLabel hShape.1 hShape.2.1
+                   simp only [hLabel, hTarget]
+                   try split_ifs with hIfTock
+                   all_goals
+                     first
+                       | rfl
+                       | rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff, hCur]))
+           | skip
+   | par_fuse outer leftEnv rightEnv interface alphabet left right leftLabel rightLabel
+       leftCurrent leftFuture rightCurrent rightFuture hLeftChild hRightChild
+       hLeftLoc hRightLoc hCond hNotTock ihLeft ihRight =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | (injection hSource with hAlpha hLeftEq hRightEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
+                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
+                  hideTypeOffers H current = hideTypeOffers H c := by
+                intro lt c f hOff hSh
+                exact (ih hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft H hOff hAgree rfl hLabel).1 hSh
+              first
+                | (refine key (by assumption) ?_
+                   simp only [PactType.shape, PactShape.seq.injEq] at hShape
+                   exact hShape.1)
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [hideTypeOffers_sdiff, hideTypeOffers_sdiff,
+                     key (by assumption) rfl])
+                | (injection hTarget with _ hChildTarget _
+                   subst hChildTarget
+                   rw [key (by assumption) rfl]))
+           | (injection hSource with hAlpha hLeftEq hRightEq hIfaceEq
+              subst hAlpha
+              subst hLeftEq
+              subst hRightEq
+              subst hIfaceEq
+              have hWFLeft : left.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.1
+              have hLinLeft : left.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.1
+              have hMsgLeft : left.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.1
+              have hProgLeft : left.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.1
+              have hFairLeft : left.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.1
+              have hScopLeft : left.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have hWFRight : right.AlphabetWellFormed := by
+                simp only [PactType.AlphabetWellFormed] at hWF
+                exact hWF.2.2.2
+              have hLinRight : right.SameCycleMessageLinear := by
+                simp only [PactType.SameCycleMessageLinear] at hLin
+                exact hLin.2
+              have hMsgRight : right.ParallelMessageOwnership := by
+                simp only [PactType.ParallelMessageOwnership] at hMsg
+                exact hMsg.2.2
+              have hProgRight : right.ParallelProgressOwnership := by
+                simp only [PactType.ParallelProgressOwnership] at hProg
+                exact hProg.2.2
+              have hFairRight : right.ParallelFairChoiceOwnership := by
+                simp only [PactType.ParallelFairChoiceOwnership] at hFair
+                exact hFair.2.2
+              have hScopRight : right.InterfaceScoped := by
+                simp only [PactType.InterfaceScoped] at hScop
+                tauto
+              have keyC : ∀ {lenv renv : TypeEnvironment} {ll rl : TypeLabel}
+                  {lc lf rc rf : Finset BareMessage},
+                  TypeOffers lenv left ll (PactType.skip left.alphabet) lc lf →
+                  TypeOffers renv right rl (PactType.skip right.alphabet) rc rf →
+                  LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
+                  LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
+                  (e₂.WellFormed alphabet ∧ TypeLabel.Sync interface ll rl) →
+                  TypeLabel.combine interface leftLabel rightLabel =
+                    TypeLabel.combine interface ll rl →
+                  hideTypeOffers H (hideTypeOffers interface (leftCurrent ∪ rightCurrent)) =
+                    hideTypeOffers H (hideTypeOffers interface (lc ∪ rc)) := by
+                intro lenv renv ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb
+                obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
+                  TypeOffers.par_combine_inj_hypotheses hMsg hWF hProg hFair hScop
+                    hLeftChild hRightChild hL hR
+                obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
+                  hOwnB hCrossA hCrossB hFreshA hFreshB hComb
+                subst hLLeq
+                subst hRLeq
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
+                  hideTypeOffers_union, hideTypeOffers_union,
+                  (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
+                    (H ∪ interface) hL
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
+                    rfl rfl).1 rfl,
+                  (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
+                    (H ∪ interface) hR
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
+                    rfl rfl).1 rfl]
+              have keyF : ∀ {lenv renv : TypeEnvironment} {ll rl : TypeLabel}
+                  {lc lf rc rf : Finset BareMessage},
+                  TypeOffers lenv left ll (PactType.skip left.alphabet) lc lf →
+                  TypeOffers renv right rl (PactType.skip right.alphabet) rc rf →
+                  LocalTypeOfferEnvironment e₂ interface left renv rc rf lenv →
+                  LocalTypeOfferEnvironment e₂ interface right lenv lc lf renv →
+                  (e₂.WellFormed alphabet ∧ TypeLabel.Sync interface ll rl) →
+                  TypeLabel.combine interface leftLabel rightLabel =
+                    TypeLabel.combine interface ll rl →
+                  hideTypeOffers H (hideTypeOffers interface (leftFuture ∪ rightFuture)) =
+                    hideTypeOffers H (hideTypeOffers interface (lf ∪ rf)) := by
+                intro lenv renv ll rl lc lf rc rf hL hR hLoc1 hLoc2 hCond₂ hComb
+                obtain ⟨hOwnA, hOwnB, hCrossA, hCrossB, hFreshA, hFreshB⟩ :=
+                  TypeOffers.par_combine_inj_hypotheses hMsg hWF hProg hFair hScop
+                    hLeftChild hRightChild hL hR
+                obtain ⟨hLLeq, hRLeq⟩ := TypeLabel.combine_inj hCond.2 hCond₂.2 hOwnA
+                  hOwnB hCrossA hCrossB hFreshA hFreshB hComb
+                subst hLLeq
+                subst hRLeq
+                rw [hideTypeOffers_hide_union, hideTypeOffers_hide_union,
+                  hideTypeOffers_union, hideTypeOffers_union,
+                  (ihLeft hWFLeft hLinLeft hMsgLeft hProgLeft hFairLeft hScopLeft
+                    (H ∪ interface) hL
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hLeftLoc hLoc1)
+                    rfl rfl).2 rfl,
+                  (ihRight hWFRight hLinRight hMsgRight hProgRight hFairRight hScopRight
+                    (H ∪ interface) hR
+                    (localTypeOfferEnvironment_agree_of_outer_agree hAgree hRightLoc hLoc2)
+                    rfl rfl).2 rfl]
+              first
+                | (exact keyC (by assumption) (by assumption) (by assumption)
+                     (by assumption) (by assumption) hLabel)
+                | (exact keyF (by assumption) (by assumption) (by assumption)
+                     (by assumption) (by assumption) hLabel))
+           | skip
+   | _ =>
+       intro hWF hLin hMsg hProg hFair hScop H e₂ s₂ l₂ t₂ c₂ f₂ h₂ hAgree hSource hLabel
+       cases h₂ <;>
+         (try (first
+                 | (exfalso; cases hSource; done)
+                 | (injection hSource; subst_vars; contradiction)
+                 | (refine absurd hLabel ?_; simp; done))) <;>
+         (try refine ⟨fun hShape => ?_, fun hTarget => ?_⟩) <;>
+         (try (have hShape := congrArg PactType.shape hTarget)) <;>
+         first
+           | rfl
+           | (subst hTarget; rfl)
+           | (injection hSource; subst_vars; rfl)
+           | exact absurd hTarget (seq_ne_right _ _ _)
+           | exact absurd hTarget.symm (seq_ne_right _ _ _)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget) (by assumption)
+           | exact absurd (eq_skip_of_reannotate_eq_skip hTarget.symm) (by assumption)
+           | (exfalso
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              try clear hTarget
+              injection hSource
+              subst_vars
+              simp only [PactType.shape_reannotate, PactType.shape] at hShape
+              first
+                | exact absurd hShape (shape_seq_ne_right _ _)
+                | exact absurd hShape.symm (shape_seq_ne_right _ _)
+                | exact absurd hShape (shape_xoffer_ne_else _ _)
+                | exact absurd hShape.symm (shape_xoffer_ne_else _ _)
+                | exact absurd hShape (shape_offer_ne_else _ _)
+                | exact absurd hShape.symm (shape_offer_ne_else _ _)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape.symm) (by assumption)
+                | exact absurd (PactType.eq_skip_of_shape_skip hShape) (by assumption)
+                | (simp at hShape; done))
+           | (exfalso
+              injection hSource with _ hElseEq hBranchEq
+              try rw [hElseEq] at hTarget
+              try rw [hBranchEq] at hTarget
+              first
+                | exact absurd hTarget (Ne.symm (xoffer_ne_else _ _ _))
+                | exact absurd hTarget (xoffer_ne_else _ _ _)
+                | exact absurd hTarget (Ne.symm (offer_ne_else _ _ _))
+                | exact absurd hTarget (offer_ne_else _ _ _))
+           | (exfalso
+              injection hSource with hSA hSL hSR
+              try rw [hSA] at hTarget
+              try rw [hSL] at hTarget
+              try rw [hSR] at hTarget
+              first
+                | exact absurd hTarget (seq_ne_right _ _ _)
+                | exact absurd hTarget.symm (seq_ne_right _ _ _))
+           | (obtain rfl := bareMessage_of_message_label hLabel
+              first
+                | rfl
+                | (subst hTarget; rfl)
+                | (injection hSource; subst_vars; rfl))
+           | (refine absurd hSource ?_; simp; done)
+           | (refine absurd hLabel ?_; simp; done)
+           | (refine absurd hTarget ?_; simp; done)
+           | (injection hSource; subst_vars; contradiction)
+           | (injection hSource; subst_vars; simp_all; done)
+           | skip
 
 /-- The offer pair is a function of the step. -/
 theorem typeOffers_unique

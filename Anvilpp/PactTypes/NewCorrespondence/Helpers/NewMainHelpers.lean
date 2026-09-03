@@ -211,7 +211,7 @@ theorem TypeOffers.future_eq_sdiff_of_label_ne_tock
   | offer_wait => rfl
   | par _ _ _ interface alphabet _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _ _ =>
       simp only [if_neg hLabel]
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ hLeft hRight _ _ _ _ _ _ =>
+  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ hLeft hRight _ _ _ _ _ _ =>
       rw [hLeft.future_eq_empty_of_target_skip rfl,
         hRight.future_eq_empty_of_target_skip rfl]
       simp [hideTypeOffers, typeFutureOffers, typeFutureOffersFuel]
@@ -300,12 +300,12 @@ theorem accepting_of_skip_residual
         · exact absurd (congrArg Prod.fst hRoot) (by simp)
         · have hq := ih (typeCompilationFuel left)
             (by rw [← hSize, hFuelEq]; omega) left hChild rfl
-          simp only [hAcceptEq, hState, childAccepting, childState,
+          simp only [hAcceptEq, childAccepting, childState,
             Finset.mem_union, Finset.mem_image]
           exact Or.inl ⟨q, hq, hState.symm⟩
         · have hq := ih (typeCompilationFuel right)
             (by rw [← hSize, hFuelEq]; omega) right hChild rfl
-          simp only [hAcceptEq, hState, childAccepting, childState,
+          simp only [hAcceptEq, childAccepting, childState,
             Finset.mem_union, Finset.mem_image]
           exact Or.inr ⟨q, hq, hState.symm⟩
     | fairChoice alphabet bid left right =>
@@ -335,12 +335,12 @@ theorem accepting_of_skip_residual
         · exact absurd (congrArg Prod.fst hRoot) (by simp)
         · have hq := ih (typeCompilationFuel left)
             (by rw [← hSize, hFuelEq]; omega) left hChild rfl
-          simp only [hAcceptEq, hState, childAccepting, childState,
+          simp only [hAcceptEq, childAccepting, childState,
             Finset.mem_union, Finset.mem_image]
           exact Or.inl ⟨q, hq, hState.symm⟩
         · have hq := ih (typeCompilationFuel right)
             (by rw [← hSize, hFuelEq]; omega) right hChild rfl
-          simp only [hAcceptEq, hState, childAccepting, childState,
+          simp only [hAcceptEq, childAccepting, childState,
             Finset.mem_union, Finset.mem_image]
           exact Or.inr ⟨q, hq, hState.symm⟩
     | seq alphabet left right =>
@@ -368,7 +368,7 @@ theorem accepting_of_skip_residual
         · exact absurd (congrArg Prod.fst hEntry) (by simp)
         · have hq := ih (typeCompilationFuel right)
             (by rw [← hSize, hFuelEq]; omega) right hChild rfl
-          simp only [hAcceptEq, hState, childAccepting, childState,
+          simp only [hAcceptEq, childAccepting, childState,
             Finset.mem_image]
           exact ⟨q, hq, hState.symm⟩
     | par alphabet left right interface =>

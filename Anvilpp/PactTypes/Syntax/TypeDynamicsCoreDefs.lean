@@ -98,13 +98,8 @@ namespace PactType
         List (BareMessage × PactType) → List (BareMessage × PactType)
       | [] => []
       | (action, processType) :: rest =>
-          (action,
-            reannotate
-              { actions :=
-                  alphabet.actions \ (seen ∪ PactType.BranchMessageActions rest) }
-              processType) ::
-            reannotateOfferBranches alphabet
-              (seen ∪ ({action} ∪ PactType.MessageActions processType)) rest
+          (action, reannotate alphabet processType) ::
+            reannotateOfferBranches alphabet seen rest
     termination_by branches => sizeOf branches
   decreasing_by
     all_goals

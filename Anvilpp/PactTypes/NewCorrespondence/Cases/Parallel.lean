@@ -14,7 +14,7 @@ theorem correspondence_par_stepIff
     (hParentAlphabet : alphabet =
       PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
     (hParallelCompatible : PactTypeAlphabet.ParallelCompatible alphabet
-      left.alphabet right.alphabet left right interface)
+      left.alphabet right.alphabet interface)
     -- `ParallelMessageOwnership`'s action clause for this node.
     (hMessageDisjoint :
       Disjoint (PactType.MessageActions left) (PactType.MessageActions right))

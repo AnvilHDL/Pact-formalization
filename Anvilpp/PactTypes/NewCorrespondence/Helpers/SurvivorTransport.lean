@@ -17,92 +17,23 @@ open Pact.NewCorrespondence
 
 namespace PactTypeAlphabet
 
-/-- Projecting to the left child twice keeps only the outer alphabet, provided
-the intermediate one declares no interface action. -/
-theorem projectParallelLeft_reannotate
-    {parent child sibling source target : PactTypeAlphabet}
-    {leftType rightType : PactType} {interface : Interface}
-    (hCompat : ParallelCompatible parent child sibling leftType rightType
-      interface)
+/-- Projecting a child twice keeps only the outer alphabet, provided the
+intermediate one declares no interface action. -/
+theorem projectParallel_reannotate
+    {child source target : PactTypeAlphabet} {interface : Interface}
     (hSourceHidden : ∀ action ∈ source.actions, action.1 ∉ interface) :
-    projectParallelLeft target
-        (projectParallelLeft source child rightType interface) rightType
-        interface =
-      projectParallelLeft target child rightType interface := by
+    projectParallel target (projectParallel source child interface) interface =
+      projectParallel target child interface := by
   refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
-  simp only [projectParallelLeft, projectParallelChild, Finset.mem_union,
-    Finset.mem_filter, Finset.mem_sdiff]
+  simp only [projectParallel, Finset.mem_union, Finset.mem_filter]
   constructor
-  · rintro (⟨hSU, hOuter⟩ | hOut)
-    · rcases hSU with ⟨hChild, _⟩ | ⟨hSource, hNotRight⟩
-      · exact Or.inl ⟨hChild, hOuter⟩
-      · rcases hOuter with hIface | hOuter
-        · exact absurd hIface (hSourceHidden action hSource)
-        · exact Or.inr ⟨hOuter, hNotRight⟩
-    · exact Or.inr hOut
-  · rintro (⟨hChild, hOuter⟩ | hOut)
-    · rcases hOuter with hIface | hTarget
-      · exact Or.inl ⟨Or.inl ⟨hChild, Or.inl hIface⟩, Or.inl hIface⟩
-      · by_cases hIface : action.1 ∈ interface
-        · exact Or.inl ⟨Or.inl ⟨hChild, Or.inl hIface⟩, Or.inl hIface⟩
-        · have hHide : action ∈ (hideInterface child interface).actions := by
-            simp only [hideInterface, Finset.mem_filter]
-            exact ⟨hChild, hIface⟩
-          rw [← hCompat.parent_left, Finset.mem_sdiff] at hHide
-          exact Or.inr ⟨hTarget, hHide.2⟩
-    · exact Or.inr hOut
-
-/-- Mirror of `projectParallelLeft_reannotate` for the right child. -/
-theorem projectParallelRight_reannotate
-    {parent child sibling source target : PactTypeAlphabet}
-    {leftType rightType : PactType} {interface : Interface}
-    (hCompat : ParallelCompatible parent sibling child leftType rightType
-      interface)
-    (hSourceHidden : ∀ action ∈ source.actions, action.1 ∉ interface) :
-    projectParallelRight target
-        (projectParallelRight source child leftType interface) leftType
-        interface =
-      projectParallelRight target child leftType interface := by
-  refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
-  simp only [projectParallelRight, projectParallelChild, Finset.mem_union,
-    Finset.mem_filter, Finset.mem_sdiff]
-  constructor
-  · rintro (⟨hSU, hOuter⟩ | hOut)
-    · rcases hSU with ⟨hChild, _⟩ | ⟨hSource, hNotLeft⟩
-      · exact Or.inl ⟨hChild, hOuter⟩
-      · rcases hOuter with hIface | hOuter
-        · exact absurd hIface (hSourceHidden action hSource)
-        · exact Or.inr ⟨hOuter, hNotLeft⟩
-    · exact Or.inr hOut
-  · rintro (⟨hChild, hOuter⟩ | hOut)
-    · rcases hOuter with hIface | hTarget
-      · exact Or.inl ⟨Or.inl ⟨hChild, Or.inl hIface⟩, Or.inl hIface⟩
-      · by_cases hIface : action.1 ∈ interface
-        · exact Or.inl ⟨Or.inl ⟨hChild, Or.inl hIface⟩, Or.inl hIface⟩
-        · have hHide : action ∈ (hideInterface child interface).actions := by
-            simp only [hideInterface, Finset.mem_filter]
-            exact ⟨hChild, hIface⟩
-          rw [← hCompat.parent_right, Finset.mem_sdiff] at hHide
-          exact Or.inr ⟨hTarget, hHide.2⟩
-    · exact Or.inr hOut
-
-/-- The left projection reads the sibling only through its message actions. -/
-theorem projectParallelLeft_congr (parent child : PactTypeAlphabet)
-    (rightType rightType' : PactType) (interface : Interface)
-    (h : PactType.MessageActions rightType =
-      PactType.MessageActions rightType') :
-    projectParallelLeft parent child rightType interface =
-      projectParallelLeft parent child rightType' interface := by
-  simp only [projectParallelLeft, h]
-
-/-- The right projection reads the sibling only through its message actions. -/
-theorem projectParallelRight_congr (parent child : PactTypeAlphabet)
-    (leftType leftType' : PactType) (interface : Interface)
-    (h : PactType.MessageActions leftType =
-      PactType.MessageActions leftType') :
-    projectParallelRight parent child leftType interface =
-      projectParallelRight parent child leftType' interface := by
-  simp only [projectParallelRight, h]
+  · rintro (⟨(⟨hChild, _⟩ | hSource), hIface⟩ | hOuter)
+    · exact Or.inl ⟨hChild, hIface⟩
+    · exact absurd hIface (hSourceHidden action hSource)
+    · exact Or.inr hOuter
+  · rintro (⟨hChild, hIface⟩ | hOuter)
+    · exact Or.inl ⟨Or.inl ⟨hChild, hIface⟩, hIface⟩
+    · exact Or.inr hOuter
 
 end PactTypeAlphabet
 
@@ -182,10 +113,7 @@ theorem reannotate_reannotate :
               omega
             rw [reannotateOfferBranches_cons] at hWF' ⊢
             rw [reannotateOfferBranches_cons, reannotateOfferBranches_cons]
-            simp only [OfferBranchesWellFormed, messageActions_reannotate,
-              branchMessageActions_reannotateOfferBranches] at hWF hWF'
-            simp only [messageActions_reannotate,
-              branchMessageActions_reannotateOfferBranches]
+            simp only [OfferBranchesWellFormed] at hWF hWF'
             rw [ih (sizeOf body) hBodySize body rfl _ _ hWF.2.1 hWF'.2.1,
               restIH hTailSize origin source target _ _ _ hWF.2.2 hWF'.2.2]
       intro source target hWF hWF'
@@ -245,20 +173,9 @@ theorem reannotate_reannotate :
           simp only [AlphabetWellFormed] at hWF hWF'
           have hHidden : ∀ action ∈ source.actions, action.1 ∉ interface :=
             hWF'.2.1.parent_hides_interface
-          have hLeftProj := PactTypeAlphabet.projectParallelLeft_reannotate
-            (parent := a) (child := left.alphabet) (sibling := right.alphabet)
-            (source := source) (target := target) (leftType := left)
-            (rightType := right) hWF.2.1 hHidden
-          have hRightProj := PactTypeAlphabet.projectParallelRight_reannotate
-            (parent := a) (child := right.alphabet) (sibling := left.alphabet)
-            (source := source) (target := target) (leftType := left)
-            (rightType := right) hWF.2.1 hHidden
           simp only [reannotate_alphabet]
-          rw [PactTypeAlphabet.projectParallelLeft_congr _ _ _ right _
-              (messageActions_reannotate _ right),
-            PactTypeAlphabet.projectParallelRight_congr _ _ _ left _
-              (messageActions_reannotate _ left),
-            hLeftProj, hRightProj,
+          rw [PactTypeAlphabet.projectParallel_reannotate hHidden,
+            PactTypeAlphabet.projectParallel_reannotate hHidden,
             ih (sizeOf left) hLeftSize left rfl _ _ hWF.2.2.1 hWF'.2.2.1,
             ih (sizeOf right) hRightSize right rfl _ _ hWF.2.2.2 hWF'.2.2.2]
 
@@ -548,8 +465,8 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
 theorem offerBranchesDisjoint_of_wellFormedIn {bound : List String}
     {processType : PactType} (h : TypeWellFormedIn bound processType) :
     processType.OfferBranchesDisjoint := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, hMO, hPO, hFO, -, -⟩ := h
-  exact offerBranchesDisjoint_of_ownership processType hMO hPO hFO
+  obtain ⟨-, -, -, -, -, -, -, -, -, hMO, hPO, hFO, -, -, hCMO⟩ := h
+  exact offerBranchesDisjoint_of_ownership processType hMO hPO hFO hCMO
 
 /-- Re-signing leaves the deleted sequence states alone. -/
 theorem sequenceDeleted_reannotate {processType : PactType}
@@ -860,40 +777,19 @@ theorem relationMembership_par_product (alphabet : PactTypeAlphabet)
       le_rfl]
     exact hRight
 
-/-- The left projection only reads the sibling's message actions, so agreeing
-child alphabets and matching sibling actions give agreeing projections. -/
-theorem agreeOn_projectParallelLeft_of_actions
-    {parent childA childB : PactTypeAlphabet} {rA rB : PactType}
+/-- The projection reads the child only through the actions being compared,
+so agreeing child alphabets give agreeing projections. -/
+theorem agreeOn_projectParallel_of_actions
+    {parent childA childB : PactTypeAlphabet}
     {interface : Interface} {used : Finset BareMessage}
-    (hChild : PactTypeAlphabet.AgreeOn childA childB used)
-    (hSibling : ∀ action ∈ used,
-      (action ∈ PactType.MessageActions rA ↔
-        action ∈ PactType.MessageActions rB)) :
+    (hChild : PactTypeAlphabet.AgreeOn childA childB used) :
     PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallelLeft parent childA rA interface)
-      (PactTypeAlphabet.projectParallelLeft parent childB rB interface)
+      (PactTypeAlphabet.projectParallel parent childA interface)
+      (PactTypeAlphabet.projectParallel parent childB interface)
       used := by
   intro action hAction
-  simp only [PactTypeAlphabet.projectParallelLeft,
-    PactTypeAlphabet.projectParallelChild, Finset.mem_union, Finset.mem_filter,
-    Finset.mem_sdiff, hChild action hAction, hSibling action hAction]
-
-/-- Mirror of `agreeOn_projectParallelLeft_of_actions`. -/
-theorem agreeOn_projectParallelRight_of_actions
-    {parent childA childB : PactTypeAlphabet} {lA lB : PactType}
-    {interface : Interface} {used : Finset BareMessage}
-    (hChild : PactTypeAlphabet.AgreeOn childA childB used)
-    (hSibling : ∀ action ∈ used,
-      (action ∈ PactType.MessageActions lA ↔
-        action ∈ PactType.MessageActions lB)) :
-    PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallelRight parent childA lA interface)
-      (PactTypeAlphabet.projectParallelRight parent childB lB interface)
-      used := by
-  intro action hAction
-  simp only [PactTypeAlphabet.projectParallelRight,
-    PactTypeAlphabet.projectParallelChild, Finset.mem_union, Finset.mem_filter,
-    Finset.mem_sdiff, hChild action hAction, hSibling action hAction]
+  simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+    Finset.mem_filter, hChild action hAction]
 
 /-- Re-signing leaves the accepting states alone. -/
 theorem accepting_reannotate {processType : PactType}
@@ -918,7 +814,7 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFL, hWFR⟩ := typeWellFormedIn_par hWF
   obtain ⟨hWFsL, hWFsR⟩ := typeWellFormedIn_survivor hWF
-  obtain ⟨hA, -, -, -, -, -, -, -, -, hMO, -, -, hIS, hIAS⟩ := id hWF
+  obtain ⟨hA, -, -, -, -, -, -, -, -, hMO, -, -, hIS, hIAS, -⟩ := id hWF
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.ParallelMessageOwnership] at hMO
   simp only [PactType.InterfaceScoped] at hIS
@@ -935,33 +831,27 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
   have hRightAlphaWF : right.alphabet.WellFormed :=
     PactType.AlphabetWellFormed.alphabet_wellFormed hA.2.2.2
   have hOmegaLWF :
-      (PactTypeAlphabet.projectParallelLeft target left.alphabet right
-        interface).WellFormed :=
-    PactTypeAlphabet.projectParallelLeft_wellFormed hLeftAlphaWF hTargetWF
+      (PactTypeAlphabet.projectParallel target left.alphabet interface).WellFormed :=
+    PactTypeAlphabet.projectParallel_wellFormed hLeftAlphaWF hTargetWF
       hTargetHidden
   have hOmegaRWF :
-      (PactTypeAlphabet.projectParallelRight target right.alphabet left
-        interface).WellFormed :=
-    PactTypeAlphabet.projectParallelRight_wellFormed hRightAlphaWF hTargetWF
+      (PactTypeAlphabet.projectParallel target right.alphabet interface).WellFormed :=
+    PactTypeAlphabet.projectParallel_wellFormed hRightAlphaWF hTargetWF
       hTargetHidden
-  have hAvoidL : ∀ act ∈ (PactTypeAlphabet.projectParallelLeft target
-      left.alphabet right interface).actions,
+  have hAvoidL : ∀ act ∈ (PactTypeAlphabet.projectParallel target left.alphabet interface).actions,
       act.1 ∉ PactType.ParallelInterfaces left := by
     intro act hAct
-    simp only [PactTypeAlphabet.projectParallelLeft,
-      PactTypeAlphabet.projectParallelChild, Finset.mem_union,
-      Finset.mem_filter, Finset.mem_sdiff] at hAct
-    rcases hAct with ⟨hIn, -⟩ | ⟨hIn, -⟩
+    simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+      Finset.mem_filter] at hAct
+    rcases hAct with ⟨hIn, -⟩ | hIn
     · exact PactType.InterfaceAlphabetScoped.avoids hIAS.2.1 act hIn
     · exact (hAvoid act hIn).1.2
-  have hAvoidR : ∀ act ∈ (PactTypeAlphabet.projectParallelRight target
-      right.alphabet left interface).actions,
+  have hAvoidR : ∀ act ∈ (PactTypeAlphabet.projectParallel target right.alphabet interface).actions,
       act.1 ∉ PactType.ParallelInterfaces right := by
     intro act hAct
-    simp only [PactTypeAlphabet.projectParallelRight,
-      PactTypeAlphabet.projectParallelChild, Finset.mem_union,
-      Finset.mem_filter, Finset.mem_sdiff] at hAct
-    rcases hAct with ⟨hIn, -⟩ | ⟨hIn, -⟩
+    simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+      Finset.mem_filter] at hAct
+    rcases hAct with ⟨hIn, -⟩ | hIn
     · exact PactType.InterfaceAlphabetScoped.avoids hIAS.2.2 act hIn
     · exact (hAvoid act hIn).2
   rcases relationMembership_par_cases a left right interface hRelated with
@@ -982,35 +872,19 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
       (relationMembership_ownership_subset left rhoL q1 hL).1
     have hActR : PactType.MessageActions rhoR ⊆ PactType.MessageActions right :=
       (relationMembership_ownership_subset right rhoR q2 hR).1
-    have hSibL : ∀ action ∈ PactType.MessageActions rhoL,
-        (action ∈ PactType.MessageActions rhoR ↔
-          action ∈ PactType.MessageActions right) := by
-      intro action hAction
-      have hNot : action ∉ PactType.MessageActions right :=
-        Finset.disjoint_left.mp hMO.2.1 (hActL hAction)
-      exact ⟨fun h => absurd (hActR h) hNot, fun h => absurd h hNot⟩
-    have hSibR : ∀ action ∈ PactType.MessageActions rhoR,
-        (action ∈ PactType.MessageActions rhoL ↔
-          action ∈ PactType.MessageActions left) := by
-      intro action hAction
-      have hNot : action ∉ PactType.MessageActions left :=
-        Finset.disjoint_right.mp hMO.2.1 (hActR hAction)
-      exact ⟨fun h => absurd (hActL h) hNot, fun h => absurd h hNot⟩
-    have hAgreeL := agreeOn_projectParallelLeft_of_actions
+    have hAgreeL := agreeOn_projectParallel_of_actions
       (parent := target) (childA := rhoL.alphabet) (childB := left.alphabet)
-      (rA := rhoR) (rB := right) (interface := interface)
-      (by rw [hAlphaL]; exact PactTypeAlphabet.AgreeOn.refl _ _) hSibL
-    have hAgreeR := agreeOn_projectParallelRight_of_actions
+      (interface := interface) (used := PactType.MessageActions rhoL)
+      (by rw [hAlphaL]; exact PactTypeAlphabet.AgreeOn.refl _ _)
+    have hAgreeR := agreeOn_projectParallel_of_actions
       (parent := target) (childA := rhoR.alphabet) (childB := right.alphabet)
-      (lA := rhoL) (lB := left) (interface := interface)
-      (by rw [hAlphaR]; exact PactTypeAlphabet.AgreeOn.refl _ _) hSibR
+      (interface := interface) (used := PactType.MessageActions rhoR)
+      (by rw [hAlphaR]; exact PactTypeAlphabet.AgreeOn.refl _ _)
     refine ⟨.par target thetaL thetaR interface, ?_, ?_, ?_⟩
     · simpa only [PactType.reannotate] using
         relationMembership_par_product target
-          (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-            left.alphabet right interface))
-          (right.reannotate (PactTypeAlphabet.projectParallelRight target
-            right.alphabet left interface)) interface hMemL hMemR
+          (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
+          (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface hMemL hMemR
     · simp only [PactType.reannotate, PactType.alphabet]
     · simp only [PactType.reannotate, PactType.LiveEqBody]
       refine ⟨trivial, PactTypeAlphabet.AgreeOn.refl _ _, ?_, ?_⟩
@@ -1032,15 +906,13 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
     obtain ⟨theta, hMem, hLive⟩ := hSurvLeft bound hWFsL target hTargetWF
       hAvoidSurv rho q1 hChild
     refine ⟨theta, ?_, hLive⟩
-    have hReWF : (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-        left.alphabet right interface)).AlphabetWellFormed :=
+    have hReWF : (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface)).AlphabetWellFormed :=
       PactType.reannotate_alphabetWellFormed_avoiding left _ hA.2.2.1
         hOmegaLWF hIS.2.1 hAvoidL
     have hC1 : (left.reannotate a).reannotate target =
         left.reannotate target :=
       PactType.reannotate_reannotate left a target hA.2.2.1 hWFsL.1
-    have hC2 : (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-          left.alphabet right interface)).reannotate target =
+    have hC2 : (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface)).reannotate target =
         left.reannotate target :=
       PactType.reannotate_reannotate left _ target hA.2.2.1 hReWF
     have hNotS : q1 ∉
@@ -1051,10 +923,8 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
     refine (by
       simpa only [PactType.reannotate] using
         survivorLeft_relationMembership target
-          (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-            left.alphabet right interface))
-          (right.reannotate (PactTypeAlphabet.projectParallelRight target
-            right.alphabet left interface)) interface
+          (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
+          (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface
           (reannotate_offerBranchesDisjoint left _ hDisjLeft)
           (by rw [hC2, ← hC1]; exact hMem)
           (by rw [accepting_reannotate hDisjLeft _]; exact hNotS))
@@ -1071,15 +941,13 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
       hAvoidSurv rho q2 hChild
     refine ⟨theta, ?_, hLive⟩
     have hReWF : (right.reannotate
-        (PactTypeAlphabet.projectParallelRight target right.alphabet left
-          interface)).AlphabetWellFormed :=
+        (PactTypeAlphabet.projectParallel target right.alphabet interface)).AlphabetWellFormed :=
       PactType.reannotate_alphabetWellFormed_avoiding right _ hA.2.2.2
         hOmegaRWF hIS.2.2 hAvoidR
     have hC1 : (right.reannotate a).reannotate target =
         right.reannotate target :=
       PactType.reannotate_reannotate right a target hA.2.2.2 hWFsR.1
-    have hC2 : (right.reannotate (PactTypeAlphabet.projectParallelRight target
-          right.alphabet left interface)).reannotate target =
+    have hC2 : (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)).reannotate target =
         right.reannotate target :=
       PactType.reannotate_reannotate right _ target hA.2.2.2 hReWF
     have hNotS : q2 ∉
@@ -1090,10 +958,8 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
     refine (by
       simpa only [PactType.reannotate] using
         survivorRight_relationMembership target
-          (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-            left.alphabet right interface))
-          (right.reannotate (PactTypeAlphabet.projectParallelRight target
-            right.alphabet left interface)) interface
+          (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
+          (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface
           (reannotate_offerBranchesDisjoint right _ hDisjRight)
           (by rw [hC2, ← hC1]; exact hMem)
           (by rw [accepting_reannotate hDisjRight _]; exact hNotS))
@@ -1103,10 +969,8 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
     refine ⟨PactType.skip target, ?_, ?_⟩
     · simpa only [PactType.reannotate] using
         relationMembership_par_final target
-          (left.reannotate (PactTypeAlphabet.projectParallelLeft target
-            left.alphabet right interface))
-          (right.reannotate (PactTypeAlphabet.projectParallelRight target
-            right.alphabet left interface)) interface
+          (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
+          (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface
     · simpa only [PactType.reannotate] using PactType.liveEq_refl
         (PactType.skip target)
 

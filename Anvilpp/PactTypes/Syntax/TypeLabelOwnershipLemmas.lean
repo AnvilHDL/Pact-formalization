@@ -8,20 +8,6 @@ open Classical
 
 /-! ## Membership helpers for `sends` and `combine` -/
 
-/-- A message id is sent by a label exactly when the label carries the send observation. -/
-private theorem mem_sends_iff' (label : TypeLabel) (msg : MessageId) :
-    msg ∈ label.sends ↔ label.contains (.message msg .send) := by
-  cases label with
-  | tock => simp [TypeLabel.sends, TypeLabel.contains]
-  | actions observations =>
-      simp only [TypeLabel.sends, TypeLabel.messageIdsWith, Finset.mem_image,
-        Finset.mem_filter, TypeLabel.contains]
-      constructor
-      · rintro ⟨observation, ⟨hMem, hDir⟩, hMsg⟩
-        cases observation <;> simp_all
-      · intro hMem
-        exact ⟨.message msg .send, ⟨hMem, rfl⟩, rfl⟩
-
 /-- A raw message observation survives `combine` when it is not synchronised away. -/
 private theorem contains_combine_message' (interface : Interface)
     (left right : Finset TypeObservation) (msg : MessageId) (dir : MessageDir) :
@@ -197,9 +183,9 @@ theorem combine {alphabet : PactTypeAlphabet} {left right : PactType}
                   exact Finset.mem_union_left _ (Finset.mem_union_left _ hInterface)
               · rcases h with ⟨_, hSend⟩ | ⟨_, hSend⟩
                 · exact Finset.mem_union_left _
-                    (hLeftMessage msg .send ((mem_sends_iff' _ _).mp hSend)).2
+                    (hLeftMessage msg .send ((TypeLabel.mem_sends_iff _ _).mp hSend)).2
                 · exact Finset.mem_union_right _
-                    (hRightMessage msg .send ((mem_sends_iff' _ _).mp hSend)).2
+                    (hRightMessage msg .send ((TypeLabel.mem_sends_iff _ _).mp hSend)).2
 
 end PactType.LabelOwned
 
@@ -301,6 +287,381 @@ theorem TypeOffers.labelOwned
       hFuture hLocal hWF hTock ihLeft =>
       exact PactType.LabelOwned.of_left ihLeft
 
+
+/-- A step's label mentions only messages the step currently offers.  The two
+message-carrying rules publish exactly the fired action, and every composite
+rule hides the same interface from label and offers alike. -/
+theorem TypeOffers.labelActions_subset_current
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future) :
+    ∀ msg dir, label.contains (.message msg dir) → (msg, dir) ∈ current := by
+  induction hOffers with
+  | action env alphabet msg dir =>
+      intro m d hIn
+      simp only [TypeLabel.message, TypeLabel.contains,
+        Finset.mem_singleton] at hIn
+      cases hIn
+      simp
+  | xoffer_branch env alphabet elseType branches action processType =>
+      intro m d hIn
+      simp only [TypeLabel.message, TypeLabel.contains,
+        Finset.mem_singleton] at hIn
+      cases hIn
+      simp
+  | action_wait | choice_left | choice_right | cycle | cycle_wait | skip
+  | recur | seq_tock | seq_fuse_tock | xoffer_else | xoffer_wait
+  | offer_some | offer_else | offer_wait =>
+      intro m d hIn
+      simp [TypeLabel.silent, TypeLabel.tock, TypeLabel.contains] at hIn
+  | fair_left | fair_right | progress =>
+      intro m d hIn
+      simp [TypeLabel.fair, TypeLabel.progress, TypeLabel.contains] at hIn
+  | seq _ _ _ _ _ _ _ _ _ _ _ ih => exact ih
+  | seq_fuse _ _ _ _ _ _ _ _ _ _ ih => exact ih
+  | par_fuse_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.tock, TypeLabel.contains] at hIn
+  | par _ _ _ interface _ _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _ hCond
+      ihLeft ihRight =>
+      intro m d hIn
+      cases leftLabel with
+      | tock =>
+          cases rightLabel with
+          | tock => simp [TypeLabel.combine, TypeLabel.contains] at hIn
+          | actions _ =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+      | actions leftObs =>
+          cases rightLabel with
+          | tock =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+          | actions rightObs =>
+              rw [contains_combine_message'] at hIn
+              obtain ⟨hSide, hUnsynced⟩ := hIn
+              have hNotIface : m ∉ interface := by
+                intro hMem
+                refine hUnsynced ?_
+                simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter]
+                rcases hSide with hL | hR
+                · cases d with
+                  | send =>
+                      exact Or.inl ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hL⟩
+                  | recv =>
+                      refine Or.inr ⟨hMem, ?_⟩
+                      have hEq := hCond.2.2.1
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions rightObs).sends := by
+                        rw [← hEq]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hL⟩
+                      exact (Finset.mem_inter.mp this).2
+                · cases d with
+                  | send =>
+                      exact Or.inr ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hR⟩
+                  | recv =>
+                      refine Or.inl ⟨hMem, ?_⟩
+                      have hEq := hCond.2.1
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions leftObs).sends := by
+                        rw [hEq]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hR⟩
+                      exact (Finset.mem_inter.mp this).2
+              simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union]
+              refine ⟨?_, hNotIface⟩
+              rcases hSide with hL | hR
+              · exact Or.inl (ihLeft m d hL)
+              · exact Or.inr (ihRight m d hR)
+  | par_fuse _ _ _ interface _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ hCond
+      _ ihLeft ihRight =>
+      intro m d hIn
+      cases leftLabel with
+      | tock =>
+          cases rightLabel with
+          | tock => simp [TypeLabel.combine, TypeLabel.contains] at hIn
+          | actions _ =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+      | actions leftObs =>
+          cases rightLabel with
+          | tock =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+          | actions rightObs =>
+              rw [contains_combine_message'] at hIn
+              obtain ⟨hSide, hUnsynced⟩ := hIn
+              have hNotIface : m ∉ interface := by
+                intro hMem
+                refine hUnsynced ?_
+                simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter]
+                rcases hSide with hL | hR
+                · cases d with
+                  | send =>
+                      exact Or.inl ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hL⟩
+                  | recv =>
+                      refine Or.inr ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions rightObs).sends := by
+                        rw [← hCond.2.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hL⟩
+                      exact (Finset.mem_inter.mp this).2
+                · cases d with
+                  | send =>
+                      exact Or.inr ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hR⟩
+                  | recv =>
+                      refine Or.inl ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions leftObs).sends := by
+                        rw [hCond.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hR⟩
+                      exact (Finset.mem_inter.mp this).2
+              simp only [hideTypeOffers, Finset.mem_filter, Finset.mem_union]
+              refine ⟨?_, hNotIface⟩
+              rcases hSide with hL | hR
+              · exact Or.inl (ihLeft m d hL)
+              · exact Or.inr (ihRight m d hR)
+  | left_complete _ _ interface _ _ _ _ _ rightCurrent _ _ _ _ _ hRestC _ _ _
+      _ ih =>
+      intro m d hIn
+      have hMem := ih m d hIn
+      have hNotIface : m ∉ interface := by
+        intro hIface
+        have : (m, d) ∈ restrictTypeOffers interface rightCurrent := by
+          simp only [restrictTypeOffers, Finset.mem_filter]
+          exact ⟨hMem, hIface⟩
+        rw [hRestC] at this
+        exact Finset.notMem_empty _ this
+      simp only [hideTypeOffers, Finset.mem_filter]
+      exact ⟨hMem, hNotIface⟩
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.contains] at hIn
+  | right_complete _ _ interface _ _ _ _ _ leftCurrent _ _ _ _ _ hRestC _ _ _
+      _ ih =>
+      intro m d hIn
+      have hMem := ih m d hIn
+      have hNotIface : m ∉ interface := by
+        intro hIface
+        have : (m, d) ∈ restrictTypeOffers interface leftCurrent := by
+          simp only [restrictTypeOffers, Finset.mem_filter]
+          exact ⟨hMem, hIface⟩
+        rw [hRestC] at this
+        exact Finset.notMem_empty _ this
+      simp only [hideTypeOffers, Finset.mem_filter]
+      exact ⟨hMem, hNotIface⟩
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.contains] at hIn
+
+/-- Every message a step observes is declared by the source's own alphabet.
+The two message-carrying rules gate on the alphabet, and every other rule
+either carries no message or inherits one from a component the enclosing node
+re-signs with its own alphabet. -/
+theorem TypeOffers.labelActionsDeclared
+    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage}
+    (hOffers : TypeOffers env source label target current future)
+    (hWF : source.AlphabetWellFormed) :
+    ∀ msg dir, label.contains (.message msg dir) →
+      (msg, dir) ∈ source.alphabet.actions := by
+  induction hOffers with
+  | action env alphabet msg dir _ hDecl =>
+      intro m d hIn
+      simp only [TypeLabel.message, TypeLabel.contains,
+        Finset.mem_singleton] at hIn
+      cases hIn
+      simpa [PactType.alphabet] using hDecl
+  | xoffer_branch env alphabet elseType branches action processType hCond
+      hDecl =>
+      intro m d hIn
+      simp only [TypeLabel.message, TypeLabel.contains,
+        Finset.mem_singleton] at hIn
+      cases hIn
+      simpa [PactType.alphabet] using hDecl _ hCond.2.1
+  | seq env alphabet left left' right label current childFuture hChild
+      hNotSkip hNotTock ih =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      have := ih hWF.2.2.2.1 m d hIn
+      rw [hWF.2.1] at this
+      simpa [PactType.alphabet] using this
+  | seq_fuse env alphabet skipAlphabet left right label current childFuture
+      hChild hNotTock ih =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      have := ih hWF.2.2.2.1 m d hIn
+      rw [hWF.2.1] at this
+      simpa [PactType.alphabet] using this
+  | action_wait | choice_left | choice_right | cycle | cycle_wait | skip
+  | recur | seq_tock | seq_fuse_tock | xoffer_else | xoffer_wait
+  | offer_some | offer_else | offer_wait =>
+      intro m d hIn
+      simp [TypeLabel.silent, TypeLabel.tock, TypeLabel.contains] at hIn
+  | fair_left | fair_right | progress =>
+      intro m d hIn
+      simp [TypeLabel.fair, TypeLabel.progress, TypeLabel.contains] at hIn
+  | par_fuse_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.tock, TypeLabel.contains] at hIn
+  | left_complete _ _ interface _ _ _ _ _ rightCurrent _ _ _ hChild _ hRestC _ _
+      _ _ ih =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      have hDecl := ih hWF.2.2.2 m d hIn
+      have hNotIface : m ∉ interface := by
+        intro hIface
+        have : (m, d) ∈ restrictTypeOffers interface rightCurrent := by
+          simp only [restrictTypeOffers, Finset.mem_filter]
+          exact ⟨hChild.labelActions_subset_current m d hIn, hIface⟩
+        rw [hRestC] at this
+        exact Finset.notMem_empty _ this
+      have hParent := hWF.2.1.parent_eq_right
+      simp only [PactType.alphabet]
+      rw [← hParent]
+      simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+      exact ⟨hDecl, hNotIface⟩
+  | right_complete _ _ interface _ _ _ _ _ leftCurrent _ _ _ hChild _ hRestC _ _
+      _ _ ih =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      have hDecl := ih hWF.2.2.1 m d hIn
+      have hNotIface : m ∉ interface := by
+        intro hIface
+        have : (m, d) ∈ restrictTypeOffers interface leftCurrent := by
+          simp only [restrictTypeOffers, Finset.mem_filter]
+          exact ⟨hChild.labelActions_subset_current m d hIn, hIface⟩
+        rw [hRestC] at this
+        exact Finset.notMem_empty _ this
+      have hParent := hWF.2.1.parent_eq_left
+      simp only [PactType.alphabet]
+      rw [← hParent]
+      simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+      exact ⟨hDecl, hNotIface⟩
+  | left_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.contains] at hIn
+  | right_complete_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hTock _ =>
+      intro m d hIn
+      rw [hTock] at hIn
+      simp [TypeLabel.contains] at hIn
+  | par _ _ _ interface _ _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _
+      hCond ihLeft ihRight =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      cases leftLabel with
+      | tock =>
+          cases rightLabel with
+          | tock => simp [TypeLabel.combine, TypeLabel.contains] at hIn
+          | actions _ =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+      | actions leftObs =>
+          cases rightLabel with
+          | tock =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+          | actions rightObs =>
+              rw [contains_combine_message'] at hIn
+              obtain ⟨hSide, hUnsynced⟩ := hIn
+              have hNotIface : m ∉ interface := by
+                intro hMem
+                refine hUnsynced ?_
+                simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter]
+                rcases hSide with hL | hR
+                · cases d with
+                  | send =>
+                      exact Or.inl ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hL⟩
+                  | recv =>
+                      refine Or.inr ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions rightObs).sends := by
+                        rw [← hCond.2.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hL⟩
+                      exact (Finset.mem_inter.mp this).2
+                · cases d with
+                  | send =>
+                      exact Or.inr ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hR⟩
+                  | recv =>
+                      refine Or.inl ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions leftObs).sends := by
+                        rw [hCond.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hR⟩
+                      exact (Finset.mem_inter.mp this).2
+              simp only [PactType.alphabet]
+              rcases hSide with hL | hR
+              · rw [← hWF.2.1.parent_eq_left]
+                simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+                exact ⟨ihLeft hWF.2.2.1 m d hL, hNotIface⟩
+              · rw [← hWF.2.1.parent_eq_right]
+                simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+                exact ⟨ihRight hWF.2.2.2 m d hR, hNotIface⟩
+  | par_fuse _ _ _ interface _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ hCond
+      _ ihLeft ihRight =>
+      intro m d hIn
+      simp only [PactType.AlphabetWellFormed] at hWF
+      cases leftLabel with
+      | tock =>
+          cases rightLabel with
+          | tock => simp [TypeLabel.combine, TypeLabel.contains] at hIn
+          | actions _ =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+      | actions leftObs =>
+          cases rightLabel with
+          | tock =>
+              simp [TypeLabel.combine, TypeLabel.silent,
+                TypeLabel.contains] at hIn
+          | actions rightObs =>
+              rw [contains_combine_message'] at hIn
+              obtain ⟨hSide, hUnsynced⟩ := hIn
+              have hNotIface : m ∉ interface := by
+                intro hMem
+                refine hUnsynced ?_
+                simp only [TypeLabel.synced, Finset.mem_union, Finset.mem_inter]
+                rcases hSide with hL | hR
+                · cases d with
+                  | send =>
+                      exact Or.inl ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hL⟩
+                  | recv =>
+                      refine Or.inr ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions rightObs).sends := by
+                        rw [← hCond.2.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hL⟩
+                      exact (Finset.mem_inter.mp this).2
+                · cases d with
+                  | send =>
+                      exact Or.inr ⟨hMem, (TypeLabel.mem_sends_iff _ _).mpr hR⟩
+                  | recv =>
+                      refine Or.inl ⟨hMem, ?_⟩
+                      have : m ∈ interface ∩
+                          (TypeLabel.actions leftObs).sends := by
+                        rw [hCond.2.1]
+                        exact Finset.mem_inter.mpr
+                          ⟨hMem, (TypeLabel.mem_recvs_iff _ _).mpr hR⟩
+                      exact (Finset.mem_inter.mp this).2
+              simp only [PactType.alphabet]
+              rcases hSide with hL | hR
+              · rw [← hWF.2.1.parent_eq_left]
+                simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+                exact ⟨ihLeft hWF.2.2.1 m d hL, hNotIface⟩
+              · rw [← hWF.2.1.parent_eq_right]
+                simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
+                exact ⟨ihRight hWF.2.2.2 m d hR, hNotIface⟩
+
 /-! ## Separation of sibling labels at a parallel node -/
 
 /-- Sibling steps of a parallel node observe nothing in common.  Message actions and the
@@ -310,7 +671,14 @@ where the two components own disjoint message names. -/
 theorem PactType.LabelOwned.separated
     {left right : PactType} {interface : Interface}
     {leftLabel rightLabel : TypeLabel}
-    (hActions : Disjoint left.MessageActions right.MessageActions)
+    (hDeclLeft : ∀ msg dir, leftLabel.contains (.message msg dir) →
+      (msg, dir) ∈ left.alphabet.actions)
+    (hDeclRight : ∀ msg dir, rightLabel.contains (.message msg dir) →
+      (msg, dir) ∈ right.alphabet.actions)
+    (hComplementary :
+      PactTypeAlphabet.ComplementaryOn left.alphabet right.alphabet interface)
+    (hLeftPolarity : left.alphabet.WellFormed)
+    (hRightPolarity : right.alphabet.WellFormed)
     (hIds : Disjoint (left.MessageIds \ interface) (right.MessageIds \ interface))
     (hProgress : Disjoint left.ProgressIds right.ProgressIds)
     (hFair : Disjoint left.FairChoiceIds right.FairChoiceIds)
@@ -323,8 +691,23 @@ theorem PactType.LabelOwned.separated
   intro observation hIn hIn'
   cases observation with
   | message msg dir =>
-      exact Finset.disjoint_left.mp hActions (hLeftMessage msg dir hIn).1
-        (hRightMessage msg dir hIn').1
+      by_cases hMem : msg ∈ interface
+      · -- On the interface the two children carry opposite polarities.
+        rcases hComplementary msg hMem with ⟨hL, hR⟩ | ⟨hL, hR⟩
+        · cases dir with
+          | send =>
+              exact hRightPolarity msg ⟨hDeclRight msg .send hIn', hR⟩
+          | recv =>
+              exact hLeftPolarity msg ⟨hL, hDeclLeft msg .recv hIn⟩
+        · cases dir with
+          | send =>
+              exact hLeftPolarity msg ⟨hDeclLeft msg .send hIn, hL⟩
+          | recv =>
+              exact hRightPolarity msg ⟨hR, hDeclRight msg .recv hIn'⟩
+      · -- Outside the interface parallel ownership separates the identifiers.
+        exact Finset.disjoint_left.mp hIds
+          (Finset.mem_sdiff.mpr ⟨(hLeftMessage msg dir hIn).2, hMem⟩)
+          (Finset.mem_sdiff.mpr ⟨(hRightMessage msg dir hIn').2, hMem⟩)
   | resolved msg =>
       have hOutside : msg ∉ interface := fun hMem =>
         Finset.disjoint_left.mp hScoped hMem
@@ -355,6 +738,7 @@ decorated component steps. -/
 theorem TypeOffers.par_combine_inj_hypotheses
     {alphabet : PactTypeAlphabet} {left right : PactType} {interface : Interface}
     (hMessage : (PactType.par alphabet left right interface).ParallelMessageOwnership)
+    (hAlphabet : (PactType.par alphabet left right interface).AlphabetWellFormed)
     (hProgress : (PactType.par alphabet left right interface).ParallelProgressOwnership)
     (hFair : (PactType.par alphabet left right interface).ParallelFairChoiceOwnership)
     (hScoped : (PactType.par alphabet left right interface).InterfaceScoped)
@@ -379,20 +763,44 @@ theorem TypeOffers.par_combine_inj_hypotheses
   simp only [PactType.ParallelProgressOwnership] at hProgress
   simp only [PactType.ParallelFairChoiceOwnership] at hFair
   simp only [PactType.InterfaceScoped] at hScoped
+  have hIds : Disjoint (left.MessageIds \ interface)
+      (right.MessageIds \ interface) := by
+    refine Finset.disjoint_left.mpr ?_
+    intro msg hLeftMem hRightMem
+    rw [Finset.mem_sdiff] at hLeftMem hRightMem
+    exact hLeftMem.2 (hMessage.1 (Finset.mem_inter.mpr
+      ⟨hLeftMem.1, hRightMem.1⟩))
   have hLeftFresh : Disjoint interface left.ParallelInterfaces :=
     hScoped.1.mono_right Finset.subset_union_left
   have hRightFresh : Disjoint interface right.ParallelInterfaces :=
     hScoped.1.mono_right Finset.subset_union_right
-  have hSeparate : ∀ {leftLabel rightLabel : TypeLabel},
-      left.LabelOwned leftLabel → right.LabelOwned rightLabel →
+  simp only [PactType.AlphabetWellFormed] at hAlphabet
+  have hLeftPolarity : left.alphabet.WellFormed := by
+    cases left <;>
+      simp only [PactType.AlphabetWellFormed] at hAlphabet <;>
+      first
+        | exact hAlphabet.2.2.1
+        | exact hAlphabet.2.2.1.1
+  have hRightPolarity : right.alphabet.WellFormed := by
+    cases right <;>
+      simp only [PactType.AlphabetWellFormed] at hAlphabet <;>
+      first
+        | exact hAlphabet.2.2.2
+        | exact hAlphabet.2.2.2.1
+  have hSeparate : ∀ {leftLabel rightLabel : TypeLabel}
+      {envL envR : TypeEnvironment} {tL tR : PactType}
+      {cL fL cR fR : Finset BareMessage},
+      TypeOffers envL left leftLabel tL cL fL →
+      TypeOffers envR right rightLabel tR cR fR →
       ∀ observation, leftLabel.contains observation →
         ¬ rightLabel.contains observation := fun hL hR =>
-    PactType.LabelOwned.separated hMessage.2.1 hMessage.1 hProgress.1 hFair.1
-      hScoped.1 hL hR
-  refine ⟨hSeparate hA₁.labelOwned hA₂.labelOwned,
-    hSeparate hB₁.labelOwned hB₂.labelOwned,
-    hSeparate hA₁.labelOwned hB₂.labelOwned,
-    hSeparate hB₁.labelOwned hA₂.labelOwned, ?_, ?_⟩
+    PactType.LabelOwned.separated
+      (hL.labelActionsDeclared hAlphabet.2.2.1)
+      (hR.labelActionsDeclared hAlphabet.2.2.2)
+      hAlphabet.2.1.complementary hLeftPolarity hRightPolarity
+      hIds hProgress.1 hFair.1 hScoped.1 hL.labelOwned hR.labelOwned
+  refine ⟨hSeparate hA₁ hA₂, hSeparate hB₁ hB₂,
+    hSeparate hA₁ hB₂, hSeparate hB₁ hA₂, ?_, ?_⟩
   · exact fun msg hMem =>
       ⟨PactType.LabelOwned.fresh hLeftFresh hA₁.labelOwned msg hMem,
         PactType.LabelOwned.fresh hRightFresh hA₂.labelOwned msg hMem⟩

@@ -81,54 +81,30 @@ theorem liveEqBody_alphabet_agreeOn {x y : PactType} (h : LiveEqBody x y) :
          simpa only [PactType.alphabet, MessageActions] using h.2.1)
 
 /-- Projecting agreeing alphabets to a parallel child keeps them agreeing. -/
-theorem agreeOn_projectParallelChild
+theorem agreeOn_projectParallel
     {parent parent' child child' : PactTypeAlphabet} {interface : Interface}
     {used : Finset BareMessage}
     (hParent : PactTypeAlphabet.AgreeOn parent parent' used)
     (hChild : PactTypeAlphabet.AgreeOn child child' used) :
     PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallelChild parent child interface)
-      (PactTypeAlphabet.projectParallelChild parent' child' interface) used := by
+      (PactTypeAlphabet.projectParallel parent child interface)
+      (PactTypeAlphabet.projectParallel parent' child' interface) used := by
   intro action hAction
-  simp only [PactTypeAlphabet.projectParallelChild, Finset.mem_filter]
+  simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+    Finset.mem_filter]
   rw [hChild action hAction, hParent action hAction]
 
-/-- The left projection additionally subtracts the sibling's actions, which
-live equivalence already equates. -/
-theorem agreeOn_projectParallelLeft
-    {parent parent' left left' : PactTypeAlphabet}
-    {rightType rightType' : PactType} {interface : Interface}
-    {used : Finset BareMessage}
-    (hParent : PactTypeAlphabet.AgreeOn parent parent' used)
-    (hLeft : PactTypeAlphabet.AgreeOn left left' used)
-    (hRight : MessageActions rightType = MessageActions rightType') :
-    PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallelLeft parent left rightType interface)
-      (PactTypeAlphabet.projectParallelLeft parent' left' rightType' interface)
-      used := by
-  intro action hAction
-  simp only [PactTypeAlphabet.projectParallelLeft,
-    PactTypeAlphabet.projectParallelChild, Finset.mem_union, Finset.mem_filter,
-    Finset.mem_sdiff, hRight]
-  rw [hLeft action hAction, hParent action hAction]
-
-/-- Mirror of `agreeOn_projectParallelLeft`. -/
-theorem agreeOn_projectParallelRight
-    {parent parent' right right' : PactTypeAlphabet}
-    {leftType leftType' : PactType} {interface : Interface}
-    {used : Finset BareMessage}
-    (hParent : PactTypeAlphabet.AgreeOn parent parent' used)
-    (hRight : PactTypeAlphabet.AgreeOn right right' used)
-    (hLeft : MessageActions leftType = MessageActions leftType') :
-    PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallelRight parent right leftType interface)
-      (PactTypeAlphabet.projectParallelRight parent' right' leftType' interface)
-      used := by
-  intro action hAction
-  simp only [PactTypeAlphabet.projectParallelRight,
-    PactTypeAlphabet.projectParallelChild, Finset.mem_union, Finset.mem_filter,
-    Finset.mem_sdiff, hLeft]
-  rw [hRight action hAction, hParent action hAction]
+/-- Re-signing a conjunctive-offer branch list leaves its actions alone. -/
+theorem branchMessageActions_reannotateOfferBranches (alphabet : PactTypeAlphabet)
+    (seen : Finset BareMessage) :
+    ∀ branches : List (BareMessage × PactType),
+      BranchMessageActions (reannotateOfferBranches alphabet seen branches) =
+        BranchMessageActions branches
+  | [] => by rw [PactType.reannotateOfferBranches_nil]
+  | (action, body) :: rest => by
+      rw [PactType.reannotateOfferBranches_cons]
+      simp only [BranchMessageActions, PactType.messageActions_reannotate,
+        branchMessageActions_reannotateOfferBranches alphabet seen rest]
 
 /-- Re-signing an exclusive-offer branch list leaves its actions alone. -/
 theorem branchMessageActions_reannotateBranches (alphabet : PactTypeAlphabet) :
@@ -242,9 +218,8 @@ theorem liveEqBody_reannotate_fuel : ∀ (n : Nat) (t t' : PactType)
               refine ⟨trivial, ?_, ?_⟩
               · refine ih _ hBodySize body body' _ _ le_rfl ?_ hBody
                 intro x hx
-                simp only [Finset.mem_sdiff]
-                rw [hAgree x
-                  (messageActions_subset_branchMessageActions action body rest hx)]
+                exact hAgree x
+                  (messageActions_subset_branchMessageActions action body rest hx)
               · exact ihRest rest' a a' _ hRestSize
                   (hAgree.mono
                     (branchMessageActions_tail_subset action body rest)) hRest
@@ -322,13 +297,13 @@ theorem liveEqBody_reannotate_fuel : ∀ (n : Nat) (t t' : PactType)
           PactType.messageActions_reannotate]
         refine ⟨trivial, hAgree, ?_, ?_⟩
         · refine ih _ (by omega) l l' _ _ le_rfl ?_ hLeft
-          exact agreeOn_projectParallelLeft
+          exact agreeOn_projectParallel
             (hAgree.mono Finset.subset_union_left)
-            ((liveEqBody_alphabet_agreeOn hLeft)) hRightActions
+            (liveEqBody_alphabet_agreeOn hLeft)
         · refine ih _ (by omega) r r' _ _ le_rfl ?_ hRight
-          exact agreeOn_projectParallelRight
+          exact agreeOn_projectParallel
             (hAgree.mono Finset.subset_union_right)
-            (liveEqBody_alphabet_agreeOn hRight) hLeftActions
+            (liveEqBody_alphabet_agreeOn hRight)
     case xoffer.xoffer _ e bs _ e' bs' =>
         simp only [MessageActions] at hAgree
         simp only [LiveEqBody] at hLive
@@ -347,7 +322,7 @@ theorem liveEqBody_reannotate_fuel : ∀ (n : Nat) (t t' : PactType)
         simp only [PactType.offer.sizeOf_spec] at hSize
         simp only [PactType.reannotate, LiveEqBody, MessageActions,
           PactType.messageActions_reannotate,
-          PactType.branchMessageActions_reannotateOfferBranches]
+          branchMessageActions_reannotateOfferBranches]
         refine ⟨hAgree, ?_, ?_⟩
         · exact ih _ (by omega) e e' a a' le_rfl
             (hAgree.mono Finset.subset_union_left) hLive.2.1
@@ -443,10 +418,8 @@ theorem parallelTypeBranchesWithin_cons_cons (a : PactTypeAlphabet)
     (branch next : BareMessage × PactType)
     (tail : List (BareMessage × PactType)) :
     parallelTypeBranchesWithin a (branch :: next :: tail) =
-      .par a (singletonTypeXOfferAt branch.2.alphabet branch)
-        (parallelTypeBranchesWithin
-          { actions := branchAlphabetActions (next :: tail) } (next :: tail))
-        ∅ := by
+      .par a (singletonTypeXOfferAt a branch)
+        (parallelTypeBranchesWithin a (next :: tail)) ∅ := by
   rw [parallelTypeBranchesWithin]
   simp
 
@@ -467,18 +440,13 @@ theorem parallelTypeBranchesSelectingWithin_cons_cons (a : PactTypeAlphabet)
     (tail : List (BareMessage × PactType)) :
     parallelTypeBranchesSelectingWithin a selected (branch :: next :: tail) =
       if branch = selected then
-        .par a (selectedTypeBranchAt branch.2.alphabet branch)
-          (parallelTypeBranchesWithin
-            { actions := branchAlphabetActions (next :: tail) } (next :: tail))
-          ∅
+        .par a (selectedTypeBranchAt a branch)
+          (parallelTypeBranchesWithin a (next :: tail)) ∅
       else
-        .par a (singletonTypeXOfferAt branch.2.alphabet branch)
-          (parallelTypeBranchesSelectingWithin
-            { actions := branchAlphabetActions (next :: tail) } selected
-            (next :: tail))
+        .par a (singletonTypeXOfferAt a branch)
+          (parallelTypeBranchesSelectingWithin a selected (next :: tail))
           ∅ := by
-  rw [parallelTypeBranchesSelectingWithin]
-  simp
+  simp only [parallelTypeBranchesSelectingWithin]
 
 /-- The uncommitted branch product respects live equivalence. -/
 theorem liveEqBody_parallelTypeBranchesWithin :
@@ -541,9 +509,8 @@ theorem liveEqBody_parallelTypeBranchesWithin :
                     parallelTypeBranchesWithin_cons_cons, LiveEqBody]
                   refine ⟨rfl, hNodeAgree, ?_, ?_⟩
                   · exact liveEqBody_singletonTypeXOfferAt hBody
-                      (hAlphaHead.mono hHeadSub)
-                  · exact ih _ _ _ used hRest hAlphaTail
-                      (agreeOn_branchAlphabetActions hAlphaTail) hTailSub
+                      (hAgree.mono hHeadSub)
+                  · exact ih _ _ _ used hRest hAlphaTail hAgree hTailSub
 
 /-- The committed branch product respects live equivalence.  The two selection
 tests agree because each list picks its committed branch by head action. -/
@@ -627,18 +594,17 @@ theorem liveEqBody_parallelTypeBranchesSelectingWithin :
                     rw [if_pos hc, if_pos (hSame.mp hc), LiveEqBody]
                     refine ⟨rfl, hNodeAgree, ?_, ?_⟩
                     · exact liveEqBody_selectedTypeBranchAt hBody
-                        (hAlphaHead.mono hHeadSub)
+                        (hAgree.mono hHeadSub)
                     · exact liveEqBody_parallelTypeBranchesWithin _ _ _ _ used
-                        hRest hAlphaTail (agreeOn_branchAlphabetActions hAlphaTail)
-                        hTailSub
+                        hRest hAlphaTail hAgree hTailSub
                   · rw [if_neg hc] at hNodeAgree
                     rw [if_neg hc, if_neg (fun h => hc (hSame.mpr h)),
                       LiveEqBody]
                     refine ⟨rfl, hNodeAgree, ?_, ?_⟩
                     · exact liveEqBody_singletonTypeXOfferAt hBody
-                        (hAlphaHead.mono hHeadSub)
+                        (hAgree.mono hHeadSub)
                     · refine ih _ _ _ used selected selected' hRest hAlphaTail
-                        (agreeOn_branchAlphabetActions hAlphaTail) hTailSub
+                        hAgree hTailSub
                         hSelected
                         (fun b hb => hTest b (List.mem_cons_of_mem _ hb))
                         (fun b hb => hTest' b (List.mem_cons_of_mem _ hb))
@@ -734,12 +700,9 @@ theorem branchAlphabetsAgreeOn_of_offerBranchesWellFormed :
           refine List.Forall₂.cons ?_ ?_
           · intro x hx
             show x ∈ body.alphabet.actions ↔ x ∈ body'.alphabet.actions
-            rw [Finset.ext_iff.mp hWF.1 x, Finset.ext_iff.mp hWF'.1 x,
-              Finset.mem_sdiff, Finset.mem_sdiff, ← hRestActions,
-              hAgree x hx]
-          · refine ih rest' a a' _ used hRest hWF.2.2 ?_ hAgree
-            rw [hBodyActions]
-            exact hWF'.2.2
+            rw [hWF.1, hWF'.1]
+            exact hAgree x hx
+          · exact ih rest' a a' _ used hRest hWF.2.2 hWF'.2.2 hAgree
 
 /-- The conjunctive-offer expansion respects live equivalence, with the
 premises a well-formed conjunctive offer supplies: conjunct compatibility for

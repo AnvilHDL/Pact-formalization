@@ -55,8 +55,7 @@ mutual
     | (action, processType) :: rest => by
         simp only [reannotateOfferBranches_cons, branchShapes,
           shape_reannotate _ processType,
-          branchShapes_reannotateOfferBranches alphabet
-            (seen ∪ ({action} ∪ MessageActions processType)) rest]
+          branchShapes_reannotateOfferBranches alphabet seen rest]
   termination_by branches => sizeOf branches
 decreasing_by
   all_goals

@@ -2725,10 +2725,10 @@ theorem helper_h13_parallelTypeBranchesWithin_case
       simp only [parallelTypeBranchesWithin] at hRelated ⊢
       exact helper_h13_par_case alphabet _ _ ∅
         (fun hR => helper_h13_singletonTypeXOfferAt_case
-          branch.2.alphabet branch
+          alphabet branch
           (fun ba => hBranchesH13 branch (by simp) ba) hR)
         (fun hR => helper_h13_parallelTypeBranchesWithin_case
-          ({ actions := PactType.branchAlphabetActions (b2 :: rest) }) (b2 :: rest)
+          alphabet (b2 :: rest)
           (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
         hRelated
 
@@ -2784,21 +2784,21 @@ theorem helper_h13_parallelTypeBranchesSelectingWithin_case
         exact helper_h13_par_case alphabet _ _ ∅
           (fun hR => by
             simp only [selectedTypeBranchAt] at hR ⊢
-            exact helper_h13_seq_case branch.2.alphabet
-              (.message branch.2.alphabet branch.1.1 branch.1.2)
-              (branch.2.reannotate branch.2.alphabet)
-              (hBranchesH13 branch (by simp) branch.2.alphabet) hR)
+            exact helper_h13_seq_case alphabet
+              (.message alphabet branch.1.1 branch.1.2)
+              (branch.2.reannotate alphabet)
+              (hBranchesH13 branch (by simp) alphabet) hR)
           (fun hR => helper_h13_parallelTypeBranchesWithin_case
-            ({ actions := PactType.branchAlphabetActions (b2 :: rest) }) (b2 :: rest)
+            alphabet (b2 :: rest)
             (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
           hRelated
       · rw [if_neg hSel] at hRelated ⊢
         exact helper_h13_par_case alphabet _ _ ∅
           (fun hR => helper_h13_singletonTypeXOfferAt_case
-            branch.2.alphabet branch
+            alphabet branch
             (fun ba => hBranchesH13 branch (by simp) ba) hR)
           (fun hR => helper_h13_parallelTypeBranchesSelectingWithin_case
-            ({ actions := PactType.branchAlphabetActions (b2 :: rest) }) selected (b2 :: rest)
+            alphabet selected (b2 :: rest)
             (fun b hb ba => hBranchesH13 b (by simp [hb]) ba) hR)
           hRelated
 
@@ -4581,7 +4581,7 @@ theorem combine_label_supported
     (hRight : LabelSupportedBy right rightLabel)
     (hSync : TypeLabel.Sync interface leftLabel rightLabel) :
     LabelSupportedBy
-      (.par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
+      (.par alphabet
         left right interface)
       (TypeLabel.combine interface leftLabel rightLabel) := by
   cases leftLabel with
@@ -5427,11 +5427,11 @@ theorem PactType.reannotate_ownership_data
             PactType.ParallelProgressOwnership,
             PactType.ParallelFairChoiceOwnership,
             ih (sizeOf left) hLeft
-              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
-                right interface) left rfl,
+              (PactTypeAlphabet.projectParallel alphabet left.alphabet
+                interface) left rfl,
             ih (sizeOf right) hRight
-              (PactTypeAlphabet.projectParallelRight alphabet right.alphabet
-                left interface) right rfl]
+              (PactTypeAlphabet.projectParallel alphabet right.alphabet
+                interface) right rfl]
       | xoffer _ elseType branches =>
           have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranchSize : sizeOf branches < n := by

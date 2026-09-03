@@ -616,7 +616,8 @@ private lemma branchesWellFormedIn_of_conjuncts {bound : List String}
     (hPO : PactType.ParallelProgressOwnershipBranches branches)
     (hFO : PactType.ParallelFairChoiceOwnershipBranches branches)
     (hIS : PactType.InterfaceScopedBranches branches)
-    (hIAS : PactType.InterfaceAlphabetScopedBranches branches) :
+    (hIAS : PactType.InterfaceAlphabetScopedBranches branches)
+    (hCMO : ∀ entry ∈ branches, PactType.ConjunctiveMessageOwnership entry.2) :
     ∀ entry ∈ branches, TypeWellFormedIn bound entry.2 := by
   induction branches with
   | nil => intro entry hEntry; cases hEntry
@@ -643,11 +644,11 @@ private lemma branchesWellFormedIn_of_conjuncts {bound : List String}
       rcases hEntry with rfl | hRest
       · exact ⟨hA _ (by simp), hB.1, hH.1,
           fun other => (hTCsplit other).1, hCG.1, hTR.1, hSC.1, hPL.1, hFL.1,
-          hMO _ (by simp), hPO.1, hFO.1, hIS.1, hIAS.1⟩
+          hMO _ (by simp), hPO.1, hFO.1, hIS.1, hIAS.1, hCMO _ (by simp)⟩
       · exact ih (fun e hE => hA e (by simp [hE])) hB.2 hH.2
           (fun other => (hTCsplit other).2) hCG.2 hTR.2 hSC.2.2 hPL.2.2 hFL.2.2
-          (fun e hE => hMO e (by simp [hE])) hPO.2.2 hFO.2.2 hIS.2 hIAS.2 entry
-          hRest
+          (fun e hE => hMO e (by simp [hE])) hPO.2.2 hFO.2.2 hIS.2 hIAS.2
+          (fun e hE => hCMO e (by simp [hE])) entry hRest
 
 lemma typeWellFormedIn_xoffer {bound : List String}
     {alphabet : PactTypeAlphabet} {elseType : PactType}
@@ -655,7 +656,8 @@ lemma typeWellFormedIn_xoffer {bound : List String}
     (h : TypeWellFormedIn bound (.xoffer alphabet elseType branches)) :
     TypeWellFormedIn bound elseType ∧
       ∀ entry ∈ branches, TypeWellFormedIn bound entry.2 := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -669,6 +671,7 @@ lemma typeWellFormedIn_xoffer {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hTCsplit : ∀ other : String,
       PactType.TailOccurrences other True elseType ∧
         PactType.TailBranchOccurrences other True branches := by
@@ -708,11 +711,28 @@ lemma typeWellFormedIn_xoffer {bound : List String}
           · exact hList.1
           · exact ihList hList.2 entry hTail
     exact hAux branches hMO.2
+  have hBranchConjunctive : ∀ entry ∈ branches,
+      PactType.ConjunctiveMessageOwnership entry.2 := by
+    have hAux : ∀ list : List (BareMessage × PactType),
+        PactType.ConjunctiveMessageOwnershipBodies list →
+        ∀ entry ∈ list, PactType.ConjunctiveMessageOwnership entry.2 := by
+      intro list
+      induction list with
+      | nil => intro _ entry hEntry; cases hEntry
+      | cons head tail ihList =>
+          rcases head with ⟨headAction, headType⟩
+          intro hList entry hEntry
+          simp only [PactType.ConjunctiveMessageOwnershipBodies] at hList
+          simp only [List.mem_cons] at hEntry
+          rcases hEntry with rfl | hTail
+          · exact hList.1
+          · exact ihList hList.2 entry hTail
+    exact hAux branches hCMO.2
   exact ⟨⟨hA.2.2.1, hB.1, hH.1, fun other => (hTCsplit other).1, hCG.1, hTR.1,
-      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1⟩,
+      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1⟩,
     branchesWellFormedIn_of_conjuncts branches hBranchAlphabet hB.2 hH.2
       (fun other => (hTCsplit other).2) hCG.2 hTR.2 hSC.2.1 hPL.2.1 hFL.2.1
-      hBranchOwnership hPO.2 hFO.2 hIS.2 hIAS.2.2⟩
+      hBranchOwnership hPO.2 hFO.2 hIS.2 hIAS.2.2 hBranchConjunctive⟩
 
 /-! ### Same-cycle completion at the base fragments
 
@@ -1426,7 +1446,8 @@ lemma typeWellFormedIn_choice {bound : List String}
     {alphabet : PactTypeAlphabet} {left right : PactType}
     (h : TypeWellFormedIn bound (.choice alphabet left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -1440,6 +1461,7 @@ lemma typeWellFormedIn_choice {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other True left ∧
         PactType.TailOccurrences other True right := by
@@ -1449,16 +1471,17 @@ lemma typeWellFormedIn_choice {bound : List String}
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed,
       hCG.1, hTR.1, hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1,
-      hIAS.2.1⟩,
+      hIAS.2.1, hCMO.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2⟩⟩
+      hIAS.2.2, hCMO.2⟩⟩
 
 lemma typeWellFormedIn_fairChoice {bound : List String}
     {alphabet : PactTypeAlphabet} {bid : BranchId} {left right : PactType}
     (h : TypeWellFormedIn bound (.fairChoice alphabet bid left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -1472,6 +1495,7 @@ lemma typeWellFormedIn_fairChoice {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other True left ∧
         PactType.TailOccurrences other True right := by
@@ -1481,16 +1505,17 @@ lemma typeWellFormedIn_fairChoice {bound : List String}
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed,
       hCG.1, hTR.1, hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1,
-      hIAS.2.1⟩,
+      hIAS.2.1, hCMO.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2⟩⟩
+      hIAS.2.2, hCMO.2⟩⟩
 
 lemma typeWellFormedIn_seq {bound : List String}
     {alphabet : PactTypeAlphabet} {left right : PactType}
     (h : TypeWellFormedIn bound (.seq alphabet left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -1504,6 +1529,7 @@ lemma typeWellFormedIn_seq {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other False left ∧
         PactType.TailOccurrences other True right := by
@@ -1513,16 +1539,17 @@ lemma typeWellFormedIn_seq {bound : List String}
     PactType.tailOccurrences_mono other False.elim left (hSplit other).1
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed, hCG.1, hTR.1, hSC.1, hPL.1,
-      hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1⟩,
+      hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2.1, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2⟩⟩
+      hIAS.2.2, hCMO.2⟩⟩
 
 lemma typeWellFormedIn_par {bound : List String}
     {alphabet : PactTypeAlphabet} {left right : PactType} {interface : Interface}
     (h : TypeWellFormedIn bound (.par alphabet left right interface)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -1536,6 +1563,7 @@ lemma typeWellFormedIn_par {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other False left ∧
         PactType.TailOccurrences other False right := by
@@ -1546,15 +1574,16 @@ lemma typeWellFormedIn_par {bound : List String}
   have hRightClosed : right.TailClosed := fun other =>
     PactType.tailOccurrences_mono other False.elim right (hSplit other).2
   exact ⟨⟨hA.2.2.1, hB.1, hH.1, hLeftClosed, hCG.1, hTR.1, hSC.1, hPL.1, hFL.1,
-      hMO.2.2.1, hPO.2.1, hFO.2.1, hIS.2.1, hIAS.2.1⟩,
+      hMO.2.1, hPO.2.1, hFO.2.1, hIS.2.1, hIAS.2.1, hCMO.1⟩,
     ⟨hA.2.2.2, hB.2, hH.2, hRightClosed, hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1,
-      hMO.2.2.2, hPO.2.2, hFO.2.2, hIS.2.2, hIAS.2.2⟩⟩
+      hMO.2.2, hPO.2.2, hFO.2.2, hIS.2.2, hIAS.2.2, hCMO.2⟩⟩
 
 lemma typeWellFormedIn_recur {bound : List String}
     {alphabet : PactTypeAlphabet} {name : String} {body : PactType}
     (h : TypeWellFormedIn bound (.recur alphabet name body)) :
     TypeWellFormedIn (name :: bound) body := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -1568,6 +1597,7 @@ lemma typeWellFormedIn_recur {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
   have hBodyClosed : body.TailClosed := by
     intro other
     by_cases hName : name = other
@@ -1575,7 +1605,7 @@ lemma typeWellFormedIn_recur {bound : List String}
     · have hOther := hTC other
       simpa only [PactType.TailOccurrences, if_neg hName] using hOther
   exact ⟨hA.2.2, hB, hH.2, hBodyClosed, hCG.2, hTR.2, hSC.1, hPL, hFL, hMO,
-    hPO, hFO, hIS, hIAS.2⟩
+    hPO, hFO, hIS, hIAS.2, hCMO⟩
 
 /-! ### Re-signing preserves the structural well-formedness conjuncts
 
@@ -2360,6 +2390,174 @@ theorem PactType.reannotate_messageActions (alphabet : PactTypeAlphabet)
       PactType.MessageActions processType :=
   (PactType.reannotate_ownership_data alphabet processType).2.1
 
+/-- Re-signing leaves the message identifiers of every branch in place. -/
+theorem PactType.reannotateBranches_branchMessageIds
+    (alphabet : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      PactType.BranchMessageIds
+          (PactType.reannotateBranches alphabet branches) =
+        PactType.BranchMessageIds branches := by
+  intro branches
+  induction branches with
+  | nil => simp [PactType.BranchMessageIds]
+  | cons head tail ih =>
+      rcases head with ⟨action, body⟩
+      rw [PactType.reannotateBranches_cons]
+      simp only [PactType.BranchMessageIds, ih,
+        PactType.reannotate_messageIds]
+
+/-- Conjunctive ownership speaks only about message identifiers, so re-signing
+transports it in both directions. -/
+theorem PactType.reannotate_conjunctiveMessageOwnership :
+    ∀ (processType : PactType) (target : PactTypeAlphabet),
+      (PactType.ConjunctiveMessageOwnership (processType.reannotate target) ↔
+        PactType.ConjunctiveMessageOwnership processType) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBodies : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ target : PactTypeAlphabet,
+          (PactType.ConjunctiveMessageOwnershipBodies
+              (PactType.reannotateBranches target branches) ↔
+            PactType.ConjunctiveMessageOwnershipBodies branches) := by
+        intro branches
+        induction branches with
+        | nil =>
+            intro _ _
+            rw [PactType.reannotateBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons target
+            rcases head with ⟨action, body⟩
+            have hBodySize : sizeOf body < n := by
+              have hPair : sizeOf body < sizeOf (action, body) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have hRest : sizeOf tail <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            rw [PactType.reannotateBranches_cons]
+            simp only [PactType.ConjunctiveMessageOwnershipBodies]
+            exact and_congr (ih (sizeOf body) hBodySize body rfl target)
+              (restIH hTailSize target)
+      have hBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ (target : PactTypeAlphabet)
+            (seen : Finset BareMessage),
+          (PactType.ConjunctiveMessageOwnershipBranches
+              (PactType.reannotateOfferBranches target seen branches) ↔
+            PactType.ConjunctiveMessageOwnershipBranches branches) := by
+        intro branches
+        induction branches with
+        | nil =>
+            intro _ _ _
+            rw [PactType.reannotateOfferBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons target seen
+            rcases head with ⟨action, body⟩
+            have hBodySize : sizeOf body < n := by
+              have hPair : sizeOf body < sizeOf (action, body) := by
+                simp_wf; omega
+              have hHead : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have hRest : sizeOf tail <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailIds : PactType.BranchMessageIds
+                (PactType.reannotateOfferBranches target seen tail) =
+                  PactType.BranchMessageIds tail := by
+              have hShape : ∀ list : List (BareMessage × PactType),
+                  PactType.reannotateOfferBranches target seen list =
+                    PactType.reannotateBranches target list := by
+                intro list
+                induction list with
+                | nil =>
+                    rw [PactType.reannotateOfferBranches_nil,
+                      PactType.reannotateBranches_nil]
+                | cons entry rest shapeIH =>
+                    rcases entry with ⟨entryAction, entryBody⟩
+                    rw [PactType.reannotateOfferBranches_cons,
+                      PactType.reannotateBranches_cons, shapeIH]
+              rw [hShape tail,
+                PactType.reannotateBranches_branchMessageIds]
+            rw [PactType.reannotateOfferBranches_cons]
+            simp only [PactType.ConjunctiveMessageOwnershipBranches,
+              PactType.reannotate_messageIds, hTailIds]
+            exact and_congr (ih (sizeOf body) hBodySize body rfl target)
+              (and_congr Iff.rfl (restIH hTailSize target seen))
+      intro target
+      subst hSize
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.ConjunctiveMessageOwnership]
+      | recur alphabet name body =>
+          have hBodySize : sizeOf body < sizeOf
+              (PactType.recur alphabet name body) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact ih (sizeOf body) hBodySize body rfl target
+      | choice alphabet left right =>
+          have hL : sizeOf left < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr (ih (sizeOf left) hL left rfl target)
+            (ih (sizeOf right) hR right rfl target)
+      | seq alphabet left right =>
+          have hL : sizeOf left < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr (ih (sizeOf left) hL left rfl target)
+            (ih (sizeOf right) hR right rfl target)
+      | fairChoice alphabet bid left right =>
+          have hL : sizeOf left < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr (ih (sizeOf left) hL left rfl target)
+            (ih (sizeOf right) hR right rfl target)
+      | par alphabet left right interface =>
+          have hL : sizeOf left < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr
+            (ih (sizeOf left) hL left rfl
+              (target.projectParallel left.alphabet interface))
+            (ih (sizeOf right) hR right rfl
+              (target.projectParallel right.alphabet interface))
+      | xoffer alphabet elseType branches =>
+          have hE : sizeOf elseType < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr (ih (sizeOf elseType) hE elseType rfl target)
+            (hBodies branches hB target)
+      | offer alphabet elseType branches =>
+          have hE : sizeOf elseType < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate,
+            PactType.ConjunctiveMessageOwnership]
+          exact and_congr (ih (sizeOf elseType) hE elseType rfl target)
+            (hBranches branches hB target ∅)
+
 theorem singletonTypeXOfferAt_ids (alphabet : PactTypeAlphabet)
     (branch : BareMessage × PactType) :
     PactType.MessageIds (singletonTypeXOfferAt alphabet branch) =
@@ -2432,23 +2630,23 @@ theorem parallelTypeBranchesWithin_conjuncts {bound : List String} :
           simp only [PactType.ParallelMessageOwnershipBranches] at hMsgOwn
           simp only [PactType.ParallelProgressOwnershipBranches] at hProgOwn
           simp only [PactType.ParallelFairChoiceOwnershipBranches] at hFairOwn
-          have hHead := singletonTypeXOfferAt_conjuncts body.alphabet
+          have hHead := singletonTypeXOfferAt_conjuncts alphabet
             (action, body) (hBranch (action, body) (by simp))
           have hRestConj := ih (fun b hb => hBranch b (by simp [hb]))
             hProg.2.2 hFair.2.2 hMsgOwn.2.2.2 hProgOwn.2.2 hFairOwn.2.2
-            ⟨PactType.branchAlphabetActions (next :: tail)⟩
+            alphabet
           obtain ⟨hHB, hHH, hHS, hHP, hHF, hHM, hHPo, hHFo⟩ := hHead
           obtain ⟨hRB, hRH, hRS, hRP, hRF, hRM, hRPo, hRFo⟩ := hRestConj
           obtain ⟨hIdsL, hActsL, hProgL, hFairL⟩ :=
-            singletonTypeXOfferAt_ids body.alphabet (action, body)
+            singletonTypeXOfferAt_ids alphabet (action, body)
           have hIdsR := parallelTypeBranchesWithin_messageIds
-            ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+            alphabet (next :: tail)
           have hActsR := parallelTypeBranchesWithin_messageActions
-            ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+            alphabet (next :: tail)
           have hProgR := parallelTypeBranchesWithin_progressIds
-            ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+            alphabet (next :: tail)
           have hFairR := parallelTypeBranchesWithin_fairChoiceIds
-            ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+            alphabet (next :: tail)
           simp only [parallelTypeBranchesWithin]
           refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
             simp only [PactType.AllVariablesBound, PactType.BinderHygienic,
@@ -2463,9 +2661,11 @@ theorem parallelTypeBranchesWithin_conjuncts {bound : List String} :
             rw [hProgL, hProgR]; exact hProg.2.1
           · refine ⟨hHF, hRF, ?_⟩
             rw [hFairL, hFairR]; exact hFair.2.1
-          · refine ⟨?_, ?_, hHM, hRM⟩
-            · simpa [hIdsL, hIdsR] using hMsgOwn.2.1
-            · rw [hActsL, hActsR]; exact hMsgOwn.2.2.1
+          · refine ⟨?_, hHM, hRM⟩
+            rw [hIdsL, hIdsR]
+            intro x hx
+            exact absurd (Finset.mem_inter.mp hx).2
+              (Finset.disjoint_left.mp hMsgOwn.2.1 (Finset.mem_inter.mp hx).1)
           · refine ⟨?_, hHPo, hRPo⟩
             rw [hProgL, hProgR]; exact hProgOwn.2.1
           · refine ⟨?_, hHFo, hRFo⟩
@@ -2515,24 +2715,24 @@ theorem parallelTypeBranchesSelectingWithin_conjuncts {bound : List String}
           simp only [parallelTypeBranchesSelectingWithin]
           by_cases hSel : (action, body) = selected
           · rw [if_pos hSel]
-            have hHead := selectedTypeBranchAt_conjuncts body.alphabet
+            have hHead := selectedTypeBranchAt_conjuncts alphabet
               (action, body) hHeadConj
             have hRestConj := parallelTypeBranchesWithin_conjuncts (next :: tail)
               (fun b hb => hBranch b (by simp [hb]))
               hProg.2.2 hFair.2.2 hMsgOwn.2.2.2 hProgOwn.2.2 hFairOwn.2.2
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩
+              alphabet
             obtain ⟨hHB, hHH, hHS, hHP, hHF, hHM, hHPo, hHFo⟩ := hHead
             obtain ⟨hRB, hRH, hRS, hRP, hRF, hRM, hRPo, hRFo⟩ := hRestConj
             obtain ⟨hIdsL, hActsL, hProgL, hFairL⟩ :=
-              selectedTypeBranchAt_ids body.alphabet (action, body)
+              selectedTypeBranchAt_ids alphabet (action, body)
             have hIdsRe := parallelTypeBranchesWithin_messageIds
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+              alphabet (next :: tail)
             have hActsRe := parallelTypeBranchesWithin_messageActions
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+              alphabet (next :: tail)
             have hProgRe := parallelTypeBranchesWithin_progressIds
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+              alphabet (next :: tail)
             have hFairRe := parallelTypeBranchesWithin_fairChoiceIds
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩ (next :: tail)
+              alphabet (next :: tail)
             refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
               simp only [PactType.AllVariablesBound, PactType.BinderHygienic,
                 PactType.InterfaceScoped, PactType.ProgressLinear,
@@ -2546,26 +2746,28 @@ theorem parallelTypeBranchesSelectingWithin_conjuncts {bound : List String}
               rw [hProgL, hProgRe]; exact hProg.2.1
             · refine ⟨hHF, hRF, ?_⟩
               rw [hFairL, hFairRe]; exact hFair.2.1
-            · refine ⟨?_, ?_, hHM, hRM⟩
-              · simpa [hIdsL, hIdsRe] using hMsgOwn.2.1
-              · rw [hActsL, hActsRe]; exact hMsgOwn.2.2.1
+            · refine ⟨?_, hHM, hRM⟩
+              rw [hIdsL, hIdsRe]
+              intro x hx
+              exact absurd (Finset.mem_inter.mp hx).2
+                (Finset.disjoint_left.mp hMsgOwn.2.1 (Finset.mem_inter.mp hx).1)
             · refine ⟨?_, hHPo, hRPo⟩
               rw [hProgL, hProgRe]; exact hProgOwn.2.1
             · refine ⟨?_, hHFo, hRFo⟩
               rw [hFairL, hFairRe]; exact hFairOwn.2.1
           · rw [if_neg hSel]
-            have hHead := singletonTypeXOfferAt_conjuncts body.alphabet
+            have hHead := singletonTypeXOfferAt_conjuncts alphabet
               (action, body) hHeadConj
             have hRestConj := ih (fun b hb => hBranch b (by simp [hb]))
               hProg.2.2 hFair.2.2 hMsgOwn.2.2.2 hProgOwn.2.2 hFairOwn.2.2
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩
+              alphabet
             obtain ⟨hHB, hHH, hHS, hHP, hHF, hHM, hHPo, hHFo⟩ := hHead
             obtain ⟨hRB, hRH, hRS, hRP, hRF, hRM, hRPo, hRFo⟩ := hRestConj
             obtain ⟨hIdsL, hActsL, hProgL, hFairL⟩ :=
-              singletonTypeXOfferAt_ids body.alphabet (action, body)
+              singletonTypeXOfferAt_ids alphabet (action, body)
             obtain ⟨hIdsRe, hActsRe, hProgRe, hFairRe⟩ :=
               parallelTypeBranchesSelectingWithin_ownershipData
-                ⟨PactType.branchAlphabetActions (next :: tail)⟩ selected
+                alphabet selected
                 (next :: tail)
             refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
               simp only [PactType.AllVariablesBound, PactType.BinderHygienic,
@@ -2580,9 +2782,11 @@ theorem parallelTypeBranchesSelectingWithin_conjuncts {bound : List String}
               rw [hProgL, hProgRe]; exact hProg.2.1
             · refine ⟨hHF, hRF, ?_⟩
               rw [hFairL, hFairRe]; exact hFair.2.1
-            · refine ⟨?_, ?_, hHM, hRM⟩
-              · simpa [hIdsL, hIdsRe] using hMsgOwn.2.1
-              · rw [hActsL, hActsRe]; exact hMsgOwn.2.2.1
+            · refine ⟨?_, hHM, hRM⟩
+              rw [hIdsL, hIdsRe]
+              intro x hx
+              exact absurd (Finset.mem_inter.mp hx).2
+                (Finset.disjoint_left.mp hMsgOwn.2.1 (Finset.mem_inter.mp hx).1)
             · refine ⟨?_, hHPo, hRPo⟩
               rw [hProgL, hProgRe]; exact hProgOwn.2.1
             · refine ⟨?_, hHFo, hRFo⟩
@@ -3020,7 +3224,7 @@ theorem parallelTypeBranchesWithin_cycleData :
               PactType.reannotate_suffixMessageIds]
       | cons next tail =>
           obtain ⟨hC, hP, hS⟩ :=
-            ih ⟨PactType.branchAlphabetActions (next :: tail)⟩
+            ih alphabet
           refine ⟨?_, ?_, ?_⟩ <;>
             simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
               PactType.CanCompleteBeforeTock,
@@ -3077,10 +3281,9 @@ theorem parallelTypeBranchesSelectingWithin_cycleData
                 PactType.reannotate_suffixMessageIds]
       | cons next tail =>
           obtain ⟨hPw, hSw⟩ :=
-            (parallelTypeBranchesWithin_cycleData (next :: tail)
-              ⟨PactType.branchAlphabetActions (next :: tail)⟩).2
+            (parallelTypeBranchesWithin_cycleData (next :: tail) alphabet).2
           obtain ⟨hPs, hSs⟩ :=
-            ih ⟨PactType.branchAlphabetActions (next :: tail)⟩
+            ih alphabet
           by_cases hSel : (action, body) = selected
           · subst hSel
             refine ⟨?_, ?_⟩ <;>
@@ -3258,7 +3461,7 @@ lemma typeWellFormedIn_survivor {bound : List String}
     TypeWellFormedIn bound (left.reannotate alphabet) ∧
       TypeWellFormedIn bound (right.reannotate alphabet) := by
   obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_par h
-  obtain ⟨hA, -, -, -, -, -, -, -, -, -, -, -, -, hIAS⟩ := h
+  obtain ⟨hA, -, -, -, -, -, -, -, -, -, -, -, -, hIAS, -⟩ := h
   have hAlphaWF : alphabet.WellFormed := by
     simp only [PactType.AlphabetWellFormed] at hA
     exact hA.1
@@ -3293,8 +3496,10 @@ lemma typeWellFormedIn_survivor {bound : List String}
       hOwn.2.2.2.2.1.mpr gMO, hOwn.2.2.2.2.2.1.mpr gPO,
       hOwn.2.2.2.2.2.2.mpr gFO,
       PactType.reannotate_interfaceScoped left alphabet gIS,
-      PactType.reannotate_interfaceAlphabetScoped left alphabet gIAS
-        hLeftAvoid⟩
+      PactType.reannotate_interfaceAlphabetScoped left alphabet gIAS.1
+        hLeftAvoid,
+      (PactType.reannotate_conjunctiveMessageOwnership left alphabet).mpr
+        gIAS.2⟩
   · obtain ⟨gA, gB, gH, gTC, gCG, gTR, gSC, gPL, gFL, gMO, gPO, gFO, gIS,
       gIAS⟩ := hRightWF
     have hOwn := PactType.reannotate_ownership_data alphabet right
@@ -3312,8 +3517,10 @@ lemma typeWellFormedIn_survivor {bound : List String}
       hOwn.2.2.2.2.1.mpr gMO, hOwn.2.2.2.2.2.1.mpr gPO,
       hOwn.2.2.2.2.2.2.mpr gFO,
       PactType.reannotate_interfaceScoped right alphabet gIS,
-      PactType.reannotate_interfaceAlphabetScoped right alphabet gIAS
-        hRightAvoid⟩
+      PactType.reannotate_interfaceAlphabetScoped right alphabet gIAS.1
+        hRightAvoid,
+      (PactType.reannotate_conjunctiveMessageOwnership right alphabet).mpr
+        gIAS.2⟩
 
 theorem singletonTypeXOfferAt_sameCycleMessageLinear
     (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)
@@ -3364,9 +3571,9 @@ theorem parallelTypeBranchesWithin_sameCycleMessageLinear :
       | cons next tail =>
           simp only [parallelTypeBranchesWithin,
             PactType.SameCycleMessageLinear]
-          exact ⟨singletonTypeXOfferAt_sameCycleMessageLinear body.alphabet
+          exact ⟨singletonTypeXOfferAt_sameCycleMessageLinear alphabet
               (action, body) hLinear.1 hLinear.2.1,
-            ih hLinear.2.2 ⟨PactType.branchAlphabetActions (next :: tail)⟩⟩
+            ih hLinear.2.2 alphabet⟩
 
 theorem parallelTypeBranchesSelectingWithin_sameCycleMessageLinear
     (selected : BareMessage × PactType) :
@@ -3400,15 +3607,15 @@ theorem parallelTypeBranchesSelectingWithin_sameCycleMessageLinear
           by_cases hSel : (action, body) = selected
           · rw [if_pos hSel]
             simp only [PactType.SameCycleMessageLinear]
-            exact ⟨selectedTypeBranchAt_sameCycleMessageLinear body.alphabet
+            exact ⟨selectedTypeBranchAt_sameCycleMessageLinear alphabet
                 (action, body) hLinear.1 hLinear.2.1,
               parallelTypeBranchesWithin_sameCycleMessageLinear (next :: tail)
-                hLinear.2.2 ⟨PactType.branchAlphabetActions (next :: tail)⟩⟩
+                hLinear.2.2 alphabet⟩
           · rw [if_neg hSel]
             simp only [PactType.SameCycleMessageLinear]
-            exact ⟨singletonTypeXOfferAt_sameCycleMessageLinear body.alphabet
+            exact ⟨singletonTypeXOfferAt_sameCycleMessageLinear alphabet
                 (action, body) hLinear.1 hLinear.2.1,
-              ih hLinear.2.2 ⟨PactType.branchAlphabetActions (next :: tail)⟩⟩
+              ih hLinear.2.2 alphabet⟩
 
 theorem parallelTypeBranchesSelecting_sameCycleMessageLinear
     (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
@@ -3472,6 +3679,106 @@ private lemma branchesGeneratedChildConjuncts {bound : List String}
       · exact ih hBound.2 hHyg.2 hScope.2 hProg.2.2 hFair.2.2 hMsgOwn.2.2.2
           hProgOwn.2.2 hFairOwn.2.2 b hTail
 
+/-- The branch product synchronises on nothing, so its parallel nodes ask
+exactly for the branch separation a conjunctive offer already has. -/
+theorem parallelTypeBranchesWithin_conjunctiveMessageOwnership :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet),
+      PactType.ConjunctiveMessageOwnershipBranches branches →
+      PactType.ConjunctiveMessageOwnership
+        (parallelTypeBranchesWithin alphabet branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro alphabet _
+      simp [parallelTypeBranchesWithin, PactType.ConjunctiveMessageOwnership]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro alphabet hConj
+      simp only [PactType.ConjunctiveMessageOwnershipBranches] at hConj
+      have hBody : PactType.ConjunctiveMessageOwnership
+          (body.reannotate alphabet) :=
+        (PactType.reannotate_conjunctiveMessageOwnership body alphabet).mpr
+          hConj.1
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.ConjunctiveMessageOwnership,
+            PactType.ConjunctiveMessageOwnershipBodies]
+          exact ⟨trivial, hBody, trivial⟩
+      | cons next tail =>
+          simp only [parallelTypeBranchesWithin, singletonTypeXOfferAt,
+            PactType.ConjunctiveMessageOwnership,
+            PactType.ConjunctiveMessageOwnershipBodies]
+          exact ⟨⟨trivial, hBody, trivial⟩, ih alphabet hConj.2.2⟩
+
+/-- The committed product: the selected branch becomes a sequence, the rest
+stay singleton offers, and the parallel nodes again synchronise on nothing. -/
+theorem parallelTypeBranchesSelectingWithin_conjunctiveMessageOwnership
+    (selected : BareMessage × PactType) :
+    ∀ (branches : List (BareMessage × PactType))
+      (alphabet : PactTypeAlphabet),
+      PactType.ConjunctiveMessageOwnershipBranches branches →
+      PactType.ConjunctiveMessageOwnership
+        (parallelTypeBranchesSelectingWithin alphabet selected branches) := by
+  intro branches
+  induction branches with
+  | nil =>
+      intro alphabet _
+      simp [parallelTypeBranchesSelectingWithin,
+        PactType.ConjunctiveMessageOwnership]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro alphabet hConj
+      simp only [PactType.ConjunctiveMessageOwnershipBranches] at hConj
+      have hBody : PactType.ConjunctiveMessageOwnership
+          (body.reannotate alphabet) :=
+        (PactType.reannotate_conjunctiveMessageOwnership body alphabet).mpr
+          hConj.1
+      cases rest with
+      | nil =>
+          by_cases hSel : (action, body) = selected
+          · rw [parallelTypeBranchesSelectingWithin, if_pos hSel]
+            simp only [selectedTypeBranchAt,
+              PactType.ConjunctiveMessageOwnership]
+            exact ⟨trivial, hBody⟩
+          · rw [parallelTypeBranchesSelectingWithin, if_neg hSel]
+            simp only [singletonTypeXOfferAt,
+              PactType.ConjunctiveMessageOwnership,
+              PactType.ConjunctiveMessageOwnershipBodies]
+            exact ⟨trivial, hBody, trivial⟩
+      | cons next tail =>
+          by_cases hSel : (action, body) = selected
+          · rw [parallelTypeBranchesSelectingWithin, if_pos hSel]
+            simp only [selectedTypeBranchAt,
+              PactType.ConjunctiveMessageOwnership]
+            · exact ⟨⟨trivial, hBody⟩,
+                parallelTypeBranchesWithin_conjunctiveMessageOwnership
+                  (next :: tail) alphabet hConj.2.2⟩
+            · exact List.cons_ne_nil _ _
+          · rw [parallelTypeBranchesSelectingWithin, if_neg hSel]
+            simp only [singletonTypeXOfferAt,
+              PactType.ConjunctiveMessageOwnership,
+              PactType.ConjunctiveMessageOwnershipBodies]
+            · exact ⟨⟨trivial, hBody, trivial⟩, ih alphabet hConj.2.2⟩
+            · exact List.cons_ne_nil _ _
+
+/-- The committed offer inherits conjunctive ownership from the offer. -/
+theorem parallelTypeBranchesSelecting_conjunctiveMessageOwnership
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hConj : PactType.ConjunctiveMessageOwnershipBranches branches) :
+    PactType.ConjunctiveMessageOwnership
+      (parallelTypeBranchesSelecting alphabet selected branches) := by
+  cases branches with
+  | nil =>
+      simp [parallelTypeBranchesSelecting,
+        PactType.ConjunctiveMessageOwnership]
+  | cons head tail =>
+      simp only [parallelTypeBranchesSelecting]
+      exact parallelTypeBranchesSelectingWithin_conjunctiveMessageOwnership
+        selected (head :: tail) alphabet hConj
+
 /-- The paper's `<compiler-call-decrease>` at a conjunctive offer: the default
 continuation and every generated child are well formed in the same context. -/
 theorem typeWellFormedIn_offer {bound : List String}
@@ -3482,8 +3789,11 @@ theorem typeWellFormedIn_offer {bound : List String}
       ∀ selected ∈ branches,
         TypeWellFormedIn bound
           (parallelTypeBranchesSelecting alphabet selected branches) := by
-  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS⟩ := h
+  obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
+    hCMO⟩ := h
   have hAoffer := hA
+  have hISoffer := hIS
+  have hIASoffer := hIAS
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -3497,21 +3807,25 @@ theorem typeWellFormedIn_offer {bound : List String}
   simp only [PactType.ParallelFairChoiceOwnership] at hFO
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
+  simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  have hBundle := PactType.parallelMessageOwnershipBranches_of_conjuncts
+    branches hMO.2 hCMO.2
   have hTCsplit : ∀ other : String,
       PactType.TailOccurrences other True elseType ∧
         PactType.TailBranchOccurrences other False branches := by
     intro other
     simpa only [PactType.TailOccurrences] using hTC other
   have hPairwise : List.Pairwise BranchDeclarationsDisjoint branches :=
-    branchDeclarationsDisjoint_pairwise branches hMO.2 hPO.2 hFO.2
+    branchDeclarationsDisjoint_pairwise branches hBundle hPO.2 hFO.2
   have hConj := branchesGeneratedChildConjuncts (bound := bound) branches
-    hB.2 hH.2 hIS.2 hPL.2.1 hFL.2.1 hMO.2 hPO.2 hFO.2
+    hB.2 hH.2 hIS.2 hPL.2.1 hFL.2.1 hBundle hPO.2 hFO.2
   refine ⟨⟨hA.2.2.1, hB.1, hH.1, fun other => (hTCsplit other).1, hCG.1, hTR.1,
-      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1⟩, ?_⟩
+      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1,
+      hCMO.1⟩, ?_⟩
   intro selected hSelected
   obtain ⟨gB, gH, gS, gP, gF, gM, gPo, gFo⟩ :=
     parallelTypeBranchesSelecting_conjuncts (bound := bound) alphabet selected
-      branches hConj hPL.2.1 hFL.2.1 hMO.2 hPO.2 hFO.2
+      branches hConj hPL.2.1 hFL.2.1 hBundle hPO.2 hFO.2
   have hBranchTailRec : ∀ branch ∈ branches, branch.2.TailRecursive := by
     intro branch hMem
     exact tailRecursive_of_mem_branches hTR.2 hMem
@@ -3534,7 +3848,7 @@ theorem typeWellFormedIn_offer {bound : List String}
   have hBranchLinear : PactType.SameCycleMessageLinearBranches branches :=
     hSC.2.1
   exact ⟨committedOffer_alphabetWellFormed alphabet elseType branches selected
-      hAoffer hPairwise hSelected,
+      hAoffer hISoffer hIASoffer hSelected,
     gB, gH,
     fun other => parallelTypeBranchesSelecting_tailOccurrences other alphabet
       selected branches True
@@ -3548,13 +3862,13 @@ theorem typeWellFormedIn_offer {bound : List String}
       branches hBranchLinear,
     gP, gF, gM, gPo, gFo, gS,
     parallelTypeBranchesSelecting_interfaceAlphabetScoped alphabet selected
-      branches (by
-        simp only [PactType.AlphabetWellFormed] at hAoffer
-        exact hAoffer.2.2.2) hPairwise hIAS.2.2
+      branches hIAS.2.2
       (fun action hAction hIn =>
         Finset.disjoint_left.mp hIAS.1
           (Finset.mem_image.mpr ⟨action, hAction, rfl⟩)
-          (Finset.mem_union_right _ hIn))⟩
+          (Finset.mem_union_right _ hIn)),
+    parallelTypeBranchesSelecting_conjunctiveMessageOwnership alphabet selected
+      branches hCMO.2⟩
 
 /-! ### Residual ownership transport (hop 1 of the guard transport)
 
@@ -6284,10 +6598,12 @@ theorem correspondence_simultaneous :
         · exact futureOffersAgree_choice alphabet left right
             (offerBranchesDisjoint_of_ownership left hLeftWF.2.2.2.2.2.2.2.2.2.1
               hLeftWF.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1)
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
             (offerBranchesDisjoint_of_ownership right
               hRightWF.2.2.2.2.2.2.2.2.2.1 hRightWF.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1)
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
             hLeft.2.2 hRight.2.2
     | fairChoice alphabet bid left right =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_fairChoice hWF
@@ -6302,10 +6618,12 @@ theorem correspondence_simultaneous :
         · exact futureOffersAgree_fairChoice alphabet bid left right
             (offerBranchesDisjoint_of_ownership left hLeftWF.2.2.2.2.2.2.2.2.2.1
               hLeftWF.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1)
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
             (offerBranchesDisjoint_of_ownership right
               hRightWF.2.2.2.2.2.2.2.2.2.1 hRightWF.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1)
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
             hLeft.2.2 hRight.2.2
     | seq alphabet left right =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_seq hWF

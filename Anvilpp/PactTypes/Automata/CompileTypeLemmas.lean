@@ -108,8 +108,7 @@ theorem typeCompilationFuel_reannotate
                 rw [ih (sizeOf branchType) hType _ branchType rfl]
             | cons next tail =>
                 rcases next with ⟨nextAction, nextType⟩
-                have hRestEq := restIH hRest
-                  (seen ∪ ({action} ∪ PactType.MessageActions branchType))
+                have hRestEq := restIH hRest seen
                 rw [PactType.reannotateOfferBranches_cons] at hRestEq
                 rw [PactType.reannotateOfferBranches_cons,
                   PactType.reannotateOfferBranches_cons]
@@ -145,11 +144,9 @@ theorem typeCompilationFuel_reannotate
           have hRight : sizeOf right < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, typeCompilationFuel,
             ih (sizeOf left) hLeft
-              (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
-                right interface) left rfl,
+              (PactTypeAlphabet.projectParallel alphabet left.alphabet interface) left rfl,
             ih (sizeOf right) hRight
-              (PactTypeAlphabet.projectParallelRight alphabet right.alphabet
-                left interface) right rfl]
+              (PactTypeAlphabet.projectParallel alphabet right.alphabet interface) right rfl]
       | xoffer _ elseType branches =>
           have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranches : sizeOf branches < n := by

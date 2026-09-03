@@ -7,7 +7,7 @@ namespace TypeLabel
 /-! ## Membership helpers for `sends`, `recvs` and `synced` -/
 
 /-- A message id is sent by a label exactly when the label carries the send observation. -/
-private theorem mem_sends_iff (label : TypeLabel) (msg : MessageId) :
+theorem mem_sends_iff (label : TypeLabel) (msg : MessageId) :
     msg ∈ label.sends ↔ label.contains (.message msg .send) := by
   cases label with
   | tock => simp [sends, contains]
@@ -20,7 +20,7 @@ private theorem mem_sends_iff (label : TypeLabel) (msg : MessageId) :
         exact ⟨.message msg .send, ⟨hMem, rfl⟩, rfl⟩
 
 /-- A message id is received by a label exactly when the label carries the recv observation. -/
-private theorem mem_recvs_iff (label : TypeLabel) (msg : MessageId) :
+theorem mem_recvs_iff (label : TypeLabel) (msg : MessageId) :
     msg ∈ label.recvs ↔ label.contains (.message msg .recv) := by
   cases label with
   | tock => simp [recvs, contains]
@@ -33,7 +33,7 @@ private theorem mem_recvs_iff (label : TypeLabel) (msg : MessageId) :
         exact ⟨.message msg .recv, ⟨hMem, rfl⟩, rfl⟩
 
 /-- Synchronised message ids come from the interface. -/
-private theorem synced_subset (interface : Interface) (left right : TypeLabel) :
+theorem synced_subset (interface : Interface) (left right : TypeLabel) :
     synced interface left right ⊆ interface := by
   intro msg hMem
   simp only [synced, Finset.mem_union, Finset.mem_inter] at hMem
