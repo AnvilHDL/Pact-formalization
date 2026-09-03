@@ -44,14 +44,20 @@ namespace PactTypeAlphabet
         action.1 ∈ interface ∨ action ∈ parent.actions }
 
   /-- Project a new parallel alphabet to the left child.  The left child keeps
-  its own projection, and additionally absorbs the declarations that are new to
-  the reannotated parallel node, so the two projected children still
-  reconstruct the whole parent alphabet. -/
+  its own projection, and additionally absorbs the declarations the right body
+  does not use, so either child alone reconstructs the parent alphabet. -/
   def projectParallelLeft (parent left : PactTypeAlphabet)
       (rightType : PactType) (interface : Interface) : PactTypeAlphabet :=
     { actions :=
         (projectParallelChild parent left interface).actions ∪
           (parent.actions \ PactType.MessageActions rightType) }
+
+  /-- Mirror of `projectParallelLeft` for the right child. -/
+  def projectParallelRight (parent right : PactTypeAlphabet)
+      (leftType : PactType) (interface : Interface) : PactTypeAlphabet :=
+    { actions :=
+        (projectParallelChild parent right interface).actions ∪
+          (parent.actions \ PactType.MessageActions leftType) }
 
 end PactTypeAlphabet
 
@@ -76,8 +82,8 @@ namespace PactType
       | .par _ left right interface =>
           let leftAlphabet := PactTypeAlphabet.projectParallelLeft alphabet
             left.alphabet right interface
-          let rightAlphabet := PactTypeAlphabet.projectParallelChild alphabet
-            right.alphabet interface
+          let rightAlphabet := PactTypeAlphabet.projectParallelRight alphabet
+            right.alphabet left interface
           .par alphabet (reannotate leftAlphabet left)
             (reannotate rightAlphabet right) interface
       | .var _ name => .var alphabet name

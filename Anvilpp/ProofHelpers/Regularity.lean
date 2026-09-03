@@ -18,7 +18,8 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType ∧
     PactType.ParallelMessageOwnership processType ∧
-    PactType.InterfaceScoped processType
+    PactType.InterfaceScoped processType ∧
+    PactType.InterfaceAlphabetScoped processType
 
 /-- Types admitted by the canonical construction. -/
 def AdmissibleType (processType : PactType) : Prop :=

@@ -127,12 +127,14 @@ namespace PactTypeAlphabet
 
   /-- Compatibility of the fixed alphabets at a parallel node.
 
-  On interface ids the two children use complementary polarities.  The parent
-  declares each child's non-interface actions together with the actions the
-  sibling body actually performs — one equation from each side. -/
+  The parent declares no interface action.  On interface ids the two children
+  use complementary polarities.  The parent declares each child's non-interface
+  actions together with the actions the sibling body actually performs — one
+  equation from each side. -/
   structure ParallelCompatible
       (parent left right : PactTypeAlphabet)
       (leftType rightType : PactType) (interface : Interface) : Prop where
+    parent_hides_interface : ∀ action ∈ parent.actions, action.1 ∉ interface
     complementary : ComplementaryOn left right interface
     parent_left : parent.actions \ PactType.MessageActions rightType =
       (hideInterface left interface).actions

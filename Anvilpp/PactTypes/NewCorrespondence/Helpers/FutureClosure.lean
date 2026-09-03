@@ -1977,6 +1977,177 @@ theorem computeFutureOf_exclusiveOffer_branch
     hCard state (by simpa [branchFragment] using hState)
 
 
+/-- A compiled fragment references only states it declares: every symbolic
+future field points at a declared state. -/
+theorem referencesClosed_compileTypeFuel (processType : PactType) (fuel : Nat)
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hDisjoint : processType.OfferBranchesDisjoint) :
+    PendingAutomaton.ReferencesClosed
+      { states := (compileTypeFuel fuel processType).states,
+        edges := (compileTypeFuel fuel processType).edges } := by
+  classical
+  have hTargets :=
+    compileTypeFuel_futureTargetsInStates fuel processType hFuel hDisjoint
+  intro state _ reference hReference
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter] at hReference
+  obtain ⟨edge, ⟨hEdge, -⟩, hIn⟩ := hReference
+  by_cases hTock : edge.label.semantic = TypeLabel.tock
+  · rw [if_pos hTock] at hIn
+    exact absurd hIn (Finset.notMem_empty _)
+  · rw [if_neg hTock] at hIn
+    cases hFuture : edge.future with
+    | explicit offers =>
+        rw [hFuture] at hIn
+        exact absurd hIn (Finset.notMem_empty _)
+    | «at» target removed =>
+        rw [hFuture, Finset.mem_singleton] at hIn
+        rw [hIn]
+        exact hTargets edge hEdge target removed hFuture
+
+/-- A binary-choice root carries no product term of its own. -/
+theorem stateProductInfo_choice_root (alphabet : PactTypeAlphabet)
+    (left right : PactType) :
+    stateProductInfo (.choice alphabet left right) TypeAutomatonState.root =
+      none := by
+  obtain ⟨k, hk⟩ : ∃ k, typeCompilationFuel (.choice alphabet left right) =
+      k + 1 :=
+    ⟨typeCompilationFuel (.choice alphabet left right) - 1, by
+      have := typeCompilationFuel_positive (.choice alphabet left right)
+      omega⟩
+  simp only [stateProductInfo, hk, stateProductInfoFuel]
+
+/-- A child tag peels off a binary choice's product information. -/
+theorem stateProductInfo_choice_child_left (alphabet : PactTypeAlphabet)
+    (left right : PactType) (q : TypeAutomatonState) :
+    stateProductInfo (.choice alphabet left right) (.child 0 q) =
+      stateProductInfo left q := by
+  have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel]
+  exact stateProductInfoFuel_eq_of_sufficient left q
+    (Nat.le_max_left _ _) (Nat.le_refl _)
+
+/-- Mirror for the right child. -/
+theorem stateProductInfo_choice_child_right (alphabet : PactTypeAlphabet)
+    (left right : PactType) (q : TypeAutomatonState) :
+    stateProductInfo (.choice alphabet left right) (.child 1 q) =
+      stateProductInfo right q := by
+  have hFuelEq : typeCompilationFuel (.choice alphabet left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel]
+  exact stateProductInfoFuel_eq_of_sufficient right q
+    (Nat.le_max_right _ _) (Nat.le_refl _)
+
+/-- A fair-choice root carries no product term of its own. -/
+theorem stateProductInfo_fairChoice_root (alphabet : PactTypeAlphabet)
+    (bid : BranchId) (left right : PactType) :
+    stateProductInfo (.fairChoice alphabet bid left right)
+        TypeAutomatonState.root = none := by
+  obtain ⟨k, hk⟩ : ∃ k,
+      typeCompilationFuel (.fairChoice alphabet bid left right) = k + 1 :=
+    ⟨typeCompilationFuel (.fairChoice alphabet bid left right) - 1, by
+      have := typeCompilationFuel_positive
+        (.fairChoice alphabet bid left right)
+      omega⟩
+  simp only [stateProductInfo, hk, stateProductInfoFuel]
+
+/-- A child tag peels off a fair choice's product information. -/
+theorem stateProductInfo_fairChoice_child_left (alphabet : PactTypeAlphabet)
+    (bid : BranchId) (left right : PactType) (q : TypeAutomatonState) :
+    stateProductInfo (.fairChoice alphabet bid left right) (.child 0 q) =
+      stateProductInfo left q := by
+  have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel]
+  exact stateProductInfoFuel_eq_of_sufficient left q
+    (Nat.le_max_left _ _) (Nat.le_refl _)
+
+/-- Mirror for the right child. -/
+theorem stateProductInfo_fairChoice_child_right (alphabet : PactTypeAlphabet)
+    (bid : BranchId) (left right : PactType) (q : TypeAutomatonState) :
+    stateProductInfo (.fairChoice alphabet bid left right) (.child 1 q) =
+      stateProductInfo right q := by
+  have hFuelEq : typeCompilationFuel (.fairChoice alphabet bid left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]; omega
+  simp only [stateProductInfo, hFuelEq, stateProductInfoFuel]
+  exact stateProductInfoFuel_eq_of_sufficient right q
+    (Nat.le_max_right _ _) (Nat.le_refl _)
+
+/-- A root's menu splits into its own offers and the menus of the states it
+references.  This is the menu equation at every non-parallel root: the root
+reaches exactly its copied child entries, and contributes no product term of
+its own.  States below it may still be product states. -/
+theorem computeFutureOf_root_decomposition (whole : PactType)
+    (source : TypeAutomatonState) (entries : Finset TypeAutomatonState)
+    (pending : PendingAutomaton)
+    (hPending : pending =
+      { states := (compileTypeFuel (typeCompilationFuel whole) whole).states,
+        edges := (compileTypeFuel (typeCompilationFuel whole) whole).edges })
+    (hClosed : pending.ReferencesClosed)
+    (hSource : source ∈ pending.states)
+    (hUpper : pending.referencedStates source ⊆ insert source entries)
+    (hEntries : entries ⊆ pending.referencedStates source)
+    (hNoProduct : stateProductInfo whole source = none) :
+    computeFutureOf whole source =
+      pending.offersAt source ∪ entries.biUnion (computeFutureOf whole) := by
+  classical
+  obtain ⟨k, hk⟩ : ∃ k, typeCompilationFuel whole = k + 1 :=
+    ⟨typeCompilationFuel whole - 1, by
+      have := typeCompilationFuel_positive whole
+      omega⟩
+  rw [hk] at hPending
+  set summand : TypeAutomatonState → Finset BareMessage := fun visited =>
+    pending.offersAt visited ∪
+      match stateProductInfo whole visited with
+      | some (interface, left, right, q1, q2) =>
+          hideTypeOffers interface
+            (computeFutureOfFuel k left q1 ∪ computeFutureOfFuel k right q2)
+      | none => ∅ with hSummand
+  have hUnfold : ∀ state,
+      computeFutureOf whole state =
+        (pending.futureReachable state).biUnion summand := by
+    intro state
+    unfold computeFutureOf
+    rw [hk, hPending]
+    simp only [computeFutureOfFuel, hSummand, hPending]
+    rfl
+  have hSourceSummand : summand source = pending.offersAt source := by
+    simp only [hSummand, hNoProduct]
+    simp
+  have hReach := pending.futureReachable_eq_self_union_biUnion source entries
+    hClosed hSource hUpper hEntries
+  rw [hUnfold source, hReach]
+  apply Finset.Subset.antisymm
+  · intro action hAction
+    rw [Finset.mem_biUnion] at hAction
+    obtain ⟨visited, hVisited, hIn⟩ := hAction
+    simp only [Finset.mem_union, Finset.mem_singleton, Finset.mem_biUnion]
+      at hVisited ⊢
+    rcases hVisited with rfl | ⟨entry, hEntry, hEntryReach⟩
+    · rw [hSourceSummand] at hIn
+      exact Or.inl hIn
+    · refine Or.inr ⟨entry, hEntry, ?_⟩
+      rw [hUnfold entry, Finset.mem_biUnion]
+      exact ⟨visited, hEntryReach, hIn⟩
+  · intro action hAction
+    simp only [Finset.mem_union, Finset.mem_biUnion] at hAction
+    rw [Finset.mem_biUnion]
+    rcases hAction with hIn | ⟨entry, hEntry, hIn⟩
+    · refine ⟨source, by simp, ?_⟩
+      rw [hSourceSummand]
+      exact hIn
+    · rw [hUnfold entry, Finset.mem_biUnion] at hIn
+      obtain ⟨visited, hVisited, hInner⟩ := hIn
+      refine ⟨visited, ?_, hInner⟩
+      simp only [Finset.mem_union, Finset.mem_biUnion]
+      exact Or.inr ⟨entry, hEntry, hVisited⟩
+
+
 end
 
 end Pact

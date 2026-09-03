@@ -302,6 +302,68 @@ theorem buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
     simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
+/-- The edges leaving an exclusive-offer root are its branch, wait and default
+edges; the two copied families are tagged and never source the root. -/
+theorem buildExclusiveOfferAutomaton_root_edge_cases
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildExclusiveOfferAutomaton alphabet branches
+      elseAutomaton branchAutomata).edges)
+    (hSource : edge.source = TypeAutomatonState.root) :
+    (∃ indexed ∈ branchAutomata.zipIdx,
+        edge.current = {indexed.1.1} ∧
+          edge.future = .at (childState (indexed.2 + 1)
+            indexed.1.2.initial) {indexed.1.1} ∧
+          edge.target = childState (indexed.2 + 1) indexed.1.2.initial ∧
+          edge.label = .visible (TypeLabel.message indexed.1.1.1
+            indexed.1.1.2)) ∨
+      (∃ environment : TypeEnvironment,
+        edge.current = (environment.future.image typeNeed) ∩
+            typeBranchActions branches ∧
+          edge.future = .at TypeAutomatonState.root
+            ((environment.future.image typeNeed) ∩
+              typeBranchActions branches) ∧
+          edge.target = TypeAutomatonState.root) ∨
+      (edge.current = ∅ ∧
+        edge.future = .at (childState 0 elseAutomaton.initial) ∅ ∧
+        edge.target = childState 0 elseAutomaton.initial) := by
+  classical
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with (((hElseCopy | hBranchCopy) | hBranch) | hWait) | hElse
+  · -- a copied default edge is tagged, so it cannot source the root
+    exfalso
+    rw [childPendingEdges, Finset.mem_image] at hElseCopy
+    obtain ⟨childEdge, -, hEq⟩ := hElseCopy
+    rw [← hEq] at hSource
+    simp [childPendingEdge, childState] at hSource
+  · -- a copied branch edge is tagged too
+    exfalso
+    rw [indexedFragmentEdges, mem_foldl_union_iff] at hBranchCopy
+    rcases hBranchCopy with hEmpty | ⟨indexed, -, hIn⟩
+    · exact absurd hEmpty (Finset.notMem_empty _)
+    · rw [childPendingEdges, Finset.mem_image] at hIn
+      obtain ⟨childEdge, -, hEq⟩ := hIn
+      rw [← hEq] at hSource
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, hIndexed, hIn⟩
+    · exact absurd hEmpty (Finset.notMem_empty _)
+    · rw [Finset.mem_image] at hIn
+      obtain ⟨environment, -, hEq⟩ := hIn
+      exact Or.inl ⟨indexed, hIndexed, by rw [← hEq], by rw [← hEq],
+        by rw [← hEq], by rw [← hEq]⟩
+  · rw [Finset.mem_image] at hWait
+    obtain ⟨environment, -, hEq⟩ := hWait
+    exact Or.inr (Or.inl ⟨environment, by rw [← hEq], by rw [← hEq],
+      by rw [← hEq]⟩)
+  · rw [Finset.mem_image] at hElse
+    obtain ⟨environment, -, hEq⟩ := hElse
+    exact Or.inr (Or.inr ⟨by rw [← hEq], by rw [← hEq], by rw [← hEq]⟩)
+
 end
 
 end Pact

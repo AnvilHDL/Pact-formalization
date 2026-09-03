@@ -541,6 +541,72 @@ namespace PactType
 
 end PactType
 
+/-- Message identifiers declared by an alphabet. -/
+def PactTypeAlphabet.messageIds (alphabet : PactTypeAlphabet) :
+    Finset MessageId :=
+  alphabet.actions.image Prod.fst
+
+/- The second interface-scoping clause: every subterm's own alphabet declares
+none of the interfaces occurring in that subterm. -/
+mutual
+  def PactType.InterfaceAlphabetScoped : PactType → Prop
+    | .message _ _ _ | .progress _ _ | .tock _ | .skip _ | .var _ _ => True
+    | .recur alphabet _ body =>
+        Disjoint (PactTypeAlphabet.messageIds alphabet)
+            (PactType.ParallelInterfaces body) ∧
+          PactType.InterfaceAlphabetScoped body
+    | .choice alphabet left right | .seq alphabet left right |
+        .fairChoice alphabet _ left right =>
+        Disjoint (PactTypeAlphabet.messageIds alphabet)
+            (PactType.ParallelInterfaces left ∪
+              PactType.ParallelInterfaces right) ∧
+          PactType.InterfaceAlphabetScoped left ∧
+          PactType.InterfaceAlphabetScoped right
+    | .par alphabet left right interface =>
+        Disjoint (PactTypeAlphabet.messageIds alphabet)
+            (interface ∪ PactType.ParallelInterfaces left ∪
+              PactType.ParallelInterfaces right) ∧
+          PactType.InterfaceAlphabetScoped left ∧
+          PactType.InterfaceAlphabetScoped right
+    | .xoffer alphabet elseType branches
+    | .offer alphabet elseType branches =>
+        Disjoint (PactTypeAlphabet.messageIds alphabet)
+            (PactType.ParallelInterfaces elseType ∪
+              PactType.ParallelBranchInterfaces branches) ∧
+          PactType.InterfaceAlphabetScoped elseType ∧
+          PactType.InterfaceAlphabetScopedBranches branches
+  termination_by processType => sizeOf processType
+
+  def PactType.InterfaceAlphabetScopedBranches :
+      List (BareMessage × PactType) → Prop
+    | [] => True
+    | (_, processType) :: rest =>
+        PactType.InterfaceAlphabetScoped processType ∧
+          PactType.InterfaceAlphabetScopedBranches rest
+  termination_by branches => sizeOf branches
+decreasing_by
+  all_goals
+    simp_wf
+    omega
+end
+
+/-- A node's own alphabet declares none of the interfaces below it. -/
+theorem PactType.InterfaceAlphabetScoped.avoids :
+    ∀ {processType : PactType}, processType.InterfaceAlphabetScoped →
+      ∀ action ∈ processType.alphabet.actions,
+        action.1 ∉ PactType.ParallelInterfaces processType := by
+  intro processType hScoped action hAction hIn
+  cases processType with
+  | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+      simp [PactType.ParallelInterfaces] at hIn
+  | recur _ _ _ | choice _ _ _ | seq _ _ _ | fairChoice _ _ _ _
+  | par _ _ _ _ | xoffer _ _ _ | offer _ _ _ =>
+      simp only [PactType.ParallelInterfaces] at hIn
+      simp only [PactType.InterfaceAlphabetScoped] at hScoped
+      simp only [PactType.alphabet] at hAction
+      exact Finset.disjoint_left.mp hScoped.1
+        (Finset.mem_image.mpr ⟨action, hAction, rfl⟩) hIn
+
 /-- Two conjunctive-offer branches use disjoint declarations: disjoint head
 actions and continuation actions, disjoint progress identifiers, and disjoint
 fair-choice identifiers.  This is what lets the branches be handed disjoint

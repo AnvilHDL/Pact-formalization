@@ -49,6 +49,21 @@ namespace PactTypeAlphabet
       simp only [Finset.mem_sdiff] at hAvailable
       exact hAvailable.2 hImmediate
 
+  /-- Every declared action has a local environment demanding exactly it. -/
+  theorem singleton_need_mem_localEnvironments (alphabet : PactTypeAlphabet)
+      {action : BareMessage} (hAction : action ∈ alphabet.actions) :
+      ({ immediate := {typeNeed action}, future := ∅, clock := false } :
+        TypeEnvironment) ∈ alphabet.localEnvironments := by
+    classical
+    simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
+      Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
+      Finset.mem_image]
+    refine Or.inr ⟨{typeNeed action}, ?_, ∅, Finset.empty_subset _, rfl⟩
+    intro need hNeed
+    rw [Finset.mem_singleton] at hNeed
+    subst hNeed
+    exact Finset.mem_image.mpr ⟨action, hAction, rfl⟩
+
 end PactTypeAlphabet
 
 @[simp] theorem PactType.mem_transitionAlphabet_iff
@@ -63,5 +78,6 @@ end PactTypeAlphabet
   simp [PactType.transitionAlphabet]
 
 end
+
 
 end Pact

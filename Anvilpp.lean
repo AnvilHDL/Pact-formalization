@@ -1,8 +1,10 @@
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.NewMainHelpers
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.SurvivorTransport
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous
 import Anvilpp.PactTypes.Syntax.TypeOfferDeterminacy
 import Anvilpp.PactTypes.Syntax.PactTypeShapeLemmas
 import Anvilpp.PactTypes.Syntax.TypeOffersAlphabet
+import Anvilpp.PactTypes.Syntax.TypeOffersTransitionBridge
 import Anvilpp.PactTypes.Syntax.TypeOfferEnvironmentAgreementLemmas
 import Anvilpp.PactTypes.Syntax.TypeLabelCombine
 import Anvilpp.PactTypes.Syntax.TypeLabelOwnershipLemmas

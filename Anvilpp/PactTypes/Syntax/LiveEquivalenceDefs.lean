@@ -26,7 +26,47 @@ theorem AgreeOn.trans {a b c : PactTypeAlphabet} {used : Finset BareMessage}
     (hab : AgreeOn a b used) (hbc : AgreeOn b c used) : AgreeOn a c used :=
   fun action hAction => (hab action hAction).trans (hbc action hAction)
 
+theorem AgreeOn.mono {a b : PactTypeAlphabet} {used smaller : Finset BareMessage}
+    (h : AgreeOn a b used) (hSub : smaller ⊆ used) : AgreeOn a b smaller :=
+  fun action hAction => h action (hSub hAction)
+
 end PactTypeAlphabet
+
+namespace TypeEnvironment
+
+/-- Two environments an residual cannot tell apart: they agree on the needs of
+every action it still uses, and on the clock.  This is the formal content of the
+paper's "no child rule or offer menu observes those actions". -/
+def AgreeOnNeeds (env env' : TypeEnvironment) (used : Finset BareMessage) :
+    Prop :=
+  env.clock = env'.clock ∧
+    (∀ action ∈ used, (typeNeed action ∈ env.immediate ↔
+      typeNeed action ∈ env'.immediate)) ∧
+    (∀ action ∈ used, (typeNeed action ∈ env.future ↔
+      typeNeed action ∈ env'.future))
+
+theorem AgreeOnNeeds.refl (env : TypeEnvironment) (used : Finset BareMessage) :
+    AgreeOnNeeds env env used :=
+  ⟨rfl, fun _ _ => Iff.rfl, fun _ _ => Iff.rfl⟩
+
+theorem AgreeOnNeeds.symm {env env' : TypeEnvironment}
+    {used : Finset BareMessage} (h : AgreeOnNeeds env env' used) :
+    AgreeOnNeeds env' env used :=
+  ⟨h.1.symm, fun a ha => (h.2.1 a ha).symm, fun a ha => (h.2.2 a ha).symm⟩
+
+theorem AgreeOnNeeds.mono {env env' : TypeEnvironment}
+    {used smaller : Finset BareMessage} (h : AgreeOnNeeds env env' used)
+    (hSub : smaller ⊆ used) : AgreeOnNeeds env env' smaller :=
+  ⟨h.1, fun a ha => h.2.1 a (hSub ha), fun a ha => h.2.2 a (hSub ha)⟩
+
+theorem AgreeOnNeeds.hasNeed {env env' : TypeEnvironment}
+    {used : Finset BareMessage} (h : AgreeOnNeeds env env' used)
+    {action : BareMessage} (hAction : action ∈ used) :
+    env.hasNeed action ↔ env'.hasNeed action :=
+  h.2.1 action hAction
+
+end TypeEnvironment
+
 
 namespace PactType
 

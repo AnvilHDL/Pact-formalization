@@ -320,7 +320,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -431,7 +431,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -542,7 +542,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ (PactType.skip beta) c f →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -648,7 +648,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {beta : PactTypeAlphabet} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ (PactType.skip beta) c f →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -1117,7 +1117,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.2
              have hScopRight : right.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.2
+               tauto
              have key : ∀ {senv : TypeEnvironment} {st : PactType}
                  {sc sf : Finset BareMessage},
                  TypeOffers senv right l₂ st sc sf →
@@ -1235,7 +1235,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.2
              have hScopRight : right.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.2
+               tauto
              have key : ∀ {senv : TypeEnvironment} {st : PactType}
                  {sc sf : Finset BareMessage},
                  TypeOffers senv right l₂ st sc sf →
@@ -1353,7 +1353,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.1
+               tauto
              have key : ∀ {senv : TypeEnvironment} {st : PactType}
                  {sc sf : Finset BareMessage},
                  TypeOffers senv left l₂ st sc sf →
@@ -1471,7 +1471,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.1
+               tauto
              have key : ∀ {senv : TypeEnvironment} {st : PactType}
                  {sc sf : Finset BareMessage},
                  TypeOffers senv left l₂ st sc sf →
@@ -1590,7 +1590,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -1628,7 +1628,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.1
+               tauto
              have hWFRight : right.AlphabetWellFormed := by
                simp only [PactType.AlphabetWellFormed] at hWF
                exact hWF.2.2.2
@@ -1646,7 +1646,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.2
              have hScopRight : right.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.2
+               tauto
              have keyC : ∀ {lenv renv : TypeEnvironment} {lt rt : PactType} {ll rl : TypeLabel}
                  {lc lf rc rf : Finset BareMessage},
                  TypeOffers lenv left ll lt lc lf →
@@ -1787,7 +1787,7 @@ theorem typeOffers_unique_aux :
                exact hFair.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.1
+               tauto
              have key : ∀ {lt : PactType} {c f : Finset BareMessage},
                  TypeOffers e₂ left l₂ lt c f → left'.shape = lt.shape →
                  hideTypeOffers H current = hideTypeOffers H c := by
@@ -1825,7 +1825,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.1
              have hScopLeft : left.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.1
+               tauto
              have hWFRight : right.AlphabetWellFormed := by
                simp only [PactType.AlphabetWellFormed] at hWF
                exact hWF.2.2.2
@@ -1843,7 +1843,7 @@ theorem typeOffers_unique_aux :
                exact hFair.2.2
              have hScopRight : right.InterfaceScoped := by
                simp only [PactType.InterfaceScoped] at hScop
-               exact hScop.2.2
+               tauto
              have keyC : ∀ {lenv renv : TypeEnvironment} {ll rl : TypeLabel}
                  {lc lf rc rf : Finset BareMessage},
                  TypeOffers lenv left ll (PactType.skip left.alphabet) lc lf →

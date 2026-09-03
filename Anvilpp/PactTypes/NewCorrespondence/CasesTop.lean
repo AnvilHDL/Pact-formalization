@@ -183,7 +183,8 @@ private def ClosedGuardedRegularWith
     PactType.TailRecursive processType ∧
     PactType.SameCycleMessageLinear processType ∧
     PactType.ParallelMessageOwnership processType ∧
-    PactType.InterfaceScoped processType
+    PactType.InterfaceScoped processType ∧
+    PactType.InterfaceAlphabetScoped processType
 
 private theorem closedGuardedRegularWith_of_closedGuardedRegular
     {processType : PactType} (h : ClosedGuardedRegular processType) :

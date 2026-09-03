@@ -148,8 +148,8 @@ theorem typeCompilationFuel_reannotate
               (PactTypeAlphabet.projectParallelLeft alphabet left.alphabet
                 right interface) left rfl,
             ih (sizeOf right) hRight
-              (PactTypeAlphabet.projectParallelChild alphabet right.alphabet
-                interface) right rfl]
+              (PactTypeAlphabet.projectParallelRight alphabet right.alphabet
+                left interface) right rfl]
       | xoffer _ elseType branches =>
           have hElse : sizeOf elseType < n := by rw [← hSize]; simp_wf; omega
           have hBranches : sizeOf branches < n := by

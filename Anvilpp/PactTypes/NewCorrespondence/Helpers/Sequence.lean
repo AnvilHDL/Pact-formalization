@@ -404,20 +404,6 @@ lemma helper_h15_sequence_left_fuse_future_offers_agree
   exact helper_h15_future_offers_agree
     (buildRelationSet_initial right (compileType right))
 
-/-- Proves H15's future agreement for a right-child target of a sequence step. -/
-lemma helper_h15_sequence_right_future_offers_agree
-     (alphabet : PactTypeAlphabet)
-    (left right : PactType)
-    {rightTarget : PactType} {q' : TypeAutomatonState}
-    (hTarget :
-      relationMembership (buildRelationSet right (compileType right))
-        rightTarget q') :
-    computeFutureOf (.seq alphabet left right) (.child 1 q') =
-      typeFutureOffers rightTarget := by
-  exact helper_h15_future_offers_agree
-    (relationMembership_seq_right alphabet left right rightTarget
-      hTarget)
-
 /-- Describes the two semantic forms of a decorated sequence step. -/
 inductive SeqDecoratedStepCase
     (alphabet : PactTypeAlphabet) (right : PactType)

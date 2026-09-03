@@ -1,5 +1,6 @@
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.Sequence
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.MainHelpers
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.OfferAlphabetLemmas
 
 namespace Pact
 
@@ -620,9 +621,8 @@ theorem typeOffers_current_subset_fixedAlphabet
     {current future : Finset BareMessage}
     (hSource : source.AlphabetWellFormed)
     (hOffers : TypeOffers env source label target current future) :
-    current ⊆ source.alphabet.actions := by
-  -- TODO: proof invalidated by the 2026-09-01 spec change (re-stamped parallel children / new offer law).
-  sorry
+    current ⊆ source.alphabet.actions :=
+  typeOffers_current_subset_alphabet hSource hOffers
 
 theorem typeOffers_future_subset_fixedAlphabet
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}

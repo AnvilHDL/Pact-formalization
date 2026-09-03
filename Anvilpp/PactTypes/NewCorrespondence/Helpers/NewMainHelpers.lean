@@ -1,4 +1,5 @@
-import Anvilpp.PactTypes.Syntax.LiveEquivalenceLemmas
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.LiveStepLemmas
+import Anvilpp.PactTypes.Syntax.SurvivorAlphabetLemmas
 import Anvilpp.PactTypes.Syntax.TypeOfferDeterminacy
 import Anvilpp.PactTypes.Syntax.TypeOfferEnvironmentAgreementLemmas
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.EnvironmentAndAlphabet
