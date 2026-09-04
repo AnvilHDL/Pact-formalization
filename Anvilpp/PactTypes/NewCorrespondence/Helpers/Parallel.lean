@@ -4294,13 +4294,19 @@ theorem buildParallelAutomaton_outgoing_pair
           leftEdge.source = p1 ∧ rightEdge.source = p2 ∧
             edge.current =
               hideOffers interface (leftEdge.current ∪ rightEdge.current) ∧
+            edge.label = AutomatonConstructionLabel.combine interface
+              leftEdge.label rightEdge.label ∧
+            syncAutomatonEdges leftAlphabet rightAlphabet interface leftEdge
+              rightEdge ∧
             (edge.target = .final ∨
               edge.target = .pair leftEdge.target rightEdge.target)) ∨
       (∃ rightEdge ∈ resolveAutomatonEdgesWith right rightFuture,
         rightEdge.source = p2 ∧ edge.current = rightEdge.current ∧
+          edge.label = rightEdge.label ∧
           edge.target = .survivor 1 rightEdge.target) ∨
       (∃ leftEdge ∈ resolveAutomatonEdgesWith left leftFuture,
         leftEdge.source = p1 ∧ edge.current = leftEdge.current ∧
+          edge.label = leftEdge.label ∧
           edge.target = .survivor 0 leftEdge.target) := by
   classical
   simp only [buildParallelAutomaton, finishAutomatonFragment,
@@ -4310,11 +4316,11 @@ theorem buildParallelAutomaton_outgoing_pair
       hRightSurvivor) | hLeftDone) | hRightDone) | hDone
   · simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
       Finset.mem_filter, Finset.mem_image] at hRaw
-    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, -⟩, rfl⟩ := hRaw
+    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, hSync, -⟩, rfl⟩ := hRaw
     simp only at hSource
     injection hSource with hLeftSource hRightSource
     refine Or.inl ⟨leftEdge, hLeftMem, rightEdge, hRightMem, hLeftSource,
-      hRightSource, rfl, ?_⟩
+      hRightSource, rfl, rfl, hSync, ?_⟩
     · by_cases hBoth : leftEdge.target ∈ left.accepting ∧
         rightEdge.target ∈ right.accepting
       · exact Or.inl (by simp [hBoth])
@@ -4325,14 +4331,14 @@ theorem buildParallelAutomaton_outgoing_pair
       hLeftComplete
     simp only at hSource
     injection hSource with hLeftSource hRightSource
-    exact Or.inr (Or.inl ⟨rightEdge, hRightMem, hRightSource, rfl, rfl⟩)
+    exact Or.inr (Or.inl ⟨rightEdge, hRightMem, hRightSource, rfl, rfl, rfl⟩)
   · simp only [parallelRightCompleteEdges, Finset.mem_biUnion,
       Finset.mem_filter, Finset.mem_image] at hRightComplete
     obtain ⟨rightState, -, leftEdge, ⟨hLeftMem, -⟩, survivorEnv, -, rfl⟩ :=
       hRightComplete
     simp only at hSource
     injection hSource with hLeftSource hRightSource
-    exact Or.inr (Or.inr ⟨leftEdge, hLeftMem, hLeftSource, rfl, rfl⟩)
+    exact Or.inr (Or.inr ⟨leftEdge, hLeftMem, hLeftSource, rfl, rfl, rfl⟩)
   · simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image] at hLeftSurvivor
     obtain ⟨rightEdge, -, rfl⟩ := hLeftSurvivor
@@ -4491,11 +4497,13 @@ theorem buildParallelAutomaton_pair_referencedStates_subset
             ((⟨right.states, right.edges⟩ :
               PendingAutomaton).referencedStates p2)).image
             (fun pair => TypeAutomatonState.pair pair.1 pair.2) ∪
-          (((⟨right.states, right.edges⟩ :
-              PendingAutomaton).referencedStates p2).image
+          ((((⟨right.states, right.edges⟩ :
+              PendingAutomaton).referencedStates p2).filter
+              (fun t => t ∉ right.accepting)).image
             (TypeAutomatonState.survivor 1)) ∪
-          (((⟨left.states, left.edges⟩ :
-              PendingAutomaton).referencedStates p1).image
+          ((((⟨left.states, left.edges⟩ :
+              PendingAutomaton).referencedStates p1).filter
+              (fun s => s ∉ left.accepting)).image
             (TypeAutomatonState.survivor 0))) := by
   classical
   intro reference hReference
@@ -4551,9 +4559,10 @@ theorem buildParallelAutomaton_pair_referencedStates_subset
     refine Finset.mem_insert_of_mem (Finset.mem_union_left _
       (Finset.mem_union_right _ ?_))
     rw [hMem]
-    exact Finset.mem_image_of_mem _
-      (resolved_target_mem_referencedStates right rightFuture hRightTargets
-        hRightExplicit hRightMem hRightSource (hRightSource ▸ hFilter.1) hTock)
+    exact Finset.mem_image_of_mem _ (Finset.mem_filter.mpr
+      ⟨resolved_target_mem_referencedStates right rightFuture hRightTargets
+        hRightExplicit hRightMem hRightSource (hRightSource ▸ hFilter.1) hTock,
+        hFilter.2.1⟩)
   · -- the right component has completed: enter the left survivor copy
     simp only [parallelRightCompleteEdges, Finset.mem_biUnion,
       Finset.mem_filter, Finset.mem_image] at hRightComplete
@@ -4564,9 +4573,10 @@ theorem buildParallelAutomaton_pair_referencedStates_subset
     simp only [parallelFutureSpec, if_neg hTock, Finset.mem_singleton] at hMem
     refine Finset.mem_insert_of_mem (Finset.mem_union_right _ ?_)
     rw [hMem]
-    exact Finset.mem_image_of_mem _
-      (resolved_target_mem_referencedStates left leftFuture hLeftTargets
-        hLeftExplicit hLeftMem hLeftSource (hLeftSource ▸ hFilter.1) hTock)
+    exact Finset.mem_image_of_mem _ (Finset.mem_filter.mpr
+      ⟨resolved_target_mem_referencedStates left leftFuture hLeftTargets
+        hLeftExplicit hLeftMem hLeftSource (hLeftSource ▸ hFilter.1) hTock,
+        hFilter.2.1⟩)
   · simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image] at hLeftSurvivor
     obtain ⟨rightEdge, -, rfl⟩ := hLeftSurvivor
@@ -4635,8 +4645,9 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
             ((⟨right.states, right.edges⟩ :
               PendingAutomaton).futureReachable p2)).image
             (fun pair => TypeAutomatonState.pair pair.1 pair.2) ∪
-          (((⟨right.states, right.edges⟩ :
-              PendingAutomaton).futureReachable p2).biUnion fun t =>
+          ((((⟨right.states, right.edges⟩ :
+              PendingAutomaton).futureReachable p2).filter
+              (fun t => t ∉ right.accepting)).biUnion fun t =>
             (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture restampedRightFuture).states,
@@ -4645,8 +4656,9 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
                 rightFuture restampedLeftFuture
                 restampedRightFuture).edges⟩ :
               PendingAutomaton).futureReachable (.survivor 1 t)) ∪
-          (((⟨left.states, left.edges⟩ :
-              PendingAutomaton).futureReachable p1).biUnion fun s =>
+          ((((⟨left.states, left.edges⟩ :
+              PendingAutomaton).futureReachable p1).filter
+              (fun s => s ∉ left.accepting)).biUnion fun s =>
             (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture restampedRightFuture).states,
@@ -4740,15 +4752,20 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
                 ⟨hLeftStep hInnerLeft, hRightStep hInnerRight⟩, rfl⟩))
           · obtain ⟨t, ht, rfl⟩ := Finset.mem_image.mp hSurvRight
             refine Finset.mem_union_left _ (Finset.mem_union_right _ ?_)
-            exact Finset.mem_biUnion.mpr ⟨t, hRightStep ht,
+            obtain ⟨htRef, htAcc⟩ := Finset.mem_filter.mp ht
+            exact Finset.mem_biUnion.mpr ⟨t,
+              Finset.mem_filter.mpr ⟨hRightStep htRef, htAcc⟩,
               PendingAutomaton.mem_futureReachable_self _ _⟩
         · obtain ⟨s, hs, rfl⟩ := Finset.mem_image.mp hSurvLeft
           refine Finset.mem_union_right _ ?_
-          exact Finset.mem_biUnion.mpr ⟨s, hLeftStep hs,
+          obtain ⟨hsRef, hsAcc⟩ := Finset.mem_filter.mp hs
+          exact Finset.mem_biUnion.mpr ⟨s,
+            Finset.mem_filter.mpr ⟨hLeftStep hsRef, hsAcc⟩,
             PendingAutomaton.mem_futureReachable_self _ _⟩
       · obtain ⟨t, ht, hInReach⟩ := Finset.mem_biUnion.mp hRightSurvivor
+        have htRef := (Finset.mem_filter.mp ht).1
         have hEntry : (TypeAutomatonState.survivor 1 t) ∈ parent.states :=
-          hSurvivorRightState t (hRightReachStates ht)
+          hSurvivorRightState t (hRightReachStates htRef)
         have hStates : parent.futureReachable (.survivor 1 t) ⊆ parent.states :=
           PendingAutomaton.futureReachable_subset_of_reference_closed parent _
             parent.states hEntry (fun s hs => hParentClosed s hs)
@@ -4762,8 +4779,9 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
         exact Finset.mem_insert_of_mem (Finset.mem_union_left _
           (Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨t, ht, hu⟩)))
     · obtain ⟨s, hs, hInReach⟩ := Finset.mem_biUnion.mp hLeftSurvivor
+      have hsRef := (Finset.mem_filter.mp hs).1
       have hEntry : (TypeAutomatonState.survivor 0 s) ∈ parent.states :=
-        hSurvivorLeftState s (hLeftReachStates hs)
+        hSurvivorLeftState s (hLeftReachStates hsRef)
       have hStates : parent.futureReachable (.survivor 0 s) ⊆ parent.states :=
         PendingAutomaton.futureReachable_subset_of_reference_closed parent _
           parent.states hEntry (fun x hx => hParentClosed x hx)
@@ -4776,5 +4794,90 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
       intro u hu
       exact Finset.mem_insert_of_mem (Finset.mem_union_right _
         (Finset.mem_biUnion.mpr ⟨s, hs, hu⟩))
+
+
+/-- A survivor state entered from a product state carries a non-accepting
+component state: the entry family filters on exactly that. -/
+theorem buildParallelAutomaton_pair_survivorRight_not_accepting
+    (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
+    (interface : Interface)
+    (left right restampedLeft restampedRight : AutomatonFragment)
+    (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
+      TypeAutomatonState → Finset BareMessage)
+    (p1 p2 t : TypeAutomatonState) (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildParallelAutomaton parentAlphabet leftAlphabet
+      rightAlphabet interface left right restampedLeft restampedRight
+      leftFuture rightFuture restampedLeftFuture restampedRightFuture).edges)
+    (hSource : edge.source = .pair p1 p2)
+    (hTarget : edge.target = .survivor 1 t) :
+    t ∉ right.accepting := by
+  classical
+  simp only [buildParallelAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with
+    ((((((hRaw | hLeftComplete) | hRightComplete) | hLeftSurvivor) |
+      hRightSurvivor) | hLeftDone) | hRightDone) | hDone
+  · simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
+      Finset.mem_filter, Finset.mem_image] at hRaw
+    obtain ⟨leftEdge, -, rightEdge, -, rfl⟩ := hRaw
+    simp only at hTarget
+    by_cases hBoth : leftEdge.target ∈ left.accepting ∧
+        rightEdge.target ∈ right.accepting
+    · rw [if_pos hBoth] at hTarget; simp at hTarget
+    · rw [if_neg hBoth] at hTarget; simp at hTarget
+  · simp only [parallelLeftCompleteEdges, Finset.mem_biUnion,
+      Finset.mem_filter, Finset.mem_image] at hLeftComplete
+    obtain ⟨leftState, -, rightEdge, ⟨-, hFilter⟩, env, -, rfl⟩ := hLeftComplete
+    simp only at hTarget
+    injection hTarget with _ hEq
+    exact hEq ▸ hFilter.2.1
+  · simp only [parallelRightCompleteEdges, Finset.mem_biUnion,
+      Finset.mem_filter, Finset.mem_image] at hRightComplete
+    obtain ⟨rightState, -, leftEdge, -, env, -, rfl⟩ := hRightComplete
+    simp only at hTarget; simp at hTarget
+  · simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
+      Finset.mem_image] at hLeftSurvivor
+    obtain ⟨rightEdge, -, rfl⟩ := hLeftSurvivor
+    simp at hSource
+  · simp only [parallelRightCompleteSurvivorEdges, Finset.mem_filter,
+      Finset.mem_image] at hRightSurvivor
+    obtain ⟨leftEdge, -, rfl⟩ := hRightSurvivor
+    simp at hSource
+  · simp only [parallelLeftCompleteDoneEdges, Finset.mem_filter,
+      Finset.mem_image] at hLeftDone
+    obtain ⟨rightEdge, -, rfl⟩ := hLeftDone
+    simp at hSource
+  · simp only [parallelRightCompleteDoneEdges, Finset.mem_filter,
+      Finset.mem_image] at hRightDone
+    obtain ⟨leftEdge, -, rfl⟩ := hRightDone
+    simp at hSource
+  · simp only [parallelDoneEdges, Finset.mem_image, Finset.mem_filter] at hDone
+    obtain ⟨environment, -, rfl⟩ := hDone
+    simp at hSource
+
+
+/-- A state's own published offers are part of its same-cycle menu, once they
+pass the type's alphabet gate: the state is the first term of its own reach. -/
+theorem offersAt_subset_computeFutureOf (processType : PactType)
+    (state : TypeAutomatonState) :
+    ((⟨(compileTypeFuel (typeCompilationFuel processType) processType).states,
+        (compileTypeFuel (typeCompilationFuel processType)
+          processType).edges⟩ : PendingAutomaton).offersAt state).filter
+        (fun action => action ∈ processType.alphabet.actions) ⊆
+      computeFutureOf processType state := by
+  classical
+  obtain ⟨k, hk⟩ : ∃ k, typeCompilationFuel processType = k + 1 :=
+    ⟨typeCompilationFuel processType - 1, by
+      have := typeCompilationFuel_positive processType; omega⟩
+  intro action hAction
+  obtain ⟨hOffers, hGate⟩ := Finset.mem_filter.mp hAction
+  rw [computeFutureOf, hk, computeFutureOfFuel]
+  refine Finset.mem_filter.mpr ⟨?_, hGate⟩
+  refine Finset.mem_biUnion.mpr ⟨state,
+    PendingAutomaton.mem_futureReachable_self _ _, ?_⟩
+  refine Finset.mem_union_left _ ?_
+  rw [← hk]
+  exact hOffers
+
 
 end Pact

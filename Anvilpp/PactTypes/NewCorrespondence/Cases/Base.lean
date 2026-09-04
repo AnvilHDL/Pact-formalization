@@ -1501,6 +1501,11 @@ theorem correspondence_seq_stepIff
     (hFirstIH : StepIffStatement first)
     (hSecondIH : StepIffStatement second)
     (hFirstDisjoint : first.OfferBranchesDisjoint)
+    (hResign : ∀ (component : PactType) (target : PactTypeAlphabet)
+      (residual : PactType) (state : TypeAutomatonState) (fuel : Nat),
+      (residual, state) ∈ buildRelationSetCoreFuel fuel component →
+      ∃ theta, (theta, state) ∈
+        buildRelationSetCoreFuel fuel (component.reannotate target))
     (hSecondDisjoint : second.OfferBranchesDisjoint) :
     StepIffStatement (.seq alphabet first second) := by
   intro residual residual' state env label offers hRelated hSymbol
@@ -1638,7 +1643,8 @@ theorem correspondence_seq_stepIff
         hSecondDisjoint hSecondAlphabet hRelated hRightRelated
         hChildTargetRelated hChildEdge
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    cases compileType_seq_edge_cases alphabet first second hSecondDisjoint
+    cases compileType_seq_edge_cases alphabet first second hFirstDisjoint
+        hResign hSecondDisjoint
         hSecondAlphabet hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge

@@ -1251,4 +1251,101 @@ theorem buildSelectedConjunctiveOfferAutomaton_marker_target
 
 end
 
+
+/-- A variable bound nowhere in `bound` does not occur free, so a type whose
+variables are all bound by `bound` has no tail occurrence of any name outside
+it.  Closed types therefore compile without marker edges. -/
+theorem tailOccurrences_false_of_allVariablesBound (name : String) :
+    ∀ (processType : PactType) (bound : List String),
+      PactType.AllVariablesBound bound processType →
+      name ∉ bound →
+      PactType.TailOccurrences name False processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound : List String), sizeOf branches < n →
+          PactType.AllBranchVariablesBound bound branches →
+          name ∉ bound →
+          PactType.TailBranchOccurrences name False branches := by
+        intro branches bound hSizeB hBound hName
+        induction branches with
+        | nil => simp [PactType.TailBranchOccurrences]
+        | cons head rest restIH =>
+            rcases head with ⟨action, body⟩
+            simp only [PactType.AllBranchVariablesBound] at hBound
+            simp only [PactType.TailBranchOccurrences]
+            refine ⟨ih (sizeOf body) (by simp at hSizeB ⊢; omega) body rfl bound
+              hBound.1 hName, ?_⟩
+            exact restIH (by simp at hSizeB ⊢; omega) hBound.2
+      intro bound hBound hName
+      cases processType with
+      | skip a => simp [PactType.TailOccurrences]
+      | message a m d => simp [PactType.TailOccurrences]
+      | tock a => simp [PactType.TailOccurrences]
+      | progress a p => simp [PactType.TailOccurrences]
+      | var a other =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          intro hEq
+          exact absurd (hEq ▸ hBound) hName
+      | choice a l r =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) l rfl bound hBound.1 hName,
+            ih _ (by subst hSize; simp; omega) r rfl bound hBound.2 hName⟩
+      | fairChoice a b l r =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) l rfl bound hBound.1 hName,
+            ih _ (by subst hSize; simp; omega) r rfl bound hBound.2 hName⟩
+      | seq a l r =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) l rfl bound hBound.1 hName,
+            ih _ (by subst hSize; simp; omega) r rfl bound hBound.2 hName⟩
+      | par a l r i =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) l rfl bound hBound.1 hName,
+            ih _ (by subst hSize; simp; omega) r rfl bound hBound.2 hName⟩
+      | recur a other body =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          by_cases hEq : other = name
+          · rw [if_pos hEq]; trivial
+          · rw [if_neg hEq]
+            refine ih _ (by subst hSize; simp; omega) body rfl (other :: bound)
+              hBound ?_
+            intro hMem
+            rcases List.mem_cons.mp hMem with hHead | hTail
+            · exact hEq hHead.symm
+            · exact hName hTail
+      | xoffer a elseType branches =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound
+              hBound.1 hName,
+            hBranches branches bound (by subst hSize; simp; omega) hBound.2
+              hName⟩
+      | offer a elseType branches =>
+          simp only [PactType.AllVariablesBound] at hBound
+          simp only [PactType.TailOccurrences]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound
+              hBound.1 hName,
+            hBranches branches bound (by subst hSize; simp; omega) hBound.2
+              hName⟩
+
+/-- A closed type compiles without marker edges: every variable is bound by an
+enclosing recursion, which the recursion builder rewrites into a silent
+backedge. -/
+theorem compileTypeFuel_noMarker_of_closed (fuel : Nat) (processType : PactType)
+    (hClosed : PactType.AllVariablesBound [] processType) (name : String) :
+    (compileTypeFuel fuel processType).NoMarkerFor name :=
+  compileTypeFuel_noMarkerFor name fuel processType
+    (tailOccurrences_false_of_allVariablesBound name processType [] hClosed
+      (by simp))
+
+
 end Pact
