@@ -1652,6 +1652,27 @@ theorem PactType.tailClosed_of_allVariablesBound_nil {processType : PactType}
   fun name => PactType.tailOccurrences_of_allVariablesBound_notMem name
     processType [] True hBound (by simp)
 
+/-- Substitution is the identity at a binder that shadows the variable. -/
+theorem PactType.replaceVar_recur_shadowed (name : String)
+    (replacement : PactType) (alphabet : PactTypeAlphabet) (body : PactType) :
+    (PactType.recur alphabet name body).replaceVar name replacement =
+      PactType.recur alphabet name body := by
+  simp [PactType.replaceVar]
+
+/-- Substituting a variable twice is the same as substituting it once, when the
+first replacement leaves no free occurrence behind. -/
+theorem PactType.replaceVar_idem (name : String)
+    (first second : PactType)
+    (hClosed : PactType.TailOccurrences name False first) :
+    ∀ processType : PactType,
+      processType.TailOccurrences name True →
+      (processType.replaceVar name first).replaceVar name second =
+        processType.replaceVar name first := by
+  intro processType hTail
+  exact PactType.replaceVar_eq_self_of_tailOccurrences_false name second _
+    (PactType.tailOccurrences_replaceVar name name _ False hClosed hTail
+      (Or.inl rfl))
+
 /-- Substituting a tail-closed tail-recursive replacement for a name confined
 to tail positions preserves tail recursion: at every nested binder the
 replacement lands where that binder's own tail discipline already holds. -/

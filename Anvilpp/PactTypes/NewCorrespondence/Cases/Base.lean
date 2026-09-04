@@ -573,6 +573,12 @@ theorem correspondence_choice_stepIff
     (hRightMenu : computeFutureOf right (compileType right).initial =
       typeFutureOffers right) :
     StepIffStatement (.choice alphabet left right) := by
+  have hLeftAlphabet' : left.alphabet =
+      (PactType.choice alphabet left right).alphabet := by
+    rw [hLeftAlphabet]; rfl
+  have hRightAlphabet' : right.alphabet =
+      (PactType.choice alphabet left right).alphabet := by
+    rw [hRightAlphabet]; rfl
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove the root's selection edges match the
   -- choice rule, and `hLeftIH`/`hRightIH` handle everything below the root.
@@ -645,7 +651,7 @@ theorem correspondence_choice_stepIff
         typeFutureOffers left := by
       rw [computeFutureOf_binaryChoice_left alphabet left right TypeLabel.silent
         TypeLabel.silent (.choice alphabet left right) hWhole hFuelLeft
-        hLeftDisjoint hLeftProductInfo
+        hLeftDisjoint hLeftAlphabet' hLeftProductInfo
         (compileTypeFuel (typeCompilationFuel left) left).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel left) left le_rfl)]
       show computeFutureOf left (compileType left).initial =
@@ -656,7 +662,7 @@ theorem correspondence_choice_stepIff
         typeFutureOffers right := by
       rw [computeFutureOf_binaryChoice_right alphabet left right TypeLabel.silent
         TypeLabel.silent (.choice alphabet left right) hWhole hFuelRight
-        hRightDisjoint hRightProductInfo
+        hRightDisjoint hRightAlphabet' hRightProductInfo
         (compileTypeFuel (typeCompilationFuel right) right).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel right) right le_rfl)]
       show computeFutureOf right (compileType right).initial =
@@ -869,7 +875,7 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left alphabet left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint hLeftProductInfo
+                (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint hLeftAlphabet' hLeftProductInfo
                 t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -908,7 +914,7 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_left alphabet left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint hLeftProductInfo
+                (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint hLeftAlphabet' hLeftProductInfo
                 t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
@@ -959,7 +965,7 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right alphabet left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelRight hRightDisjoint hRightProductInfo
+                (.choice alphabet left right) hWhole hFuelRight hRightDisjoint hRightAlphabet' hRightProductInfo
                 t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -998,7 +1004,7 @@ theorem correspondence_choice_stepIff
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_binaryChoice_right alphabet left right
                 TypeLabel.silent TypeLabel.silent
-                (.choice alphabet left right) hWhole hFuelRight hRightDisjoint hRightProductInfo
+                (.choice alphabet left right) hWhole hFuelRight hRightDisjoint hRightAlphabet' hRightProductInfo
                 t hStateMem]
       have hTargetEq : state' = .child 1 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
@@ -1030,6 +1036,12 @@ theorem correspondence_fairChoice_stepIff
     (hRightMenu : computeFutureOf right (compileType right).initial =
       typeFutureOffers right) :
     StepIffStatement (.fairChoice alphabet bid left right) := by
+  have hLeftAlphabet' : left.alphabet =
+      (PactType.fairChoice alphabet bid left right).alphabet := by
+    rw [hLeftAlphabet]; rfl
+  have hRightAlphabet' : right.alphabet =
+      (PactType.fairChoice alphabet bid left right).alphabet := by
+    rw [hRightAlphabet]; rfl
   intro residual residual' state env label offers hRelated hSymbol
   -- Given this, now we need to prove the root's two selection edges match
   -- `fair_left`/`fair_right`, and `hLeftIH`/`hRightIH` handle the children.
@@ -1104,7 +1116,7 @@ theorem correspondence_fairChoice_stepIff
         typeFutureOffers left := by
       rw [computeFutureOf_binaryChoice_left alphabet left right (TypeLabel.fair bid true)
         (TypeLabel.fair bid false) (.fairChoice alphabet bid left right) hWhole hFuelLeft
-        hLeftDisjoint hLeftProductInfo
+        hLeftDisjoint hLeftAlphabet' hLeftProductInfo
         (compileTypeFuel (typeCompilationFuel left) left).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel left) left le_rfl)]
       show computeFutureOf left (compileType left).initial =
@@ -1115,7 +1127,7 @@ theorem correspondence_fairChoice_stepIff
         typeFutureOffers right := by
       rw [computeFutureOf_binaryChoice_right alphabet left right (TypeLabel.fair bid true)
         (TypeLabel.fair bid false) (.fairChoice alphabet bid left right) hWhole hFuelRight
-        hRightDisjoint hRightProductInfo
+        hRightDisjoint hRightAlphabet' hRightProductInfo
         (compileTypeFuel (typeCompilationFuel right) right).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel right) right le_rfl)]
       show computeFutureOf right (compileType right).initial =
@@ -1336,7 +1348,7 @@ theorem correspondence_fairChoice_stepIff
               rw [computeFutureOf_binaryChoice_left alphabet left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
                 (.fairChoice alphabet bid left right) hWhole hFuelLeft
-                hLeftDisjoint hLeftProductInfo t hStateMem]
+                hLeftDisjoint hLeftAlphabet' hLeftProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 0 q', hOuterEdge, ?_⟩
@@ -1375,7 +1387,7 @@ theorem correspondence_fairChoice_stepIff
               rw [computeFutureOf_binaryChoice_left alphabet left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
                 (.fairChoice alphabet bid left right) hWhole hFuelLeft
-                hLeftDisjoint hLeftProductInfo t hStateMem]
+                hLeftDisjoint hLeftAlphabet' hLeftProductInfo t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -1426,7 +1438,7 @@ theorem correspondence_fairChoice_stepIff
               rw [computeFutureOf_binaryChoice_right alphabet left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
                 (.fairChoice alphabet bid left right) hWhole hFuelRight
-                hRightDisjoint hRightProductInfo t hStateMem]
+                hRightDisjoint hRightAlphabet' hRightProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
       refine ⟨.child 1 q', hOuterEdge, ?_⟩
@@ -1465,7 +1477,7 @@ theorem correspondence_fairChoice_stepIff
               rw [computeFutureOf_binaryChoice_right alphabet left right
                 (TypeLabel.fair bid true) (TypeLabel.fair bid false)
                 (.fairChoice alphabet bid left right) hWhole hFuelRight
-                hRightDisjoint hRightProductInfo t hStateMem]
+                hRightDisjoint hRightAlphabet' hRightProductInfo t hStateMem]
       have hTargetEq : state' = .child 1 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
       rw [hTargetEq] at hTargetRelated
@@ -1579,7 +1591,8 @@ theorem correspondence_seq_stepIff
             ⟨q', hChildEdge, hChildTargetRelated⟩
           exact ⟨.child 1 (compileType second).initial,
             compileType_seq_lift_left_fuse alphabet
-              offerSkipAlphabet first second hSecondDisjoint hRelated hLeftRelated
+              offerSkipAlphabet first second hSecondDisjoint hSecondAlphabet
+              hRelated hLeftRelated
               hChildTargetRelated hChildStep hNotTock hChildEdge⟩
       | fuse_tock transitionSkipAlphabet offerSkipAlphabet childCurrent
           childFuture hTarget hLabel hChildTransition hChildOffers hFuture =>
@@ -1622,11 +1635,11 @@ theorem correspondence_seq_stepIff
       rcases (hSecondIH hRightRelated hChildSymbol).mp hStep with
         ⟨q', hChildEdge, hChildTargetRelated⟩
       exact compileType_seq_lift_right_step alphabet first second
-        hSecondDisjoint hRelated hRightRelated hChildTargetRelated hStep
-        hChildEdge
+        hSecondDisjoint hSecondAlphabet hRelated hRightRelated
+        hChildTargetRelated hChildEdge
   · rintro ⟨state', hEdge, hTargetRelated⟩
     cases compileType_seq_edge_cases alphabet first second hSecondDisjoint
-        hRelated hEdge hTargetRelated with
+        hSecondAlphabet hRelated hEdge hTargetRelated with
     | leftStep leftResidual leftTarget q q' childFuture hResidual hResidual'
         hState hState' hNonFinal hLeftRelated hLeftTargetRelated hChildEdge
         hNotTock hFuture =>
@@ -1806,6 +1819,15 @@ theorem correspondence_xoffer_stepIff
             residual state →
           computeFutureOf branchType state = typeFutureOffers residual) :
     StepIffStatement (.xoffer alphabet elseType branches) := by
+  have hElseAlphabet' : elseType.alphabet =
+      (PactType.xoffer alphabet elseType branches).alphabet := by
+    rw [hElseAlphabet]; rfl
+  have hBranchAlphabet' : ∀ action branchType,
+      (action, branchType) ∈ branches →
+      branchType.alphabet =
+        (PactType.xoffer alphabet elseType branches).alphabet := by
+    intro action branchType hMem
+    rw [hBranchAlphabet action branchType hMem]; rfl
   simp only [PactType.OfferBranchesDisjoint] at hWholeDisjoint
   have hElseDisjoint : elseType.OfferBranchesDisjoint := hWholeDisjoint.1
   have hBranchesDisjoint : PactType.OfferBranchesDisjointBranches branches :=
@@ -1905,7 +1927,7 @@ theorem correspondence_xoffer_stepIff
         (.child 0 (compileTypeFuel (typeCompilationFuel elseType)
           elseType).initial) = typeFutureOffers elseType := by
       rw [computeFutureOf_exclusiveOffer_else elseType branches
-        (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
+        (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint hElseAlphabet'
         hElseProductInfo
         (compileTypeFuel (typeCompilationFuel elseType) elseType).initial
         (compileTypeFuel_initial_mem (typeCompilationFuel elseType) elseType
@@ -1951,6 +1973,7 @@ theorem correspondence_xoffer_stepIff
             (.xoffer alphabet elseType branches) hWhole index branchAction actualTarget hBranchGet
             (hBranchFuelStrict (branchAction, actualTarget) hBranchMem)
             (hBranchDisjoint branchAction actualTarget hBranchMem)
+            (hBranchAlphabet' branchAction actualTarget hBranchMem)
             (hBranchProductInfo index branchAction actualTarget hBranchGet)
             (compileTypeFuel (typeCompilationFuel actualTarget)
               actualTarget).initial (compileTypeFuel_initial_mem
@@ -2161,6 +2184,7 @@ theorem correspondence_xoffer_stepIff
               (.xoffer alphabet elseType branches) hWhole index branchAction branchType' hBranchGet
               (hBranchFuelStrict (branchAction, branchType') hBranchMem)
               (hBranchDisjoint branchAction branchType' hBranchMem)
+              (hBranchAlphabet' branchAction branchType' hBranchMem)
               (hBranchProductInfo index branchAction branchType' hBranchGet)
               (compileTypeFuel (typeCompilationFuel branchType')
                 branchType').initial (compileTypeFuel_initial_mem
@@ -2249,7 +2273,7 @@ theorem correspondence_xoffer_stepIff
         have hFutureEq : future = typeFutureOffers elseType := by
           rw [← hPFuture, Finset.sdiff_empty]
           rw [computeFutureOf_exclusiveOffer_else elseType branches
-            (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
+            (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint hElseAlphabet'
             hElseProductInfo
             (compileTypeFuel (typeCompilationFuel elseType) elseType).initial
             (compileTypeFuel_initial_mem (typeCompilationFuel elseType) elseType
@@ -2314,7 +2338,7 @@ theorem correspondence_xoffer_stepIff
                 hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint hElseAlphabet'
                 hElseProductInfo t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -2352,7 +2376,7 @@ theorem correspondence_xoffer_stepIff
                 hChildEdgeMem t r hSpec
               simp only [childPendingEdge, childFutureSpec, hSpec, childState]
               rw [computeFutureOf_exclusiveOffer_else elseType branches
-                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint
+                (.xoffer alphabet elseType branches) hWhole hElseFuelStrict hElseDisjoint hElseAlphabet'
                 hElseProductInfo t hStateMem]
       have hTargetEq : state' = .child 0 childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl
@@ -2425,6 +2449,7 @@ theorem correspondence_xoffer_stepIff
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
                 (hBranchFuelStrict (action, branchType) hBranchMem)
                 (hBranchDisjoint action branchType hBranchMem)
+                (hBranchAlphabet' action branchType hBranchMem)
                 (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
               simpa [childFutureSpec, hSpec] using hCFuture
         · simp [childPendingEdge, childState, hCTarget]
@@ -2475,6 +2500,7 @@ theorem correspondence_xoffer_stepIff
                 (.xoffer alphabet elseType branches) hWhole i action branchType hBranchesEq
                 (hBranchFuelStrict (action, branchType) hBranchMem)
                 (hBranchDisjoint action branchType hBranchMem)
+                (hBranchAlphabet' action branchType hBranchMem)
                 (hBranchProductInfo i action branchType hBranchesEq) t hStateMem]
       have hTargetEq : state' = .child (i + 1) childEdge.target := by
         rw [← hPTarget, hChildEdgeEq]; rfl

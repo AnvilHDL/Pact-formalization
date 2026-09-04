@@ -314,6 +314,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
           (branches.map fun selected => (selected.1, compileTypeFuel
             (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
             (parallelTypeBranchesSelecting alphabet selected branches))))
+    (hElseAlphabet : elseType.alphabet = whole.alphabet)
     (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : elseType.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
@@ -353,7 +354,8 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     (typeCompilationFuel whole) (typeCompilationFuel elseType)
     parentFragment elseFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient elseType) hDisjoint hFuel hProductInfo
+    (typeCompilationFuel_sufficient elseType) hDisjoint hElseAlphabet hFuel
+    hProductInfo
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else
       alphabet branches elseFragment selectedConjunctions q edge)
     hCard state (by simpa [elseFragment] using hState)
@@ -374,6 +376,9 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     (hSelected : branches[i]? = some selected)
     (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) +
       1 ≤ typeCompilationFuel whole)
+    (hBranchAlphabet :
+      (parallelTypeBranchesSelecting alphabet selected branches).alphabet =
+        whole.alphabet)
     (hDisjoint : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child (i + 1) visited) =
@@ -429,7 +434,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient branchType)
     (parallelTypeBranchesSelecting_offerBranchesDisjoint selected branches
-      hDisjoint) hFuel hProductInfo
+      hDisjoint) hBranchAlphabet hFuel hProductInfo
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
       alphabet branches elseFragment selectedConjunctions i selected.1
       branchFragment hBranchFragment q edge)

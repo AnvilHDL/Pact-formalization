@@ -329,14 +329,17 @@ def computeFutureOfFuel :
       let fragment := compileTypeFuel (fuel + 1) processType
       let pending : PendingAutomaton :=
         { states := fragment.states, edges := fragment.edges }
-      (pending.futureReachable state).biUnion fun visited =>
+      -- Gated by the type's own alphabet, matching the paper's typing of the
+      -- menu operator as `X : Q_τ → 2^(Ω(τ))`.
+      ((pending.futureReachable state).biUnion fun visited =>
         pending.offersAt visited ∪
           match stateProductInfo processType visited with
           | some (interface, left, right, q1, q2) =>
               hideTypeOffers interface
                 (computeFutureOfFuel fuel left q1 ∪
                   computeFutureOfFuel fuel right q2)
-          | none => ∅
+          | none => ∅).filter fun action =>
+            action ∈ processType.alphabet.actions
 termination_by fuel processType state => (fuel, 1)
 decreasing_by
   all_goals omega

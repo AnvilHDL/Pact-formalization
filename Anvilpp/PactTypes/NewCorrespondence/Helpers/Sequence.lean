@@ -211,6 +211,7 @@ theorem computeFutureOf_sequence_right
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel right)
       right).states) :
@@ -273,6 +274,9 @@ theorem computeFutureOf_sequence_right
   rw [hRightFuel]
   conv_rhs => rw [computeFutureOfFuel]
   rw [hCompileSequence, hCompileRight]
+  rw [show right.alphabet = (PactType.seq alphabet left right).alphabet from by
+    rw [hRightAlphabet]; rfl]
+  refine congrArg (Finset.filter _) ?_
   change (parent.futureReachable (.child 1 state)).biUnion
       (_ : TypeAutomatonState → Finset BareMessage) =
     (child.futureReachable state).biUnion
@@ -387,6 +391,7 @@ lemma helper_h15_sequence_left_fuse_future_offers_agree
      (alphabet skipAlphabet : PactTypeAlphabet)
     (left right : PactType)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
     {q' : TypeAutomatonState}
     (_hTarget :
       relationMembership (buildRelationSet left (compileType left))
@@ -395,6 +400,7 @@ lemma helper_h15_sequence_left_fuse_future_offers_agree
         (.child 1 (compileType right).initial) =
       typeFutureOffers right := by
   rw [computeFutureOf_sequence_right alphabet left right hDisjoint
+    hRightAlphabet
     (compileType right).initial
     (by
       show (compileTypeFuel (typeCompilationFuel right) right).initial ∈
@@ -795,7 +801,7 @@ theorem compileType_seq_lift_left_step
     {leftResidual leftTarget : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
-    {current childFuture : Finset BareMessage}
+    {current childFuture edgeFuture : Finset BareMessage}
     (hParentSource :
       relationMembership
         (buildRelationSet (.seq alphabet left right)
@@ -814,7 +820,7 @@ theorem compileType_seq_lift_left_step
     (hNotTock : label ≠ TypeLabel.tock)
     (hChildEdge :
       (compileType left).HasEdge q env label
-        (TypeOfferSummary.mk current childFuture) q') :
+        (TypeOfferSummary.mk current edgeFuture) q') :
     (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env label
         (TypeOfferSummary.mk current
@@ -826,7 +832,7 @@ theorem compileType_seq_lift_left_step
         (.seq alphabet leftTarget right) (.child 0 q') := by
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge left q q' env label
-      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
+      (TypeOfferSummary.mk current edgeFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -908,7 +914,7 @@ theorem compileType_seq_lift_left_step_tock
     {leftResidual leftTarget : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment}
-    {current childFuture : Finset BareMessage}
+    {current childFuture edgeFuture : Finset BareMessage}
     (hParentSource :
       relationMembership
         (buildRelationSet (.seq alphabet left right)
@@ -926,7 +932,7 @@ theorem compileType_seq_lift_left_step_tock
         (TypeOfferSummary.mk current childFuture) leftTarget)
     (hChildEdge :
       (compileType left).HasEdge q env TypeLabel.tock
-        (TypeOfferSummary.mk current childFuture) q') :
+        (TypeOfferSummary.mk current edgeFuture) q') :
     (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env TypeLabel.tock
         (TypeOfferSummary.mk ∅ ∅)
@@ -941,7 +947,7 @@ theorem compileType_seq_lift_left_step_tock
   subst hCurrentEmpty
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge left q q' env TypeLabel.tock
-      (TypeOfferSummary.mk ∅ childFuture)).mp hChildEdge
+      (TypeOfferSummary.mk ∅ edgeFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -997,10 +1003,11 @@ theorem compileType_seq_lift_left_fuse
      (alphabet skipAlphabet : PactTypeAlphabet)
     (left right : PactType)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
     {leftResidual : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
-    {current childFuture : Finset BareMessage}
+    {current childFuture edgeFuture : Finset BareMessage}
     (hParentSource :
       relationMembership
         (buildRelationSet (.seq alphabet left right)
@@ -1018,7 +1025,7 @@ theorem compileType_seq_lift_left_fuse
     (hNotTock : label ≠ TypeLabel.tock)
     (hChildEdge :
       (compileType left).HasEdge q env label
-        (TypeOfferSummary.mk current childFuture) q') :
+        (TypeOfferSummary.mk current edgeFuture) q') :
     (compileType (.seq alphabet left right)).HasEdge
       (.child 0 q) env label
         (TypeOfferSummary.mk current (typeFutureOffers right \ current))
@@ -1029,7 +1036,7 @@ theorem compileType_seq_lift_left_fuse
         right (.child 1 (compileType right).initial) := by
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge left q q' env label
-      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
+      (TypeOfferSummary.mk current edgeFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -1040,7 +1047,7 @@ theorem compileType_seq_lift_left_fuse
     simpa [compileType] using hAccepting'
   have hSeqFuture :=
     helper_h15_sequence_left_fuse_future_offers_agree alphabet
-      skipAlphabet left right hDisjoint hTarget
+      skipAlphabet left right hDisjoint hRightAlphabet hTarget
   have hParentEdge :
       (compileType (.seq alphabet left right)).HasEdge
         (.child 0 q) env label
@@ -1097,7 +1104,7 @@ theorem compileType_seq_lift_left_fuse_tock
     {leftResidual : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment}
-    {current childFuture : Finset BareMessage}
+    {current childFuture edgeFuture : Finset BareMessage}
     (hParentSource :
       relationMembership
         (buildRelationSet (.seq alphabet left right)
@@ -1114,7 +1121,7 @@ theorem compileType_seq_lift_left_fuse_tock
         (TypeOfferSummary.mk current childFuture) (.skip skipAlphabet))
     (hChildEdge :
       (compileType left).HasEdge q env TypeLabel.tock
-        (TypeOfferSummary.mk current childFuture) q') :
+        (TypeOfferSummary.mk current edgeFuture) q') :
     (compileType (.seq alphabet left right)).HasEdge
       (.child 0 q) env TypeLabel.tock
         (TypeOfferSummary.mk current ∅)
@@ -1125,7 +1132,7 @@ theorem compileType_seq_lift_left_fuse_tock
         right (.child 1 (compileType right).initial) := by
   have hChildResolved :=
     (compileType_hasEdge_iff_hasResolvedEdge left q q' env TypeLabel.tock
-      (TypeOfferSummary.mk current childFuture)).mp hChildEdge
+      (TypeOfferSummary.mk current edgeFuture)).mp hChildEdge
   rcases hChildResolved with ⟨pendingEdge, hPendingMem, hPendingSource,
     hPendingEnv, hPendingLabel, hPendingCurrent, _hPendingFuture,
     hPendingTarget⟩
@@ -1172,6 +1179,7 @@ theorem compileType_seq_lift_right_step
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
     {rightResidual rightTarget : PactType}
     {q q' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1187,8 +1195,6 @@ theorem compileType_seq_lift_right_step
     (_hTarget :
       relationMembership (buildRelationSet right (compileType right))
         rightTarget q')
-    (hChildStep :
-      DecoratedTypeTransition env rightResidual label offers rightTarget)
     (hChildEdge :
       (compileType right).HasEdge q env label offers q') :
     ∃ state',
@@ -1231,6 +1237,7 @@ theorem compileType_seq_lift_right_step
             hPendingMem futureTarget removed hSpec
           have hSeqFuture :=
             computeFutureOf_sequence_right alphabet left right hDisjoint
+              hRightAlphabet
               futureTarget hStateMem
           have hSeqFuture' :
               computeFutureOf (.seq alphabet left right)
@@ -1269,6 +1276,7 @@ theorem compileType_seq_edge_cases
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
     {residual residual' : PactType}
     {state state' : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel}
@@ -1354,6 +1362,7 @@ theorem compileType_seq_edge_cases
               hChildEdgeMem futureTarget removed hSpec
             have hSeqFuture :=
               computeFutureOf_sequence_right alphabet left right hDisjoint
+                hRightAlphabet
                 futureTarget
                 hStateMem
             have hSeqFuture' :

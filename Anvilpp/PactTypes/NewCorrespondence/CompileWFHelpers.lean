@@ -103,6 +103,8 @@ lemma computeFutureOf_skip_root
   simp only [Finset.union_empty]
   apply Finset.eq_empty_iff_forall_notMem.mpr
   intro action hAction
+  rw [Finset.mem_filter] at hAction
+  obtain ⟨hAction, -⟩ := hAction
   simp only [PendingAutomaton.offersAt, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
     Finset.mem_image] at hAction
@@ -203,6 +205,8 @@ lemma computeFutureOf_message_final
   simp only [Finset.union_empty]
   apply Finset.eq_empty_iff_forall_notMem.mpr
   intro action hAction
+  rw [Finset.mem_filter] at hAction
+  obtain ⟨hAction, -⟩ := hAction
   simp only [PendingAutomaton.offersAt, typeCompilationFuel, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
     Finset.mem_image] at hAction
@@ -357,6 +361,8 @@ lemma computeFutureOf_message_root
     · rw [← hEq] at hAction; simp [AutomatonConstructionLabel.semantic] at hAction
   apply Finset.Subset.antisymm
   · intro action hAction
+    rw [Finset.mem_filter] at hAction
+    obtain ⟨hAction, -⟩ := hAction
     simp only [Finset.mem_biUnion] at hAction
     obtain ⟨visited, hVisited, hAction⟩ := hAction
     have hVisitedMem := hUpper hVisited
@@ -366,9 +372,13 @@ lemma computeFutureOf_message_root
     · rw [hNoProductFinal, Finset.union_empty, hOffersFinal] at hAction
       exact absurd hAction (by simp)
   · intro action hAction
-    refine Finset.mem_biUnion.mpr ⟨TypeAutomatonState.root, hLower, ?_⟩
-    rw [hNoProductRoot, Finset.union_empty]
-    rwa [hOffersRoot]
+    rw [Finset.mem_filter]
+    simp only [Finset.mem_singleton] at hAction
+    subst hAction
+    refine ⟨Finset.mem_biUnion.mpr ⟨TypeAutomatonState.root, hLower, ?_⟩,
+      by simpa [PactType.alphabet] using hDeclared⟩
+    rw [hNoProductRoot, Finset.union_empty, hOffersRoot]
+    simp
 
 /-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
 lemma compileType_message_wait_edge
@@ -539,6 +549,8 @@ lemma computeFutureOf_tock_root
   simp only [Finset.union_empty]
   apply Finset.eq_empty_iff_forall_notMem.mpr
   intro action hAction
+  rw [Finset.mem_filter] at hAction
+  obtain ⟨hAction, -⟩ := hAction
   simp only [PendingAutomaton.offersAt, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
     Finset.mem_union, Finset.mem_image] at hAction
@@ -591,6 +603,8 @@ lemma computeFutureOf_tock_final
   simp only [Finset.union_empty]
   apply Finset.eq_empty_iff_forall_notMem.mpr
   intro action hAction
+  rw [Finset.mem_filter] at hAction
+  obtain ⟨hAction, -⟩ := hAction
   simp only [PendingAutomaton.offersAt, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
     Finset.mem_union, Finset.mem_image] at hAction
@@ -738,6 +752,8 @@ lemma computeFutureOf_progress_final
   simp only [Finset.union_empty]
   apply Finset.eq_empty_iff_forall_notMem.mpr
   intro action hAction
+  rw [Finset.mem_filter] at hAction
+  obtain ⟨hAction, -⟩ := hAction
   simp only [PendingAutomaton.offersAt, typeCompilationFuel, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
     Finset.mem_image] at hAction

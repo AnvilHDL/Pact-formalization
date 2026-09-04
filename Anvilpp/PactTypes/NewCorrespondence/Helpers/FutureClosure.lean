@@ -1417,6 +1417,9 @@ private theorem computeFutureOfFuel_succ_stable :
             omega)
           hFuel
       rw [hCompile]
+      -- Both sides carry the same alphabet gate, so it is enough to match
+      -- the sets it filters.
+      refine congrArg (Finset.filter _) ?_
       apply Finset.biUnion_congr rfl
       intro visited _hVisited
       cases hInfo : stateProductInfo processType visited with
@@ -1532,6 +1535,7 @@ theorem computeFutureOfFuel_child_embedding
     (hParentFuel : TypeCompilationFuelSufficient parentType parentFuel)
     (hChildFuel : TypeCompilationFuelSufficient childType childFuel)
     (hChildDisjoint : childType.OfferBranchesDisjoint)
+    (hChildAlphabet : childType.alphabet = parentType.alphabet)
     (hChildFits : childFuel + 1 ≤ parentFuel)
     (hProductInfo : ∀ visited,
       stateProductInfo parentType (childState index visited) =
@@ -1579,6 +1583,8 @@ theorem computeFutureOfFuel_child_embedding
   conv_lhs => rw [computeFutureOfFuel]
   conv_rhs => rw [computeFutureOfFuel]
   rw [hParentCompile, hChildCompile]
+  rw [hChildAlphabet]
+  refine congrArg (Finset.filter _) ?_
   change (parent.futureReachable (childState index state)).biUnion
       (_ : TypeAutomatonState → Finset BareMessage) =
     (child.futureReachable state).biUnion
@@ -1761,6 +1767,7 @@ theorem computeFutureOf_binaryChoice_left
           selectionLeft selectionRight)
     (hFuel : typeCompilationFuel left + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : left.OfferBranchesDisjoint)
+    (hChildAlphabet : left.alphabet = whole.alphabet)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 0 visited) =
         stateProductInfo left visited)
@@ -1796,7 +1803,8 @@ theorem computeFutureOf_binaryChoice_left
     (typeCompilationFuel whole) (typeCompilationFuel left)
     parentFragment leftFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient left) hDisjoint hFuel hProductInfo
+    (typeCompilationFuel_sufficient left) hDisjoint hChildAlphabet hFuel
+    hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_left alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [leftFragment] using hState)
@@ -1815,6 +1823,7 @@ theorem computeFutureOf_binaryChoice_right
           selectionLeft selectionRight)
     (hFuel : typeCompilationFuel right + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : right.OfferBranchesDisjoint)
+    (hChildAlphabet : right.alphabet = whole.alphabet)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 1 visited) =
         stateProductInfo right visited)
@@ -1850,7 +1859,8 @@ theorem computeFutureOf_binaryChoice_right
     (typeCompilationFuel whole) (typeCompilationFuel right)
     parentFragment rightFragment 1 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient right) hDisjoint hFuel hProductInfo
+    (typeCompilationFuel_sufficient right) hDisjoint hChildAlphabet hFuel
+    hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_right alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
     hCard state (by simpa [rightFragment] using hState)
@@ -1868,6 +1878,7 @@ theorem computeFutureOf_exclusiveOffer_else
             (typeCompilationFuel branch.2) branch.2)))
     (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : elseType.OfferBranchesDisjoint)
+    (hChildAlphabet : elseType.alphabet = whole.alphabet)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child 0 visited) =
         stateProductInfo elseType visited)
@@ -1904,7 +1915,8 @@ theorem computeFutureOf_exclusiveOffer_else
     (typeCompilationFuel whole) (typeCompilationFuel elseType)
     parentFragment elseFragment 0 hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient elseType) hDisjoint hFuel hProductInfo
+    (typeCompilationFuel_sufficient elseType) hDisjoint hChildAlphabet hFuel
+    hProductInfo
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_else alphabet
       branches elseFragment branchFragments q edge)
     hCard state (by simpa [elseFragment] using hState)
@@ -1924,6 +1936,7 @@ theorem computeFutureOf_exclusiveOffer_branch
     (hBranch : branches[i]? = some (action, branchType))
     (hFuel : typeCompilationFuel branchType + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : branchType.OfferBranchesDisjoint)
+    (hChildAlphabet : branchType.alphabet = whole.alphabet)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child (i + 1) visited) =
         stateProductInfo branchType visited)
@@ -1970,7 +1983,8 @@ theorem computeFutureOf_exclusiveOffer_branch
     (typeCompilationFuel whole) (typeCompilationFuel branchType)
     parentFragment branchFragment (i + 1) hWhole rfl
     (typeCompilationFuel_sufficient whole)
-    (typeCompilationFuel_sufficient branchType) hDisjoint hFuel hProductInfo
+    (typeCompilationFuel_sufficient branchType) hDisjoint hChildAlphabet hFuel
+    hProductInfo
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch alphabet
       branches elseFragment branchFragments i action branchFragment
       hBranchFragment q edge)
@@ -2141,7 +2155,9 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     (hSource : source ∈ pending.states)
     (hUpper : pending.referencedStates source ⊆ insert source entries)
     (hEntries : entries ⊆ pending.referencedStates source)
-    (hNoProduct : stateProductInfo whole source = none) :
+    (hNoProduct : stateProductInfo whole source = none)
+    (hOffersDeclared : ∀ action ∈ pending.offersAt source,
+      action ∈ whole.alphabet.actions) :
     computeFutureOf whole source =
       pending.offersAt source ∪ entries.biUnion (computeFutureOf whole) := by
   classical
@@ -2159,7 +2175,8 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
       | none => ∅ with hSummand
   have hUnfold : ∀ state,
       computeFutureOf whole state =
-        (pending.futureReachable state).biUnion summand := by
+        ((pending.futureReachable state).biUnion summand).filter
+          fun action => action ∈ whole.alphabet.actions := by
     intro state
     unfold computeFutureOf
     rw [hk, hPending]
@@ -2173,6 +2190,8 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
   rw [hUnfold source, hReach]
   apply Finset.Subset.antisymm
   · intro action hAction
+    rw [Finset.mem_filter] at hAction
+    obtain ⟨hAction, hDecl⟩ := hAction
     rw [Finset.mem_biUnion] at hAction
     obtain ⟨visited, hVisited, hIn⟩ := hAction
     simp only [Finset.mem_union, Finset.mem_singleton, Finset.mem_biUnion]
@@ -2181,18 +2200,18 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     · rw [hSourceSummand] at hIn
       exact Or.inl hIn
     · refine Or.inr ⟨entry, hEntry, ?_⟩
-      rw [hUnfold entry, Finset.mem_biUnion]
-      exact ⟨visited, hEntryReach, hIn⟩
+      rw [hUnfold entry, Finset.mem_filter, Finset.mem_biUnion]
+      exact ⟨⟨visited, hEntryReach, hIn⟩, hDecl⟩
   · intro action hAction
     simp only [Finset.mem_union, Finset.mem_biUnion] at hAction
-    rw [Finset.mem_biUnion]
+    rw [Finset.mem_filter, Finset.mem_biUnion]
     rcases hAction with hIn | ⟨entry, hEntry, hIn⟩
-    · refine ⟨source, by simp, ?_⟩
-      rw [hSourceSummand]
-      exact hIn
-    · rw [hUnfold entry, Finset.mem_biUnion] at hIn
-      obtain ⟨visited, hVisited, hInner⟩ := hIn
-      refine ⟨visited, ?_, hInner⟩
+    · refine ⟨⟨source, by simp, ?_⟩, ?_⟩
+      · rw [hSourceSummand]; exact hIn
+      · exact hOffersDeclared action hIn
+    · rw [hUnfold entry, Finset.mem_filter, Finset.mem_biUnion] at hIn
+      obtain ⟨⟨visited, hVisited, hInner⟩, hDecl⟩ := hIn
+      refine ⟨⟨visited, ?_, hInner⟩, hDecl⟩
       simp only [Finset.mem_union, Finset.mem_biUnion]
       exact Or.inr ⟨entry, hEntry, hVisited⟩
 

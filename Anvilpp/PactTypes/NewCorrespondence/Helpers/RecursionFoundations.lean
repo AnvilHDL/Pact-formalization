@@ -74,6 +74,61 @@ lemma relationMembership_recur_cases
     exact Or.inr ⟨entry.2, entry.1,
       Prod.ext hResidual.symm hState.symm, hBodyRelated⟩
 
+/-- Substitution rewrites branch bodies only, so any predicate reading just the
+branch heads is invariant. -/
+theorem PactType.typeBranchNeeds_replaceBranches
+    (branches : List (BareMessage × PactType)) (name : String)
+    (replacement : PactType) :
+    typeBranchNeeds (PactType.replaceBranches branches name replacement) =
+      typeBranchNeeds branches := by
+  induction branches with
+  | nil => simp [PactType.replaceBranches]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      simp only [PactType.replaceBranches, typeBranchNeeds, List.map_cons] at *
+      simp [ih]
+
+/-- A non-`skip` stays a non-`skip` under substitution, provided the replacement
+is not itself a `skip`.  The recursion caller instantiates the replacement with
+`μX.body`, which is never a `skip`. -/
+theorem PactType.replaceVar_ne_skip
+    (name : String) (replacement : PactType)
+    (hRepl : ∀ a, replacement ≠ .skip a) :
+    ∀ t : PactType, t ≠ .skip t.alphabet →
+      t.replaceVar name replacement ≠
+        .skip (t.replaceVar name replacement).alphabet := by
+  intro t hNot
+  cases t with
+  | skip a => exact absurd rfl hNot
+  | var a other =>
+      simp only [PactType.replaceVar]
+      split
+      · intro h; exact hRepl _ h
+      · simp [PactType.alphabet]
+  | recur a other b =>
+      simp only [PactType.replaceVar]
+      split <;> simp [PactType.alphabet]
+  | _ => simp [PactType.replaceVar, PactType.alphabet]
+
+/-- Branch membership survives substitution, at the substituted body. -/
+theorem PactType.mem_replaceBranches
+    {branches : List (BareMessage × PactType)}
+    {action : BareMessage} {branchType : PactType}
+    (name : String) (replacement : PactType)
+    (hMem : (action, branchType) ∈ branches) :
+    (action, branchType.replaceVar name replacement) ∈
+      PactType.replaceBranches branches name replacement := by
+  induction branches with
+  | nil => cases hMem
+  | cons branch rest ih =>
+      rcases branch with ⟨headAction, headType⟩
+      simp only [PactType.replaceBranches, List.mem_cons] at hMem ⊢
+      rcases hMem with hHead | hRest
+      · injection hHead with hAction hType
+        subst hAction; subst hType
+        exact Or.inl rfl
+      · exact Or.inr (ih hRest)
+
 /-- Substitution is harmless in a residual where the recursive variable has no
 active occurrence.
 
