@@ -1113,6 +1113,486 @@ theorem parallelTypeBranchesSelecting_clockGuarded
       exact parallelTypeBranchesSelectingWithin_clockGuarded selected
         (branch :: rest) alphabet hBranches hSelected
 
+/-- Re-signing changes only alphabet annotations, so it preserves binder
+hygiene.  Moved here from `Simultaneous.lean` so that the relation-preservation
+proof in `AlphabetPreservation.lean` can use it. -/
+theorem PactType.reannotate_binderHygienic (bound : List String) :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
+      PactType.BinderHygienic bound processType →
+        PactType.BinderHygienic bound (processType.reannotate alphabet) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType bound with
+  | _ n ih =>
+      intro alphabet hHolds
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet),
+          sizeOf branches < n →
+          PactType.BinderHygienicBranches bound branches →
+          PactType.BinderHygienicBranches bound
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro branches branchAlphabet hBranchesSize hHold
+        induction branches with
+        | nil => simp [PactType.reannotateBranches,
+            PactType.BinderHygienicBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderHygienicBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateBranches,
+              PactType.BinderHygienicBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize bound branchType rfl
+                branchAlphabet hHold.1,
+              restIH hRestSize hHold.2⟩
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          PactType.BinderHygienicBranches bound branches →
+          PactType.BinderHygienicBranches bound
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.BinderHygienicBranches]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize hHold
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderHygienicBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateOfferBranches_cons,
+              PactType.BinderHygienicBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize bound branchType rfl _
+                hHold.1,
+              restIH _ hRestSize hHold.2⟩
+      cases processType with
+      | message a m d => simp [PactType.reannotate, PactType.BinderHygienic]
+      | progress a p => simp [PactType.reannotate, PactType.BinderHygienic]
+      | tock a => simp [PactType.reannotate, PactType.BinderHygienic]
+      | skip a => simp [PactType.reannotate, PactType.BinderHygienic]
+      | var a name => simp [PactType.reannotate, PactType.BinderHygienic]
+      | recur a name body =>
+          have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨hHolds.1,
+            ih (sizeOf body) hB (name :: bound) body rfl alphabet hHolds.2⟩
+      | choice a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf l) hL bound l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR bound r rfl alphabet hHolds.2⟩
+      | fairChoice a bid l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf l) hL bound l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR bound r rfl alphabet hHolds.2⟩
+      | seq a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf l) hL bound l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR bound r rfl alphabet hHolds.2⟩
+      | par a l r i =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf l) hL bound l rfl _ hHolds.1,
+            ih (sizeOf r) hR bound r rfl _ hHolds.2⟩
+      | xoffer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf e) hE bound e rfl alphabet hHolds.1,
+            hBranches bs alphabet hBs hHolds.2⟩
+      | offer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderHygienic] at hHolds
+          simp only [PactType.reannotate, PactType.BinderHygienic]
+          exact ⟨ih (sizeOf e) hE bound e rfl alphabet hHolds.1,
+            hOfferBranches bs alphabet ∅ hBs hHolds.2⟩
+
+/-- Re-signing changes only alphabet annotations, never binders, so it
+preserves binder freshness. -/
+theorem PactType.reannotate_binderFreshFor (bound : List String) :
+    ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
+      PactType.BinderFreshFor bound processType →
+        PactType.BinderFreshFor bound (processType.reannotate alphabet) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      intro alphabet hHolds
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches bound branches →
+          PactType.BinderFreshForBranches bound
+            (PactType.reannotateBranches branchAlphabet branches) := by
+        intro branches branchAlphabet hBranchesSize hHold
+        induction branches with
+        | nil => simp [PactType.reannotateBranches,
+            PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateBranches,
+              PactType.BinderFreshForBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl
+                branchAlphabet hHold.1,
+              restIH hRestSize hHold.2⟩
+      have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
+          (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
+          sizeOf branches < n →
+          PactType.BinderFreshForBranches bound branches →
+          PactType.BinderFreshForBranches bound
+            (PactType.reannotateOfferBranches branchAlphabet seen branches) := by
+        intro branches branchAlphabet
+        induction branches with
+        | nil =>
+            intro seen _ _
+            simp [PactType.reannotateOfferBranches_nil,
+              PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            intro seen hBranchesSize hHold
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hHold
+            have hBranchSize : sizeOf branchType < n := by
+              have h1 : sizeOf branchType < sizeOf (action, branchType) := by
+                simp_wf; omega
+              have h2 : sizeOf (action, branchType) <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            have hRestSize : sizeOf rest < n := by
+              have h3 : sizeOf rest <
+                  sizeOf ((action, branchType) :: rest) := by simp_wf; omega
+              omega
+            simp only [PactType.reannotateOfferBranches_cons,
+              PactType.BinderFreshForBranches]
+            exact ⟨ih (sizeOf branchType) hBranchSize branchType rfl _
+                hHold.1,
+              restIH _ hRestSize hHold.2⟩
+      cases processType with
+      | message a m d => simp [PactType.reannotate, PactType.BinderFreshFor]
+      | progress a p => simp [PactType.reannotate, PactType.BinderFreshFor]
+      | tock a => simp [PactType.reannotate, PactType.BinderFreshFor]
+      | skip a => simp [PactType.reannotate, PactType.BinderFreshFor]
+      | var a name => simp [PactType.reannotate, PactType.BinderFreshFor]
+      | recur a name body =>
+          have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨hHolds.1, ih (sizeOf body) hB body rfl alphabet hHolds.2⟩
+      | choice a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | fairChoice a bid l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | seq a l r =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf l) hL l rfl alphabet hHolds.1,
+            ih (sizeOf r) hR r rfl alphabet hHolds.2⟩
+      | par a l r i =>
+          have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
+          have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf l) hL l rfl _ hHolds.1,
+            ih (sizeOf r) hR r rfl _ hHolds.2⟩
+      | xoffer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
+            hBranches bs alphabet hBs hHolds.2⟩
+      | offer a e bs =>
+          have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
+          have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
+          simp only [PactType.BinderFreshFor] at hHolds
+          simp only [PactType.reannotate, PactType.BinderFreshFor]
+          exact ⟨ih (sizeOf e) hE e rfl alphabet hHolds.1,
+            hOfferBranches bs alphabet ∅ hBs hHolds.2⟩
+
+/-- Committing a conjunctive offer introduces no binder: the product is built
+from the branch bodies by re-signing and by `xoffer`, `seq` and `par` nodes. -/
+theorem parallelTypeBranchesSelecting_binderFreshFor (bound : List String)
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hBranches : ∀ branch ∈ branches, PactType.BinderFreshFor bound branch.2) :
+    PactType.BinderFreshFor bound
+      (parallelTypeBranchesSelecting alphabet selected branches) := by
+  have hSingleton : ∀ (a : PactTypeAlphabet) (branch : BareMessage × PactType),
+      PactType.BinderFreshFor bound branch.2 →
+      PactType.BinderFreshFor bound (singletonTypeXOfferAt a branch) := by
+    intro a branch hBranch
+    simp only [singletonTypeXOfferAt, PactType.BinderFreshFor,
+      PactType.BinderFreshForBranches]
+    exact ⟨trivial,
+      PactType.reannotate_binderFreshFor bound branch.2 a hBranch, trivial⟩
+  have hSelectedAt : ∀ (a : PactTypeAlphabet) (branch : BareMessage × PactType),
+      PactType.BinderFreshFor bound branch.2 →
+      PactType.BinderFreshFor bound (selectedTypeBranchAt a branch) := by
+    intro a branch hBranch
+    simp only [selectedTypeBranchAt, PactType.BinderFreshFor]
+    exact ⟨trivial, PactType.reannotate_binderFreshFor bound branch.2 a hBranch⟩
+  have hWithin : ∀ (rest : List (BareMessage × PactType))
+      (a : PactTypeAlphabet),
+      (∀ branch ∈ rest, PactType.BinderFreshFor bound branch.2) →
+      PactType.BinderFreshFor bound (parallelTypeBranchesWithin a rest) := by
+    intro rest
+    induction rest with
+    | nil =>
+        intro _ _
+        simp [parallelTypeBranchesWithin, PactType.BinderFreshFor]
+    | cons branch tail ih =>
+        intro a hTail
+        cases tail with
+        | nil => exact hSingleton a branch (hTail branch (by simp))
+        | cons next tail' =>
+            simp only [parallelTypeBranchesWithin, PactType.BinderFreshFor]
+            exact ⟨hSingleton _ branch (hTail branch (by simp)),
+              ih _ (fun item hItem =>
+                hTail item (List.mem_cons_of_mem branch hItem))⟩
+  have hSelectingWithin : ∀ (rest : List (BareMessage × PactType))
+      (a : PactTypeAlphabet),
+      (∀ branch ∈ rest, PactType.BinderFreshFor bound branch.2) →
+      PactType.BinderFreshFor bound
+        (parallelTypeBranchesSelectingWithin a selected rest) := by
+    intro rest
+    induction rest with
+    | nil =>
+        intro _ _
+        simp [parallelTypeBranchesSelectingWithin, PactType.BinderFreshFor]
+    | cons branch tail ih =>
+        intro a hTail
+        cases tail with
+        | nil =>
+            by_cases hEq : branch = selected
+            · simpa only [parallelTypeBranchesSelectingWithin, if_pos hEq] using
+                hSelectedAt a branch (hTail branch (by simp))
+            · simpa only [parallelTypeBranchesSelectingWithin, if_neg hEq] using
+                hSingleton a branch (hTail branch (by simp))
+        | cons next tail' =>
+            by_cases hEq : branch = selected
+            · simp only [parallelTypeBranchesSelectingWithin, if_pos hEq,
+                PactType.BinderFreshFor]
+              exact ⟨hSelectedAt _ branch (hTail branch (by simp)),
+                hWithin _ _ (fun item hItem =>
+                  hTail item (List.mem_cons_of_mem branch hItem))⟩
+            · simp only [parallelTypeBranchesSelectingWithin, if_neg hEq,
+                PactType.BinderFreshFor]
+              exact ⟨hSingleton _ branch (hTail branch (by simp)),
+                ih _ (fun item hItem =>
+                  hTail item (List.mem_cons_of_mem branch hItem))⟩
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, PactType.BinderFreshFor]
+  | cons branch rest =>
+      exact hSelectingWithin (branch :: rest) alphabet hBranches
+
+/-- Re-signing a type by the alphabet it already carries changes nothing. -/
+theorem PactType.reannotate_own_alphabet :
+    ∀ processType : PactType,
+      processType.AlphabetWellFormed →
+      processType.reannotate processType.alphabet = processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hXBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ alphabet : PactTypeAlphabet,
+          PactType.BranchesAlphabetWellFormed alphabet branches →
+          PactType.reannotateBranches alphabet branches = branches := by
+        intro branches
+        induction branches with
+        | nil => intro _ _ _; rw [PactType.reannotateBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons alphabet hWF
+            rcases head with ⟨action, body⟩
+            simp only [PactType.BranchesAlphabetWellFormed] at hWF
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            rw [PactType.reannotateBranches_cons, ← hWF.1,
+              ih (sizeOf body) hBodySize body rfl hWF.2.1,
+              hWF.1, restIH hTailSize alphabet hWF.2.2]
+      have hOBranches : ∀ branches : List (BareMessage × PactType),
+          sizeOf branches < n → ∀ (alphabet : PactTypeAlphabet)
+            (seen : Finset BareMessage),
+          PactType.OfferBranchesWellFormed alphabet seen branches →
+          PactType.reannotateOfferBranches alphabet seen branches = branches := by
+        intro branches
+        induction branches with
+        | nil => intro _ _ _ _; rw [PactType.reannotateOfferBranches_nil]
+        | cons head tail restIH =>
+            intro hSizeCons alphabet seen hWF
+            rcases head with ⟨action, body⟩
+            simp only [PactType.OfferBranchesWellFormed] at hWF
+            have hBodySize : sizeOf body < n := by
+              have h1 : sizeOf body < sizeOf (action, body) := by simp_wf; omega
+              have h2 : sizeOf (action, body) <
+                  sizeOf ((action, body) :: tail) := by simp_wf; omega
+              omega
+            have hTailSize : sizeOf tail < n := by
+              have : sizeOf tail < sizeOf ((action, body) :: tail) := by
+                simp_wf; omega
+              omega
+            rw [PactType.reannotateOfferBranches_cons, ← hWF.1,
+              ih (sizeOf body) hBodySize body rfl hWF.2.1,
+              hWF.1, restIH hTailSize alphabet seen hWF.2.2]
+      intro hWF
+      subst hSize
+      cases processType with
+      | message _ _ _ | progress _ _ | tock _ | skip _ | var _ _ =>
+          simp [PactType.reannotate, PactType.alphabet]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hB : sizeOf body < sizeOf
+              (PactType.recur alphabet name body) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf body) hB body rfl hWF.2.2, hWF.2.1]
+      | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.choice alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.seq alphabet left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.fairChoice alphabet bid left right) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf left) hL left rfl hWF.2.2.2.1, hWF.2.1,
+            ← hWF.2.2.1, ih (sizeOf right) hR right rfl hWF.2.2.2.2, hWF.2.2.1]
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL : sizeOf left < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          have hR : sizeOf right < sizeOf
+              (PactType.par alphabet left right interface) := by simp_wf; omega
+          have hAlphaPar : (PactType.par alphabet left right interface).alphabet
+              = alphabet := rfl
+          simp only [PactType.reannotate, hAlphaPar]
+          have hProjL : alphabet.projectParallel left.alphabet interface =
+              left.alphabet := by
+            rw [← hWF.2.1.parent_eq_left]
+            refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
+            simp only [PactTypeAlphabet.projectParallel,
+              PactTypeAlphabet.hideInterface, Finset.mem_union,
+              Finset.mem_filter]
+            constructor
+            · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)
+              · exact hMem
+              · exact hMem
+            · intro hMem
+              by_cases hIface : action.1 ∈ interface
+              · exact Or.inl ⟨hMem, hIface⟩
+              · exact Or.inr ⟨hMem, hIface⟩
+          have hProjR : alphabet.projectParallel right.alphabet interface =
+              right.alphabet := by
+            rw [← hWF.2.1.parent_eq_right]
+            refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
+            simp only [PactTypeAlphabet.projectParallel,
+              PactTypeAlphabet.hideInterface, Finset.mem_union,
+              Finset.mem_filter]
+            constructor
+            · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)
+              · exact hMem
+              · exact hMem
+            · intro hMem
+              by_cases hIface : action.1 ∈ interface
+              · exact Or.inl ⟨hMem, hIface⟩
+              · exact Or.inr ⟨hMem, hIface⟩
+          rw [hProjL, hProjR, ih (sizeOf left) hL left rfl hWF.2.2.1,
+            ih (sizeOf right) hR right rfl hWF.2.2.2]
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.xoffer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf elseType) hE elseType rfl hWF.2.2.1,
+            hWF.2.1, hXBranches branches hB alphabet hWF.2.2.2]
+      | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hE : sizeOf elseType < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          have hB : sizeOf branches < sizeOf
+              (PactType.offer alphabet elseType branches) := by simp_wf; omega
+          simp only [PactType.reannotate, PactType.alphabet]
+          rw [← hWF.2.1, ih (sizeOf elseType) hE elseType rfl hWF.2.2.1,
+            hWF.2.1, hOBranches branches hB alphabet ∅ hWF.2.2.2]
+
 end
 
 end Pact

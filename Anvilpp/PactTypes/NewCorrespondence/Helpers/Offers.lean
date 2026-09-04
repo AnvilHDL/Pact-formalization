@@ -642,4 +642,108 @@ lemma relationMembership_offer_cases
 
 end
 
+
+/-- A copied right component of a sequence keeps its own marker reach. -/
+theorem buildSequenceAutomaton_markerReachable_right
+    (left right : AutomatonFragment) (name : String)
+    (hClosed : (⟨right.states, right.edges⟩ :
+      PendingAutomaton).ReferencesClosed)
+    (hCard : right.states.card ≤ (buildSequenceAutomaton left right).states.card)
+    (state : TypeAutomatonState) (hState : state ∈ right.states) :
+    MarkerReachable (buildSequenceAutomaton left right) name
+        (childState 1 state) ↔
+      MarkerReachable right name state :=
+  markerReachable_of_outgoing_childPendingEdge _ right 1 name
+    (fun q edge => buildSequenceAutomaton_outgoing_right left right q edge)
+    hClosed hCard state hState
+
+/-- The copied default arm of an exclusive offer keeps its own marker reach. -/
+theorem buildExclusiveOfferAutomaton_markerReachable_else
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (name : String)
+    (hClosed : (⟨elseAutomaton.states, elseAutomaton.edges⟩ :
+      PendingAutomaton).ReferencesClosed)
+    (hCard : elseAutomaton.states.card ≤
+      (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+        branchAutomata).states.card)
+    (state : TypeAutomatonState) (hState : state ∈ elseAutomaton.states) :
+    MarkerReachable (buildExclusiveOfferAutomaton alphabet branches
+        elseAutomaton branchAutomata) name (childState 0 state) ↔
+      MarkerReachable elseAutomaton name state :=
+  markerReachable_of_outgoing_childPendingEdge _ elseAutomaton 0 name
+    (fun q edge => buildExclusiveOfferAutomaton_outgoing_else alphabet branches
+      elseAutomaton branchAutomata q edge)
+    hClosed hCard state hState
+
+/-- A copied branch of an exclusive offer keeps its own marker reach. -/
+theorem buildExclusiveOfferAutomaton_markerReachable_branch
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment))
+    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (name : String)
+    (hBranch : branchAutomata[i]? = some (action, automaton))
+    (hClosed : (⟨automaton.states, automaton.edges⟩ :
+      PendingAutomaton).ReferencesClosed)
+    (hCard : automaton.states.card ≤
+      (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
+        branchAutomata).states.card)
+    (state : TypeAutomatonState) (hState : state ∈ automaton.states) :
+    MarkerReachable (buildExclusiveOfferAutomaton alphabet branches
+        elseAutomaton branchAutomata) name (childState (i + 1) state) ↔
+      MarkerReachable automaton name state :=
+  markerReachable_of_outgoing_childPendingEdge _ automaton (i + 1) name
+    (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch alphabet
+      branches elseAutomaton branchAutomata i action automaton hBranch q edge)
+    hClosed hCard state hState
+
+/-- The copied default arm of a conjunctive offer keeps its own marker reach. -/
+theorem buildSelectedConjunctiveOfferAutomaton_markerReachable_else
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (name : String)
+    (hClosed : (⟨elseAutomaton.states, elseAutomaton.edges⟩ :
+      PendingAutomaton).ReferencesClosed)
+    (hCard : elseAutomaton.states.card ≤
+      (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+        selectedConjunctions).states.card)
+    (state : TypeAutomatonState) (hState : state ∈ elseAutomaton.states) :
+    MarkerReachable (buildSelectedConjunctiveOfferAutomaton alphabet branches
+        elseAutomaton selectedConjunctions) name (childState 0 state) ↔
+      MarkerReachable elseAutomaton name state :=
+  markerReachable_of_outgoing_childPendingEdge _ elseAutomaton 0 name
+    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else alphabet
+      branches elseAutomaton selectedConjunctions q edge)
+    hClosed hCard state hState
+
+/-- A copied branch of a conjunctive offer keeps its own marker reach. -/
+theorem buildSelectedConjunctiveOfferAutomaton_markerReachable_branch
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (name : String)
+    (hBranch : selectedConjunctions[i]? = some (action, automaton))
+    (hClosed : (⟨automaton.states, automaton.edges⟩ :
+      PendingAutomaton).ReferencesClosed)
+    (hCard : automaton.states.card ≤
+      (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+        selectedConjunctions).states.card)
+    (state : TypeAutomatonState) (hState : state ∈ automaton.states) :
+    MarkerReachable (buildSelectedConjunctiveOfferAutomaton alphabet branches
+        elseAutomaton selectedConjunctions) name (childState (i + 1) state) ↔
+      MarkerReachable automaton name state :=
+  markerReachable_of_outgoing_childPendingEdge _ automaton (i + 1) name
+    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
+      alphabet branches elseAutomaton selectedConjunctions i action automaton
+      hBranch q edge)
+    hClosed hCard state hState
+
 end Pact

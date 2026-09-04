@@ -387,6 +387,194 @@ theorem mem_foldl_offer_menu {action : BareMessage} :
       simp only [Finset.mem_union, Finset.mem_singleton, List.mem_cons]
       aesop
 
+/-- The uncommitted singleton product offers every branch head together with
+every branch continuation menu. -/
+theorem typeFutureOffers_parallelTypeBranchesWithin
+    (alphabet : PactTypeAlphabet) :
+    ∀ branches : List (BareMessage × PactType),
+      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
+      (∀ b ∈ branches, b.2.alphabet = alphabet) →
+      (∀ b ∈ branches, b.2.AlphabetWellFormed) →
+      typeFutureOffers (parallelTypeBranchesWithin alphabet branches) =
+        branches.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffers branch.2) ∅ := by
+  have hSkip : typeFutureOffers (PactType.skip alphabet) = ∅ := by
+    simp [typeFutureOffers, typeFutureOffersFuel]
+  have hHideEmpty : ∀ offers : Finset BareMessage,
+      hideTypeOffers (∅ : Interface) offers = offers := by
+    intro offers
+    ext action
+    simp [hideTypeOffers]
+  have hSingle : ∀ b : BareMessage × PactType,
+      b.1 ∈ alphabet.actions → b.2.alphabet = alphabet →
+      b.2.AlphabetWellFormed →
+      typeFutureOffers (singletonTypeXOfferAt alphabet b) =
+        {b.1} ∪ typeFutureOffers b.2 := by
+    intro b hDecl hAlpha hWFb
+    have hOwn : b.2.reannotate alphabet = b.2 := by
+      rw [← hAlpha]
+      exact PactType.reannotate_own_alphabet b.2 hWFb
+    have hGate : ∀ x ∈ [(b.1, b.2.reannotate alphabet)],
+        x.1 ∈ alphabet.actions := by
+      intro x hx
+      rw [List.mem_singleton] at hx
+      subst hx
+      exact hDecl
+    have hUnfold : singletonTypeXOfferAt alphabet b =
+        PactType.xoffer alphabet (PactType.skip alphabet)
+          [(b.1, b.2.reannotate alphabet)] := rfl
+    rw [hUnfold, typeFutureOffers_xoffer alphabet (PactType.skip alphabet)
+      [(b.1, b.2.reannotate alphabet)] hGate, hOwn, hSkip]
+    simp
+  intro branches
+  induction branches with
+  | nil =>
+      intro _ _ _
+      simp [parallelTypeBranchesWithin, hSkip]
+  | cons head rest ih =>
+      intro hDeclared hAlphabet hWF
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesWithin]
+          rw [hSingle head (hDeclared head (by simp)) (hAlphabet head (by simp))
+            (hWF head (by simp))]
+          simp
+      | cons next tail =>
+          simp only [parallelTypeBranchesWithin]
+          rw [typeFutureOffers_parallel,
+            hSingle head (hDeclared head (by simp)) (hAlphabet head (by simp))
+              (hWF head (by simp)),
+            ih (fun b hb => hDeclared b (by simp [hb]))
+              (fun b hb => hAlphabet b (by simp [hb]))
+              (fun b hb => hWF b (by simp [hb]))]
+          rw [hHideEmpty]
+          ext action
+          simp only [List.foldl_cons, mem_foldl_offer_menu, Finset.mem_union,
+            Finset.mem_singleton, Finset.notMem_empty, false_or, or_assoc]
+
+/-- The committed product has the same menu as the uncommitted one: dropping a
+singleton offer's synthetic `skip` arm in favour of a mandatory head keeps both
+that head and its continuation menu on offer. -/
+theorem typeFutureOffers_parallelTypeBranchesSelecting
+    (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
+    (branches : List (BareMessage × PactType))
+    (hDeclared : ∀ b ∈ branches, b.1 ∈ alphabet.actions)
+    (hAlphabet : ∀ b ∈ branches, b.2.alphabet = alphabet)
+    (hWF : ∀ b ∈ branches, b.2.AlphabetWellFormed) :
+    typeFutureOffers (parallelTypeBranchesSelecting alphabet selected branches) =
+      branches.foldl (fun offers branch =>
+        offers ∪ {branch.1} ∪ typeFutureOffers branch.2) ∅ := by
+  have hSkip : ∀ signature : PactTypeAlphabet,
+      typeFutureOffers (PactType.skip signature) = ∅ := by
+    intro signature
+    simp [typeFutureOffers, typeFutureOffersFuel]
+  have hHideEmpty : ∀ offers : Finset BareMessage,
+      hideTypeOffers (∅ : Interface) offers = offers := by
+    intro offers
+    ext action
+    simp [hideTypeOffers]
+  have hSingle : ∀ b : BareMessage × PactType,
+      b.1 ∈ alphabet.actions → b.2.alphabet = alphabet →
+      b.2.AlphabetWellFormed →
+      typeFutureOffers (singletonTypeXOfferAt alphabet b) =
+        {b.1} ∪ typeFutureOffers b.2 := by
+    intro b hDecl hAlpha hWFb
+    have hOwn : b.2.reannotate alphabet = b.2 := by
+      rw [← hAlpha]
+      exact PactType.reannotate_own_alphabet b.2 hWFb
+    have hGate : ∀ x ∈ [(b.1, b.2.reannotate alphabet)],
+        x.1 ∈ alphabet.actions := by
+      intro x hx
+      rw [List.mem_singleton] at hx
+      subst hx
+      exact hDecl
+    have hUnfold : singletonTypeXOfferAt alphabet b =
+        PactType.xoffer alphabet (PactType.skip alphabet)
+          [(b.1, b.2.reannotate alphabet)] := rfl
+    rw [hUnfold, typeFutureOffers_xoffer alphabet (PactType.skip alphabet)
+      [(b.1, b.2.reannotate alphabet)] hGate, hOwn, hSkip]
+    simp
+  have hSelected : ∀ b : BareMessage × PactType,
+      b.1 ∈ alphabet.actions → b.2.alphabet = alphabet →
+      b.2.AlphabetWellFormed →
+      typeFutureOffers (selectedTypeBranchAt alphabet b) =
+        {b.1} ∪ typeFutureOffers b.2 := by
+    intro b hDecl hAlpha hWFb
+    have hOwn : b.2.reannotate alphabet = b.2 := by
+      rw [← hAlpha]
+      exact PactType.reannotate_own_alphabet b.2 hWFb
+    have hEta : ((b.1.1, b.1.2) : BareMessage) = b.1 := rfl
+    have hHead : typeFutureOffers
+        (PactType.message alphabet b.1.1 b.1.2) = {b.1} := by
+      simp only [typeFutureOffers, typeFutureOffersFuel, hEta]
+      rw [if_pos hDecl]
+    have hCan : (PactType.message alphabet b.1.1 b.1.2).CanCompleteBeforeTock =
+        true := by
+      simp [PactType.CanCompleteBeforeTock]
+    have hUnfold : selectedTypeBranchAt alphabet b =
+        PactType.seq alphabet (PactType.message alphabet b.1.1 b.1.2)
+          (b.2.reannotate alphabet) := rfl
+    rw [hUnfold, typeFutureOffers_sequence, if_pos hCan, hHead, hOwn]
+  have hWithin : ∀ rest : List (BareMessage × PactType),
+      (∀ b ∈ rest, b.1 ∈ alphabet.actions) →
+      (∀ b ∈ rest, b.2.alphabet = alphabet) →
+      (∀ b ∈ rest, b.2.AlphabetWellFormed) →
+      typeFutureOffers
+          (parallelTypeBranchesSelectingWithin alphabet selected rest) =
+        rest.foldl (fun offers branch =>
+          offers ∪ {branch.1} ∪ typeFutureOffers branch.2) ∅ := by
+    intro rest
+    induction rest with
+    | nil =>
+        intro _ _ _
+        simp [parallelTypeBranchesSelectingWithin, hSkip]
+    | cons head tail ih =>
+        intro hD hA hW
+        cases tail with
+        | nil =>
+            by_cases hEq : head = selected
+            · simp only [parallelTypeBranchesSelectingWithin, if_pos hEq]
+              rw [hSelected head (hD head (by simp)) (hA head (by simp))
+                (hW head (by simp))]
+              simp
+            · simp only [parallelTypeBranchesSelectingWithin, if_neg hEq]
+              rw [hSingle head (hD head (by simp)) (hA head (by simp))
+                (hW head (by simp))]
+              simp
+        | cons next tail' =>
+            by_cases hEq : head = selected
+            · simp only [parallelTypeBranchesSelectingWithin, if_pos hEq]
+              rw [typeFutureOffers_parallel,
+                hSelected head (hD head (by simp)) (hA head (by simp))
+                  (hW head (by simp)),
+                typeFutureOffers_parallelTypeBranchesWithin alphabet
+                  (next :: tail')
+                  (fun b hb => hD b (by simp [hb]))
+                  (fun b hb => hA b (by simp [hb]))
+                  (fun b hb => hW b (by simp [hb]))]
+              rw [hHideEmpty]
+              ext action
+              simp only [List.foldl_cons, mem_foldl_offer_menu,
+                Finset.mem_union, Finset.mem_singleton, Finset.notMem_empty,
+                false_or, or_assoc]
+            · simp only [parallelTypeBranchesSelectingWithin, if_neg hEq]
+              rw [typeFutureOffers_parallel,
+                hSingle head (hD head (by simp)) (hA head (by simp))
+                  (hW head (by simp)),
+                ih (fun b hb => hD b (by simp [hb]))
+                  (fun b hb => hA b (by simp [hb]))
+                  (fun b hb => hW b (by simp [hb]))]
+              rw [hHideEmpty]
+              ext action
+              simp only [List.foldl_cons, mem_foldl_offer_menu,
+                Finset.mem_union, Finset.mem_singleton, Finset.notMem_empty,
+                false_or, or_assoc]
+  cases branches with
+  | nil => simp [parallelTypeBranchesSelecting, hSkip]
+  | cons head rest =>
+      simp only [parallelTypeBranchesSelecting]
+      exact hWithin (head :: rest) hDeclared hAlphabet hWF
+
 end
 
 end Pact

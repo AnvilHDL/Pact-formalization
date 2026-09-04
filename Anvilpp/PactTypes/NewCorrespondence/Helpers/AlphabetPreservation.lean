@@ -1850,6 +1850,237 @@ theorem tailRecursive_of_mem_branches
       · cases hEq; exact hBranches.1
       · exact ih hBranches.2 hMem
 
+/-- Binder freshness is preserved by the compiler relation: a residual
+represented by one of `source`'s compiled states is rebuilt, re-signed or
+substituted from `source`'s own subterms, so it carries no binder that `source`
+does not already have. -/
+theorem relationMembership_binderFreshFor :
+    ∀ (source residual : PactType) (state : TypeAutomatonState)
+      (bound : List String),
+      PactType.BinderFreshFor bound source →
+      relationMembership (buildRelationSet source (compileType source))
+        residual state →
+      PactType.BinderFreshFor bound residual := by
+  intro source
+  induction hFuel : typeCompilationFuel source using Nat.strong_induction_on
+      generalizing source with
+  | _ n ih =>
+      intro residual state bound hFresh hRelated
+      have hMemBranches : ∀ (bs : List (BareMessage × PactType))
+          (branch : BareMessage × PactType),
+          PactType.BinderFreshForBranches bound bs → branch ∈ bs →
+          PactType.BinderFreshFor bound branch.2 := by
+        intro bs
+        induction bs with
+        | nil => intro _ _ hMem; cases hMem
+        | cons head tail restIH =>
+            rcases head with ⟨headAction, headType⟩
+            intro branch hFreshBs hMem
+            simp only [PactType.BinderFreshForBranches] at hFreshBs
+            simp only [List.mem_cons] at hMem
+            rcases hMem with hEq | hMem
+            · subst hEq; exact hFreshBs.1
+            · exact restIH branch hFreshBs.2 hMem
+      cases source with
+      | skip alphabet =>
+          rw [(relationMembership_skip_cases alphabet hRelated).1]
+          exact hFresh
+      | message alphabet msg dir =>
+          rcases relationMembership_message_cases alphabet msg dir
+              hRelated with hRoot | hFinal
+          · rw [hRoot.1]; exact hFresh
+          · rw [hFinal.1]; simp [PactType.BinderFreshFor]
+      | tock alphabet =>
+          rcases relationMembership_tock_cases alphabet hRelated with
+            hRoot | hFinal
+          · rw [hRoot.1]; exact hFresh
+          · rw [hFinal.1]; simp [PactType.BinderFreshFor]
+      | progress alphabet pid =>
+          rcases relationMembership_progress_cases alphabet pid
+              hRelated with hRoot | hFinal
+          · rw [hRoot.1]; exact hFresh
+          · rw [hFinal.1]; simp [PactType.BinderFreshFor]
+      | var alphabet other =>
+          rw [(relationMembership_var_cases alphabet other hRelated).1]
+          exact hFresh
+      | choice alphabet left right =>
+          have hFields : PactType.BinderFreshFor bound left ∧
+              PactType.BinderFreshFor bound right := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_choice_cases alphabet left right
+              hRelated with hRoot | hLeft | hRight
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            exact hFresh
+          · rcases hLeft with ⟨q, _, hLeftRelated⟩
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel left) hLeftFuel left rfl residual q
+              bound hFields.1 hLeftRelated
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              bound hFields.2 hRightRelated
+      | fairChoice alphabet bid left right =>
+          have hFields : PactType.BinderFreshFor bound left ∧
+              PactType.BinderFreshFor bound right := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_fairChoice_cases alphabet bid left
+              right hRelated with hRoot | hLeft | hRight
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            exact hFresh
+          · rcases hLeft with ⟨q, _, hLeftRelated⟩
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel left) hLeftFuel left rfl residual q
+              bound hFields.1 hLeftRelated
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              bound hFields.2 hRightRelated
+      | seq alphabet left right =>
+          have hFields : PactType.BinderFreshFor bound left ∧
+              PactType.BinderFreshFor bound right := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_seq_cases alphabet left right
+              hRelated with hLeft | hRight
+          · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            simpa only [PactType.BinderFreshFor] using
+              And.intro (ih (typeCompilationFuel left) hLeftFuel left rfl
+                  leftResidual q bound hFields.1 hLeftRelated) hFields.2
+          · rcases hRight with ⟨q, _, hRightRelated⟩
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel right) hRightFuel right rfl residual q
+              bound hFields.2 hRightRelated
+      | par alphabet left right interface =>
+          have hFields : PactType.BinderFreshFor bound left ∧
+              PactType.BinderFreshFor bound right := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_par_cases alphabet left right
+              interface hRelated with hPair | hSurvL | hSurvR | hFinal
+          · rcases hPair with ⟨q1, q2, leftResidual, rightResidual,
+              hEntry, hLeftRelated, hRightRelated⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel : typeCompilationFuel left < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            have hRightFuel : typeCompilationFuel right < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            simpa only [PactType.BinderFreshFor] using
+              And.intro (ih (typeCompilationFuel left) hLeftFuel left rfl
+                  leftResidual q1 bound hFields.1 hLeftRelated)
+                (ih (typeCompilationFuel right) hRightFuel right rfl
+                  rightResidual q2 bound hFields.2 hRightRelated)
+          · rcases hSurvL with ⟨q1, residualLeft, hEntry, hLeftRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hLeftFuel :
+                typeCompilationFuel (left.reannotate alphabet) < n := by
+              rw [← hFuel, typeCompilationFuel_reannotate]
+              simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel (left.reannotate alphabet)) hLeftFuel
+              (left.reannotate alphabet) rfl residualLeft q1 bound
+              (PactType.reannotate_binderFreshFor bound left alphabet hFields.1)
+              hLeftRelated
+          · rcases hSurvR with ⟨q2, residualRight, hEntry, hRightRelated, _⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hRightFuel :
+                typeCompilationFuel (right.reannotate alphabet) < n := by
+              rw [← hFuel, typeCompilationFuel_reannotate]
+              simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel (right.reannotate alphabet))
+              hRightFuel (right.reannotate alphabet) rfl residualRight q2 bound
+              (PactType.reannotate_binderFreshFor bound right alphabet
+                hFields.2)
+              hRightRelated
+          · injection hFinal with hResidual _
+            rw [hResidual]
+            simp [PactType.BinderFreshFor]
+      | recur alphabet binder body =>
+          have hFields : binder ∉ bound ∧
+              PactType.BinderFreshFor bound body := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_recur_cases alphabet binder body
+              hRelated with hRoot | hBody
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            exact hFresh
+          · rcases hBody with ⟨q, bodyResidual, hEntry, hBodyRelated⟩
+            injection hEntry with hResidual _
+            rw [hResidual]
+            have hBodyFuel : typeCompilationFuel body < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact PactType.binderFreshFor_replaceVar binder
+              (PactType.recur alphabet binder body) bodyResidual bound
+              (ih (typeCompilationFuel body) hBodyFuel body rfl bodyResidual q
+                bound hFields.2 hBodyRelated)
+              hFresh
+      | xoffer alphabet elseType branches =>
+          have hFields : PactType.BinderFreshFor bound elseType ∧
+              PactType.BinderFreshForBranches bound branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_xoffer_cases alphabet elseType
+              branches hRelated with hRoot | hElse | hBranch
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            exact hFresh
+          · rcases hElse with ⟨q, _, hElseRelated⟩
+            have hElseFuel : typeCompilationFuel elseType < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
+              residual q bound hFields.1 hElseRelated
+          · rcases hBranch with ⟨i, action, branchType, q, hGet, _,
+              hBranchRelated⟩
+            have hMember : (action, branchType) ∈ branches :=
+              List.mem_of_getElem? hGet
+            have hBranchFuel : typeCompilationFuel branchType < n := by
+              have hLe : typeCompilationFuel branchType ≤
+                  typeBranchCompilationFuel branches := by
+                simpa using typeCompilationFuel_le_typeBranchCompilationFuel
+                  branches (action, branchType) hMember
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel branchType) hBranchFuel branchType rfl
+              residual q bound
+              (hMemBranches branches (action, branchType) hFields.2 hMember)
+              hBranchRelated
+      | offer alphabet elseType branches =>
+          have hFields : PactType.BinderFreshFor bound elseType ∧
+              PactType.BinderFreshForBranches bound branches := by
+            simpa only [PactType.BinderFreshFor] using hFresh
+          rcases relationMembership_offer_cases alphabet elseType
+              branches hRelated with hRoot | hElse | hSelected
+          · injection hRoot with hResidual _
+            rw [hResidual]
+            exact hFresh
+          · rcases hElse with ⟨q, _, hElseRelated⟩
+            have hElseFuel : typeCompilationFuel elseType < n := by
+              rw [← hFuel]; simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
+              residual q bound hFields.1 hElseRelated
+          · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
+            have hSelectedFuel : typeCompilationFuel
+                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
+              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
+              simp only [typeCompilationFuel]; omega
+            exact ih (typeCompilationFuel
+                (parallelTypeBranchesSelecting alphabet selected branches))
+              hSelectedFuel (parallelTypeBranchesSelecting alphabet selected branches)
+              rfl residual q bound
+              (parallelTypeBranchesSelecting_binderFreshFor bound alphabet
+                selected branches
+                (fun branch hBranch =>
+                  hMemBranches branches branch hFields.2 hBranch))
+              hSelectedRelated
+
 /-- The residual of a compiled state keeps every tail-occurrence judgement of
 its source.  The statement is parametric in the tail parameter because a
 sequence's left child and a parallel's children carry the constant `False`. -/

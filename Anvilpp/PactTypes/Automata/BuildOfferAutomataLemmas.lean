@@ -459,6 +459,15 @@ def exclusiveOfferEntries (elseAutomaton : AutomatonFragment)
     (branchAutomata.zipIdx.map fun indexed =>
       childState (indexed.2 + 1) indexed.1.2.initial).toFinset
 
+/-- The entry states of a compiled conjunctive offer: the copied default entry
+and one copied entry per selected conjunction. -/
+def conjunctiveOfferEntries (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState :=
+  insert (childState 0 elseAutomaton.initial)
+    (selectedConjunctions.zipIdx.map fun indexed =>
+      childState (indexed.2 + 1) indexed.1.2.initial).toFinset
+
 /-- A root references nothing beyond itself and those entries. -/
 theorem buildExclusiveOfferAutomaton_referencedStates_root_subset
     (alphabet : PactTypeAlphabet)
@@ -575,6 +584,158 @@ theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
           hGuard⟩, rfl⟩
     · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
         TypeLabel.message])]
+      exact Finset.mem_singleton_self _
+
+/-- A conjunctive-offer root references nothing beyond itself and those
+entries. -/
+theorem buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
+    ({ states := (buildSelectedConjunctiveOfferAutomaton alphabet branches
+         elseAutomaton selectedConjunctions).states
+       edges := (buildSelectedConjunctiveOfferAutomaton alphabet branches
+         elseAutomaton selectedConjunctions).edges } :
+        PendingAutomaton).referencedStates TypeAutomatonState.root ⊆
+      insert TypeAutomatonState.root
+        (conjunctiveOfferEntries elseAutomaton selectedConjunctions) := by
+  classical
+  intro state hState
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter] at hState
+  obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hState
+  by_cases hTock : edge.label.semantic = TypeLabel.tock
+  · rw [if_pos hTock] at hIn
+    exact absurd hIn (Finset.notMem_empty _)
+  · rw [if_neg hTock] at hIn
+    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+      Finset.mem_union] at hEdge
+    rcases hEdge with
+      ((((hElseCopy | hConjunctionCopy) | hEnabled) | hWait) | hResolved)
+    · -- a copied default edge is tagged, so it cannot source the root
+      exfalso
+      rw [childPendingEdges, Finset.mem_image] at hElseCopy
+      obtain ⟨childEdge, -, hEq⟩ := hElseCopy
+      rw [← hEq] at hSource
+      simp [childPendingEdge, childState] at hSource
+    · -- a copied conjunction edge is tagged too
+      exfalso
+      rw [indexedFragmentEdges, mem_foldl_union_iff] at hConjunctionCopy
+      rcases hConjunctionCopy with hEmpty | ⟨indexed, -, hCopy⟩
+      · exact absurd hEmpty (Finset.notMem_empty _)
+      · rw [childPendingEdges, Finset.mem_image] at hCopy
+        obtain ⟨childEdge, -, hEq⟩ := hCopy
+        rw [← hEq] at hSource
+        simp [childPendingEdge, childState] at hSource
+    · rw [mem_foldl_union_iff] at hEnabled
+      rcases hEnabled with hEmpty | ⟨indexed, hIndexed, hNewEdge⟩
+      · exact absurd hEmpty (Finset.notMem_empty _)
+      · rw [Finset.mem_image] at hNewEdge
+        obtain ⟨environment, -, hEq⟩ := hNewEdge
+        have hFuture : edge.future =
+            .at (childState (indexed.2 + 1) indexed.1.2.initial) ∅ := by
+          rw [← hEq]
+        rw [hFuture, Finset.mem_singleton] at hIn
+        subst hIn
+        refine Finset.mem_insert_of_mem ?_
+        simp only [conjunctiveOfferEntries, Finset.mem_insert,
+          List.mem_toFinset, List.mem_map]
+        exact Or.inr ⟨indexed, hIndexed, rfl⟩
+    · rw [Finset.mem_image] at hWait
+      obtain ⟨environment, -, hEq⟩ := hWait
+      have hFuture : edge.future =
+          .at TypeAutomatonState.root (typeBranchActions branches) := by
+        rw [← hEq]
+      rw [hFuture, Finset.mem_singleton] at hIn
+      subst hIn
+      exact Finset.mem_insert_self _ _
+    · rw [Finset.mem_image] at hResolved
+      obtain ⟨environment, -, hEq⟩ := hResolved
+      have hFuture : edge.future =
+          .at (childState 0 elseAutomaton.initial)
+            (typeBranchActions branches) := by
+        rw [← hEq]
+      rw [hFuture, Finset.mem_singleton] at hIn
+      subst hIn
+      exact Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
+
+/-- And it references every one of them: the default is taken by the empty
+environment, each conjunction by the environment demanding exactly its head. -/
+theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_referencedStates_root
+    (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (hHeads : selectedConjunctions.map Prod.fst = branches.map Prod.fst)
+    (hGuard : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    conjunctiveOfferEntries elseAutomaton selectedConjunctions ⊆
+      ({ states := (buildSelectedConjunctiveOfferAutomaton alphabet branches
+           elseAutomaton selectedConjunctions).states
+         edges := (buildSelectedConjunctiveOfferAutomaton alphabet branches
+           elseAutomaton selectedConjunctions).edges } :
+          PendingAutomaton).referencedStates TypeAutomatonState.root := by
+  classical
+  intro state hState
+  simp only [conjunctiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+    List.mem_map] at hState
+  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+    Finset.mem_filter]
+  rcases hState with rfl | ⟨indexed, hIndexed, rfl⟩
+  · -- the default entry, taken when nothing is demanded or pending
+    refine ⟨{ source := TypeAutomatonState.root
+              environment := TypeEnvironment.empty
+              label := .visible TypeLabel.silent
+              current := typeBranchActions branches
+              future := .at (childState 0 elseAutomaton.initial)
+                (typeBranchActions branches)
+              target := childState 0 elseAutomaton.initial },
+      ⟨?_, rfl⟩, ?_⟩
+    · simp only [buildSelectedConjunctiveOfferAutomaton,
+        finishAutomatonFragment, Finset.mem_union]
+      refine Or.inr ?_
+      rw [Finset.mem_image]
+      refine ⟨TypeEnvironment.empty, Finset.mem_filter.mpr
+        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_,
+          hGuard⟩, rfl⟩
+      · simp [TypeEnvironment.empty]
+      · simp [TypeEnvironment.empty]
+    · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
+        TypeLabel.silent])]
+      exact Finset.mem_singleton_self _
+  · -- a conjunction entry, taken by the environment demanding exactly its head
+    have hGet : selectedConjunctions[indexed.2]? = some indexed.1 := by
+      rw [← List.mk_mem_zipIdx_iff_getElem?]
+      simpa using hIndexed
+    have hMem : indexed.1 ∈ selectedConjunctions := List.mem_of_getElem? hGet
+    have hDeclared : indexed.1.1 ∈ alphabet.actions := by
+      have hHead : indexed.1.1 ∈ selectedConjunctions.map Prod.fst :=
+        List.mem_map_of_mem hMem
+      rw [hHeads, List.mem_map] at hHead
+      obtain ⟨branch, hBranch, hEq⟩ := hHead
+      rw [← hEq]
+      exact hGuard branch hBranch
+    set environment : TypeEnvironment :=
+      { immediate := {typeNeed indexed.1.1}, future := ∅, clock := false }
+      with hEnvironmentDef
+    refine ⟨{ source := TypeAutomatonState.root
+              environment := environment
+              label := .visible TypeLabel.silent
+              current := ∅
+              future := .at (childState (indexed.2 + 1) indexed.1.2.initial) ∅
+              target := childState (indexed.2 + 1) indexed.1.2.initial },
+      ⟨?_, rfl⟩, ?_⟩
+    · simp only [buildSelectedConjunctiveOfferAutomaton,
+        finishAutomatonFragment, Finset.mem_union]
+      refine Or.inl (Or.inl (Or.inr ?_))
+      rw [mem_foldl_union_iff]
+      refine Or.inr ⟨indexed, hIndexed, ?_⟩
+      rw [Finset.mem_image]
+      refine ⟨environment, Finset.mem_filter.mpr
+        ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
+          hDeclared, Finset.mem_singleton_self _, hGuard⟩, rfl⟩
+    · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
+        TypeLabel.silent])]
       exact Finset.mem_singleton_self _
 
 end

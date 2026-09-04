@@ -818,18 +818,52 @@ further edge is sourced there and it is not a product state either, so
 `ofStage`'s value there is `∅` regardless of what (if anything) it
 represents. Replaces the old (deleted) `relationSuccessors_mem_cases` for the
 new, provenance-directed relation. -/
-theorem buildRelationSetCoreFuel_edge_target_mem  :
+theorem branchesDisjoint_mem :
+    ∀ {branches : List (BareMessage × PactType)},
+      PactType.OfferBranchesDisjointBranches branches →
+      ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint := by
+  intro branches
+  induction branches with
+  | nil => intro _ branch hBranch; simp at hBranch
+  | cons head rest ih =>
+      intro hDisjoint branch hBranch
+      rcases head with ⟨action, branchType⟩
+      simp only [PactType.OfferBranchesDisjointBranches] at hDisjoint
+      rcases List.mem_cons.mp hBranch with rfl | hRest
+      · exact hDisjoint.1
+      · exact ih hDisjoint.2 branch hRest
+
+theorem buildRelationSetCoreFuel_edge_target_mem
+    (hResign : ∀ (component : PactType) (target : PactTypeAlphabet)
+      (residual : PactType) (state : TypeAutomatonState) (fuel : Nat),
+      (residual, state) ∈ buildRelationSetCoreFuel fuel component →
+      ∃ theta, (theta, state) ∈
+        buildRelationSetCoreFuel fuel (component.reannotate target))
+    (hAccepting : ∀ (component : PactType) (target : PactTypeAlphabet)
+      (fuel : Nat), component.OfferBranchesDisjoint →
+      (compileTypeFuel fuel (component.reannotate target)).accepting =
+        (compileTypeFuel fuel component).accepting)
+    (hResignDisjoint : ∀ (component : PactType) (target : PactTypeAlphabet),
+      component.OfferBranchesDisjoint →
+      (component.reannotate target).OfferBranchesDisjoint)
+    (hSelectingDisjoint : ∀ (alphabet : PactTypeAlphabet)
+      (selected : BareMessage × PactType)
+      (branches : List (BareMessage × PactType)),
+      PactType.OfferBranchesDisjointBranches branches →
+      (parallelTypeBranchesSelecting alphabet selected
+        branches).OfferBranchesDisjoint) :
     ∀ fuel ty, TypeCompilationFuelSufficient ty fuel →
+      ty.OfferBranchesDisjoint →
       ∀ edge ∈ (compileTypeFuel fuel ty).edges,
       (∃ residual, (residual, edge.target) ∈ buildRelationSetCoreFuel fuel ty) ∨
       (∃ name, edge.label = AutomatonConstructionLabel.variable name) := by
   intro fuel
   induction fuel with
   | zero =>
-      intro ty hFuel edge hEdge
+      intro ty hFuel hDisjoint edge hEdge
       exact (Nat.not_lt_zero _ (TypeCompilationFuelSufficient.positive hFuel)).elim
   | succ fuel ih =>
-      intro ty hFuel edge hEdge
+      intro ty hFuel hDisjoint edge hEdge
       cases ty with
       | skip alphabet =>
           left
@@ -868,6 +902,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
           obtain ⟨env, -, hEq⟩ := hEdge
           exact ⟨name, by subst hEq; rfl⟩
       | choice alphabet left right =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
           have hRight : TypeCompilationFuelSufficient right fuel := by
@@ -877,7 +912,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             Finset.mem_insert, Finset.mem_singleton] at hEdge
           rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
             ⟨environment, -, hEq | hEq⟩
-          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih left hLeft hDisjoint.1 childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -885,7 +920,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 Finset.mem_insert, Finset.mem_union, Finset.mem_image]
               exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
             · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih right hRight hDisjoint.2 childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -908,6 +943,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               ⟨(right, (compileTypeFuel fuel right).initial),
                 buildRelationSetCoreFuel_initial_mem fuel right hRight, rfl⟩))
       | fairChoice alphabet bid left right =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
           have hRight : TypeCompilationFuelSufficient right fuel := by
@@ -917,7 +953,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             Finset.mem_insert, Finset.mem_singleton] at hEdge
           rcases hEdge with (⟨childEdge, hChildMem, hEq⟩ | ⟨childEdge, hChildMem, hEq⟩) |
             ⟨environment, -, hEq | hEq⟩
-          · rcases ih left hLeft childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih left hLeft hDisjoint.1 childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -925,7 +961,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 Finset.mem_insert, Finset.mem_union, Finset.mem_image]
               exact Or.inr (Or.inl ⟨(residual, childEdge.target), hResidual, rfl⟩)
             · exact Or.inr ⟨name, by subst hEq; exact hLabel⟩
-          · rcases ih right hRight childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
+          · rcases ih right hRight hDisjoint.2 childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
               subst hEq
@@ -948,6 +984,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               ⟨(right, (compileTypeFuel fuel right).initial),
                 buildRelationSetCoreFuel_initial_mem fuel right hRight, rfl⟩))
       | seq alphabet left right =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -961,7 +998,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
           rcases hEdge with (hLeftEdge | hRightEdge) | hRedirect
           · obtain ⟨childEdge, ⟨hChildMem, hNotAccepting⟩, rfl⟩ :=
               hLeftEdge
-            rcases ih left hLeft childEdge hChildMem with
+            rcases ih left hLeft hDisjoint.1 childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨.seq alphabet residual right, ?_⟩
@@ -976,7 +1013,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               exact ⟨markerName, by
                 simpa [sequenceKeptLeftEdge] using hLabel⟩
           · obtain ⟨childEdge, hChildMem, rfl⟩ := hRightEdge
-            rcases ih right hRight childEdge hChildMem with
+            rcases ih right hRight hDisjoint.2 childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -996,6 +1033,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               buildRelationSetCoreFuel_initial_mem fuel right hRight,
               rfl⟩
       | recur alphabet name body =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hBody : TypeCompilationFuelSufficient body fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢; omega
           simp only [compileTypeFuel, buildRecursionAutomaton, finishAutomatonFragment,
@@ -1018,7 +1056,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               exact Or.inr ⟨(body, (compileTypeFuel fuel body).initial),
                 buildRelationSetCoreFuel_initial_mem fuel body hBody, rfl⟩
             · rw [if_neg hMarker] at hEq
-              rcases ih body hBody childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name', hLabel⟩
+              rcases ih body hBody hDisjoint childEdge hChildMem with ⟨residual, hResidual⟩ | ⟨name', hLabel⟩
               · left
                 refine ⟨residual.replaceVar name (.recur alphabet name body), ?_⟩
                 subst hEq
@@ -1027,6 +1065,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 exact Or.inr ⟨(residual, childEdge.target), hResidual, rfl⟩
               · exact Or.inr ⟨name', by subst hEq; exact hLabel⟩
       | par alphabet left right interface =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hLeft : TypeCompilationFuelSufficient left fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -1102,10 +1141,10 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             have hRightTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hLeftEq, ← hRightEq]
-            rcases ih left hLeft leftRaw hLeftRaw with
+            rcases ih left hLeft hDisjoint.1 leftRaw hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ |
                 ⟨leftMarker, hLeftLabel⟩
-            · rcases ih right hRight rightRaw hRightRaw with
+            · rcases ih right hRight hDisjoint.2 rightRaw hRightRaw with
                   ⟨rightResidual, hRightResidual⟩ |
                   ⟨rightMarker, hRightLabel⟩
               · left
@@ -1138,17 +1177,55 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 simp [AutomatonConstructionLabel.combine, hLeftLabel]⟩
           · -- Entry into the survivor region from a completed left component.
             -- The edge is drawn from the un-restamped right child, whereas the
-            -- relation indexes `survivor 1` by the re-stamped one.
-            sorry
+            -- relation indexes `survivor 1` by the re-stamped one, so the
+            -- residual is carried across by the re-signing transport.
+            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
+            obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
+            have hTargetEq : rightRaw.target = rightEdge.target :=
+              congrArg AutomatonFragmentEdge.target hRightEq
+            rw [← hRightEq]
+            rcases ih right hRight hDisjoint.2 rightRaw hRightRaw with
+                ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
+            · left
+              obtain ⟨theta, hTheta⟩ :=
+                hResign right alphabet rightResidual rightRaw.target fuel
+                  hRightResidual
+              refine ⟨theta, ?_⟩
+              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              refine Or.inr (Or.inr ⟨(theta, rightRaw.target), ?_, rfl⟩)
+              exact Finset.mem_filter.mpr ⟨hTheta, by
+                rw [hAccepting right alphabet fuel hDisjoint.2]
+                simpa [hTargetEq] using hRightNotAcc⟩
+            · exact Or.inr ⟨rightMarker, hRightLabel⟩
           · -- The mirror entry for a completed right component.
-            sorry
+            simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
+            obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
+            have hTargetEq : leftRaw.target = leftEdge.target :=
+              congrArg AutomatonFragmentEdge.target hLeftEq
+            rw [← hLeftEq]
+            rcases ih left hLeft hDisjoint.1 leftRaw hLeftRaw with
+                ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
+            · left
+              obtain ⟨theta, hTheta⟩ :=
+                hResign left alphabet leftResidual leftRaw.target fuel
+                  hLeftResidual
+              refine ⟨theta, ?_⟩
+              simp only [buildRelationSetCoreFuel, Finset.mem_insert,
+                Finset.mem_union, Finset.mem_image]
+              refine Or.inr (Or.inl (Or.inr ⟨(theta, leftRaw.target), ?_, rfl⟩))
+              exact Finset.mem_filter.mpr ⟨hTheta, by
+                rw [hAccepting left alphabet fuel hDisjoint.1]
+                simpa [hTargetEq] using hLeftNotAcc⟩
+            · exact Or.inr ⟨leftMarker, hLeftLabel⟩
           · -- The right survivor continuing inside the survivor region.
             simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
             obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
             have hTargetEq : rightRaw.target = rightEdge.target :=
               congrArg AutomatonFragmentEdge.target hRightEq
             rw [← hRightEq]
-            rcases ih (right.reannotate alphabet) hRightRestamped rightRaw
+            rcases ih (right.reannotate alphabet) hRightRestamped
+                (hResignDisjoint right alphabet hDisjoint.2) rightRaw
                 hRightRaw with
                 ⟨rightResidual, hRightResidual⟩ | ⟨rightMarker, hRightLabel⟩
             · left
@@ -1165,7 +1242,8 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
             have hTargetEq : leftRaw.target = leftEdge.target :=
               congrArg AutomatonFragmentEdge.target hLeftEq
             rw [← hLeftEq]
-            rcases ih (left.reannotate alphabet) hLeftRestamped leftRaw
+            rcases ih (left.reannotate alphabet) hLeftRestamped
+                (hResignDisjoint left alphabet hDisjoint.1) leftRaw
                 hLeftRaw with
                 ⟨leftResidual, hLeftResidual⟩ | ⟨leftMarker, hLeftLabel⟩
             · left
@@ -1198,6 +1276,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 (.par alphabet left right interface)
             simp [buildRelationSetCoreFuel]
       | xoffer alphabet elseType branches =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -1216,7 +1295,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 hResolvedEdge)
           · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
             obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
-            rcases ih elseType hElse childEdge hChildMem with
+            rcases ih elseType hElse hDisjoint.1 childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -1249,6 +1328,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                   (compileTypeFuel fuel branch.2).edges := by
                 simpa [hAutomatonEq] using hChildMem
               rcases ih branch.2 (hBranches branch hBranchMem)
+                (branchesDisjoint_mem hDisjoint.2 branch hBranchMem)
                   childEdge hChildMem' with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
               · left
@@ -1320,6 +1400,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
               buildRelationSetCoreFuel_initial_mem fuel elseType hElse,
               rfl⟩)
       | offer alphabet elseType branches =>
+          simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
@@ -1339,7 +1420,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                 hResolvedEdge)
           · simp only [childPendingEdges, Finset.mem_image] at hElseEdge
             obtain ⟨childEdge, hChildMem, rfl⟩ := hElseEdge
-            rcases ih elseType hElse childEdge hChildMem with
+            rcases ih elseType hElse hDisjoint.1 childEdge hChildMem with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
             · left
               refine ⟨residual, ?_⟩
@@ -1376,6 +1457,7 @@ theorem buildRelationSetCoreFuel_edge_target_mem  :
                   (compileTypeFuel fuel selectedType).edges := by
                 simpa [hAutomatonEq] using hChildMem
               rcases ih selectedType (hSelected selected hSelectedMem)
+                (hSelectingDisjoint alphabet selected branches hDisjoint.2.2)
                   childEdge hChildMem' with
                 ⟨residual, hResidual⟩ | ⟨markerName, hLabel⟩
               · left

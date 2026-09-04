@@ -587,6 +587,12 @@ lemma helper_h15_sequence_left_public_edge_cases
         (buildRelationSet (.seq alphabet left right)
           (compileType (.seq alphabet left right)))
         (.seq alphabet leftResidual right) (.child 0 q))
+    (hLeftDisjoint : left.OfferBranchesDisjoint)
+    (hResign : ∀ (component : PactType) (target : PactTypeAlphabet)
+      (residual : PactType) (state : TypeAutomatonState) (fuel : Nat),
+      (residual, state) ∈ buildRelationSetCoreFuel fuel component →
+      ∃ theta, (theta, state) ∈
+        buildRelationSetCoreFuel fuel (component.reannotate target))
     (hLeftSource :
       relationMembership (buildRelationSet left (compileType left))
         leftResidual q)
@@ -641,7 +647,16 @@ lemma helper_h15_sequence_left_public_edge_cases
           childTargetResidual childEdge.target := by
     have hTargetRaw :=
       buildRelationSetCoreFuel_edge_target_mem
-        (typeCompilationFuel left) left le_rfl childEdge hChildEdgeMem
+        hResign
+        (fun component target fuel hDisjointComponent =>
+          (CompiledShape.compileTypeFuel_shapeEq_reannotate fuel component
+            hDisjointComponent target).2.2)
+        reannotate_offerBranchesDisjoint
+        (fun _ selected branches hBranches =>
+          parallelTypeBranchesSelecting_offerBranchesDisjoint selected
+            branches (branchesDisjoint_mem hBranches))
+        (typeCompilationFuel left) left le_rfl hLeftDisjoint childEdge
+        hChildEdgeMem
     rcases hTargetRaw with hTargetRaw | hMarker
     · rcases hTargetRaw with ⟨childTargetResidual, hTargetRaw⟩
       exact ⟨childTargetResidual, hTargetRaw⟩
@@ -1275,6 +1290,12 @@ lemma relationMembership_seq_cases
 theorem compileType_seq_edge_cases
      (alphabet : PactTypeAlphabet)
     (left right : PactType)
+    (hLeftDisjoint : left.OfferBranchesDisjoint)
+    (hResign : ∀ (component : PactType) (target : PactTypeAlphabet)
+      (residual : PactType) (state : TypeAutomatonState) (fuel : Nat),
+      (residual, state) ∈ buildRelationSetCoreFuel fuel component →
+      ∃ theta, (theta, state) ∈
+        buildRelationSetCoreFuel fuel (component.reannotate target))
     (hDisjoint : right.OfferBranchesDisjoint)
     (hRightAlphabet : right.alphabet = alphabet)
     {residual residual' : PactType}
@@ -1301,7 +1322,7 @@ theorem compileType_seq_edge_cases
   · rcases hLeft with ⟨q, leftResidual, hEntry, hLeftRelated, _hSurvives⟩
     cases hEntry
     exact helper_h15_sequence_left_public_edge_cases alphabet left right
-      hRelated hLeftRelated hEdge hTarget
+      hRelated hLeftDisjoint hResign hLeftRelated hEdge hTarget
   · rcases hRight with ⟨q, hState, hRightRelated⟩
     simp only at hState hRightRelated
     subst state

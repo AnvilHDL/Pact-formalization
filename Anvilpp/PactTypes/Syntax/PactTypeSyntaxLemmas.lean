@@ -297,6 +297,395 @@ namespace PactType
 
 end PactType
 
+/-- Freshness weakens along a smaller forbidden set. -/
+theorem PactType.binderFreshFor_of_cons {name : String} :
+    ∀ (processType : PactType) (bound : List String),
+      PactType.BinderFreshFor (name :: bound) processType →
+      PactType.BinderFreshFor bound processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound : List String), sizeOf branches < n →
+          PactType.BinderFreshForBranches (name :: bound) branches →
+          PactType.BinderFreshForBranches bound branches := by
+        intro branches bound hSizeBranches hFresh
+        induction branches with
+        | nil => simp [PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hFresh ⊢
+            refine ⟨ih (sizeOf branchType) (by simp at hSizeBranches ⊢; omega)
+              branchType rfl bound hFresh.1, ?_⟩
+            exact restIH (by simp at hSizeBranches ⊢; omega) hFresh.2
+      intro bound hFresh
+      cases processType with
+      | message _ _ _ => simp [PactType.BinderFreshFor]
+      | progress _ _ => simp [PactType.BinderFreshFor]
+      | tock _ => simp [PactType.BinderFreshFor]
+      | skip _ => simp [PactType.BinderFreshFor]
+      | var _ _ => simp [PactType.BinderFreshFor]
+      | recur alphabet other body =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨fun hMem => hFresh.1 (List.mem_cons_of_mem _ hMem),
+            ih (sizeOf body) (by subst hSize; simp; omega) body rfl bound
+              hFresh.2⟩
+      | choice alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2⟩
+      | seq alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2⟩
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2⟩
+      | par alphabet left right interface =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2⟩
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2⟩
+      | offer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2⟩
+
+/-- Substitution introduces no new binder: every binder of the result is one of
+the target's or one of the replacement's. -/
+theorem PactType.binderFreshFor_replaceVar (var : String)
+    (replacement : PactType) :
+    ∀ (processType : PactType) (bound : List String),
+      PactType.BinderFreshFor bound processType →
+      PactType.BinderFreshFor bound replacement →
+      PactType.BinderFreshFor bound (processType.replaceVar var replacement) := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound : List String), sizeOf branches < n →
+          PactType.BinderFreshForBranches bound branches →
+          PactType.BinderFreshFor bound replacement →
+          PactType.BinderFreshForBranches bound
+            (PactType.replaceBranches branches var replacement) := by
+        intro branches bound hSizeBranches hFresh hReplacement
+        induction branches with
+        | nil => simp [PactType.replaceBranches, PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hFresh
+            simp only [PactType.replaceBranches,
+              PactType.BinderFreshForBranches]
+            refine ⟨ih (sizeOf branchType) (by simp at hSizeBranches ⊢; omega)
+              branchType rfl bound hFresh.1 hReplacement, ?_⟩
+            exact restIH (by simp at hSizeBranches ⊢; omega) hFresh.2
+      intro bound hFresh hReplacement
+      cases processType with
+      | message _ _ _ => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | progress _ _ => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | tock _ => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | skip _ => simp [PactType.replaceVar, PactType.BinderFreshFor]
+      | var alphabet other =>
+          simp only [PactType.replaceVar]
+          by_cases hEq : var = other
+          · rw [if_pos hEq]; exact hReplacement
+          · rw [if_neg hEq]; simp [PactType.BinderFreshFor]
+      | recur alphabet other body =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar]
+          by_cases hEq : var = other
+          · rw [if_pos hEq]
+            simp only [PactType.BinderFreshFor]
+            exact hFresh
+          · rw [if_neg hEq]
+            simp only [PactType.BinderFreshFor]
+            exact ⟨hFresh.1, ih (sizeOf body) (by subst hSize; simp; omega) body
+              rfl bound hFresh.2 hReplacement⟩
+      | choice alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hReplacement,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2
+              hReplacement⟩
+      | seq alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hReplacement,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2
+              hReplacement⟩
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hReplacement,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2
+              hReplacement⟩
+      | par alphabet left right interface =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hReplacement,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2
+              hReplacement⟩
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1
+              hReplacement,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2
+              hReplacement⟩
+      | offer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.replaceVar, PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1
+              hReplacement,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2
+              hReplacement⟩
+
+/-- Hygiene gives freshness.  `BinderHygienic` grows the context at every
+binder, so each binder it meets is outside the context it inherited; that head
+conjunct is what `BinderFreshFor` asks of the original context. -/
+theorem PactType.binderHygienic_binderFreshFor :
+    ∀ (processType : PactType) (bound : List String),
+      PactType.BinderHygienic bound processType →
+      PactType.BinderFreshFor bound processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound : List String), sizeOf branches < n →
+          PactType.BinderHygienicBranches bound branches →
+          PactType.BinderFreshForBranches bound branches := by
+        intro branches bound hSizeBranches hHyg
+        induction branches with
+        | nil => simp [PactType.BinderFreshForBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderHygienicBranches] at hHyg
+            simp only [PactType.BinderFreshForBranches]
+            refine ⟨ih (sizeOf branchType) (by simp at hSizeBranches ⊢; omega)
+              branchType rfl bound hHyg.1, ?_⟩
+            exact restIH (by simp at hSizeBranches ⊢; omega) hHyg.2
+      intro bound hHyg
+      cases processType with
+      | message _ _ _ => simp [PactType.BinderFreshFor]
+      | progress _ _ => simp [PactType.BinderFreshFor]
+      | tock _ => simp [PactType.BinderFreshFor]
+      | skip _ => simp [PactType.BinderFreshFor]
+      | var _ _ => simp [PactType.BinderFreshFor]
+      | recur alphabet other body =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          refine ⟨hHyg.1, ?_⟩
+          exact PactType.binderFreshFor_of_cons body bound
+            (ih _ (by subst hSize; simp; omega) body rfl (other :: bound)
+              hHyg.2)
+      | choice alphabet left right =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hHyg.2⟩
+      | seq alphabet left right =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hHyg.2⟩
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hHyg.2⟩
+      | par alphabet left right interface =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hHyg.2⟩
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hHyg.1,
+            hBranches branches bound (by subst hSize; simp; omega) hHyg.2⟩
+      | offer alphabet elseType branches =>
+          simp only [PactType.BinderHygienic] at hHyg
+          simp only [PactType.BinderFreshFor]
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hHyg.1,
+            hBranches branches bound (by subst hSize; simp; omega) hHyg.2⟩
+
+/-- `BinderHygienic` reads its context only through membership, so contexts with
+the same members are interchangeable.  Swap and permutation are instances. -/
+theorem PactType.binderHygienic_congr :
+    ∀ (processType : PactType) (bound bound' : List String),
+      (∀ x, x ∈ bound ↔ x ∈ bound') →
+      PactType.BinderHygienic bound processType →
+      PactType.BinderHygienic bound' processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound bound' : List String), sizeOf branches < n →
+          (∀ x, x ∈ bound ↔ x ∈ bound') →
+          PactType.BinderHygienicBranches bound branches →
+          PactType.BinderHygienicBranches bound' branches := by
+        intro branches bound bound' hSizeBranches hMem hHyg
+        induction branches with
+        | nil => simp [PactType.BinderHygienicBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderHygienicBranches] at hHyg ⊢
+            exact ⟨ih (sizeOf branchType)
+                (by simp at hSizeBranches ⊢; omega) branchType rfl bound bound'
+                hMem hHyg.1,
+              restIH (by simp at hSizeBranches ⊢; omega) hHyg.2⟩
+      intro bound bound' hMem hHyg
+      cases processType with
+      | message _ _ _ => simp [PactType.BinderHygienic]
+      | progress _ _ => simp [PactType.BinderHygienic]
+      | tock _ => simp [PactType.BinderHygienic]
+      | skip _ => simp [PactType.BinderHygienic]
+      | var _ _ => simp [PactType.BinderHygienic]
+      | recur alphabet other body =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          refine ⟨fun h => hHyg.1 ((hMem other).mpr h), ?_⟩
+          refine ih (sizeOf body) (by subst hSize; simp; omega) body rfl
+            (other :: bound) (other :: bound') ?_ hHyg.2
+          intro x
+          simp only [List.mem_cons, hMem x]
+      | choice alphabet left right =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound bound' hMem
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound bound' hMem
+              hHyg.2⟩
+      | seq alphabet left right =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound bound' hMem
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound bound' hMem
+              hHyg.2⟩
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound bound' hMem
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound bound' hMem
+              hHyg.2⟩
+      | par alphabet left right interface =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound bound' hMem
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound bound' hMem
+              hHyg.2⟩
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound bound'
+              hMem hHyg.1,
+            hBranches branches bound bound' (by subst hSize; simp; omega) hMem
+              hHyg.2⟩
+      | offer alphabet elseType branches =>
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound bound'
+              hMem hHyg.1,
+            hBranches branches bound bound' (by subst hSize; simp; omega) hMem
+              hHyg.2⟩
+
+/-- Hygiene extends to a larger context, provided the new entry is not itself a
+binder of the term.  The freshness premise is exactly the capture condition: at
+a `recur` node the binder must avoid the whole extended context, and hygiene in
+the smaller context only rules out the old entries. -/
+theorem PactType.binderHygienic_of_cons {name : String} :
+    ∀ (processType : PactType) (bound : List String),
+      PactType.BinderFreshFor [name] processType →
+      PactType.BinderHygienic bound processType →
+      PactType.BinderHygienic (name :: bound) processType := by
+  intro processType
+  induction hSize : sizeOf processType using Nat.strong_induction_on
+      generalizing processType with
+  | _ n ih =>
+      have hBranches : ∀ (branches : List (BareMessage × PactType))
+          (bound : List String), sizeOf branches < n →
+          PactType.BinderFreshForBranches [name] branches →
+          PactType.BinderHygienicBranches bound branches →
+          PactType.BinderHygienicBranches (name :: bound) branches := by
+        intro branches bound hSizeBranches hFresh hHyg
+        induction branches with
+        | nil => simp [PactType.BinderHygienicBranches]
+        | cons branch rest restIH =>
+            rcases branch with ⟨action, branchType⟩
+            simp only [PactType.BinderFreshForBranches] at hFresh
+            simp only [PactType.BinderHygienicBranches] at hHyg ⊢
+            refine ⟨ih (sizeOf branchType)
+              (by simp at hSizeBranches ⊢; omega) branchType rfl bound hFresh.1
+              hHyg.1, ?_⟩
+            exact restIH (by simp at hSizeBranches ⊢; omega) hFresh.2 hHyg.2
+      intro bound hFresh hHyg
+      cases processType with
+      | message _ _ _ => simp [PactType.BinderHygienic]
+      | progress _ _ => simp [PactType.BinderHygienic]
+      | tock _ => simp [PactType.BinderHygienic]
+      | skip _ => simp [PactType.BinderHygienic]
+      | var _ _ => simp [PactType.BinderHygienic]
+      | recur alphabet other body =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          refine ⟨?_, ?_⟩
+          · intro hMem
+            rcases List.mem_cons.mp hMem with hEq | hRest
+            · exact hFresh.1 (by simp [hEq])
+            · exact hHyg.1 hRest
+          · -- Reassociate the two context entries and recurse.
+            have := ih (sizeOf body) (by subst hSize; simp; omega) body rfl
+              (other :: bound) hFresh.2 hHyg.2
+            refine PactType.binderHygienic_congr body (name :: other :: bound)
+              (other :: name :: bound) ?_ this
+            intro x; simp only [List.mem_cons]; tauto
+      | choice alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2 hHyg.2⟩
+      | seq alphabet left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2 hHyg.2⟩
+      | fairChoice alphabet bid left right =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2 hHyg.2⟩
+      | par alphabet left right interface =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) left rfl bound hFresh.1
+              hHyg.1,
+            ih _ (by subst hSize; simp; omega) right rfl bound hFresh.2 hHyg.2⟩
+      | xoffer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1
+              hHyg.1,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2
+              hHyg.2⟩
+      | offer alphabet elseType branches =>
+          simp only [PactType.BinderFreshFor] at hFresh
+          simp only [PactType.BinderHygienic] at hHyg ⊢
+          exact ⟨ih _ (by subst hSize; simp; omega) elseType rfl bound hFresh.1
+              hHyg.1,
+            hBranches branches bound (by subst hSize; simp; omega) hFresh.2
+              hHyg.2⟩
+
 end
 
 end Pact
