@@ -1,11 +1,9 @@
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.TypeWellFormedIn
 
 /-!
-Transport of a related residual along re-signing: for every state related to a
-residual of a type, the re-signed type relates the same state to a
-live-equivalent residual.  `SurvivorTransport` names the obligation and one
-lemma per constructor discharges it from the corresponding component
-obligations.
+Re-signing transports a canonical represented residual to the same state.
+The constructor induction proves exact equality; the paper's live-equivalent
+witness follows as a corollary.
 -/
 
 namespace Pact
@@ -181,9 +179,8 @@ theorem reannotate_reannotate :
 
 end PactType
 
-/-- Target transport for one type: every state related to a residual of
-`sigma` is related to a live-equivalent residual of the re-signed `sigma`. -/
-def SurvivorTransport (sigma : PactType) : Prop :=
+/-- Re-signing a canonical represented residual preserves its state exactly. -/
+def ExactSurvivorTransport (sigma : PactType) : Prop :=
   ∀ bound : List String, TypeWellFormedIn bound sigma →
     ∀ target : PactTypeAlphabet, target.WellFormed →
       (∀ action ∈ target.actions,
@@ -194,14 +191,14 @@ def SurvivorTransport (sigma : PactType) : Prop :=
           relationMembership
             (buildRelationSet (sigma.reannotate target)
               (compileType (sigma.reannotate target))) theta q ∧
-          PactType.LiveEq (rho.reannotate target) theta
+          rho.reannotate target = theta
 
 theorem survivorTransport_skip (a : PactTypeAlphabet) :
-    SurvivorTransport (.skip a) := by
+    ExactSurvivorTransport (.skip a) := by
   intro _ _ target _ _ rho q hRelated
   obtain ⟨rfl, rfl⟩ := relationMembership_skip_cases a hRelated
   refine ⟨(PactType.skip a).reannotate target, ?_,
-    PactType.liveEq_refl _⟩
+    rfl⟩
   simp only [PactType.reannotate]
   show ((PactType.skip target : PactType), TypeAutomatonState.root) ∈
     buildRelationSetCoreFuel (typeCompilationFuel (PactType.skip target))
@@ -209,11 +206,11 @@ theorem survivorTransport_skip (a : PactTypeAlphabet) :
   simp [typeCompilationFuel, buildRelationSetCoreFuel]
 
 theorem survivorTransport_var (a : PactTypeAlphabet) (name : String) :
-    SurvivorTransport (.var a name) := by
+    ExactSurvivorTransport (.var a name) := by
   intro _ _ target _ _ rho q hRelated
   obtain ⟨rfl, rfl⟩ := relationMembership_var_cases a name hRelated
   refine ⟨(PactType.var a name).reannotate target, ?_,
-    PactType.liveEq_refl _⟩
+    rfl⟩
   simp only [PactType.reannotate]
   show ((PactType.var target name : PactType), TypeAutomatonState.root) ∈
     buildRelationSetCoreFuel (typeCompilationFuel (PactType.var target name))
@@ -221,12 +218,12 @@ theorem survivorTransport_var (a : PactTypeAlphabet) (name : String) :
   simp [typeCompilationFuel, buildRelationSetCoreFuel]
 
 theorem survivorTransport_message (a : PactTypeAlphabet) (msg : MessageId)
-    (dir : MessageDir) : SurvivorTransport (.message a msg dir) := by
+    (dir : MessageDir) : ExactSurvivorTransport (.message a msg dir) := by
   intro _ _ target _ _ rho q hRelated
   rcases relationMembership_message_cases a msg dir hRelated with
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   · refine ⟨(PactType.message a msg dir).reannotate target, ?_,
-      PactType.liveEq_refl _⟩
+      rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.message target msg dir : PactType),
         TypeAutomatonState.root) ∈
@@ -234,35 +231,35 @@ theorem survivorTransport_message (a : PactTypeAlphabet) (msg : MessageId)
         (typeCompilationFuel (PactType.message target msg dir))
         (PactType.message target msg dir)
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
-  · refine ⟨(PactType.skip a).reannotate target, ?_, PactType.liveEq_refl _⟩
+  · refine ⟨(PactType.skip a).reannotate target, ?_, rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.skip target : PactType), TypeAutomatonState.final) ∈
       buildRelationSetCoreFuel (typeCompilationFuel (PactType.message target msg dir)) (PactType.message target msg dir)
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
 
 theorem survivorTransport_tock (a : PactTypeAlphabet) :
-    SurvivorTransport (.tock a) := by
+    ExactSurvivorTransport (.tock a) := by
   intro _ _ target _ _ rho q hRelated
   rcases relationMembership_tock_cases a hRelated with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · refine ⟨(PactType.tock a).reannotate target, ?_, PactType.liveEq_refl _⟩
+  · refine ⟨(PactType.tock a).reannotate target, ?_, rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.tock target : PactType), TypeAutomatonState.root) ∈
       buildRelationSetCoreFuel (typeCompilationFuel (PactType.tock target))
         (PactType.tock target)
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
-  · refine ⟨(PactType.skip a).reannotate target, ?_, PactType.liveEq_refl _⟩
+  · refine ⟨(PactType.skip a).reannotate target, ?_, rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.skip target : PactType), TypeAutomatonState.final) ∈
       buildRelationSetCoreFuel (typeCompilationFuel (PactType.tock target)) (PactType.tock target)
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
 
 theorem survivorTransport_progress (a : PactTypeAlphabet) (pid : ProcId) :
-    SurvivorTransport (.progress a pid) := by
+    ExactSurvivorTransport (.progress a pid) := by
   intro _ _ target _ _ rho q hRelated
   rcases relationMembership_progress_cases a pid hRelated with
     ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   · refine ⟨(PactType.progress a pid).reannotate target, ?_,
-      PactType.liveEq_refl _⟩
+      rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.progress target pid : PactType),
         TypeAutomatonState.root) ∈
@@ -270,7 +267,7 @@ theorem survivorTransport_progress (a : PactTypeAlphabet) (pid : ProcId) :
         (typeCompilationFuel (PactType.progress target pid))
         (PactType.progress target pid)
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
-  · refine ⟨(PactType.skip a).reannotate target, ?_, PactType.liveEq_refl _⟩
+  · refine ⟨(PactType.skip a).reannotate target, ?_, rfl⟩
     simp only [PactType.reannotate]
     show ((PactType.skip target : PactType), TypeAutomatonState.final) ∈
       buildRelationSetCoreFuel (typeCompilationFuel (PactType.progress target pid)) (PactType.progress target pid)
@@ -346,9 +343,9 @@ theorem relationMembership_recur_root (a : PactTypeAlphabet) (name : String)
   simp [buildRelationSetCoreFuel]
 
 theorem survivorTransport_choice (a : PactTypeAlphabet)
-    (left right : PactType) (hLeft : SurvivorTransport left)
-    (hRight : SurvivorTransport right) :
-    SurvivorTransport (.choice a left right) := by
+    (left right : PactType) (hLeft : ExactSurvivorTransport left)
+    (hRight : ExactSurvivorTransport right) :
+    ExactSurvivorTransport (.choice a left right) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFL, hWFR⟩ := typeWellFormedIn_choice hWF
   simp only [PactType.ParallelInterfaces, Finset.mem_union, not_or] at hAvoid
@@ -360,28 +357,28 @@ theorem survivorTransport_choice (a : PactTypeAlphabet)
       by simpa only [PactType.reannotate] using
         relationMembership_choice_root target (left.reannotate target)
           (right.reannotate target),
-      PactType.liveEq_refl _⟩
+      rfl⟩
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hLeft bound hWFL target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hLeft bound hWFL target hTargetWF
       (fun act hAct => (hAvoid act hAct).1) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_choice_left target (left.reannotate target)
         (right.reannotate target) theta hMem
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hRight bound hWFR target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hRight bound hWFR target hTargetWF
       (fun act hAct => (hAvoid act hAct).2) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_choice_right target (left.reannotate target)
         (right.reannotate target) theta hMem
 
 theorem survivorTransport_fairChoice (a : PactTypeAlphabet) (bid : BranchId)
-    (left right : PactType) (hLeft : SurvivorTransport left)
-    (hRight : SurvivorTransport right) :
-    SurvivorTransport (.fairChoice a bid left right) := by
+    (left right : PactType) (hLeft : ExactSurvivorTransport left)
+    (hRight : ExactSurvivorTransport right) :
+    ExactSurvivorTransport (.fairChoice a bid left right) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFL, hWFR⟩ := typeWellFormedIn_fairChoice hWF
   simp only [PactType.ParallelInterfaces, Finset.mem_union, not_or] at hAvoid
@@ -393,29 +390,29 @@ theorem survivorTransport_fairChoice (a : PactTypeAlphabet) (bid : BranchId)
       by simpa only [PactType.reannotate] using
         relationMembership_fairChoice_root target bid
           (left.reannotate target) (right.reannotate target),
-      PactType.liveEq_refl _⟩
+      rfl⟩
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hLeft bound hWFL target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hLeft bound hWFL target hTargetWF
       (fun act hAct => (hAvoid act hAct).1) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_fairChoice_left target bid (left.reannotate target)
         (right.reannotate target) theta hMem
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hRight bound hWFR target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hRight bound hWFR target hTargetWF
       (fun act hAct => (hAvoid act hAct).2) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_fairChoice_right target bid (left.reannotate target)
         (right.reannotate target) theta hMem
 
 theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (hElse : SurvivorTransport elseType)
-    (hBranch : ∀ entry ∈ branches, SurvivorTransport entry.2) :
-    SurvivorTransport (.xoffer a elseType branches) := by
+    (hElse : ExactSurvivorTransport elseType)
+    (hBranch : ∀ entry ∈ branches, ExactSurvivorTransport entry.2) :
+    ExactSurvivorTransport (.xoffer a elseType branches) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFE, hWFB⟩ := typeWellFormedIn_xoffer hWF
   simp only [PactType.ParallelInterfaces, Finset.mem_union, not_or] at hAvoid
@@ -428,12 +425,12 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
       by simpa only [PactType.reannotate] using
         relationMembership_xoffer_root target (elseType.reannotate target)
           (PactType.reannotateBranches target branches),
-      PactType.liveEq_refl _⟩
+      rfl⟩
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hElse bound hWFE target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hElse bound hWFE target hTargetWF
       (fun act hAct => (hAvoid act hAct).1) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_xoffer_else target (elseType.reannotate target)
         (PactType.reannotateBranches target branches) hMem
@@ -447,10 +444,10 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
       exact (hAvoid act hAct).2
         (parallelInterfaces_subset_branches branches (action, branchType)
           hMemBranch hIn)
-    obtain ⟨theta, hMem, hLive⟩ := hBranch (action, branchType) hMemBranch
+    obtain ⟨theta, hMem, hEq⟩ := hBranch (action, branchType) hMemBranch
       bound (hWFB (action, branchType) hMemBranch) target hTargetWF
       hAvoidBranch rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     have hGet' : (PactType.reannotateBranches target branches)[i]? =
         some (action, branchType.reannotate target) := by
       rw [CompiledShape.reannotateBranches_eq_map, List.getElem?_map, hGet]
@@ -947,10 +944,10 @@ a committed state lives in the branch product, which re-signing rebuilds at the
 new alphabet. -/
 theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (hElse : SurvivorTransport elseType)
+    (hElse : ExactSurvivorTransport elseType)
     (hProduct : ∀ selected ∈ branches,
-      SurvivorTransport (parallelTypeBranchesSelecting a selected branches)) :
-    SurvivorTransport (.offer a elseType branches) := by
+      ExactSurvivorTransport (parallelTypeBranchesSelecting a selected branches)) :
+    ExactSurvivorTransport (.offer a elseType branches) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFE, hWFB⟩ := typeWellFormedIn_offer hWF
   obtain ⟨hAlphaWF, -, -, -, -, -, -, -, -, -, -, -, hIScopAll, -, hCOwn⟩ :=
@@ -990,12 +987,12 @@ theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
       by simpa only [PactType.reannotate] using
         relationMembership_offer_root target (elseType.reannotate target)
           (PactType.reannotateOfferBranches target ∅ branches),
-      PactType.liveEq_refl _⟩
+      rfl⟩
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hElse bound hWFE target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hElse bound hWFE target hTargetWF
       (fun act hAct => (hAvoid act hAct).1) rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_offer_else target (elseType.reannotate target)
         (PactType.reannotateOfferBranches target ∅ branches) hMem
@@ -1014,9 +1011,9 @@ theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
             rw [parallelTypeBranchesSelecting,
               parallelTypeBranchesSelectingWithin_parallelInterfaces] at hIn
             exact hIn)
-    obtain ⟨theta, hMem, hLive⟩ := hProduct selected hMemSelected bound
+    obtain ⟨theta, hMem, hEq⟩ := hProduct selected hMemSelected bound
       (hWFB selected hMemSelected) target hTargetWF hAvoidProduct rho q' hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     have hGet' : (PactType.reannotateOfferBranches target ∅ branches)[i]? =
         some (selected.1, selected.2.reannotate target) := by
       rw [reannotateOfferBranches_eq_map', List.getElem?_map, hGet]
@@ -1468,8 +1465,8 @@ theorem relationMembership_survivorInvariant
 /-- Recursion.  The fresh root re-signs to itself; a body state carries a
 substituted residual, and re-signing commutes with that substitution. -/
 theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
-    (body : PactType) (hBody : SurvivorTransport body) :
-    SurvivorTransport (.recur a name body) := by
+    (body : PactType) (hBody : ExactSurvivorTransport body) :
+    ExactSurvivorTransport (.recur a name body) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   have hWFBody := typeWellFormedIn_recur hWF
   have hWFBodyForTransport := hWFBody
@@ -1489,28 +1486,16 @@ theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
     exact ⟨(PactType.recur a name body).reannotate target,
       by simpa only [PactType.reannotate] using
         relationMembership_recur_root target name (body.reannotate target),
-      PactType.liveEq_refl _⟩
+      rfl⟩
   · rw [Prod.ext_iff] at hEntry
     obtain ⟨hResidual, hState⟩ := hEntry
     subst hResidual
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hBody (name :: bound) hWFBodyForTransport target
+    obtain ⟨theta, hMem, hEq⟩ := hBody (name :: bound) hWFBodyForTransport target
       hTargetWF hAvoid residual q' hChild
     have hResidualData := relationMembership_survivorInvariant name body
       residual q' hBodyAlphabet hBodyScoped hBodyAlphaScoped
       hBodyTailRecursive hBodyDisjoint hParentTailRecursive.1 hChild
-    have hReannotatedBodyData := relationMembership_survivorInvariant name
-      (body.reannotate target) theta q'
-      (PactType.reannotate_alphabetWellFormed_avoiding body target
-        hBodyAlphabet hTargetWF hBodyScoped hAvoid)
-      (PactType.reannotate_interfaceScoped body target hBodyScoped)
-      (PactType.reannotate_interfaceAlphabetScoped body target hBodyAlphaScoped
-        hAvoid)
-      (PactType.reannotate_tailRecursive body target hBodyTailRecursive)
-      (reannotate_offerBranchesDisjoint body target hBodyDisjoint)
-      (PactType.reannotate_tailOccurrences name body target True
-        hParentTailRecursive.1)
-      hMem
     refine ⟨theta.replaceVar name (.recur target name (body.reannotate target)),
       ?_, ?_⟩
     · simpa only [PactType.reannotate] using
@@ -1528,36 +1513,8 @@ theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
             simp only [PactType.alphabet]
             exact hAlphaWF.2.1.symm)
           hResidualData.2.2.1
-      rw [hCommute]
-      have hAlphaRes : (residual.reannotate target).alphabet = target :=
-        PactType.reannotate_alphabet target residual
-      have hAlphaTheta : theta.alphabet = target := by
-        rw [← hLive.1, hAlphaRes]
-      have hReplAlpha :
-          ((PactType.recur a name body).reannotate target).alphabet =
-            (residual.reannotate target).alphabet := by
-        simp only [PactType.reannotate_alphabet, hAlphaRes]
-      have hReplAlpha' :
-          (PactType.recur target name (body.reannotate target)).alphabet =
-            theta.alphabet := by
-        rw [hAlphaTheta]
-        rfl
-      refine ⟨?_, ?_⟩
-      · rw [PactType.replaceVar_alphabet_eq_of_replacement _ name hReplAlpha,
-          PactType.replaceVar_alphabet_eq_of_replacement _ name hReplAlpha',
-          hAlphaRes, hAlphaTheta]
-      · refine PactType.liveEqBody_replaceVar hLive.2
-          (by
-            simp only [PactType.reannotate]
-            exact PactType.liveEq_refl _)
-          ?_ ?_ (by rw [hAlphaRes, hAlphaTheta]) ?_
-        · exact PactType.reannotate_alphabetWellFormed_avoiding residual target
-            hResidualData.1 hTargetWF hResidualData.2.1
-            (fun act hAct hIn => hAvoid act hAct
-              (hResidualData.2.2.2.1 hIn))
-        · exact hReannotatedBodyData.1
-        · exact PactType.reannotate_tailOccurrences name residual target True
-            hResidualData.2.2.1
+      rw [hCommute, hEq]
+      simp only [PactType.reannotate]
 
 /-- Offer-branch disjointness is one of the ownership consequences carried by
 `TypeWellFormedIn`. -/
@@ -1613,8 +1570,8 @@ theorem relationMembership_seq_left_of_not_deleted (alphabet : PactTypeAlphabet)
     exact hKept
 
 theorem survivorTransport_seq (a : PactTypeAlphabet) (left right : PactType)
-    (hLeft : SurvivorTransport left) (hRight : SurvivorTransport right) :
-    SurvivorTransport (.seq a left right) := by
+    (hLeft : ExactSurvivorTransport left) (hRight : ExactSurvivorTransport right) :
+    ExactSurvivorTransport (.seq a left right) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFL, hWFR⟩ := typeWellFormedIn_seq hWF
   simp only [PactType.ParallelInterfaces, Finset.mem_union, not_or] at hAvoid
@@ -1625,7 +1582,7 @@ theorem survivorTransport_seq (a : PactTypeAlphabet) (left right : PactType)
     simp only at hRho hQ
     subst hRho
     subst hQ
-    obtain ⟨theta, hMem, hLive⟩ := hLeft bound hWFL target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hLeft bound hWFL target hTargetWF
       (fun act hAct => (hAvoid act hAct).1) residualLeft q1 hChild
     refine ⟨.seq target theta (right.reannotate target), ?_, ?_⟩
     · have hKept' : q1 ∉ sequenceDeleted
@@ -1643,16 +1600,12 @@ theorem survivorTransport_seq (a : PactTypeAlphabet) (left right : PactType)
       simpa only [PactType.reannotate] using
         relationMembership_seq_left_of_not_deleted target
           (left.reannotate target) (right.reannotate target) theta hMem hKept'
-    · refine ⟨?_, ?_⟩
-      · simp only [PactType.reannotate, PactType.alphabet]
-      · simp only [PactType.reannotate, PactType.LiveEqBody]
-        exact ⟨PactTypeAlphabet.AgreeOn.refl _ _, hLive.2,
-          PactType.liveEqBody_refl _⟩
+    · simp only [PactType.reannotate, hEq]
   · simp only at hState hChild
     subst hState
-    obtain ⟨theta, hMem, hLive⟩ := hRight bound hWFR target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hRight bound hWFR target hTargetWF
       (fun act hAct => (hAvoid act hAct).2) rho q2 hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     simpa only [PactType.reannotate] using
       relationMembership_seq_right target (left.reannotate target)
         (right.reannotate target) theta hMem
@@ -1905,11 +1858,11 @@ theorem accepting_reannotate {processType : PactType}
 
 set_option maxHeartbeats 1000000 in
 theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
-    (interface : Interface) (hLeft : SurvivorTransport left)
-    (hRight : SurvivorTransport right)
-    (hSurvLeft : SurvivorTransport (left.reannotate a))
-    (hSurvRight : SurvivorTransport (right.reannotate a)) :
-    SurvivorTransport (.par a left right interface) := by
+    (interface : Interface) (hLeft : ExactSurvivorTransport left)
+    (hRight : ExactSurvivorTransport right)
+    (hSurvLeft : ExactSurvivorTransport (left.reannotate a))
+    (hSurvRight : ExactSurvivorTransport (right.reannotate a)) :
+    ExactSurvivorTransport (.par a left right interface) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFL, hWFR⟩ := typeWellFormedIn_par hWF
   obtain ⟨hWFsL, hWFsR⟩ := typeWellFormedIn_survivor hWF
@@ -1959,40 +1912,20 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
     injection hEntry with hRho hQ
     subst hRho
     subst hQ
-    obtain ⟨thetaL, hMemL, hLiveL⟩ := hLeft bound hWFL _ hOmegaLWF hAvoidL
+    obtain ⟨thetaL, hMemL, hEqL⟩ := hLeft bound hWFL _ hOmegaLWF hAvoidL
       rhoL q1 hL
-    obtain ⟨thetaR, hMemR, hLiveR⟩ := hRight bound hWFR _ hOmegaRWF hAvoidR
+    obtain ⟨thetaR, hMemR, hEqR⟩ := hRight bound hWFR _ hOmegaRWF hAvoidR
       rhoR q2 hR
     have hAlphaL : rhoL.alphabet = left.alphabet :=
       relationMembership_alphabet_eq_of_wellFormed left rhoL q1 hA.2.2.1 hL
     have hAlphaR : rhoR.alphabet = right.alphabet :=
       relationMembership_alphabet_eq_of_wellFormed right rhoR q2 hA.2.2.2 hR
-    have hActL : PactType.MessageActions rhoL ⊆ PactType.MessageActions left :=
-      (relationMembership_ownership_subset left rhoL q1 hL).1
-    have hActR : PactType.MessageActions rhoR ⊆ PactType.MessageActions right :=
-      (relationMembership_ownership_subset right rhoR q2 hR).1
-    have hAgreeL := agreeOn_projectParallel_of_actions
-      (parent := target) (childA := rhoL.alphabet) (childB := left.alphabet)
-      (interface := interface) (used := PactType.MessageActions rhoL)
-      (by rw [hAlphaL]; exact PactTypeAlphabet.AgreeOn.refl _ _)
-    have hAgreeR := agreeOn_projectParallel_of_actions
-      (parent := target) (childA := rhoR.alphabet) (childB := right.alphabet)
-      (interface := interface) (used := PactType.MessageActions rhoR)
-      (by rw [hAlphaR]; exact PactTypeAlphabet.AgreeOn.refl _ _)
-    refine ⟨.par target thetaL thetaR interface, ?_, ?_, ?_⟩
+    refine ⟨.par target thetaL thetaR interface, ?_, ?_⟩
     · simpa only [PactType.reannotate] using
         relationMembership_par_product target
           (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
           (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface hMemL hMemR
-    · simp only [PactType.reannotate, PactType.alphabet]
-    · simp only [PactType.reannotate, PactType.LiveEqBody]
-      refine ⟨trivial, PactTypeAlphabet.AgreeOn.refl _ _, ?_, ?_⟩
-      · exact PactType.liveEqBody_trans
-          (liveEqBody_reannotate hAgreeL (PactType.liveEqBody_refl rhoL))
-          hLiveL.2
-      · exact PactType.liveEqBody_trans
-          (liveEqBody_reannotate hAgreeR (PactType.liveEqBody_refl rhoR))
-          hLiveR.2
+    · simp only [PactType.reannotate, hAlphaL, hAlphaR, hEqL, hEqR]
   · obtain ⟨q1, residualLeft, hEntry, hChild, hNotAcc⟩ := hSurvL
     injection hEntry with hRho hQ
     subst hRho
@@ -2002,9 +1935,9 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
       intro act hAct
       rw [PactType.reannotate_parallelInterfaces]
       exact (hAvoid act hAct).1.2
-    obtain ⟨theta, hMem, hLive⟩ := hSurvLeft bound hWFsL target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hSurvLeft bound hWFsL target hTargetWF
       hAvoidSurv rho q1 hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     have hReWF : (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface)).AlphabetWellFormed :=
       PactType.reannotate_alphabetWellFormed_avoiding left _ hA.2.2.1
         hOmegaLWF hIS.2.1 hAvoidL
@@ -2036,9 +1969,9 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
       intro act hAct
       rw [PactType.reannotate_parallelInterfaces]
       exact (hAvoid act hAct).2
-    obtain ⟨theta, hMem, hLive⟩ := hSurvRight bound hWFsR target hTargetWF
+    obtain ⟨theta, hMem, hEq⟩ := hSurvRight bound hWFsR target hTargetWF
       hAvoidSurv rho q2 hChild
-    refine ⟨theta, ?_, hLive⟩
+    refine ⟨theta, ?_, hEq⟩
     have hReWF : (right.reannotate
         (PactTypeAlphabet.projectParallel target right.alphabet interface)).AlphabetWellFormed :=
       PactType.reannotate_alphabetWellFormed_avoiding right _ hA.2.2.2
@@ -2070,8 +2003,7 @@ theorem survivorTransport_par (a : PactTypeAlphabet) (left right : PactType)
         relationMembership_par_final target
           (left.reannotate (PactTypeAlphabet.projectParallel target left.alphabet interface))
           (right.reannotate (PactTypeAlphabet.projectParallel target right.alphabet interface)) interface
-    · simpa only [PactType.reannotate] using PactType.liveEq_refl
-        (PactType.skip target)
+    · simp only [PactType.reannotate]
 
 end
 
@@ -2080,8 +2012,8 @@ end
 `typeCompilationFuel` rather than `sizeOf`: re-signing preserves it, which the
 parallel case needs, and the conjunctive branch product sits strictly below the
 offer that generates it, which the conjunctive case needs. -/
-theorem survivorTransport_all
-    : ∀ processType : PactType, SurvivorTransport processType := by
+theorem survivorTransport_exact_all
+    : ∀ processType : PactType, ExactSurvivorTransport processType := by
   intro processType
   induction hFuel : typeCompilationFuel processType
       using Nat.strong_induction_on generalizing processType with
@@ -2134,5 +2066,40 @@ theorem survivorTransport_all
             simp only [typeCompilationFuel]
             omega
 
+
+/-- The paper's live-equivalent survivor witness follows from exact transport
+for the compiler's canonical relation. -/
+def SurvivorTransport (sigma : PactType) : Prop :=
+  ∀ bound : List String, TypeWellFormedIn bound sigma →
+    ∀ target : PactTypeAlphabet, target.WellFormed →
+      (∀ action ∈ target.actions,
+        action.1 ∉ PactType.ParallelInterfaces sigma) →
+      ∀ (rho : PactType) (q : TypeAutomatonState),
+        relationMembership (buildRelationSet sigma (compileType sigma)) rho q →
+        ∃ theta,
+          relationMembership
+            (buildRelationSet (sigma.reannotate target)
+              (compileType (sigma.reannotate target))) theta q ∧
+          PactType.LiveEq (rho.reannotate target) theta
+
+theorem survivorTransport_all (processType : PactType) :
+    SurvivorTransport processType := by
+  intro bound hWF target hTargetWF hAvoid rho q hRelated
+  obtain ⟨theta, hMem, hEq⟩ := survivorTransport_exact_all processType bound hWF
+    target hTargetWF hAvoid rho q hRelated
+  exact ⟨theta, hMem, hEq ▸ PactType.liveEq_refl _⟩
+
+theorem relationMembership_reannotate {processType rho : PactType}
+    {bound : List String} {target : PactTypeAlphabet} {q : TypeAutomatonState}
+    (hWF : TypeWellFormedIn bound processType) (hTargetWF : target.WellFormed)
+    (hAvoid : ∀ action ∈ target.actions,
+      action.1 ∉ PactType.ParallelInterfaces processType)
+    (hRelated : relationMembership (buildRelationSet processType
+      (compileType processType)) rho q) :
+    relationMembership (buildRelationSet (processType.reannotate target)
+      (compileType (processType.reannotate target))) (rho.reannotate target) q := by
+  obtain ⟨theta, hMem, hEq⟩ := survivorTransport_exact_all processType bound hWF
+    target hTargetWF hAvoid rho q hRelated
+  exact hEq ▸ hMem
 
 end Pact

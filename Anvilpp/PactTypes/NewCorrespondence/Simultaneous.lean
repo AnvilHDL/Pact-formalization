@@ -1,5 +1,6 @@
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Recursion
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Sequence
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Parallel
 
 /-!
 Same-cycle completion at the compound fragments, the parallel product menu, and
@@ -1759,7 +1760,8 @@ theorem correspondence_simultaneous :
           ih _ hRightResignFuel bound (right.reannotate alphabet) rfl
             hRightResignWF
         refine ⟨?_, ?_, ?_⟩
-        · sorry -- current-offer correspondence, `.par`
+        · exact currentOfferCorrespondence_par_of_typeWF hWF hLeft.1 hRight.1
+            hLeftResign.1 hRightResign.1 hLeft.2.2 hRight.2.2
         · sorry -- same-cycle completion, `.par`
         · exact futureOffersAgree_par_of_typeWF hWF hLeft.1 hRight.1
             hLeft.2.2 hRight.2.2 hLeftResign.2.2 hRightResign.2.2
