@@ -331,13 +331,13 @@ theorem compiledMenuGraphFuel_eq_of_sufficient (processType : PactType)
   simp only [compiledMenuGraphFuel, Nat.min_eq_right hFirst, Nat.min_eq_right hSecond]
   rw [compileTypeFuel_eq_of_sufficient processType hFirst hSecond]
 
-/-- The sequence equation, with the paper's backward completion invariant explicit. -/
-theorem computeFutureOf_sequence_left
+/-- The sequence path decomposition for arbitrary observations. This also
+applies to marker sources; it does not add edges or menu dependencies. -/
+theorem compiledMenuFrom_sequence_left
     (alphabet : PactTypeAlphabet) (left right : PactType)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
     (hRightDisjoint : right.OfferBranchesDisjoint)
-    (hLeftAlphabet : left.alphabet = alphabet)
-    (hRightAlphabet : right.alphabet = alphabet)
+    (leftOffer rightOffer parentOffer : TypeAutomatonState → Finset BareMessage)
     (source : TypeAutomatonState)
     (hSource : source ∈ (compileTypeFuel (typeCompilationFuel left) left).states)
     (hRetained : source ∉ sequenceDeleted
@@ -347,13 +347,22 @@ theorem computeFutureOf_sequence_left
       (∃ residual, (residual, r) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
         typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) →
       ∃ residual, (residual, q) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
-        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) :
-    computeFutureOf (.seq alphabet left right) (.child 0 source) =
-      computeFutureOf left source ∪
+        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true)
+    (hFinalEmpty : ∀ q ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting,
+      leftOffer q = ∅)
+    (hLeftOffer : ∀ q ∈ (compileTypeFuel (typeCompilationFuel left) left).states,
+      q ∉ sequenceDeleted (compileTypeFuel (typeCompilationFuel left) left) →
+        parentOffer (.child 0 q) = leftOffer q)
+    (hRightOffer : ∀ q ∈ (compileTypeFuel (typeCompilationFuel right) right).states,
+      parentOffer (.child 1 q) = rightOffer q) :
+    (compiledMenuGraphFuel (typeCompilationFuel (.seq alphabet left right))
+      (.seq alphabet left right)).menuFrom parentOffer (.child 0 source) =
+      (compiledMenuGraphFuel (typeCompilationFuel left) left).menuFrom leftOffer source ∪
         if ∃ residual, (residual, source) ∈
             buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
             typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true then
-          computeFutureOf right (compileTypeFuel (typeCompilationFuel right) right).initial
+          (compiledMenuGraphFuel (typeCompilationFuel right) right).menuFrom rightOffer
+            (compileTypeFuel (typeCompilationFuel right) right).initial
         else ∅ := by
   let leftFragment := compileTypeFuel (typeCompilationFuel left) left
   let rightFragment := compileTypeFuel (typeCompilationFuel right) right
@@ -428,12 +437,11 @@ theorem computeFutureOf_sequence_left
       Nat.min_self, Finset.image_union]
   have hMenus := FiniteMenuGraph.menuFrom_sequence_left leftGraph rightGraph parentGraph
     leftFragment.accepting (sequenceDeleted leftFragment) rightFragment.initial source complete
-    (compiledMenuContribution left) (compiledMenuContribution right)
-    (compiledMenuContribution (.seq alphabet left right))
+    leftOffer rightOffer parentOffer
     hLeftClosed hRightClosed hParentClosed hSource hRetained
     (compileTypeFuel_initial_mem _ right (typeCompilationFuel_sufficient right))
     (fun _ h => (Finset.mem_sdiff.mp h).1) hLeftStates hRightStates hFinalClosed
-    (fun q hq => compiledMenuContribution_accepting left q hq)
+    hFinalEmpty
     (fun q hq => by
       simpa only [complete, decide_eq_true_eq] using
         accepting_state_completionFlag (typeCompilationFuel left) left le_rfl q hq)
@@ -441,15 +449,45 @@ theorem computeFutureOf_sequence_left
       simp only [complete, decide_eq_true_eq] at hc ⊢
       exact hComplete q hq r hr hc)
     hLeftReferences hRightReferences
+    hLeftOffer hRightOffer
+  simpa only [complete, decide_eq_true_eq] using hMenus
+
+/-- The sequence equation, with the paper's backward completion invariant explicit. -/
+theorem computeFutureOf_sequence_left
+    (alphabet : PactTypeAlphabet) (left right : PactType)
+    (hLeftDisjoint : left.OfferBranchesDisjoint)
+    (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hLeftAlphabet : left.alphabet = alphabet)
+    (hRightAlphabet : right.alphabet = alphabet)
+    (source : TypeAutomatonState)
+    (hSource : source ∈ (compileTypeFuel (typeCompilationFuel left) left).states)
+    (hRetained : source ∉ sequenceDeleted
+      (compileTypeFuel (typeCompilationFuel left) left))
+    (hComplete : ∀ q ∈ (compiledMenuGraphFuel (typeCompilationFuel left) left).futureReachable source,
+      ∀ r ∈ (compiledMenuGraphFuel (typeCompilationFuel left) left).referencedStates q,
+      (∃ residual, (residual, r) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
+        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) →
+      ∃ residual, (residual, q) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
+        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) :
+    computeFutureOf (.seq alphabet left right) (.child 0 source) =
+      computeFutureOf left source ∪
+        if ∃ residual, (residual, source) ∈
+            buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
+            typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true then
+          computeFutureOf right (compileTypeFuel (typeCompilationFuel right) right).initial
+        else ∅ := by
+  have hMenus := compiledMenuFrom_sequence_left alphabet left right hLeftDisjoint hRightDisjoint
+    (compiledMenuContribution left) (compiledMenuContribution right)
+    (compiledMenuContribution (.seq alphabet left right)) source hSource hRetained hComplete
+    (compiledMenuContribution_accepting left)
     (fun q _ hq => compiledMenuContribution_sequence_left alphabet left right q hq)
     (fun q _ => compiledMenuContribution_sequence_right alphabet left right q)
   rw [computeFutureOf_eq_menuFrom, computeFutureOf_eq_menuFrom,
     computeFutureOf_eq_menuFrom]
-  change (parentGraph.menuFrom _ (.child 0 source)).filter _ = _
   rw [hMenus, Finset.filter_union]
   simp only [show (PactType.seq alphabet left right).alphabet = alphabet from rfl,
-    hLeftAlphabet, hRightAlphabet, complete, decide_eq_true_eq]
-  split_ifs <;> simp [leftGraph, rightGraph, rightFragment]
+    hLeftAlphabet, hRightAlphabet]
+  split_ifs <;> simp
 
 end
 

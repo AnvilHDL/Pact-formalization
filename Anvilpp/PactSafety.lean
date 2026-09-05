@@ -186,6 +186,7 @@ theorem type_automaton_correspondence
           (by simpa [typeAutomaton] using hEdge)
     }⟩
 
+#print axioms type_automaton_correspondence
 /-- Lemma 4.6, "Process--automaton correspondence": conforming processes
 simulate into the type automaton. -/
 theorem process_automaton_correspondence

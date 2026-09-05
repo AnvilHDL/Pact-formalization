@@ -1,5 +1,6 @@
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Recursion
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.RecursionMenus
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.MarkerCorrespondence
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Sequence
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Parallel
 
@@ -1793,7 +1794,13 @@ theorem correspondence_simultaneous :
                 (∃ reached ∈ (compiledMenuGraphFuel (typeCompilationFuel body) body).futureReachable q,
                   MarkerSource (compileTypeFuel (typeCompilationFuel body) body) name reached) ↔
                 menuReachesVarFuel name replacement.CanCompleteDeclared fuel rho = true := by
-              sorry -- Paper: marker-path/syntax-test equivalence, by compiler-rank induction.
+              -- Paper: M_X agrees with b_X by the smaller-rank marker induction.
+              rw [menuReachesVarFuel_eq_menuReachesVar name replacement.CanCompleteDeclared
+                fuel rho (by omega) hRhoTail]
+              exact markerReachable_iff_menuReachesVar_of_current body (name :: bound) hBodyWF
+                (fun child childBound hChildLt hChildWF =>
+                  (ih _ (Nat.lt_trans hChildLt hBodyFuel) childBound child rfl hChildWF).1)
+                name (List.mem_cons_self) hChildRelated
             simp only [hMarker]
     | xoffer alphabet elseType branches =>
         obtain ⟨hElseWF, hBranchWF⟩ := typeWellFormedIn_xoffer hWF
