@@ -24,17 +24,6 @@ def TypeBranchEnabled (env : TypeEnvironment)
 
 namespace PactTypeAlphabet
 
-  /-- The part of `parent` used by one conjunctive-offer branch. -/
-  def branchPart (parent : PactTypeAlphabet)
-      (branch : BareMessage × PactType) : PactTypeAlphabet :=
-    { actions := parent.actions ∩
-        ({branch.1} ∪ PactType.MessageActions branch.2) }
-
-  /-- The declarations left after assigning one component of an internal
-  parallel product. -/
-  def remove (parent assigned : PactTypeAlphabet) : PactTypeAlphabet :=
-    { actions := parent.actions \ assigned.actions }
-
   /-- Project a new parallel alphabet onto a child: the child keeps its own
   interface actions and receives the whole new parent alphabet. -/
   def projectParallel (parent child : PactTypeAlphabet)
@@ -114,18 +103,12 @@ def singletonTypeXOfferAt (alphabet : PactTypeAlphabet)
   let branch := (branch.1, branch.2.reannotate alphabet)
   .xoffer alphabet (.skip alphabet) [branch]
 
-def singletonTypeXOffer (branch : BareMessage × PactType) : PactType :=
-  singletonTypeXOfferAt branch.2.alphabet branch
-
 /-- A selected conjunctive-offer branch has no synthetic else alternative:
 its head action is now mandatory, followed by its continuation. -/
 def selectedTypeBranchAt (alphabet : PactTypeAlphabet)
     (branch : BareMessage × PactType) : PactType :=
   .seq alphabet (.message alphabet branch.1.1 branch.1.2)
     (branch.2.reannotate alphabet)
-
-def selectedTypeBranch (branch : BareMessage × PactType) : PactType :=
-  selectedTypeBranchAt branch.2.alphabet branch
 
 def parallelType (left right : PactType) (interface : Interface) : PactType :=
   .par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
@@ -141,14 +124,6 @@ def parallelTypeBranchesWithin (alphabet : PactTypeAlphabet) :
   | branch :: rest =>
       .par alphabet (singletonTypeXOfferAt alphabet branch)
         (parallelTypeBranchesWithin alphabet rest) ∅
-
-/-- Rewrite a conjunctive type offer into parallel singleton exclusive offers.
-Commitment places the branches in parallel with an empty interface, so every
-component carries the complete enclosing alphabet. -/
-def parallelTypeBranches (alphabet : PactTypeAlphabet) :
-    List (BareMessage × PactType) → PactType
-  | [] => .skip PactTypeAlphabet.empty
-  | branch :: rest => parallelTypeBranchesWithin alphabet (branch :: rest)
 
 /-- Post-process the singleton-`xoffer` product after `selected` witnesses that
 the conjunctive offer fired.  Exactly that singleton loses its synthetic

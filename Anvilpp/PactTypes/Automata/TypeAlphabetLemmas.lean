@@ -75,17 +75,6 @@ namespace PactTypeAlphabet
 
 end PactTypeAlphabet
 
-@[simp] theorem PactType.mem_transitionAlphabet_iff
-    (processType : PactType) (environment : TypeEnvironment)
-    (label : TypeLabel) (offers : TypeOfferSummary) :
-    TypeAutomatonSymbol.mk environment label offers ∈
-        processType.transitionAlphabet ↔
-      environment ∈ processType.alphabet.localEnvironments ∧
-      label ∈ processType.labels ∧
-      offers ∈ processType.alphabet.localOfferSummaries := by
-  classical
-  simp [PactType.transitionAlphabet]
-
 end
 
 

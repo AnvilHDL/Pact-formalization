@@ -185,27 +185,6 @@ namespace PendingAutomaton
         rw [hStep]
         exact ih (child.futureStep reached)
 
-  /-- Offers unioned over an embedded reached set are preserved whenever
-  `offersAt` is preserved pointwise by the embedding. -/
-  theorem biUnion_offersAt_image_of_embedding
-      (child parent : PendingAutomaton)
-      (embed : TypeAutomatonState → TypeAutomatonState)
-      (hOffers : ∀ state,
-        parent.offersAt (embed state) = child.offersAt state)
-      (reached : Finset TypeAutomatonState) :
-      (reached.image embed).biUnion parent.offersAt =
-        reached.biUnion child.offersAt := by
-    ext action
-    simp only [Finset.mem_biUnion, Finset.mem_image]
-    constructor
-    · rintro ⟨_, ⟨state, hState, rfl⟩, hAction⟩
-      rw [hOffers] at hAction
-      exact ⟨state, hState, hAction⟩
-    · rintro ⟨state, hState, hAction⟩
-      refine ⟨embed state, ⟨state, hState, rfl⟩, ?_⟩
-      rw [hOffers]
-      exact hAction
-
   /-- An exact reference-preserving state embedding preserves the saturated
   same-cycle reachable set.  A larger parent carrier only adds redundant
   saturation rounds. -/
@@ -228,48 +207,6 @@ namespace PendingAutomaton
     rw [hExtra,
       child.futureReachableAux_add_card_stable hClosed {state} (by
         simpa using hState) extra]
-
-  /-- Two closed pending graphs with the same edge set have the same
-  same-cycle reachability from any state carried by both graphs.  Their state
-  carriers may differ because constructor views retain different bookkeeping
-  states; only the finite saturation bound changes, and closure makes those
-  extra rounds redundant. -/
-  theorem futureReachable_eq_of_same_edges
-      (first second : PendingAutomaton)
-      (hEdges : first.edges = second.edges)
-      (hFirstClosed : first.ReferencesClosed)
-      (hSecondClosed : second.ReferencesClosed)
-      (state : TypeAutomatonState)
-      (hFirstState : state ∈ first.states)
-      (hSecondState : state ∈ second.states) :
-      first.futureReachable state = second.futureReachable state := by
-    let shared : PendingAutomaton :=
-      { states := first.states ∪ second.states, edges := first.edges }
-    have hFirstCard : first.states.card ≤ shared.states.card :=
-      Finset.card_le_card Finset.subset_union_left
-    have hSecondCard : second.states.card ≤ shared.states.card :=
-      Finset.card_le_card Finset.subset_union_right
-    have hFirst := futureReachable_eq_of_embedding first shared id
-      (fun current => by
-        change first.referencedStates current =
-          (first.referencedStates current).image id
-        ext target
-        simp) hFirstClosed state hFirstState hFirstCard
-    have hSecondReferences : ∀ current,
-        shared.referencedStates (id current) =
-          (second.referencedStates current).image id := by
-      intro current
-      unfold referencedStates
-      rw [hEdges]
-      ext target
-      simp
-    have hSecond := futureReachable_eq_of_embedding second shared id
-      hSecondReferences hSecondClosed state hSecondState hSecondCard
-    have hFirst' : shared.futureReachable state =
-        first.futureReachable state := by simpa using hFirst
-    have hSecond' : shared.futureReachable state =
-        second.futureReachable state := by simpa using hSecond
-    exact hFirst'.symm.trans hSecond'
 
   /-- If a state has no same-cycle future references, saturation cannot leave
   that state. -/
@@ -601,23 +538,6 @@ namespace PendingAutomaton
           hEntryReachable) hReachable
 
 end PendingAutomaton
-
-/-- A graph containing only explicit future fields has no symbolic future
-references.  Parallel products have this form after their child decorations
-have been resolved. -/
-theorem PendingAutomaton.referencedStates_eq_empty_of_all_explicit
-    (automaton : PendingAutomaton)
-    (hExplicit : ∀ edge ∈ automaton.edges,
-      ∃ offers, edge.future = .explicit offers)
-    (state : TypeAutomatonState) :
-    automaton.referencedStates state = ∅ := by
-  rw [Finset.eq_empty_iff_forall_notMem]
-  intro target hTarget
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-    Finset.mem_filter] at hTarget
-  rcases hTarget with ⟨edge, ⟨hEdge, _⟩, hFuture⟩
-  obtain ⟨offers, hOffers⟩ := hExplicit edge hEdge
-  simp [hOffers] at hFuture
 
 end
 

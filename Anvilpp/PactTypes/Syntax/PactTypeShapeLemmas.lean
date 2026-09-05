@@ -63,46 +63,9 @@ decreasing_by
     omega
 end
 
-theorem shape_eq_of_reannotate_eq {t₁ t₂ : PactType} {alphabet : PactTypeAlphabet}
-    (h : t₁.reannotate alphabet = t₂.reannotate alphabet) : shape t₁ = shape t₂ := by
-  rw [← shape_reannotate alphabet t₁, ← shape_reannotate alphabet t₂, h]
-
-theorem eq_skip_of_shape_skip {t : PactType} (h : shape t = PactShape.skip) :
-    t = .skip t.alphabet := by
-  cases t <;> simp [shape, PactType.alphabet] at h ⊢
-
 end PactType
 
 /-! ### Shapes are strictly bigger than their components -/
-
-theorem shape_seq_ne_right (left right : PactShape) :
-    PactShape.seq left right ≠ right := by
-  intro h
-  have hLt : sizeOf right < sizeOf (PactShape.seq left right) := by
-    simp_wf
-    omega
-  rw [h] at hLt
-  omega
-
-theorem shape_xoffer_ne_else (elseShape : PactShape)
-    (branches : List (BareMessage × PactShape)) :
-    PactShape.xoffer elseShape branches ≠ elseShape := by
-  intro h
-  have hLt : sizeOf elseShape < sizeOf (PactShape.xoffer elseShape branches) := by
-    simp_wf
-    omega
-  rw [h] at hLt
-  omega
-
-theorem shape_offer_ne_else (elseShape : PactShape)
-    (branches : List (BareMessage × PactShape)) :
-    PactShape.offer elseShape branches ≠ elseShape := by
-  intro h
-  have hLt : sizeOf elseShape < sizeOf (PactShape.offer elseShape branches) := by
-    simp_wf
-    omega
-  rw [h] at hLt
-  omega
 
 namespace PactType
 
@@ -201,148 +164,13 @@ decreasing_by
     omega
 end
 
-/-- Prefix message ids only depend on the shape. -/
-theorem prefixMessageIds_congr_of_shape {t₁ t₂ : PactType}
-    (h : shape t₁ = shape t₂) : PrefixMessageIds t₁ = PrefixMessageIds t₂ := by
-  rw [← prefixIds_shape, ← prefixIds_shape, h]
-
 end PactType
 
 /-! ### Per-constructor equations for `PrefixMessageIds` -/
 
-theorem prefix_message (alphabet : PactTypeAlphabet) (msg : MessageId)
-    (dir : MessageDir) :
-    PactType.PrefixMessageIds (.message alphabet msg dir) = {msg} := by
-  rw [PactType.PrefixMessageIds.eq_def]
-
-theorem prefix_seq (alphabet : PactTypeAlphabet) (left right : PactType) :
-    PactType.PrefixMessageIds (.seq alphabet left right) =
-      PactType.PrefixMessageIds left ∪
-        (if left.CanCompleteBeforeTock then PactType.PrefixMessageIds right
-          else ∅) := by
-  rw [PactType.PrefixMessageIds.eq_def]
-
-theorem prefix_par (alphabet : PactTypeAlphabet) (left right : PactType)
-    (interface : Interface) :
-    PactType.PrefixMessageIds (.par alphabet left right interface) =
-      PactType.PrefixMessageIds left ∪ PactType.PrefixMessageIds right := by
-  rw [PactType.PrefixMessageIds.eq_def]
-
-theorem prefix_xoffer (alphabet : PactTypeAlphabet) (elseType : PactType)
-    (branches : List (BareMessage × PactType)) :
-    PactType.PrefixMessageIds (.xoffer alphabet elseType branches) =
-      PactType.PrefixMessageIds elseType ∪
-        PactType.BranchPrefixMessageIds branches := by
-  rw [PactType.PrefixMessageIds.eq_def]
-
-theorem branchPrefix_cons (action : BareMessage) (processType : PactType)
-    (rest : List (BareMessage × PactType)) :
-    PactType.BranchPrefixMessageIds ((action, processType) :: rest) =
-      {action.1} ∪ PactType.PrefixMessageIds processType ∪
-        PactType.BranchPrefixMessageIds rest := by
-  rw [PactType.BranchPrefixMessageIds.eq_def]
-
 /-! ### A branch head is in the prefix of its own expansion -/
-
-theorem head_mem_prefix_selectedTypeBranchAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    branch.1.1 ∈ PactType.PrefixMessageIds (selectedTypeBranchAt alphabet branch) := by
-  rw [selectedTypeBranchAt, prefix_seq, prefix_message]
-  simp
-
-theorem head_mem_prefix_singletonTypeXOfferAt (alphabet : PactTypeAlphabet)
-    (branch : BareMessage × PactType) :
-    branch.1.1 ∈
-      PactType.PrefixMessageIds (singletonTypeXOfferAt alphabet branch) := by
-  rw [singletonTypeXOfferAt, prefix_xoffer, branchPrefix_cons]
-  simp
-
-theorem head_mem_prefix_parallelTypeBranchesSelecting
-    (alphabet : PactTypeAlphabet) (enabled branch : BareMessage × PactType)
-    (rest : List (BareMessage × PactType)) :
-    branch.1.1 ∈ PactType.PrefixMessageIds
-      (parallelTypeBranchesSelecting alphabet enabled (branch :: rest)) := by
-  rw [parallelTypeBranchesSelecting]
-  cases rest with
-  | nil =>
-      rw [parallelTypeBranchesSelectingWithin]
-      split_ifs
-      · exact head_mem_prefix_selectedTypeBranchAt _ _
-      · exact head_mem_prefix_singletonTypeXOfferAt _ _
-  | cons head tail =>
-      rw [parallelTypeBranchesSelectingWithin]
-      all_goals
-        first
-          | (split_ifs <;>
-              · rw [prefix_par]
-                simp only [Finset.mem_union]
-                refine Or.inl ?_
-                first
-                  | exact head_mem_prefix_selectedTypeBranchAt _ _
-                  | exact head_mem_prefix_singletonTypeXOfferAt _ _)
-          | simp
 
 /-! ### The exclusion -/
 
-theorem parallelTypeBranchesSelecting_ne_elseType
-    {alphabet : PactTypeAlphabet} {elseType : PactType}
-    {branches : List (BareMessage × PactType)}
-    {enabled : BareMessage × PactType}
-    (hLinear : ∀ branch ∈ branches,
-      branch.1.1 ∉ PactType.PrefixMessageIds elseType)
-    (hNonempty : branches ≠ []) :
-    parallelTypeBranchesSelecting alphabet enabled branches ≠ elseType := by
-  intro hEq
-  cases branches with
-  | nil => exact hNonempty rfl
-  | cons branch rest =>
-      refine hLinear branch (by simp) ?_
-      rw [← hEq]
-      exact head_mem_prefix_parallelTypeBranchesSelecting alphabet enabled branch rest
-
-/-- Shape-level form: the selecting expansion of a non-empty branch list cannot
-even have the same shape as the else arm. -/
-theorem shape_parallelTypeBranchesSelecting_ne_elseType
-    {alphabet : PactTypeAlphabet} {elseType : PactType}
-    {branches : List (BareMessage × PactType)}
-    {enabled : BareMessage × PactType}
-    (hLinear : ∀ branch ∈ branches,
-      branch.1.1 ∉ PactType.PrefixMessageIds elseType)
-    (hNonempty : branches ≠ []) :
-    PactType.shape (parallelTypeBranchesSelecting alphabet enabled branches) ≠
-      PactType.shape elseType := by
-  intro hShape
-  cases branches with
-  | nil => exact hNonempty rfl
-  | cons branch rest =>
-      refine hLinear branch (by simp) ?_
-      rw [← PactType.prefixMessageIds_congr_of_shape hShape]
-      exact head_mem_prefix_parallelTypeBranchesSelecting alphabet enabled branch rest
-
-
-/-- A selecting expansion of a non-empty branch list is a `seq`, an `xoffer` or
-a `par` — never an `offer`. -/
-theorem shape_parallelTypeBranchesSelecting_ne_offer
-    (alphabet : PactTypeAlphabet) (enabled branch : BareMessage × PactType)
-    (rest : List (BareMessage × PactType)) (elseShape : PactShape)
-    (branchShapes : List (BareMessage × PactShape)) :
-    PactType.shape
-        (parallelTypeBranchesSelecting alphabet enabled (branch :: rest)) ≠
-      PactShape.offer elseShape branchShapes := by
-  rw [parallelTypeBranchesSelecting]
-  cases rest with
-  | nil =>
-      rw [parallelTypeBranchesSelectingWithin]
-      split_ifs <;>
-        simp [selectedTypeBranchAt, singletonTypeXOfferAt, PactType.shape]
-  | cons head tail =>
-      rw [parallelTypeBranchesSelectingWithin]
-      all_goals
-        first
-          | (split_ifs <;> simp [PactType.shape])
-          | simp
-
 end Pact
 
-#print axioms Pact.shape_parallelTypeBranchesSelecting_ne_elseType
-#print axioms Pact.parallelTypeBranchesSelecting_ne_elseType

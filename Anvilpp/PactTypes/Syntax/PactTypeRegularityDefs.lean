@@ -85,10 +85,6 @@ namespace PactType
   one hypothesis carry "none of these ambient enclosing-binder names occur
   here" for an arbitrary-length list, propagated through a structural
   induction exactly the way a single `TailOccurrences` fact already is. -/
-  def AllTailOccurrences (names : List String) (tail : Prop)
-      (processType : PactType) : Prop :=
-    ∀ n ∈ names, TailOccurrences n tail processType
-
   /- Every binder is used only in tail positions, and every nested binder has
   the same property.  This is the finite-control part of regularity. -/
   mutual

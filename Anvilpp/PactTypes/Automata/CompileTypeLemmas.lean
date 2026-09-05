@@ -214,23 +214,6 @@ theorem typeCompilationFuel_parallelTypeBranchesSelectingWithin
           conjunctiveCompilationFuel, typeCompilationFuel_reannotate,
           typeCompilationFuel_parallelTypeBranchesSelectingWithin]
 
-/--
-The auxiliary budget is exactly the budget of the parallel type generated for
-a conjunctive offer.  This is the non-structural recursive call that motivates
-the custom fuel calculation.
--/
-theorem typeCompilationFuel_parallelTypeBranches
-    (alphabet : PactTypeAlphabet)
-    (branches : List (BareMessage × PactType)) :
-    typeCompilationFuel (parallelTypeBranches alphabet branches) =
-      conjunctiveCompilationFuel branches := by
-  cases branches with
-  | nil => simp [parallelTypeBranches, typeCompilationFuel,
-      conjunctiveCompilationFuel]
-  | cons branch rest =>
-      exact typeCompilationFuel_parallelTypeBranchesWithin
-        alphabet (branch :: rest)
-
 /-- Forcing one singleton branch removes only its synthetic else outcome and
 does not change the compilation budget of the generated parallel product. -/
 theorem typeCompilationFuel_parallelTypeBranchesSelecting
@@ -277,44 +260,6 @@ theorem typeCompilationFuel_le_typeBranchCompilationFuel
       · simp [typeBranchCompilationFuel]
       · exact le_trans (ih hRest) (by
           simp [typeBranchCompilationFuel])
-
-/-- Every continuation in a conjunctive offer fits within the compilation
-budget of the generated branch product. -/
-theorem typeCompilationFuel_le_conjunctiveCompilationFuel
-    (branches : List (BareMessage × PactType))
-    (entry : BareMessage × PactType) (hEntry : entry ∈ branches) :
-    typeCompilationFuel entry.2 ≤ conjunctiveCompilationFuel branches := by
-  induction branches with
-  | nil => simp at hEntry
-  | cons head rest ih =>
-      rcases head with ⟨action, processType⟩
-      simp only [List.mem_cons] at hEntry
-      cases rest with
-      | nil =>
-          have hEq : entry = (action, processType) := by
-            simpa using hEntry
-          subst entry
-          simp [conjunctiveCompilationFuel]
-          omega
-      | cons next tail =>
-          rcases hEntry with hHead | hRest
-          · subst entry
-            simp [conjunctiveCompilationFuel]
-            omega
-          · exact le_trans (ih hRest) (by
-              simp [conjunctiveCompilationFuel]
-              omega)
-
-/-- A sufficient parent budget gives a child exactly its public, type-aware
-future function. -/
-theorem compiledChildFutureFuel_eq_computeFutureOf
-     (fuel : Nat) (processType : PactType)
-    (hFuel : typeCompilationFuel processType ≤ fuel) :
-    compiledChildFutureFuel fuel processType =
-      computeFutureOfFuel (typeCompilationFuel processType)
-        processType := by
-  unfold compiledChildFutureFuel
-  rw [Nat.min_eq_right hFuel]
 
 /-- Once fuel covers the custom compilation budget, one more unit leaves the
 constructor fragment unchanged. -/
@@ -542,12 +487,6 @@ theorem compileTypeFuel_eq_of_sufficient
     obtain ⟨extra, rfl⟩ := Nat.exists_eq_add_of_le hReverse
     exact compileTypeFuel_add_stable processType rightFuel extra hRight
 
-@[simp] theorem compileType_alphabet
-     (processType : PactType) :
-    (compileType processType).alphabet =
-      processType.transitionAlphabet := by
-  rfl
-
 /-- Public edge membership is exactly resolved membership in the constructor
 fragment. -/
 theorem compileType_hasEdge_iff_hasResolvedEdge
@@ -587,44 +526,6 @@ theorem compileType_hasEdge_iff_resolvedEdge_mem
     target env label offers]
   simp [AutomatonFragment.HasResolvedEdge, resolveAutomatonEdgesWith]
   aesop
-
-/-- The source of every compiled transition belongs to the exported state
-carrier. -/
-theorem compileType_edge_source_mem
-     (processType : PactType)
-    {source target : TypeAutomatonState} {env : TypeEnvironment}
-    {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : (compileType processType).HasEdge
-      source env label offers target) :
-    source ∈ (compileType processType).states := by
-  simp only [TypeAutomaton.HasEdge] at hEdge
-  simp only [compileType, Finset.mem_union]
-  right
-  apply Finset.mem_biUnion.mpr
-  refine ⟨
-    { source := source
-      symbol := { environment := env, label := label, offers := offers }
-      target := target }, hEdge, ?_⟩
-  simp
-
-/-- The target of every compiled transition belongs to the exported state
-carrier. -/
-theorem compileType_edge_target_mem
-     (processType : PactType)
-    {source target : TypeAutomatonState} {env : TypeEnvironment}
-    {label : TypeLabel} {offers : TypeOfferSummary}
-    (hEdge : (compileType processType).HasEdge
-      source env label offers target) :
-    target ∈ (compileType processType).states := by
-  simp only [TypeAutomaton.HasEdge] at hEdge
-  simp only [compileType, Finset.mem_union]
-  right
-  apply Finset.mem_biUnion.mpr
-  refine ⟨
-    { source := source
-      symbol := { environment := env, label := label, offers := offers }
-      target := target }, hEdge, ?_⟩
-  simp
 
 /-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
 theorem compileTypeFuel_initial_mem  :

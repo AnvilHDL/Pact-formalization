@@ -274,7 +274,6 @@ theorem survivorTransport_progress (a : PactTypeAlphabet) (pid : ProcId) :
     simp [typeCompilationFuel, buildRelationSetCoreFuel]
 
 
-
 /-- A branch body's interfaces are among the list's. -/
 theorem parallelInterfaces_subset_branches :
     ∀ (branches : List (BareMessage × PactType))
@@ -455,8 +454,6 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
     simpa only [PactType.reannotate] using
       relationMembership_xoffer_branch target (elseType.reannotate target)
         (PactType.reannotateBranches target branches) hGet' hMem
-
-
 
 
 /-- Synchronising on nothing leaves the parent alphabet unchanged. -/
@@ -1828,20 +1825,6 @@ theorem relationMembership_par_product (alphabet : PactTypeAlphabet)
   · rw [buildRelationSetCoreFuel_eq_of_sufficient right (le_max_right _ _)
       le_rfl]
     exact hRight
-
-/-- The projection reads the child only through the actions being compared,
-so agreeing child alphabets give agreeing projections. -/
-theorem agreeOn_projectParallel_of_actions
-    {parent childA childB : PactTypeAlphabet}
-    {interface : Interface} {used : Finset BareMessage}
-    (hChild : PactTypeAlphabet.AgreeOn childA childB used) :
-    PactTypeAlphabet.AgreeOn
-      (PactTypeAlphabet.projectParallel parent childA interface)
-      (PactTypeAlphabet.projectParallel parent childB interface)
-      used := by
-  intro action hAction
-  simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
-    Finset.mem_filter, hChild action hAction]
 
 /-- Re-signing leaves the accepting states alone. -/
 theorem accepting_reannotate {processType : PactType}

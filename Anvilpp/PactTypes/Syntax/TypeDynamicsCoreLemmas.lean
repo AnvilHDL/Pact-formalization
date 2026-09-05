@@ -40,35 +40,6 @@ namespace PactType
 
 end PactType
 
-@[simp] theorem singletonTypeXOffer_alphabet
-    (branch : BareMessage × PactType) :
-    (singletonTypeXOffer branch).alphabet = branch.2.alphabet := by
-  rcases branch with ⟨action, processType⟩
-  simp [singletonTypeXOffer, singletonTypeXOfferAt, PactType.alphabet]
-
-@[simp] theorem selectedTypeBranch_alphabet
-    (branch : BareMessage × PactType) :
-    (selectedTypeBranch branch).alphabet = branch.2.alphabet := by
-  rcases branch with ⟨action, processType⟩
-  simp [selectedTypeBranch, selectedTypeBranchAt, PactType.alphabet]
-
-@[simp] theorem parallelTypeBranchesSelecting_singleton_self
-    (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType) :
-    parallelTypeBranchesSelecting alphabet branch [branch] =
-      selectedTypeBranchAt alphabet branch := by
-  simp [parallelTypeBranchesSelecting, parallelTypeBranchesSelectingWithin]
-
-theorem parallelTypeBranches_alphabet_eq_of_nonempty
-    {alphabet : PactTypeAlphabet} :
-    ∀ {branches : List (BareMessage × PactType)},
-      branches ≠ [] →
-      (parallelTypeBranches alphabet branches).alphabet = alphabet
-  | [], hNonempty => False.elim (hNonempty rfl)
-  | [branch], _ => by
-      simp [parallelTypeBranches, parallelTypeBranchesWithin,
-        singletonTypeXOfferAt, PactType.alphabet]
-  | _ :: _ :: _, _ => rfl
-
 theorem parallelTypeBranchesSelecting_alphabet_eq_of_mem
     {alphabet : PactTypeAlphabet} {selected : BareMessage × PactType} :
     ∀ {branches : List (BareMessage × PactType)},

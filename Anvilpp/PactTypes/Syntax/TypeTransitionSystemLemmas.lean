@@ -255,14 +255,6 @@ theorem TypeTransition.preserves_alphabet
       rw [PactType.reannotate_alphabet]
       simp [PactType.alphabet]
 
-theorem DecoratedTypeTransition.preserves_alphabet
-    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
-    {offers : TypeOfferSummary}
-    (hSource : source.AlphabetWellFormed)
-    (transition : DecoratedTypeTransition env source label offers target) :
-    target.alphabet = source.alphabet :=
-  TypeTransition.preserves_alphabet hSource transition.1
-
 end
 
 end Pact

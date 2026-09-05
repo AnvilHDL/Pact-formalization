@@ -20,10 +20,6 @@ theorem not_mem_sequenceDeleted_of_not_accepting {left : AutomatonFragment}
     state ∉ sequenceDeleted left := fun hDeleted =>
   hNotAccepting (mem_sequenceDeleted_iff.mp hDeleted).1
 
-theorem accepting_of_mem_sequenceDeleted {left : AutomatonFragment}
-    {state : TypeAutomatonState} (hDeleted : state ∈ sequenceDeleted left) :
-    state ∈ left.accepting := (mem_sequenceDeleted_iff.mp hDeleted).1
-
 /-- Edges leaving a right-child state are exactly the copied edges of the
 right fragment. Neither the left-edge nor redirect clause can have a
 `.child 1` source. -/
@@ -74,14 +70,6 @@ environment, label, and current offers from the left child. -/
     {state : TypeAutomatonState} (hKept : state ∉ left.accepting) :
     sequenceRedirect left right state = childState 0 state := by
   simp [sequenceRedirect, hKept]
-
-theorem sequenceRedirect_eq_or (left right : AutomatonFragment)
-    (state : TypeAutomatonState) :
-    sequenceRedirect left right state = childState 1 right.initial ∨
-      sequenceRedirect left right state = childState 0 state := by
-  by_cases hAccepting : state ∈ left.accepting
-  · exact Or.inl (sequenceRedirect_of_accepting hAccepting)
-  · exact Or.inr (sequenceRedirect_of_not_accepting hAccepting)
 
 @[simp] theorem sequenceLeftEdge_source (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :

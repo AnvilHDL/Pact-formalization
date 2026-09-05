@@ -141,12 +141,6 @@ end PactTypeAlphabet
 
 namespace PactType
 
-  /-- Actions declared by the branch alphabets of an offer. -/
-  def branchAlphabetActions : List (BareMessage × PactType) → Finset BareMessage
-    | [] => ∅
-    | (_, processType) :: rest =>
-        processType.alphabet.actions ∪ branchAlphabetActions rest
-
   mutual
     /-- The fixed alphabet discipline for type syntax.
 

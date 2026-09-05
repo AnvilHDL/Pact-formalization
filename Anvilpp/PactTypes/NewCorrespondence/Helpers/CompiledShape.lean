@@ -27,30 +27,6 @@ theorem reannotateBranches_mem
       · obtain ⟨source, hSource, hEq⟩ := ih hTail
         exact ⟨source, List.mem_cons_of_mem _ hSource, hEq⟩
 
-/-- Reannotation keeps branch heads and structural footprints, so it keeps
-declaration-disjointness of a branch list. -/
-theorem reannotateBranches_pairwise_branchDeclarationsDisjoint
-    (alphabet : PactTypeAlphabet) :
-    ∀ branches : List (BareMessage × PactType),
-      List.Pairwise BranchDeclarationsDisjoint branches →
-      List.Pairwise BranchDeclarationsDisjoint
-        (PactType.reannotateBranches alphabet branches) := by
-  intro branches
-  induction branches with
-  | nil => intro _; rw [PactType.reannotateBranches_nil]; exact List.Pairwise.nil
-  | cons head tail ih =>
-      rcases head with ⟨action, branchType⟩
-      intro hPairwise
-      rw [PactType.reannotateBranches_cons, List.pairwise_cons]
-      rw [List.pairwise_cons] at hPairwise
-      refine ⟨?_, ih hPairwise.2⟩
-      intro other hOther
-      obtain ⟨source, hSource, hEq⟩ := reannotateBranches_mem hOther
-      subst hEq
-      have hHead := hPairwise.1 source hSource
-      exact ⟨by simpa using hHead.1, by simpa using hHead.2.1,
-        by simpa using hHead.2.2⟩
-
 /-- Every branch of a re-signed conjunctive-offer list comes from a source
 branch, carrying that branch's own alphabet. -/
 theorem reannotateOfferBranches_mem (alphabet : PactTypeAlphabet) :

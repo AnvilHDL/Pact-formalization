@@ -11,11 +11,6 @@ def hideOffers (interface : Interface)
     (offers : Finset BareMessage) : Finset BareMessage :=
   offers.filter fun offer => offer.1 ∉ interface
 
-/-- Keep only offers whose message identifier belongs to the interface. -/
-def interfaceOffers (interface : Interface)
-    (offers : Finset BareMessage) : Finset BareMessage :=
-  offers.filter fun offer => offer.1 ∈ interface
-
 /-- Hide the interface from the union of two component environments. -/
 def combineAutomatonEnvironment (interface : Interface)
     (left right : TypeEnvironment) : TypeEnvironment :=

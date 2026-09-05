@@ -10,14 +10,6 @@ def AutomatonFragment.toPending (fragment : AutomatonFragment) :
   { states := fragment.states, edges := fragment.edges }
 
 
-def markerAugmentedPending (fragment : AutomatonFragment) (name : String)
-    (menu : Finset BareMessage) : PendingAutomaton :=
-  { states := fragment.states
-    edges := fragment.edges.image fun edge =>
-      if edge.label = AutomatonConstructionLabel.variable name then
-        { edge with future := .explicit menu }
-      else edge }
-
 /-- A state is a marker source when it has an outgoing `.variable name` edge. -/
 def MarkerSource (fragment : AutomatonFragment) (name : String)
     (state : TypeAutomatonState) : Prop :=
@@ -59,14 +51,6 @@ The relevant side condition is whether any same-cycle reachable state still
 carries an outgoing `.variable name` edge. The predicate is named here,
 together with the transport lemmas used to compute it constructor by
 constructor. -/
-
-/-- Some state reachable in the same cycle still calls the enclosing binder. -/
-def MarkerReachable (fragment : AutomatonFragment) (name : String)
-    (state : TypeAutomatonState) : Prop :=
-  ∃ reached ∈ (⟨fragment.states, fragment.edges⟩ :
-      PendingAutomaton).futureReachable state,
-    MarkerSource fragment name reached
-
 
 /-- Package a constructor graph without resolving its future references. -/
 def finishAutomatonFragment

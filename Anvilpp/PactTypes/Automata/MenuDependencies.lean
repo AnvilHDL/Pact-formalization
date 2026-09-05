@@ -67,10 +67,6 @@ def withMenuDependencies (automaton : PendingAutomaton)
       automaton.referencedStates source ∪
         menuDependencyTargets dependencies source }
 
-@[simp] theorem withMenuDependencies_states (automaton : PendingAutomaton)
-    (dependencies : Finset (TypeAutomatonState × TypeAutomatonState)) :
-    (automaton.withMenuDependencies dependencies).states = automaton.states := rfl
-
 theorem referencedStates_withMenuDependencies (automaton : PendingAutomaton)
     (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
     (source : TypeAutomatonState) :

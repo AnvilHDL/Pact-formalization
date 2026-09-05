@@ -24,51 +24,6 @@ lemma futureReachable_eq_singleton_of_referencedStates_subset_self
     (Finset.singleton_subset_iff.mpr
       (automaton.mem_futureReachable_self state))
 
-/-- A symbol in a type's fixed public alphabet uses an environment over that
-same fixed alphabet. -/
-lemma transitionAlphabetFor_localEnvironment_mem
-     (processType : PactType)
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      processType.transitionAlphabet) :
-    env ∈ processType.alphabet.localEnvironments := by
-  classical
-  unfold PactType.transitionAlphabet at hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  rcases hSymbol with ⟨env0, hEnv0, hRest⟩
-  rw [Finset.mem_biUnion] at hRest
-  rcases hRest with ⟨_label0, _hLabel0, hImage⟩
-  rw [Finset.mem_image] at hImage
-  rcases hImage with ⟨_offers0, _hOffers0, hEq⟩
-  injection hEq with hEnvEq _ _
-  simpa [hEnvEq] using hEnv0
-
-/-- A symbol in a type's fixed public alphabet reports only current offers
-owned by that alphabet. -/
-lemma transitionAlphabetFor_current_mem
-     (processType : PactType)
-    {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary}
-    {action : BareMessage}
-    (hSymbol : TypeAutomatonSymbol.mk env label offers ∈
-      processType.transitionAlphabet)
-    (hAction : action ∈ offers.current) :
-    action ∈ processType.alphabet.actions := by
-  classical
-  unfold PactType.transitionAlphabet at hSymbol
-  rw [Finset.mem_biUnion] at hSymbol
-  rcases hSymbol with ⟨_env0, _hEnv0, hRest⟩
-  rw [Finset.mem_biUnion] at hRest
-  rcases hRest with ⟨_label0, _hLabel0, hImage⟩
-  rw [Finset.mem_image] at hImage
-  rcases hImage with ⟨offers0, hOffers0, hEq⟩
-  injection hEq with _ _ hOffersEq
-  subst hOffersEq
-  simp only [PactTypeAlphabet.localOfferSummaries, Finset.mem_biUnion,
-    Finset.mem_powerset, Finset.mem_image] at hOffers0
-  rcases hOffers0 with ⟨current, hCurrent, future, _hFuture, hMk⟩
-  rw [← hMk] at hAction
-  exact hCurrent hAction
-
 /-- Proves that compiled `skip`'s root offers nothing: its only edge is the
 idle self-loop, which carries no current offers and references its own state. -/
 lemma computeFutureOf_skip_root
@@ -857,71 +812,6 @@ lemma compileType_progress_edge_cases
     injection hLabel with hLabelVisible
     subst label; subst current; subst target
     exact Or.inr ⟨rfl, rfl, rfl, rfl, hFuture.symm, hClock⟩
-
-/-- Proves that any decorated message fire step from `a` targets `skip`. -/
-lemma decorated_message_action_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {msg : MessageId} {dir : MessageDir}
-    {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.message alphabet msg dir)
-      (TypeLabel.message msg dir) offers target) :
-    target = .skip alphabet := by
-  generalize hLabelEq : TypeLabel.message msg dir = actualLabel at hStep
-  cases hStep.1 <;> simp [TypeLabel.message, TypeLabel.silent] at hLabelEq ⊢
-
-/-- Proves that any decorated message wait step from `a` stays at `a`. -/
-lemma decorated_message_wait_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {msg : MessageId} {dir : MessageDir}
-    {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.message alphabet msg dir)
-      TypeLabel.silent offers target) :
-    target = .message alphabet msg dir := by
-  generalize hLabelEq : TypeLabel.silent = actualLabel at hStep
-  cases hStep.1 <;> simp [TypeLabel.message, TypeLabel.silent] at hLabelEq ⊢
-
-/-- Proves that any decorated step from `skip` targets `skip`. -/
-lemma decorated_skip_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {label : TypeLabel} {offers : TypeOfferSummary}
-    {target : PactType}
-    (hStep : DecoratedTypeTransition env (.skip alphabet) label offers target) :
-    target = .skip alphabet := by
-  generalize hLabelEq : label = actualLabel at hStep
-  cases hStep.1
-  simp_all
-
-/-- Proves that any decorated clock step from `#` targets `skip`. -/
-lemma decorated_tock_action_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.tock alphabet) TypeLabel.tock
-      offers target) :
-    target = .skip alphabet := by
-  generalize hLabelEq : TypeLabel.tock = actualLabel at hStep
-  cases hStep.1 <;> simp [TypeLabel.silent] at hLabelEq ⊢
-
-/-- Proves that any decorated non-clock wait step from `#` stays at `#`. -/
-lemma decorated_tock_wait_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {offers : TypeOfferSummary} {target : PactType}
-    (hStep : DecoratedTypeTransition env (.tock alphabet) TypeLabel.silent
-      offers target) :
-    target = .tock alphabet := by
-  generalize hLabelEq : TypeLabel.silent = actualLabel at hStep
-  cases hStep.1 <;> simp [TypeLabel.silent] at hLabelEq ⊢
-
-/-- Proves that any decorated progress step from `$t` targets `skip`. -/
-lemma decorated_progress_target
-    {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
-    {pid : ProcId} {offers : TypeOfferSummary}
-    {target : PactType}
-    (hStep : DecoratedTypeTransition env (.progress alphabet pid)
-      (TypeLabel.progress pid) offers target) :
-    target = .skip alphabet := by
-  generalize hLabelEq : TypeLabel.progress pid = actualLabel at hStep
-  cases hStep.1
-  all_goals simp [TypeLabel.progress] at hLabelEq ⊢
 
 /-- Proves that any generated `skip` relation member has the `skip` relation
 shape. Provenance-directed relation (Task 4): `buildRelationSetCoreFuel`'s

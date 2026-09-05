@@ -1,9 +1,0 @@
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.AlphabetPreservation
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.ChoiceRelations
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.EnvironmentAndAlphabet
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.ExclusiveOffer
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.FutureClosure
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.MainHelpers
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.RecursionFoundations
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.Sequence
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.Variables
