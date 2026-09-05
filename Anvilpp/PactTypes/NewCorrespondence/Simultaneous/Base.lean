@@ -3165,25 +3165,6 @@ theorem resignTransport_relationMembership :
         buildRelationSetCoreFuel fuel (component.reannotate target) := by
   sorry
 
-/-- The survivor menu bound over a same-cycle reach, at the shape the parallel
-menu clause consumes.  **Open** only in its two side conditions: closedness of
-the component (`futureReachable_related` needs `AllVariablesBound []`, but
-`bound` grows at every `.recur`, so this wants the disjunctive *related-or-inert*
-form, with the inert half from `AutomatonFragment.MarkerOffersInert`), and
-`alphabet.actions` avoiding `ParallelInterfaces component` (expected from
-`InterfaceAlphabetScoped`).  Everything else is
-`survivorMenuBound_reach`. -/
-theorem survivorMenuBound_par
-    (component : PactType) (alphabet : PactTypeAlphabet)
-    (bound : List String) (hWF : TypeWellFormedIn bound component)
-    (q : TypeAutomatonState) :
-    ∀ s ∈ (⟨(compileTypeFuel (typeCompilationFuel component) component).states,
-        (compileTypeFuel (typeCompilationFuel component) component).edges⟩ :
-        PendingAutomaton).futureReachable q,
-      computeFutureOf (component.reannotate alphabet) s ⊆
-        computeFutureOf component s := by
-  sorry
-
 /-- Every edge lands on a state that still represents some residual.  A public
 edge always resolves a `.visible` pending edge, so the variable-marker escape of
 the relation's closure lemma cannot occur. -/

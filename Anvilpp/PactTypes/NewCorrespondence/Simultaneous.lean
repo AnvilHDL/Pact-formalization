@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Offers
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Recursion
 
 /-!
 Same-cycle completion at the compound fragments, the parallel product menu, and
@@ -1193,12 +1193,14 @@ theorem futureOffersAgree_par (alphabet : PactTypeAlphabet)
     (hRightDisjoint : right.OfferBranchesDisjoint)
     (hCompatible : PactTypeAlphabet.ParallelCompatible alphabet left.alphabet
       right.alphabet interface)
-    (hSurvLeft : ∀ q1 : TypeAutomatonState,
+    (hSurvLeft : ∀ (rho : PactType) (q1 : TypeAutomatonState),
+      relationMembership (buildRelationSet left (compileType left)) rho q1 →
       ∀ s ∈ (⟨(compileTypeFuel (typeCompilationFuel left) left).states,
           (compileTypeFuel (typeCompilationFuel left) left).edges⟩ :
           PendingAutomaton).futureReachable q1,
         computeFutureOf (left.reannotate alphabet) s ⊆ computeFutureOf left s)
-    (hSurvRight : ∀ q2 : TypeAutomatonState,
+    (hSurvRight : ∀ (rho : PactType) (q2 : TypeAutomatonState),
+      relationMembership (buildRelationSet right (compileType right)) rho q2 →
       ∀ t ∈ (⟨(compileTypeFuel (typeCompilationFuel right) right).states,
           (compileTypeFuel (typeCompilationFuel right) right).edges⟩ :
           PendingAutomaton).futureReachable q2,
@@ -1216,7 +1218,7 @@ theorem futureOffersAgree_par (alphabet : PactTypeAlphabet)
     subst hResidual
     subst hState
     rw [computeFutureOf_par_pair alphabet left right interface hLeftDisjoint
-        hRightDisjoint hCompatible q1 q2 (hSurvLeft q1) (hSurvRight q2)
+        hRightDisjoint hCompatible q1 q2 (hSurvLeft rL q1 hL) (hSurvRight rR q2 hR)
         (relationMembership_state_mem left _ q1 hLeftDisjoint hL)
         (relationMembership_state_mem right _ q2 hRightDisjoint hR),
       hLeft hL, hRight hR, typeFutureOffers_parallel]
@@ -1407,6 +1409,142 @@ theorem survivorMenuBound_reach (component : PactType)
   exact survivorMenuBound component target bound hWF hTargetWF hNoInterface
     hComponent hResignAgree hRho (hResidualActions hRho) (hResidualWF hRho)
 
+/-- In a marker-free component, the current-offer hypothesis makes every
+same-cycle successor of a related state related. -/
+theorem futureReachable_related_of_currentOffer
+    (component : PactType) (hDisjoint : component.OfferBranchesDisjoint)
+    (hNoMarker : ∀ name,
+      (compileTypeFuel (typeCompilationFuel component) component).NoMarkerFor name)
+    (hCurrent : CurrentOfferCorrespondence component)
+    {rho : PactType} {q : TypeAutomatonState}
+    (hRelated : relationMembership
+      (buildRelationSet component (compileType component)) rho q) :
+    ∀ s ∈ (⟨(compileTypeFuel (typeCompilationFuel component) component).states,
+        (compileTypeFuel (typeCompilationFuel component) component).edges⟩ :
+        PendingAutomaton).futureReachable q,
+      ∃ theta, relationMembership
+        (buildRelationSet component (compileType component)) theta s := by
+  classical
+  let fragment := compileTypeFuel (typeCompilationFuel component) component
+  let pending : PendingAutomaton := ⟨fragment.states, fragment.edges⟩
+  let allowed := fragment.states.filter fun s => ∃ theta,
+    relationMembership (buildRelationSet component (compileType component)) theta s
+  have hStep : ∀ s ∈ allowed, pending.referencedStates s ⊆ allowed := by
+    intro s hs t ht
+    obtain ⟨_, theta, hTheta⟩ := Finset.mem_filter.mp hs
+    rw [PendingAutomaton.referencedStates, Finset.mem_biUnion] at ht
+    obtain ⟨edge, hEdge, hRef⟩ := ht
+    obtain ⟨hEdgeMem, hSource⟩ := Finset.mem_filter.mp hEdge
+    by_cases hTock : edge.label.semantic = TypeLabel.tock
+    · rw [if_pos hTock] at hRef
+      simp at hRef
+    rw [if_neg hTock] at hRef
+    have hTarget : t = edge.target := by
+      cases hFuture : edge.future with
+      | explicit offers => rw [hFuture] at hRef; simp at hRef
+      | «at» target removed =>
+          rw [hFuture] at hRef
+          simp only [Finset.mem_singleton] at hRef
+          rw [hRef, compileTypeFuel_futureTargetsAreEdgeTargets
+            (typeCompilationFuel component) component edge hEdgeMem
+            target removed hFuture]
+    subst t
+    cases hLabel : edge.label with
+    | «variable» name => exact False.elim (hNoMarker name edge hEdgeMem hLabel)
+    | visible label =>
+        have hPublic : (compileType component).HasEdge s edge.environment label
+            ⟨edge.current, match edge.future with
+              | .explicit offers => offers
+              | .at target removed => computeFutureOf component target \ removed⟩
+            edge.target := by
+          rw [compileType_hasEdge_iff_hasResolvedEdge]
+          exact ⟨edge, hEdgeMem, hSource, rfl, hLabel, rfl, rfl, rfl⟩
+        obtain ⟨theta', _, _, hTheta'⟩ := hCurrent.2 hTheta hPublic
+        exact Finset.mem_filter.mpr
+          ⟨compileTypeFuel_edgeTargetsInStates _ _ le_rfl hDisjoint edge hEdgeMem,
+            theta', hTheta'⟩
+  have hSeed : q ∈ allowed := Finset.mem_filter.mpr
+    ⟨relationMembership_state_mem component rho q hDisjoint hRelated, rho, hRelated⟩
+  intro s hs
+  exact (Finset.mem_filter.mp
+    (PendingAutomaton.futureReachable_subset_of_reference_closed pending q
+      allowed hSeed hStep hs)).2
+
+/-- At a related child state, narrowing to the parent alphabet cannot add
+survivor offers. The current-offer hypothesis supplies the reachable witnesses;
+the two menu hypotheses and survivor transport compare their menus. -/
+theorem survivorMenuBound_par
+    (component : PactType) (alphabet : PactTypeAlphabet)
+    (bound : List String) (hWF : TypeWellFormedIn bound component)
+    (hAlphabet : alphabet.WellFormed)
+    (hSubset : alphabet.actions ⊆ component.alphabet.actions)
+    (hTail : ∀ name, component.TailOccurrences name False)
+    (hCurrent : CurrentOfferCorrespondence component)
+    (hMenu : FutureOffersAgree component)
+    (hResignMenu : FutureOffersAgree (component.reannotate alphabet))
+    (rho : PactType) (q : TypeAutomatonState)
+    (hRelated : relationMembership
+      (buildRelationSet component (compileType component)) rho q) :
+    ∀ s ∈ (⟨(compileTypeFuel (typeCompilationFuel component) component).states,
+        (compileTypeFuel (typeCompilationFuel component) component).edges⟩ :
+        PendingAutomaton).futureReachable q,
+      computeFutureOf (component.reannotate alphabet) s ⊆
+        computeFutureOf component s := by
+  have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hWF
+  obtain ⟨hA, _, _, _, _, hTR, _, _, _, _, _, _, hIS, hIAS, _⟩ := id hWF
+  intro s hs
+  obtain ⟨theta, hTheta⟩ := futureReachable_related_of_currentOffer component
+    hDisjoint (fun name => compileTypeFuel_noMarkerFor name _ _ (hTail name))
+    hCurrent hRelated s hs
+  apply survivorMenuBound component alphabet bound hWF hAlphabet
+    (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS
+      action (hSubset hAction)) hMenu hResignMenu hTheta
+  · rw [relationMembership_alphabet_eq_of_wellFormed component theta s hA hTheta]
+    exact hSubset
+  · exact relationMembership_alphabetWellFormed
+      committedOfferAlphabetWellFormed_holds committedOfferScoping_holds
+      component theta s hA hIS hIAS hTR hDisjoint hTheta
+
+/-- The parallel menu case uses only well-formedness and the lower-rank
+current-offer and menu hypotheses. -/
+theorem futureOffersAgree_par_of_typeWF
+    {alphabet : PactTypeAlphabet} {left right : PactType} {interface : Interface}
+    {bound : List String}
+    (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
+    (hLeftCurrent : CurrentOfferCorrespondence left)
+    (hRightCurrent : CurrentOfferCorrespondence right)
+    (hLeft : FutureOffersAgree left) (hRight : FutureOffersAgree right)
+    (hLeftResign : FutureOffersAgree (left.reannotate alphabet))
+    (hRightResign : FutureOffersAgree (right.reannotate alphabet)) :
+    FutureOffersAgree (.par alphabet left right interface) := by
+  obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_par hWF
+  have hAlphabet : alphabet.WellFormed :=
+    PactType.AlphabetWellFormed.alphabet_wellFormed hWF.1
+  have hCompatible : PactTypeAlphabet.ParallelCompatible alphabet left.alphabet
+      right.alphabet interface := by
+    have h := hWF.1
+    simp only [PactType.AlphabetWellFormed] at h
+    exact h.2.1
+  have hTail : ∀ name, left.TailOccurrences name False ∧
+      right.TailOccurrences name False := by
+    intro name
+    simpa only [PactType.TailOccurrences] using hWF.2.2.2.1 name
+  intro rho q hRelated
+  exact futureOffersAgree_par alphabet left right interface
+    (offerBranchesDisjoint_of_wellFormedIn hLeftWF)
+    (offerBranchesDisjoint_of_wellFormedIn hRightWF) hCompatible
+    (survivorMenuBound_par left alphabet bound hLeftWF hAlphabet
+      (PactTypeAlphabet.parent_actions_subset_left hCompatible)
+      (fun name => (hTail name).1) hLeftCurrent hLeft hLeftResign)
+    (survivorMenuBound_par right alphabet bound hRightWF hAlphabet
+      (PactTypeAlphabet.parent_actions_subset_right hCompatible)
+      (fun name => (hTail name).2) hRightCurrent hRight hRightResign)
+    hLeft hRight hLeftResign hRightResign hRelated
+
+#print axioms futureReachable_related_of_currentOffer
+#print axioms survivorMenuBound_par
+#print axioms futureOffersAgree_par_of_typeWF
+
 /-- The three helpers, proved together by induction on `typeCompilationFuel`. -/
 theorem correspondence_simultaneous :
     ∀ (bound : List String) (processType : PactType),
@@ -1590,21 +1728,7 @@ theorem correspondence_simultaneous :
         refine ⟨?_, ?_, ?_⟩
         · sorry -- current-offer correspondence, `.par`
         · sorry -- same-cycle completion, `.par`
-        · exact futureOffersAgree_par alphabet left right interface
-            (offerBranchesDisjoint_of_ownership left
-              hLeftWF.2.2.2.2.2.2.2.2.2.1 hLeftWF.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
-            (offerBranchesDisjoint_of_ownership right
-              hRightWF.2.2.2.2.2.2.2.2.2.1 hRightWF.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
-            (by
-              have h := hWF.1
-              simp only [PactType.AlphabetWellFormed] at h
-              exact h.2.1)
-            (fun q => survivorMenuBound_par left alphabet bound hLeftWF q)
-            (fun q => survivorMenuBound_par right alphabet bound hRightWF q)
+        · exact futureOffersAgree_par_of_typeWF hWF hLeft.1 hRight.1
             hLeft.2.2 hRight.2.2 hLeftResign.2.2 hRightResign.2.2
     | recur alphabet name body =>
         have hBodyWF := typeWellFormedIn_recur hWF
@@ -1612,7 +1736,8 @@ theorem correspondence_simultaneous :
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hBody := ih _ hBodyFuel (name :: bound) body rfl hBodyWF
         refine ⟨?_, ?_, ?_⟩
-        · sorry -- current-offer correspondence, `.recur`
+        · exact currentOfferCorrespondence_recur_of_typeWF alphabet name body
+            hWF hBody.1
         · sorry -- same-cycle completion, `.recur`
         · sorry -- menu equation, `.recur`
     | xoffer alphabet elseType branches =>
