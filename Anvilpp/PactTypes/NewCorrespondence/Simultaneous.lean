@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Recursion
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.RecursionMenus
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Sequence
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Parallel
 
@@ -1692,19 +1693,6 @@ theorem correspondence_simultaneous :
         have hRight := ih _ hRightFuel bound right rfl hRightWF
         refine ⟨?_, sameCycleCompletionAgrees_seq alphabet left right hLeft.2.1 hRight.2.1, ?_⟩
         · exact currentOfferCorrespondence_seq alphabet left right
-            (offerBranchesDisjoint_of_ownership left
-              hLeftWF.2.2.2.2.2.2.2.2.2.1 hLeftWF.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1
-              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
-            hWF resignTransport_relationMembership
-            (offerBranchesDisjoint_of_ownership right
-              hRightWF.2.2.2.2.2.2.2.2.2.1 hRightWF.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1
-              hRightWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
-            (by
-              have h := hWF.1
-              simp only [PactType.AlphabetWellFormed] at h
-              exact h.2.2.1)
             (fun hRel =>
               relationMembership_alphabetWellFormed
                 committedOfferAlphabetWellFormed_holds committedOfferScoping_holds
@@ -1774,7 +1762,48 @@ theorem correspondence_simultaneous :
         · exact currentOfferCorrespondence_recur_of_typeWF alphabet name body
             hWF hBody.1
         · sorry -- same-cycle completion, `.recur`
-        · sorry -- menu equation, `.recur`
+        · intro residual state hRelated
+          have hAlphabet : body.alphabet = alphabet := by
+            have h := hWF.1
+            simp only [PactType.AlphabetWellFormed] at h
+            exact h.2.1
+          have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hBodyWF
+          have hTail := hBodyWF.2.2.2.1
+          rcases relationMembership_recur_cases alphabet name body hRelated with
+            hRoot | ⟨q, rho, hPair, hChildRelated⟩
+          · cases hRoot
+            -- Paper: the fresh root reads the body-entry menu.
+            exact futureOffersAgree_recur_root alphabet name body hAlphabet
+              hDisjoint hTail hBody.1 hBody.2.2
+          · cases hPair
+            -- Paper: installed backedges add the body menu at marker-reachable states.
+            rw [computeFutureOf_recur_child_eq alphabet name body hAlphabet
+              hDisjoint hTail hBody.1 hBody.2.2 hChildRelated]
+            let replacement := PactType.recur alphabet name body
+            let fuel := max (sizeOf rho + 1) (sizeOf (rho.replaceVar name replacement) + 1)
+            have hRhoFuel : sizeOf rho + 1 ≤ fuel := le_max_left _ _
+            have hReplacedFuel : sizeOf (rho.replaceVar name replacement) + 1 ≤ fuel :=
+              le_max_right _ _
+            have hRhoTail := relationMembership_tailOccurrences body rho q name True
+              hBodyWF.2.2.2.2.2.1 (hTail name) hChildRelated
+            have hSyntax : typeFutureOffers (rho.replaceVar name replacement) =
+                typeFutureOffers rho ∪
+                  if menuReachesVarFuel name replacement.CanCompleteDeclared fuel rho
+                  then typeFutureOffers body else ∅ := by
+              -- Paper: substitution contributes V exactly when the syntax test b_X holds.
+              rw [← typeFutureOffersFuel_eq_typeFutureOffers _ fuel hReplacedFuel,
+                typeFutureOffersFuel_replaceVar name replacement fuel rho hReplacedFuel,
+                typeFutureOffersFuelSubst_split name _ _ fuel rho (by omega) hRhoTail,
+                typeFutureOffersFuelSubst_empty name _ fuel rho (by omega) hRhoTail,
+                typeFutureOffersFuel_eq_typeFutureOffers rho fuel hRhoFuel]
+              rw [typeFutureOffers_recur]
+            rw [hSyntax]
+            have hMarker :
+                (∃ reached ∈ (compiledMenuGraphFuel (typeCompilationFuel body) body).futureReachable q,
+                  MarkerSource (compileTypeFuel (typeCompilationFuel body) body) name reached) ↔
+                menuReachesVarFuel name replacement.CanCompleteDeclared fuel rho = true := by
+              sorry -- Paper: marker-path/syntax-test equivalence, by compiler-rank induction.
+            simp only [hMarker]
     | xoffer alphabet elseType branches =>
         obtain ⟨hElseWF, hBranchWF⟩ := typeWellFormedIn_xoffer hWF
         have hElseFuel : typeCompilationFuel elseType < n := by

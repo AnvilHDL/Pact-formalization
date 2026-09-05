@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Base
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.SequenceCurrent
 
 /-!
 Choice, fair choice and sequence: their edge lift/restrict families, the
@@ -180,9 +181,10 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
       exact ⟨residual', future', hChildStep,
         relationMembership_choice_right alphabet left right residual' hChildTarget⟩
 
-/-- Current-offer correspondence at a sequence.  Following the paper: apply the
+/- Superseded by SequenceCurrent: retained for comparison until cleanup.
+Current-offer correspondence at a sequence.  Following the paper: apply the
 lower-rank hypothesis to the left step, let completion decide whether its target
-is retained or redirected to the right entry, and copy right states unchanged. -/
+is retained or redirected to the right entry, and copy right states unchanged.
 theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
     (left right : PactType)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
@@ -396,6 +398,8 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
         exact ⟨residual'', future'', hChildStep,
           relationMembership_seq_right alphabet left right residual''
             hChildTarget''⟩
+
+-/
 
 /-- Menus agree at a binary choice: the root reaches exactly its two copied
 child entries, and their menus agree by the child hypotheses. -/
