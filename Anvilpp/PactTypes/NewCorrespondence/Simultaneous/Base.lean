@@ -160,13 +160,16 @@ private lemma computeFutureOfFuel_eq_empty_of_pair
     (hOffersA : hFragment.offersAt a = ∅)
     (hOffersB : hFragment.offersAt b = ∅)
     (hProductA : stateProductInfo processType a = none)
-    (hProductB : stateProductInfo processType b = none) :
+    (hProductB : stateProductInfo processType b = none)
+    (hNoLinks : compileTypeMenuLinksFuel
+      (min (fuel + 1) (typeCompilationFuel processType)) processType = ∅ := by
+      simp [typeCompilationFuel, compileTypeMenuLinksFuel]) :
     computeFutureOfFuel (fuel + 1) processType a = ∅ := by
   classical
   have hReach : hFragment.futureReachable a ⊆ ({a, b} : Finset TypeAutomatonState) :=
     hFragment.futureReachable_subset_of_reference_closed a {a, b}
       (by simp) hClosed
-  simp only [computeFutureOfFuel]
+  simp only [computeFutureOfFuel, hNoLinks, PendingAutomaton.withMenuDependencies_empty]
   rw [← hFragmentDef]
   refine Finset.eq_empty_iff_forall_notMem.mpr ?_
   intro action hAction
@@ -287,7 +290,8 @@ lemma computeFutureOf_message_root_of_not_declared
   show computeFutureOfFuel
     (typeCompilationFuel (.message alphabet msg dir))
     (.message alphabet msg dir) .root = ∅
-  simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [typeCompilationFuel, computeFutureOfFuel, Nat.min_self,
+    compileTypeMenuLinksFuel, PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1 (.message alphabet msg dir)).states,
           edges := (compileTypeFuel 1 (.message alphabet msg dir)).edges } :

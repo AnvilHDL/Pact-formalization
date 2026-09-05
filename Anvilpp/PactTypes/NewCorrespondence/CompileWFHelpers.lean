@@ -79,6 +79,8 @@ lemma computeFutureOf_skip_root
     (typeCompilationFuel (.skip alphabet))
     (.skip alphabet) .root = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1 (.skip alphabet)).states,
           edges := (compileTypeFuel 1 (.skip alphabet)).edges } :
@@ -176,6 +178,8 @@ lemma computeFutureOf_message_final
     (typeCompilationFuel (.message alphabet msg dir))
     (.message alphabet msg dir) .final = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1
             (.message alphabet msg dir)).states,
@@ -255,6 +259,8 @@ lemma computeFutureOf_message_root
     (typeCompilationFuel (.message alphabet msg dir))
     (.message alphabet msg dir) .root = {(msg, dir)}
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   set pending : PendingAutomaton :=
     { states := (compileTypeFuel 1
           (.message alphabet msg dir)).states,
@@ -519,6 +525,8 @@ lemma computeFutureOf_tock_root
   show computeFutureOfFuel
     (typeCompilationFuel (.tock alphabet)) (.tock alphabet) .root = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
           edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
@@ -574,6 +582,8 @@ lemma computeFutureOf_tock_final
   show computeFutureOfFuel
     (typeCompilationFuel (.tock alphabet)) (.tock alphabet) .final = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
           edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
@@ -724,6 +734,8 @@ lemma computeFutureOf_progress_final
     (typeCompilationFuel (.progress alphabet pid))
     (.progress alphabet pid) .final = ∅
   simp only [typeCompilationFuel, computeFutureOfFuel]
+  simp only [Nat.min_self, compileTypeMenuLinksFuel,
+    PendingAutomaton.withMenuDependencies_empty]
   have hReferences :
       ({ states := (compileTypeFuel 1
             (.progress alphabet pid)).states,

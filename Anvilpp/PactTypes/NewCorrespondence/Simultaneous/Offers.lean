@@ -2045,7 +2045,9 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
       unfold computeFutureOf
       rw [hk, computeFutureOfFuel]
       simp only [← hk, ← hPending]
-      rw [hReach]
+      rw [FiniteMenuGraph.futureReachable_eq_singleton_of_referencedStates_eq_empty
+        _ .root (by simp only [PendingAutomaton.withMenuDependencies, hRefs,
+          compileTypeMenuLinksFuel_root, Finset.union_empty])]
       simp only [Finset.singleton_biUnion, hOffersEmpty]
       rw [show stateProductInfo whole TypeAutomatonState.root = none by
         simp only [hWholeDef]
@@ -2341,7 +2343,9 @@ theorem futureOffersAgree_offer (alphabet : PactTypeAlphabet)
       unfold computeFutureOf
       rw [hk, computeFutureOfFuel]
       simp only [← hk, ← hPending]
-      rw [hReach]
+      rw [FiniteMenuGraph.futureReachable_eq_singleton_of_referencedStates_eq_empty
+        _ .root (by simp only [PendingAutomaton.withMenuDependencies, hRefs,
+          compileTypeMenuLinksFuel_root, Finset.union_empty])]
       simp only [Finset.singleton_biUnion, hOffersEmpty]
       rw [show stateProductInfo whole TypeAutomatonState.root = none by
         simp only [hWholeDef]

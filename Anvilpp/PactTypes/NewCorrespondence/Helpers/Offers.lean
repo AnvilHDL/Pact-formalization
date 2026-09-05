@@ -322,7 +322,13 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
         stateProductInfo elseType visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel elseType)
-      elseType).states) :
+      elseType).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+          (.child 0 source) =
+        (menuDependencyTargets
+          (compileTypeMenuLinksFuel (typeCompilationFuel elseType) elseType) source).image
+          (.child 0) := by intro source; apply menuDependencyTargets_offer_else) :
     computeFutureOf whole (.child 0 state) =
       computeFutureOf elseType state := by
   classical
@@ -358,7 +364,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     hProductInfo
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else
       alphabet branches elseFragment selectedConjunctions q edge)
-    hCard state (by simpa [elseFragment] using hState)
+    hCard state (by simpa [elseFragment] using hState) hMenuReferences
 
 /-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled conjunctive offer, agrees with branch `i`'s generated commit type's own. -/
 theorem computeFutureOf_selectedConjunctiveOffer_branch
@@ -387,7 +393,17 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel
       (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-      (parallelTypeBranchesSelecting alphabet selected branches)).states) :
+      (parallelTypeBranchesSelecting alphabet selected branches)).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+          (.child (i + 1) source) =
+        (menuDependencyTargets (compileTypeMenuLinksFuel
+          (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
+          (parallelTypeBranchesSelecting alphabet selected branches)) source).image
+          (.child (i + 1)) := by
+      intro source
+      apply menuDependencyTargets_offer_branch
+      assumption) :
     computeFutureOf whole (.child (i + 1) state) =
       computeFutureOf (parallelTypeBranchesSelecting alphabet selected branches)
         state := by
@@ -438,7 +454,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
       alphabet branches elseFragment selectedConjunctions i selected.1
       branchFragment hBranchFragment q edge)
-    hCard state (by simpa [branchFragment] using hState)
+    hCard state (by simpa [branchFragment] using hState) hMenuReferences
 
 /-- Relates a branch's generated commit type found by index after mapping compiled fragments in to the same branch found by index in the original list. -/
 theorem branches_map_selecting_getElem?_eq_some_iff

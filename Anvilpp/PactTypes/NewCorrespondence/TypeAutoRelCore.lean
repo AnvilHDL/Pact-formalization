@@ -8,6 +8,9 @@ open Classical
 noncomputable section
 
 
+/- The canonical relation definition now lives with the compiler metadata in
+CompileTypeDefs.lean. Its previous location is retained during the migration.
+
 /-- Relates each residual of `ty` to the compiled state that represents it.
 A rebuilt node carries `ty`'s alphabet; a residual copied from a child keeps
 the child's. -/
@@ -100,6 +103,7 @@ def buildRelationSetCoreFuel :
                     (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
+-/
 
 /-- Public, provenance-directed relation: `buildRelationSetCoreFuel` at
 `typeCompilationFuel`'s own budget. -/
@@ -524,16 +528,18 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
   | succ fuel ih =>
       intro processType hFuel
       cases processType with
-      | message alphabet msg dir => rfl
-      | progress alphabet pid => rfl
-      | tock alphabet => rfl
-      | skip alphabet => rfl
-      | var alphabet name => rfl
+      | message alphabet msg dir => simp only [buildRelationSetCoreFuel]
+      | progress alphabet pid => simp only [buildRelationSetCoreFuel]
+      | tock alphabet => simp only [buildRelationSetCoreFuel]
+      | skip alphabet => simp only [buildRelationSetCoreFuel]
+      | var alphabet name => simp only [buildRelationSetCoreFuel]
       | choice alphabet left right =>
           have hLeft : typeCompilationFuel left ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
+          conv_lhs => rw [buildRelationSetCoreFuel.eq_def]
+          conv_rhs => rw [buildRelationSetCoreFuel.eq_def]
           change insert (PactType.choice alphabet left right, TypeAutomatonState.root)
               ((buildRelationSetCoreFuel (fuel+1) left).image
                   (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
@@ -550,6 +556,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
             simp [typeCompilationFuel] at hFuel; omega
           have hRight : typeCompilationFuel right ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
+          conv_lhs => rw [buildRelationSetCoreFuel.eq_def]
+          conv_rhs => rw [buildRelationSetCoreFuel.eq_def]
           change insert (PactType.fairChoice alphabet bid left right,
               TypeAutomatonState.root)
               ((buildRelationSetCoreFuel (fuel+1) left).image
@@ -574,6 +582,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
             compileTypeFuel_eq_of_sufficient left
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hLeft) hLeft
+          conv_lhs => rw [buildRelationSetCoreFuel.eq_def]
+          conv_rhs => rw [buildRelationSetCoreFuel.eq_def]
           change
               ((buildRelationSetCoreFuel (fuel+1) left).filter (fun entry =>
                   entry.2 ∉ sequenceDeleted
@@ -625,6 +635,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
             compileTypeFuel_eq_of_sufficient (right.reannotate alphabet)
               (leftFuel := fuel + 1) (rightFuel := fuel)
               (Nat.le.step hRightR) hRightR
+          conv_lhs => rw [buildRelationSetCoreFuel.eq_def]
+          conv_rhs => rw [buildRelationSetCoreFuel.eq_def]
           change insert (PactType.skip alphabet, TypeAutomatonState.final)
               ((Finset.product (buildRelationSetCoreFuel (fuel+1) left)
                   (buildRelationSetCoreFuel (fuel+1) right)).image
@@ -682,6 +694,8 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
       | recur alphabet name body =>
           have hBody : typeCompilationFuel body ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
+          conv_lhs => rw [buildRelationSetCoreFuel.eq_def]
+          conv_rhs => rw [buildRelationSetCoreFuel.eq_def]
           change insert (PactType.recur alphabet name body,
               TypeAutomatonState.root)
               ((buildRelationSetCoreFuel (fuel+1) body).image

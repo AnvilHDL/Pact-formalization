@@ -1,4 +1,6 @@
 import Anvilpp.PactTypes.Automata.BuildOfferAutomataLemmas
+import Anvilpp.PactTypes.Automata.MenuDependencies
+import Mathlib.Data.Finset.Prod
 
 namespace Pact
 
@@ -320,6 +322,160 @@ def compileTypeFuel :
 
 termination_by fuel processType => (fuel, 0)
 
+/-- Relates each residual of `ty` to the compiled state that represents it.
+A rebuilt node carries `ty`'s alphabet; a residual copied from a child keeps
+the child's. -/
+def buildRelationSetCoreFuel :
+    Nat → PactType → Finset (PactType × TypeAutomatonState)
+  | 0, ty => {(ty, .root)}
+  | fuel + 1, ty =>
+      match ty with
+      | .skip alphabet => {(.skip alphabet, .root)}
+      | .message alphabet msg dir =>
+          {(.message alphabet msg dir, .root), (.skip alphabet, .final)}
+      | .tock alphabet => {(.tock alphabet, .root), (.skip alphabet, .final)}
+      | .progress alphabet pid =>
+          {(.progress alphabet pid, .root), (.skip alphabet, .final)}
+      | .var alphabet name => {(.var alphabet name, .root)}
+      | .choice _ left right =>
+          insert (ty, TypeAutomatonState.root)
+            ((buildRelationSetCoreFuel fuel
+                  left).image
+                (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+              (buildRelationSetCoreFuel fuel
+                  right).image
+                (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
+      | .fairChoice _ _ left right =>
+          insert (ty, TypeAutomatonState.root)
+            ((buildRelationSetCoreFuel fuel
+                  left).image
+                (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+              (buildRelationSetCoreFuel fuel
+                  right).image
+                (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2)))
+      | .seq alphabet left right =>
+          ((buildRelationSetCoreFuel fuel
+              left).filter (fun entry =>
+              entry.2 ∉ sequenceDeleted
+                (compileTypeFuel fuel left))).image
+              (fun entry =>
+                (.seq alphabet entry.1 right,
+                  TypeAutomatonState.child 0 entry.2)) ∪
+            (buildRelationSetCoreFuel fuel
+                right).image
+              (fun entry => (entry.1, TypeAutomatonState.child 1 entry.2))
+      | .par alphabet left right interface =>
+          insert (PactType.skip alphabet, TypeAutomatonState.final)
+            ((Finset.product
+                (buildRelationSetCoreFuel fuel left)
+                (buildRelationSetCoreFuel fuel right)).image
+              (fun entry =>
+                (.par alphabet entry.1.1 entry.2.1 interface,
+                  TypeAutomatonState.pair entry.1.2 entry.2.2)) ∪
+              ((buildRelationSetCoreFuel fuel
+                  (left.reannotate alphabet)).filter fun entry =>
+                  entry.2 ∉
+                    (compileTypeFuel fuel
+                      (left.reannotate alphabet)).accepting).image
+                (fun entry =>
+                  (entry.1, TypeAutomatonState.survivor 0 entry.2)) ∪
+              ((buildRelationSetCoreFuel fuel
+                  (right.reannotate alphabet)).filter fun entry =>
+                  entry.2 ∉
+                    (compileTypeFuel fuel
+                      (right.reannotate alphabet)).accepting).image
+                (fun entry =>
+                  (entry.1, TypeAutomatonState.survivor 1 entry.2)))
+      | .recur alphabet name body =>
+          insert (ty, TypeAutomatonState.root)
+            ((buildRelationSetCoreFuel fuel
+                body).image
+              (fun entry =>
+                (entry.1.replaceVar name (.recur alphabet name body),
+                  TypeAutomatonState.child 0 entry.2)))
+      | .xoffer _ elseType branches =>
+          insert (ty, TypeAutomatonState.root)
+            ((buildRelationSetCoreFuel fuel
+                elseType).image
+                (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+              branches.zipIdx.foldl (fun acc indexed =>
+                acc ∪ (buildRelationSetCoreFuel
+                    fuel indexed.1.2).image
+                  (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
+                ∅)
+      | .offer alphabet elseType branches =>
+          insert (ty, TypeAutomatonState.root)
+            ((buildRelationSetCoreFuel fuel
+                elseType).image
+                (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
+              branches.zipIdx.foldl (fun acc indexed =>
+                acc ∪ (buildRelationSetCoreFuel
+                    fuel
+                    (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
+                  (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
+                ∅)
+termination_by fuel processType => (fuel, 0)
+
+/-- The paper's menu-only dependency relation. Sequence flags are read from
+the existing canonical residual relation, before any menu is saturated. -/
+def compileTypeMenuLinksFuel :
+    Nat → PactType → Finset (TypeAutomatonState × TypeAutomatonState)
+  | 0, _ => ∅
+  | fuel + 1, processType => by
+      classical
+      let copy := fun (index : Nat)
+          (links : Finset (TypeAutomatonState × TypeAutomatonState)) =>
+        links.image fun link =>
+          (TypeAutomatonState.child index link.1, TypeAutomatonState.child index link.2)
+      match processType with
+      | .seq _ left right =>
+          let leftFragment := compileTypeFuel fuel left
+          let rightFragment := compileTypeFuel fuel right
+          let inheritedLeft :=
+            ((compileTypeMenuLinksFuel fuel left).filter fun link =>
+              link.1 ∉ sequenceDeleted leftFragment).image fun link =>
+                (TypeAutomatonState.child 0 link.1,
+                  sequenceRedirect leftFragment rightFragment link.2)
+          let optimistic :=
+            ((buildRelationSetCoreFuel fuel left).filter fun entry =>
+              entry.2 ∉ sequenceDeleted leftFragment ∧
+                typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true).image
+              fun entry => (TypeAutomatonState.child 0 entry.2,
+                TypeAutomatonState.child 1 rightFragment.initial)
+          exact inheritedLeft ∪ copy 1 (compileTypeMenuLinksFuel fuel right) ∪ optimistic
+      | .choice _ left right | .fairChoice _ _ left right =>
+          exact copy 0 (compileTypeMenuLinksFuel fuel left) ∪
+            copy 1 (compileTypeMenuLinksFuel fuel right)
+      | .recur _ _ body =>
+          exact copy 0 (compileTypeMenuLinksFuel fuel body)
+      | .par alphabet left right _ =>
+          let survivor := fun (index : Nat)
+              (fragment : AutomatonFragment)
+              (links : Finset (TypeAutomatonState × TypeAutomatonState)) =>
+            (links.filter fun link => link.1 ∉ fragment.accepting).image fun link =>
+              (TypeAutomatonState.survivor index link.1,
+                if link.2 ∈ fragment.accepting then TypeAutomatonState.final
+                else TypeAutomatonState.survivor index link.2)
+          exact survivor 0
+              (compileTypeFuel fuel (left.reannotate alphabet))
+              (compileTypeMenuLinksFuel fuel (left.reannotate alphabet)) ∪
+            survivor 1
+              (compileTypeFuel fuel (right.reannotate alphabet))
+              (compileTypeMenuLinksFuel fuel (right.reannotate alphabet))
+      | .xoffer _ elseType branches =>
+          exact branches.zipIdx.foldl (fun links indexed =>
+            links ∪ copy (indexed.2 + 1)
+              (compileTypeMenuLinksFuel fuel indexed.1.2))
+            (copy 0 (compileTypeMenuLinksFuel fuel elseType))
+      | .offer alphabet elseType branches =>
+          exact branches.zipIdx.foldl (fun links indexed =>
+            links ∪ copy (indexed.2 + 1)
+              (compileTypeMenuLinksFuel fuel
+                (parallelTypeBranchesSelecting alphabet indexed.1 branches)))
+            (copy 0 (compileTypeMenuLinksFuel fuel elseType))
+      | _ => exact ∅
+termination_by fuel processType => (fuel, 0)
+
 /-- The global future-menu fixed point. The graph closure and every
 product-state contribution are computed from the same type-aware compiler. -/
 def computeFutureOfFuel :
@@ -329,9 +485,12 @@ def computeFutureOfFuel :
       let fragment := compileTypeFuel (fuel + 1) processType
       let pending : PendingAutomaton :=
         { states := fragment.states, edges := fragment.edges }
+      let menuGraph := pending.withMenuDependencies
+        (compileTypeMenuLinksFuel
+          (min (fuel + 1) (typeCompilationFuel processType)) processType)
       -- Gated by the type's own alphabet, matching the paper's typing of the
       -- menu operator as `X : Q_τ → 2^(Ω(τ))`.
-      ((pending.futureReachable state).biUnion fun visited =>
+      ((menuGraph.futureReachable state).biUnion fun visited =>
         pending.offersAt visited ∪
           match stateProductInfo processType visited with
           | some (interface, left, right, q1, q2) =>
@@ -351,6 +510,13 @@ def compiledChildFutureFuel  (fuel : Nat)
     (processType : PactType) : TypeAutomatonState → Finset BareMessage :=
   computeFutureOfFuel (min fuel (typeCompilationFuel processType))
     processType
+
+/-- The graph of menu references used by `computeFutureOfFuel`; it is not
+the compiled execution automaton. -/
+def compiledMenuGraphFuel (fuel : Nat) (processType : PactType) : FiniteMenuGraph :=
+  let fragment := compileTypeFuel fuel processType
+  ({ states := fragment.states, edges := fragment.edges } : PendingAutomaton).withMenuDependencies
+    (compileTypeMenuLinksFuel (min fuel (typeCompilationFuel processType)) processType)
 
 /-!
 ### Native product-aware future resolution (`pactautomatonconstruction.typ`, "Future menus are global")

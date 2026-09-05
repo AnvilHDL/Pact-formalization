@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Recursion
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Sequence
 
 /-!
 Same-cycle completion at the compound fragments, the parallel product menu, and
@@ -48,7 +49,7 @@ lemma sameCycleCompletionAgrees_choice
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
     exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
   have hShape := helper_h12_binaryChoice_shape (.choice alphabet left right) left right
-    rfl hFuelEq hRelated
+    (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
   have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
     (buildChoiceAutomaton alphabet leftAuto rightAuto
       TypeLabel.silent TypeLabel.silent)
@@ -125,7 +126,7 @@ lemma sameCycleCompletionAgrees_fairChoice
       Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
     exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
   have hShape := helper_h12_binaryChoice_shape (.fairChoice alphabet bid left right)
-    left right rfl hFuelEq hRelated
+    left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
   have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
     (buildChoiceAutomaton alphabet leftAuto rightAuto
       (TypeLabel.fair bid true) (TypeLabel.fair bid false))
@@ -710,17 +711,22 @@ theorem computeFutureOf_par_pair (alphabet : PactTypeAlphabet)
       N + 1 := by simp only [hN, typeCompilationFuel]; omega
   have hLeftLe : typeCompilationFuel left ≤ N := le_max_left _ _
   have hRightLe : typeCompilationFuel right ≤ N := le_max_right _ _
-  have hParentClosed := compileTypeFuel_referencesClosed (N + 1)
+  have hParentClosed := compiledMenuGraphFuel_referencesClosed (N + 1)
     (.par alphabet left right interface)
     (by simp only [TypeCompilationFuelSufficient, hFuel]; exact le_rfl)
     (by simp only [PactType.OfferBranchesDisjoint]
         exact ⟨hLeftDisjoint, hRightDisjoint⟩)
+  simp only [compiledMenuGraphFuel] at hParentClosed
   rw [computeFutureOf, hFuel, computeFutureOfFuel]
   set parent : PendingAutomaton :=
     { states := (compileTypeFuel (N + 1)
         (PactType.par alphabet left right interface)).states
       edges := (compileTypeFuel (N + 1)
         (PactType.par alphabet left right interface)).edges } with hParent
+  set parentMenu : FiniteMenuGraph := parent.withMenuDependencies
+    (compileTypeMenuLinksFuel
+      (min (N + 1) (typeCompilationFuel (.par alphabet left right interface)))
+      (.par alphabet left right interface)) with hParentMenu
   -- the product term of the pair state itself is the whole right-hand side
   have hInfo : stateProductInfo (PactType.par alphabet left right interface)
       (.pair q1 q2) = some (interface, left, right, q1, q2) := by
@@ -732,7 +738,7 @@ theorem computeFutureOf_par_pair (alphabet : PactTypeAlphabet)
   have hRhsSubset :
       hideTypeOffers interface
           (computeFutureOf left q1 ∪ computeFutureOf right q2) ⊆
-        (parent.futureReachable (.pair q1 q2)).biUnion fun visited =>
+        (parentMenu.futureReachable (.pair q1 q2)).biUnion fun visited =>
           parent.offersAt visited ∪
             match stateProductInfo (PactType.par alphabet left right interface)
               visited with
@@ -742,7 +748,7 @@ theorem computeFutureOf_par_pair (alphabet : PactTypeAlphabet)
             | none => ∅ := by
     intro action hAction
     refine Finset.mem_biUnion.mpr ⟨.pair q1 q2,
-      PendingAutomaton.mem_futureReachable_self parent _, ?_⟩
+      FiniteMenuGraph.mem_futureReachable_self parentMenu _, ?_⟩
     refine Finset.mem_union_right _ ?_
     rw [hInfo]
     simpa [hMenuLeft, hMenuRight] using hAction
@@ -803,9 +809,14 @@ theorem computeFutureOf_par_pair (alphabet : PactTypeAlphabet)
         (compileTypeFuel_explicitOnlyAtAccepting N right)
         (compileTypeFuel_referencesClosed N left hLeftLe hLeftDisjoint)
         (compileTypeFuel_referencesClosed N right hRightLe hRightDisjoint)
+        (compileTypeMenuLinksFuel
+          (min (N + 1) (typeCompilationFuel (.par alphabet left right interface)))
+          (.par alphabet left right interface))
+        (compileTypeMenuLinksFuel_pair _ _)
+        (compileTypeMenuLinksFuel_final _ _)
         (by rw [← hParEq]; exact hParentClosed)
         q1 q2 (by rw [hLeftFragEq]; exact hq1) (by rw [hRightFragEq]; exact hq2)
-      rw [hParent, hParEq] at hVisited
+      rw [hParentMenu, hParent, hParEq] at hVisited
       have hCases := hReach hVisited
       rcases Finset.mem_insert.mp hCases with rfl | hRest
       · -- the done state offers nothing and carries no product term
@@ -1180,8 +1191,9 @@ theorem computeFutureOf_par_final (alphabet : PactTypeAlphabet)
     obtain ⟨hCurrent, hFuture⟩ := hShape edge hMem hSource
     rw [hCurrent, hFuture] at hActionMem
     simp at hActionMem
-  rw [PendingAutomaton.futureReachable_eq_singleton_of_referencedStates_eq_empty
-      pending TypeAutomatonState.final hRefs]
+  rw [FiniteMenuGraph.futureReachable_eq_singleton_of_referencedStates_eq_empty
+      _ .final (by simp only [PendingAutomaton.withMenuDependencies, hRefs,
+        compileTypeMenuLinksFuel_final, Finset.union_empty])]
   simp only [Finset.singleton_biUnion, hOffers,
     stateProductInfo_par_final alphabet left right interface,
     Finset.empty_union, Finset.filter_empty]
@@ -1704,7 +1716,26 @@ theorem correspondence_simultaneous :
                   hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
                 hRel)
             hLeft.1 hRight.1
-        · sorry -- menu equation, `.seq`
+        · apply futureOffersAgree_seq alphabet left right
+            (offerBranchesDisjoint_of_ownership left
+              hLeftWF.2.2.2.2.2.2.2.2.2.1 hLeftWF.2.2.2.2.2.2.2.2.2.2.1
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hLeftWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
+            (offerBranchesDisjoint_of_ownership right
+              hRightWF.2.2.2.2.2.2.2.2.2.1 hRightWF.2.2.2.2.2.2.2.2.2.2.1
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.1
+              hRightWF.2.2.2.2.2.2.2.2.2.2.2.2.2.2)
+            (by
+              have h := hWF.1
+              simp only [PactType.AlphabetWellFormed] at h
+              exact h.2.1)
+            (by
+              have h := hWF.1
+              simp only [PactType.AlphabetWellFormed] at h
+              exact h.2.2.1)
+            hLeft.2.2 hRight.2.2
+          -- Paper: propagate the optimistic flag backwards through execution references and L.
+          sorry -- remaining part of the original `.seq` menu obligation
     | par alphabet left right interface =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_par hWF
         have hLeftFuel : typeCompilationFuel left < n := by

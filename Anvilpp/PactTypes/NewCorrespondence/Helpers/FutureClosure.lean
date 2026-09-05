@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.CompiledShape
+import Anvilpp.PactTypes.NewCorrespondence.Helpers.MenuMetadata
 
 namespace Pact
 
@@ -981,6 +981,21 @@ theorem compileTypeFuel_referencesClosed
     (compileTypeFuel fuel processType)
     (compileTypeFuel_futureTargetsInStates fuel processType hFuel hDisjoint)
 
+/-- Both execution references and menu-only dependencies stay in the carrier. -/
+theorem compiledMenuGraphFuel_referencesClosed
+    (fuel : Nat) (processType : PactType)
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hDisjoint : processType.OfferBranchesDisjoint) :
+    (compiledMenuGraphFuel fuel processType).ReferencesClosed := by
+  unfold compiledMenuGraphFuel
+  apply PendingAutomaton.referencesClosed_withMenuDependencies
+  · exact compileTypeFuel_referencesClosed fuel processType hFuel hDisjoint
+  · intro link hLink
+    simp only [Nat.min_eq_right hFuel] at hLink
+    rw [compileTypeFuel_eq_of_sufficient processType hFuel le_rfl]
+    exact compileTypeMenuLinksFuel_targets_mem (typeCompilationFuel processType)
+      processType le_rfl hDisjoint link hLink
+
 private theorem stateProductInfoFuel_succ_stable :
     ∀ fuel processType state,
       typeCompilationFuel processType ≤ fuel →
@@ -1417,6 +1432,7 @@ private theorem computeFutureOfFuel_succ_stable :
             omega)
           hFuel
       rw [hCompile]
+      simp only [Nat.min_eq_right hFuel, Nat.min_eq_right (Nat.le.step hFuel)]
       -- Both sides carry the same alphabet gate, so it is enough to match
       -- the sets it filters.
       refine congrArg (Finset.filter _) ?_
@@ -1546,7 +1562,25 @@ theorem computeFutureOfFuel_child_embedding
           childEdge.source = q ∧ edge = childPendingEdge index childEdge)
     (hCard : childFragment.states.card ≤ parentFragment.states.card)
     (state : TypeAutomatonState)
-    (hState : state ∈ childFragment.states) :
+    (hState : state ∈ childFragment.states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets
+        (compileTypeMenuLinksFuel (typeCompilationFuel parentType) parentType)
+        (childState index source) =
+      (menuDependencyTargets
+        (compileTypeMenuLinksFuel (typeCompilationFuel childType) childType) source).image
+        (childState index) := by
+      intro source
+      first
+      | apply menuDependencyTargets_choice_left
+      | apply menuDependencyTargets_choice_right
+      | apply menuDependencyTargets_fairChoice_left
+      | apply menuDependencyTargets_fairChoice_right
+      | apply menuDependencyTargets_xoffer_else
+      | apply menuDependencyTargets_xoffer_branch
+      | apply menuDependencyTargets_offer_else
+      | apply menuDependencyTargets_offer_branch
+      all_goals assumption) :
     computeFutureOfFuel parentFuel parentType
         (childState index state) =
       computeFutureOfFuel childFuel childType state := by
@@ -1565,29 +1599,36 @@ theorem computeFutureOfFuel_child_embedding
     { states := parentFragment.states, edges := parentFragment.edges }
   let child : PendingAutomaton :=
     { states := childFragment.states, edges := childFragment.edges }
+  let parentMenu := parent.withMenuDependencies
+    (compileTypeMenuLinksFuel (typeCompilationFuel parentType) parentType)
+  let childMenu := child.withMenuDependencies
+    (compileTypeMenuLinksFuel (typeCompilationFuel childType) childType)
   have hReachable :
-      parent.futureReachable (childState index state) =
-        (child.futureReachable state).image (childState index) := by
-    apply PendingAutomaton.futureReachable_eq_of_embedding child parent
+      parentMenu.futureReachable (childState index state) =
+        (childMenu.futureReachable state).image (childState index) := by
+    apply FiniteMenuGraph.futureReachable_eq_of_embedding childMenu parentMenu
       (childState index)
     · intro visited
-      exact referencedStates_of_outgoing_childPendingEdge
-        parentFragment childFragment index visited (hOutgoing visited)
-    · change ({ states := childFragment.states, edges := childFragment.edges } :
-        PendingAutomaton).ReferencesClosed
-      rw [← hChildCompile]
-      exact compileTypeFuel_referencesClosed (childRest + 1)
-        childType hChildFuel hChildDisjoint
+      change parent.referencedStates (childState index visited) ∪
+        menuDependencyTargets _ (childState index visited) =
+          (child.referencedStates visited ∪ menuDependencyTargets _ visited).image (childState index)
+      rw [referencedStates_of_outgoing_childPendingEdge
+        parentFragment childFragment index visited (hOutgoing visited),
+        hMenuReferences visited, Finset.image_union]
+    · simpa only [childMenu, child, compiledMenuGraphFuel, hChildCompile,
+        Nat.min_eq_right hChildFuel] using
+        compiledMenuGraphFuel_referencesClosed (childRest + 1) childType hChildFuel hChildDisjoint
     · simpa [child] using hState
     · exact hCard
   conv_lhs => rw [computeFutureOfFuel]
   conv_rhs => rw [computeFutureOfFuel]
   rw [hParentCompile, hChildCompile]
+  simp only [Nat.min_eq_right hParentFuel, Nat.min_eq_right hChildFuel]
   rw [hChildAlphabet]
   refine congrArg (Finset.filter _) ?_
-  change (parent.futureReachable (childState index state)).biUnion
+  change (parentMenu.futureReachable (childState index state)).biUnion
       (_ : TypeAutomatonState → Finset BareMessage) =
-    (child.futureReachable state).biUnion
+    (childMenu.futureReachable state).biUnion
       (_ : TypeAutomatonState → Finset BareMessage)
   rw [hReachable, Finset.image_biUnion]
   apply Finset.biUnion_congr rfl
@@ -1773,7 +1814,16 @@ theorem computeFutureOf_binaryChoice_left
         stateProductInfo left visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel left)
-      left).states) :
+      left).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+        (.child 0 source) =
+      (menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel left) left)
+        source).image (.child 0) := by
+      intro source
+      first
+      | apply menuDependencyTargets_choice_left
+      | apply menuDependencyTargets_fairChoice_left) :
     computeFutureOf whole (.child 0 state) =
       computeFutureOf left state := by
   classical
@@ -1807,7 +1857,7 @@ theorem computeFutureOf_binaryChoice_left
     hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_left alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
-    hCard state (by simpa [leftFragment] using hState)
+    hCard state (by simpa [leftFragment] using hState) hMenuReferences
 
 /-- Proves a `.child 1`-tagged state's future menu, in a compiled binary choice, agrees with the right child's own. -/
 theorem computeFutureOf_binaryChoice_right
@@ -1829,7 +1879,16 @@ theorem computeFutureOf_binaryChoice_right
         stateProductInfo right visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel right)
-      right).states) :
+      right).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+        (.child 1 source) =
+      (menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel right) right)
+        source).image (.child 1) := by
+      intro source
+      first
+      | apply menuDependencyTargets_choice_right
+      | apply menuDependencyTargets_fairChoice_right) :
     computeFutureOf whole (.child 1 state) =
       computeFutureOf right state := by
   classical
@@ -1863,7 +1922,7 @@ theorem computeFutureOf_binaryChoice_right
     hProductInfo
     (fun q edge => buildChoiceAutomaton_outgoing_right alphabet
       leftFragment rightFragment selectionLeft selectionRight q edge)
-    hCard state (by simpa [rightFragment] using hState)
+    hCard state (by simpa [rightFragment] using hState) hMenuReferences
 
 /-- Proves a `.child 0`-tagged state's future menu, in a compiled exclusive offer, agrees with the else child's own. -/
 theorem computeFutureOf_exclusiveOffer_else
@@ -1884,7 +1943,14 @@ theorem computeFutureOf_exclusiveOffer_else
         stateProductInfo elseType visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel elseType)
-      elseType).states) :
+      elseType).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+        (.child 0 source) =
+      (menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel elseType) elseType)
+        source).image (.child 0) := by
+      intro source
+      apply menuDependencyTargets_xoffer_else) :
     computeFutureOf whole (.child 0 state) =
       computeFutureOf elseType state := by
   classical
@@ -1919,7 +1985,7 @@ theorem computeFutureOf_exclusiveOffer_else
     hProductInfo
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_else alphabet
       branches elseFragment branchFragments q edge)
-    hCard state (by simpa [elseFragment] using hState)
+    hCard state (by simpa [elseFragment] using hState) hMenuReferences
 
 /-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled exclusive offer, agrees with branch `i`'s own. -/
 theorem computeFutureOf_exclusiveOffer_branch
@@ -1942,7 +2008,15 @@ theorem computeFutureOf_exclusiveOffer_branch
         stateProductInfo branchType visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel (typeCompilationFuel branchType)
-      branchType).states) :
+      branchType).states)
+    (hMenuReferences : ∀ source,
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+        (.child (i + 1) source) =
+      (menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel branchType) branchType)
+        source).image (.child (i + 1)) := by
+      intro source
+      apply menuDependencyTargets_xoffer_branch
+      assumption) :
     computeFutureOf whole (.child (i + 1) state) =
       computeFutureOf branchType state := by
   classical
@@ -1988,7 +2062,7 @@ theorem computeFutureOf_exclusiveOffer_branch
     (fun q edge => buildExclusiveOfferAutomaton_outgoing_branch alphabet
       branches elseFragment branchFragments i action branchFragment
       hBranchFragment q edge)
-    hCard state (by simpa [branchFragment] using hState)
+    hCard state (by simpa [branchFragment] using hState) hMenuReferences
 
 
 /-- A compiled fragment references only states it declares: every symbolic
@@ -2157,7 +2231,9 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     (hEntries : entries ⊆ pending.referencedStates source)
     (hNoProduct : stateProductInfo whole source = none)
     (hOffersDeclared : ∀ action ∈ pending.offersAt source,
-      action ∈ whole.alphabet.actions) :
+      action ∈ whole.alphabet.actions)
+    (hWholeDisjoint : whole.OfferBranchesDisjoint := by assumption)
+    (hRoot : source = .root := by rfl) :
     computeFutureOf whole source =
       pending.offersAt source ∪ entries.biUnion (computeFutureOf whole) := by
   classical
@@ -2166,6 +2242,15 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
       have := typeCompilationFuel_positive whole
       omega⟩
   rw [hk] at hPending
+  let graph := pending.withMenuDependencies
+    (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
+  have hGraphClosed : graph.ReferencesClosed := by
+    simpa only [graph, hPending, compiledMenuGraphFuel, hk, Nat.min_self] using
+      compiledMenuGraphFuel_referencesClosed (typeCompilationFuel whole) whole le_rfl hWholeDisjoint
+  have hGraphReferences : graph.referencedStates source = pending.referencedStates source := by
+    change pending.referencedStates source ∪ menuDependencyTargets
+      (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source = _
+    rw [hRoot, compileTypeMenuLinksFuel_root, Finset.union_empty]
   set summand : TypeAutomatonState → Finset BareMessage := fun visited =>
     pending.offersAt visited ∪
       match stateProductInfo whole visited with
@@ -2175,18 +2260,19 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
       | none => ∅ with hSummand
   have hUnfold : ∀ state,
       computeFutureOf whole state =
-        ((pending.futureReachable state).biUnion summand).filter
+        ((graph.futureReachable state).biUnion summand).filter
           fun action => action ∈ whole.alphabet.actions := by
     intro state
     unfold computeFutureOf
-    rw [hk, hPending]
-    simp only [computeFutureOfFuel, hSummand, hPending]
+    rw [hk, computeFutureOfFuel]
+    simp only [graph, hSummand, hPending, hk, Nat.min_self]
     rfl
   have hSourceSummand : summand source = pending.offersAt source := by
     simp only [hSummand, hNoProduct]
     simp
-  have hReach := pending.futureReachable_eq_self_union_biUnion source entries
-    hClosed hSource hUpper hEntries
+  have hReach := graph.futureReachable_eq_self_union_biUnion source entries
+    hGraphClosed hSource (by rw [hGraphReferences]; exact hUpper)
+    (by rw [hGraphReferences]; exact hEntries)
   rw [hUnfold source, hReach]
   apply Finset.Subset.antisymm
   · intro action hAction

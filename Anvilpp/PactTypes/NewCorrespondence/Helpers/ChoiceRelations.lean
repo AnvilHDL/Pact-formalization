@@ -96,7 +96,7 @@ lemma relationMembership_choice_left
       residual (.child 0 state) := by
   apply relationMembership_binaryChoice_left
     (.choice alphabet left right)
-    left right residual rfl
+    left right residual (by simp only [buildRelationSetCoreFuel])
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
@@ -113,7 +113,7 @@ lemma relationMembership_choice_right
       residual (.child 1 state) := by
   apply relationMembership_binaryChoice_right
     (.choice alphabet left right)
-    left right residual rfl
+    left right residual (by simp only [buildRelationSetCoreFuel])
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
@@ -128,7 +128,7 @@ lemma relationMembership_fairChoice_left
         (compileType (.fairChoice alphabet bid left right)))
       residual (.child 0 state) := by
   apply relationMembership_binaryChoice_left
-    (.fairChoice alphabet bid left right) left right residual rfl
+    (.fairChoice alphabet bid left right) left right residual (by simp only [buildRelationSetCoreFuel])
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
@@ -143,7 +143,7 @@ lemma relationMembership_fairChoice_right
         (compileType (.fairChoice alphabet bid left right)))
       residual (.child 1 state) := by
   apply relationMembership_binaryChoice_right
-    (.fairChoice alphabet bid left right) left right residual rfl
+    (.fairChoice alphabet bid left right) left right residual (by simp only [buildRelationSetCoreFuel])
   · simp only [typeCompilationFuel]
     omega
   · exact hRelated
@@ -193,7 +193,7 @@ lemma relationMembership_choice_cases
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
   exact relationMembership_binaryChoice_cases
-    (.choice alphabet left right) left right rfl hFuelEq hRelated
+    (.choice alphabet left right) left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
 
 /-- Proves every related fair-choice pair has the binary-choice shape. -/
 lemma relationMembership_fairChoice_cases
@@ -233,7 +233,7 @@ lemma relationMembership_fairChoice_cases
     rw [compileTypeFuel_eq_of_sufficient left (le_max_left _ _) le_rfl,
       compileTypeFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
   exact relationMembership_binaryChoice_cases
-    (.fairChoice alphabet bid left right) left right rfl hFuelEq hRelated
+    (.fairChoice alphabet bid left right) left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
 
 
 end

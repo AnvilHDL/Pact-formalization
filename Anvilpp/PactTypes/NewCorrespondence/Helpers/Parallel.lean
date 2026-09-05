@@ -3209,6 +3209,93 @@ theorem computeFutureOf_par_survivorLeft
       (survivorLeft_futureReachable_ge _ _ _ _ _ _ _ _ _ _ _ _
         hTargets hExplicit hInert hClosed hParentClosed q hqStates hqNotAcc
         hSurvivorState)
+  let childMenu := compiledMenuGraphFuel N childType
+  let parentMenu := compiledMenuGraphFuel (N + 1) (.par alphabet left right interface)
+  have hChildMenuClosed : childMenu.ReferencesClosed :=
+    compiledMenuGraphFuel_referencesClosed N childType hChildLe hChildDisjoint
+  have hParentMenuClosed : parentMenu.ReferencesClosed :=
+    compiledMenuGraphFuel_referencesClosed (N + 1) (.par alphabet left right interface)
+      (by change typeCompilationFuel _ ≤ N + 1; rw [hFuel])
+      (by simpa only [PactType.OfferBranchesDisjoint] using And.intro hLeftDisjoint hRightDisjoint)
+  have hChildLinks : compileTypeMenuLinksFuel (min N (typeCompilationFuel childType)) childType =
+      compileTypeMenuLinksFuel N childType := by
+    rw [Nat.min_eq_right hChildLe]
+    exact (compileTypeMenuLinksFuel_eq_of_sufficient childType hChildLe le_rfl).symm
+  have hParentMin : min (N + 1) (typeCompilationFuel (.par alphabet left right interface)) =
+      N + 1 := by rw [hFuel]; exact Nat.min_self _
+  have hDoneRefs : parentMenu.referencedStates .final = ∅ := by
+    simp only [parentMenu, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
+      compileTypeMenuLinksFuel_final, Finset.union_empty, hParEq]
+    apply Finset.eq_empty_of_forall_notMem
+    intro target hTarget
+    rw [PendingAutomaton.referencedStates, Finset.mem_biUnion] at hTarget
+    obtain ⟨edge, hEdge, hMem⟩ := hTarget
+    obtain ⟨_, hFuture⟩ := buildParallelAutomaton_final_edge_shape
+      _ _ _ _ _ _ _ _ _ _ _ _ edge (Finset.mem_filter.mp hEdge).1
+        (Finset.mem_filter.mp hEdge).2
+    rw [hFuture] at hMem
+    simp at hMem
+  have hReferences : ∀ p, p ∉ (compileTypeFuel N childType).accepting →
+      parentMenu.referencedStates (.survivor 0 p) =
+        (childMenu.referencedStates p).image (survivorRedirect (compileTypeFuel N childType)) := by
+    intro p hp
+    simp only [parentMenu, childMenu, compiledMenuGraphFuel,
+      PendingAutomaton.withMenuDependencies, hParentMin, hChildLinks, hParEq]
+    rw [survivorLeft_referencedStates _ _ _ _ _ _ _ _ _ _ _ _ hTargets hExplicit p hp,
+      menuDependencyTargets_par_survivorLeft N alphabet left right interface p hp,
+      Finset.image_union]
+    rfl
+  have hAcceptingRefs : ∀ p ∈ (compileTypeFuel N childType).accepting,
+      childMenu.referencedStates p ⊆ (compileTypeFuel N childType).accepting := by
+    intro p hp
+    simp only [childMenu, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
+      hChildLinks, compileTypeMenuLinksFuel_accepting N childType p hp, Finset.union_empty]
+    exact acceptingInert_referencedStates_subset _ hInert hTargets p hp
+  have hCarrier : ∀ p ∈ childMenu.states,
+      survivorRedirect (compileTypeFuel N childType) p ∈ parentMenu.states := by
+    intro p hp
+    change p ∈ (compileTypeFuel N childType).states at hp
+    change survivorRedirect (compileTypeFuel N childType) p ∈
+      (compileTypeFuel (N + 1) (.par alphabet left right interface)).states
+    rw [hParEq]
+    simp only [survivorRedirect]
+    split_ifs with hAcc
+    · simp [buildParallelAutomaton, finishAutomatonFragment]
+    · simp only [buildParallelAutomaton, finishAutomatonFragment,
+        Finset.mem_insert, Finset.mem_union]
+      have hShape := CompiledShape.compileTypeFuel_shapeEq_reannotate N left
+        hLeftDisjoint alphabet
+      have hpOriginal : p ∈ (compileTypeFuel N left).states := by
+        rw [← hShape.1, ← hChildType]
+        exact hp
+      exact Or.inr (Or.inl (Or.inr (Finset.mem_image_of_mem _ hpOriginal)))
+  have hMenuReachEq := FiniteMenuGraph.futureReachable_eq_image_of_stuttering
+    childMenu parentMenu (survivorRedirect (compileTypeFuel N childType))
+    hChildMenuClosed hParentMenuClosed hCarrier
+    (by
+      intro p hp
+      by_cases hAcc : p ∈ (compileTypeFuel N childType).accepting
+      · simp only [survivorRedirect, if_pos hAcc, hDoneRefs]
+        exact Finset.empty_subset _
+      · rw [show survivorRedirect (compileTypeFuel N childType) p = .survivor 0 p by
+          simp [survivorRedirect, hAcc], hReferences p hAcc]
+        exact Finset.image_subset_image (Finset.subset_insert _ _))
+    (by
+      intro p hp target hTarget
+      obtain ⟨t, ht, rfl⟩ := Finset.mem_image.mp hTarget
+      by_cases hAcc : p ∈ (compileTypeFuel N childType).accepting
+      · have htAcc := hAcceptingRefs p hAcc ht
+        simp [survivorRedirect, hAcc, htAcc]
+      · rw [show survivorRedirect (compileTypeFuel N childType) p = .survivor 0 p by
+          simp [survivorRedirect, hAcc]]
+        apply Finset.mem_insert_of_mem
+        rw [hReferences p hAcc]
+        exact Finset.mem_image_of_mem _ ht)
+    q hqStates
+  simp only [survivorRedirect, if_neg hqNotAcc] at hMenuReachEq
+  change parentMenu.futureReachable (.survivor 0 q) =
+    (childMenu.futureReachable q).image (survivorRedirect (compileTypeFuel N childType)) at hMenuReachEq
+  simp only [parentMenu, childMenu, compiledMenuGraphFuel, hParEq] at hMenuReachEq
   have hFragEq' : compileTypeFuel (childFuel + 1) childType =
       compileTypeFuel N childType := by rw [← hChildSucc, ← hFragEq]
   have hAlphabet : childType.alphabet =
@@ -3218,7 +3305,10 @@ theorem computeFutureOf_par_survivorLeft
   rw [computeFutureOf, computeFutureOf, hFuel, hChildSucc]
   rw [computeFutureOfFuel, computeFutureOfFuel, hParEq, hFragEq', hAlphabet]
   refine congrArg (Finset.filter _) ?_
-  rw [hReachEq, Finset.image_biUnion]
+  have hSmallLinks : min (childFuel + 1) (typeCompilationFuel childType) =
+      min N (typeCompilationFuel childType) := by
+    rw [← hChildSucc, Nat.min_self, Nat.min_eq_right hChildLe]
+  rw [hSmallLinks, hMenuReachEq, Finset.image_biUnion]
   refine Finset.biUnion_congr rfl ?_
   intro visited _hVisited
   by_cases hAcc : visited ∈ (compileTypeFuel N childType).accepting
@@ -3856,6 +3946,93 @@ theorem computeFutureOf_par_survivorRight
       (survivorRight_futureReachable_ge _ _ _ _ _ _ _ _ _ _ _ _
         hTargets hExplicit hInert hClosed hParentClosed q hqStates hqNotAcc
         hSurvivorState)
+  let childMenu := compiledMenuGraphFuel N childType
+  let parentMenu := compiledMenuGraphFuel (N + 1) (.par alphabet left right interface)
+  have hChildMenuClosed : childMenu.ReferencesClosed :=
+    compiledMenuGraphFuel_referencesClosed N childType hChildLe hChildDisjoint
+  have hParentMenuClosed : parentMenu.ReferencesClosed :=
+    compiledMenuGraphFuel_referencesClosed (N + 1) (.par alphabet left right interface)
+      (by change typeCompilationFuel _ ≤ N + 1; rw [hFuel])
+      (by simpa only [PactType.OfferBranchesDisjoint] using And.intro hLeftDisjoint hRightDisjoint)
+  have hChildLinks : compileTypeMenuLinksFuel (min N (typeCompilationFuel childType)) childType =
+      compileTypeMenuLinksFuel N childType := by
+    rw [Nat.min_eq_right hChildLe]
+    exact (compileTypeMenuLinksFuel_eq_of_sufficient childType hChildLe le_rfl).symm
+  have hParentMin : min (N + 1) (typeCompilationFuel (.par alphabet left right interface)) =
+      N + 1 := by rw [hFuel]; exact Nat.min_self _
+  have hDoneRefs : parentMenu.referencedStates .final = ∅ := by
+    simp only [parentMenu, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
+      compileTypeMenuLinksFuel_final, Finset.union_empty, hParEq]
+    apply Finset.eq_empty_of_forall_notMem
+    intro target hTarget
+    rw [PendingAutomaton.referencedStates, Finset.mem_biUnion] at hTarget
+    obtain ⟨edge, hEdge, hMem⟩ := hTarget
+    obtain ⟨_, hFuture⟩ := buildParallelAutomaton_final_edge_shape
+      _ _ _ _ _ _ _ _ _ _ _ _ edge (Finset.mem_filter.mp hEdge).1
+        (Finset.mem_filter.mp hEdge).2
+    rw [hFuture] at hMem
+    simp at hMem
+  have hReferences : ∀ p, p ∉ (compileTypeFuel N childType).accepting →
+      parentMenu.referencedStates (.survivor 1 p) =
+        (childMenu.referencedStates p).image (survivorRightRedirect (compileTypeFuel N childType)) := by
+    intro p hp
+    simp only [parentMenu, childMenu, compiledMenuGraphFuel,
+      PendingAutomaton.withMenuDependencies, hParentMin, hChildLinks, hParEq]
+    rw [survivorRight_referencedStates _ _ _ _ _ _ _ _ _ _ _ _ hTargets hExplicit p hp,
+      menuDependencyTargets_par_survivorRight N alphabet left right interface p hp,
+      Finset.image_union]
+    rfl
+  have hAcceptingRefs : ∀ p ∈ (compileTypeFuel N childType).accepting,
+      childMenu.referencedStates p ⊆ (compileTypeFuel N childType).accepting := by
+    intro p hp
+    simp only [childMenu, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
+      hChildLinks, compileTypeMenuLinksFuel_accepting N childType p hp, Finset.union_empty]
+    exact acceptingInert_referencedStates_subset _ hInert hTargets p hp
+  have hCarrier : ∀ p ∈ childMenu.states,
+      survivorRightRedirect (compileTypeFuel N childType) p ∈ parentMenu.states := by
+    intro p hp
+    change p ∈ (compileTypeFuel N childType).states at hp
+    change survivorRightRedirect (compileTypeFuel N childType) p ∈
+      (compileTypeFuel (N + 1) (.par alphabet left right interface)).states
+    rw [hParEq]
+    simp only [survivorRightRedirect]
+    split_ifs with hAcc
+    · simp [buildParallelAutomaton, finishAutomatonFragment]
+    · simp only [buildParallelAutomaton, finishAutomatonFragment,
+        Finset.mem_insert, Finset.mem_union]
+      have hShape := CompiledShape.compileTypeFuel_shapeEq_reannotate N right
+        hRightDisjoint alphabet
+      have hpOriginal : p ∈ (compileTypeFuel N right).states := by
+        rw [← hShape.1, ← hChildType]
+        exact hp
+      exact Or.inr (Or.inr (Finset.mem_image_of_mem _ hpOriginal))
+  have hMenuReachEq := FiniteMenuGraph.futureReachable_eq_image_of_stuttering
+    childMenu parentMenu (survivorRightRedirect (compileTypeFuel N childType))
+    hChildMenuClosed hParentMenuClosed hCarrier
+    (by
+      intro p hp
+      by_cases hAcc : p ∈ (compileTypeFuel N childType).accepting
+      · simp only [survivorRightRedirect, if_pos hAcc, hDoneRefs]
+        exact Finset.empty_subset _
+      · rw [show survivorRightRedirect (compileTypeFuel N childType) p = .survivor 1 p by
+          simp [survivorRightRedirect, hAcc], hReferences p hAcc]
+        exact Finset.image_subset_image (Finset.subset_insert _ _))
+    (by
+      intro p hp target hTarget
+      obtain ⟨t, ht, rfl⟩ := Finset.mem_image.mp hTarget
+      by_cases hAcc : p ∈ (compileTypeFuel N childType).accepting
+      · have htAcc := hAcceptingRefs p hAcc ht
+        simp [survivorRightRedirect, hAcc, htAcc]
+      · rw [show survivorRightRedirect (compileTypeFuel N childType) p = .survivor 1 p by
+          simp [survivorRightRedirect, hAcc]]
+        apply Finset.mem_insert_of_mem
+        rw [hReferences p hAcc]
+        exact Finset.mem_image_of_mem _ ht)
+    q hqStates
+  simp only [survivorRightRedirect, if_neg hqNotAcc] at hMenuReachEq
+  change parentMenu.futureReachable (.survivor 1 q) =
+    (childMenu.futureReachable q).image (survivorRightRedirect (compileTypeFuel N childType)) at hMenuReachEq
+  simp only [parentMenu, childMenu, compiledMenuGraphFuel, hParEq] at hMenuReachEq
   have hFragEq' : compileTypeFuel (childFuel + 1) childType =
       compileTypeFuel N childType := by rw [← hChildSucc, ← hFragEq]
   have hAlphabet : childType.alphabet =
@@ -3865,7 +4042,10 @@ theorem computeFutureOf_par_survivorRight
   rw [computeFutureOf, computeFutureOf, hFuel, hChildSucc]
   rw [computeFutureOfFuel, computeFutureOfFuel, hParEq, hFragEq', hAlphabet]
   refine congrArg (Finset.filter _) ?_
-  rw [hReachEq, Finset.image_biUnion]
+  have hSmallLinks : min (childFuel + 1) (typeCompilationFuel childType) =
+      min N (typeCompilationFuel childType) := by
+    rw [← hChildSucc, Nat.min_self, Nat.min_eq_right hChildLe]
+  rw [hSmallLinks, hMenuReachEq, Finset.image_biUnion]
   refine Finset.biUnion_congr rfl ?_
   intro visited _hVisited
   by_cases hAcc : visited ∈ (compileTypeFuel N childType).accepting
@@ -4034,14 +4214,21 @@ theorem computeFutureOf_mono_of_futureReachable
   obtain ⟨fuel, hFuel⟩ : ∃ fuel, typeCompilationFuel processType = fuel + 1 :=
     ⟨typeCompilationFuel processType - 1, by
       have := typeCompilationFuel_positive processType; omega⟩
-  have hClosed := compileTypeFuel_referencesClosed
+  have hClosed := compiledMenuGraphFuel_referencesClosed
     (typeCompilationFuel processType) processType le_rfl hDisjoint
-  have hReach := PendingAutomaton.futureReachable_subset_of_mem
+  simp only [compiledMenuGraphFuel, Nat.min_self] at hClosed
+  have hTargetMenu := PendingAutomaton.futureReachable_subset_withMenuDependencies
     (⟨(compileTypeFuel (typeCompilationFuel processType) processType).states,
       (compileTypeFuel (typeCompilationFuel processType) processType).edges⟩ :
-      PendingAutomaton) hClosed hSource hTarget
-  rw [computeFutureOf, computeFutureOf, hFuel] at *
+      PendingAutomaton)
+    (compileTypeMenuLinksFuel (typeCompilationFuel processType) processType)
+    hClosed source hSource hTarget
+  have hReach := FiniteMenuGraph.futureReachable_subset_of_mem
+    _ hClosed hSource hTargetMenu
+  rw [hFuel] at hReach
+  rw [computeFutureOf, computeFutureOf, hFuel]
   rw [computeFutureOfFuel, computeFutureOfFuel]
+  simp only [hFuel, Nat.min_self]
   exact Finset.filter_subset_filter _ (Finset.biUnion_subset_biUnion_of_subset_left _ hReach)
 
 /-! ### Re-signing narrows a same-cycle menu
@@ -4623,22 +4810,25 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
       PendingAutomaton).ReferencesClosed)
     (hRightClosed : (⟨right.states, right.edges⟩ :
       PendingAutomaton).ReferencesClosed)
-    (hParentClosed : (⟨(buildParallelAutomaton parentAlphabet leftAlphabet
+    (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
+    (hNoPair : ∀ s t, menuDependencyTargets dependencies (.pair s t) = ∅)
+    (hNoFinal : menuDependencyTargets dependencies .final = ∅)
+    (hParentClosed : ((⟨(buildParallelAutomaton parentAlphabet leftAlphabet
         rightAlphabet interface left right restampedLeft restampedRight
         leftFuture rightFuture restampedLeftFuture restampedRightFuture).states,
       (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
         interface left right restampedLeft restampedRight leftFuture rightFuture
         restampedLeftFuture restampedRightFuture).edges⟩ :
-      PendingAutomaton).ReferencesClosed)
+      PendingAutomaton).withMenuDependencies dependencies).ReferencesClosed)
     (p1 p2 : TypeAutomatonState)
     (hp1 : p1 ∈ left.states) (hp2 : p2 ∈ right.states) :
-    (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
+    ((⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
         interface left right restampedLeft restampedRight leftFuture rightFuture
         restampedLeftFuture restampedRightFuture).states,
       (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
         interface left right restampedLeft restampedRight leftFuture rightFuture
         restampedLeftFuture restampedRightFuture).edges⟩ :
-      PendingAutomaton).futureReachable (.pair p1 p2) ⊆
+      PendingAutomaton).withMenuDependencies dependencies).futureReachable (.pair p1 p2) ⊆
       insert TypeAutomatonState.final
         ((((⟨left.states, left.edges⟩ :
               PendingAutomaton).futureReachable p1) ×ˢ
@@ -4648,37 +4838,38 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
           ((((⟨right.states, right.edges⟩ :
               PendingAutomaton).futureReachable p2).filter
               (fun t => t ∉ right.accepting)).biUnion fun t =>
-            (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
+            ((⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture restampedRightFuture).states,
               (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture
                 restampedRightFuture).edges⟩ :
-              PendingAutomaton).futureReachable (.survivor 1 t)) ∪
+              PendingAutomaton).withMenuDependencies dependencies).futureReachable (.survivor 1 t)) ∪
           ((((⟨left.states, left.edges⟩ :
               PendingAutomaton).futureReachable p1).filter
               (fun s => s ∉ left.accepting)).biUnion fun s =>
-            (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
+            ((⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture restampedRightFuture).states,
               (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
                 interface left right restampedLeft restampedRight leftFuture
                 rightFuture restampedLeftFuture
                 restampedRightFuture).edges⟩ :
-              PendingAutomaton).futureReachable (.survivor 0 s))) := by
+              PendingAutomaton).withMenuDependencies dependencies).futureReachable (.survivor 0 s))) := by
   classical
   set leftPending : PendingAutomaton := ⟨left.states, left.edges⟩
     with hLeftPending
   set rightPending : PendingAutomaton := ⟨right.states, right.edges⟩
     with hRightPending
-  set parent : PendingAutomaton :=
-    ⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
+  set parent : FiniteMenuGraph :=
+    (⟨(buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
         interface left right restampedLeft restampedRight leftFuture rightFuture
         restampedLeftFuture restampedRightFuture).states,
       (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
         interface left right restampedLeft restampedRight leftFuture rightFuture
-        restampedLeftFuture restampedRightFuture).edges⟩ with hParent
+        restampedLeftFuture restampedRightFuture).edges⟩ : PendingAutomaton).withMenuDependencies
+          dependencies with hParent
   have hLeftReachStates : leftPending.futureReachable p1 ⊆ left.states :=
     PendingAutomaton.futureReachable_subset_of_reference_closed leftPending p1
       left.states hp1 (fun s hs => hLeftClosed s hs)
@@ -4688,16 +4879,16 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
   have hSurvivorRightState : ∀ t ∈ right.states,
       (TypeAutomatonState.survivor 1 t) ∈ parent.states := by
     intro t ht
-    simp only [hParent, buildParallelAutomaton, finishAutomatonFragment,
+    simp only [hParent, PendingAutomaton.withMenuDependencies, buildParallelAutomaton, finishAutomatonFragment,
       Finset.mem_insert, Finset.mem_union]
     exact Or.inr (Or.inr (Finset.mem_image_of_mem _ ht))
   have hSurvivorLeftState : ∀ s ∈ left.states,
       (TypeAutomatonState.survivor 0 s) ∈ parent.states := by
     intro s hs
-    simp only [hParent, buildParallelAutomaton, finishAutomatonFragment,
+    simp only [hParent, PendingAutomaton.withMenuDependencies, buildParallelAutomaton, finishAutomatonFragment,
       Finset.mem_insert, Finset.mem_union]
     exact Or.inr (Or.inl (Or.inr (Finset.mem_image_of_mem _ hs)))
-  refine PendingAutomaton.futureReachable_subset_of_reference_closed parent _ _
+  refine FiniteMenuGraph.futureReachable_subset_of_reference_closed parent _ _
     ?_ ?_
   · refine Finset.mem_insert_of_mem (Finset.mem_union_left _
       (Finset.mem_union_left _ ?_))
@@ -4707,6 +4898,8 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
   · intro state hState
     rcases Finset.mem_insert.mp hState with rfl | hRest
     · intro target hTarget
+      simp only [hParent, PendingAutomaton.withMenuDependencies, hNoFinal,
+        Finset.union_empty] at hTarget
       rw [PendingAutomaton.referencedStates, Finset.mem_biUnion] at hTarget
       obtain ⟨edge, hEdge, hMem⟩ := hTarget
       obtain ⟨-, hFuture⟩ := buildParallelAutomaton_final_edge_shape
@@ -4735,6 +4928,8 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
               (hRightReachStates hSecond))
             (PendingAutomaton.futureReachable_subset_of_mem rightPending
               hRightClosed hp2 hSecond)
+        simp only [hParent, PendingAutomaton.withMenuDependencies, hNoPair,
+          Finset.union_empty]
         refine subset_trans
           (buildParallelAutomaton_pair_referencedStates_subset parentAlphabet
             leftAlphabet rightAlphabet interface left right restampedLeft
@@ -4755,25 +4950,25 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
             obtain ⟨htRef, htAcc⟩ := Finset.mem_filter.mp ht
             exact Finset.mem_biUnion.mpr ⟨t,
               Finset.mem_filter.mpr ⟨hRightStep htRef, htAcc⟩,
-              PendingAutomaton.mem_futureReachable_self _ _⟩
+              FiniteMenuGraph.mem_futureReachable_self _ _⟩
         · obtain ⟨s, hs, rfl⟩ := Finset.mem_image.mp hSurvLeft
           refine Finset.mem_union_right _ ?_
           obtain ⟨hsRef, hsAcc⟩ := Finset.mem_filter.mp hs
           exact Finset.mem_biUnion.mpr ⟨s,
             Finset.mem_filter.mpr ⟨hLeftStep hsRef, hsAcc⟩,
-            PendingAutomaton.mem_futureReachable_self _ _⟩
+            FiniteMenuGraph.mem_futureReachable_self _ _⟩
       · obtain ⟨t, ht, hInReach⟩ := Finset.mem_biUnion.mp hRightSurvivor
         have htRef := (Finset.mem_filter.mp ht).1
         have hEntry : (TypeAutomatonState.survivor 1 t) ∈ parent.states :=
           hSurvivorRightState t (hRightReachStates htRef)
         have hStates : parent.futureReachable (.survivor 1 t) ⊆ parent.states :=
-          PendingAutomaton.futureReachable_subset_of_reference_closed parent _
+          FiniteMenuGraph.futureReachable_subset_of_reference_closed parent _
             parent.states hEntry (fun s hs => hParentClosed s hs)
         refine subset_trans
           (subset_trans
-            (PendingAutomaton.referencedStates_subset_futureReachable parent
+            (FiniteMenuGraph.referencedStates_subset_futureReachable parent
               state hParentClosed (hStates hInReach))
-            (PendingAutomaton.futureReachable_subset_of_mem parent hParentClosed
+            (FiniteMenuGraph.futureReachable_subset_of_mem parent hParentClosed
               hEntry hInReach)) ?_
         intro u hu
         exact Finset.mem_insert_of_mem (Finset.mem_union_left _
@@ -4783,13 +4978,13 @@ theorem buildParallelAutomaton_pair_futureReachable_subset
       have hEntry : (TypeAutomatonState.survivor 0 s) ∈ parent.states :=
         hSurvivorLeftState s (hLeftReachStates hsRef)
       have hStates : parent.futureReachable (.survivor 0 s) ⊆ parent.states :=
-        PendingAutomaton.futureReachable_subset_of_reference_closed parent _
+        FiniteMenuGraph.futureReachable_subset_of_reference_closed parent _
           parent.states hEntry (fun x hx => hParentClosed x hx)
       refine subset_trans
         (subset_trans
-          (PendingAutomaton.referencedStates_subset_futureReachable parent
+          (FiniteMenuGraph.referencedStates_subset_futureReachable parent
             state hParentClosed (hStates hInReach))
-          (PendingAutomaton.futureReachable_subset_of_mem parent hParentClosed
+          (FiniteMenuGraph.futureReachable_subset_of_mem parent hParentClosed
             hEntry hInReach)) ?_
       intro u hu
       exact Finset.mem_insert_of_mem (Finset.mem_union_right _
@@ -4874,7 +5069,7 @@ theorem offersAt_subset_computeFutureOf (processType : PactType)
   rw [computeFutureOf, hk, computeFutureOfFuel]
   refine Finset.mem_filter.mpr ⟨?_, hGate⟩
   refine Finset.mem_biUnion.mpr ⟨state,
-    PendingAutomaton.mem_futureReachable_self _ _, ?_⟩
+    FiniteMenuGraph.mem_futureReachable_self _ _, ?_⟩
   refine Finset.mem_union_left _ ?_
   rw [← hk]
   exact hOffers

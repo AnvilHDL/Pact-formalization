@@ -2088,7 +2088,7 @@ theorem ofStage_futOffStage_agree  (processType : PactType)
             (.choice alphabet left right) left right
             TypeLabel.silent TypeLabel.silent (by rw [hWhole]) hProductEq1
           have hShape := helper_h12_binaryChoice_shape (.choice alphabet left right) left right
-            rfl hFuelEq hRelated
+            (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
           rcases hShape with ⟨hResidualEq, hStateEq⟩ |
             ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
           · subst hResidualEq; subst hStateEq
@@ -2257,7 +2257,7 @@ theorem ofStage_futOffStage_agree  (processType : PactType)
             left right (TypeLabel.fair bid true) (TypeLabel.fair bid false)
             (by rw [hWhole]) hProductEq1
           have hShape := helper_h12_binaryChoice_shape (.fairChoice alphabet bid left right)
-            left right rfl hFuelEq hRelated
+            left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
           rcases hShape with ⟨hResidualEq, hStateEq⟩ |
             ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
           · subst hResidualEq; subst hStateEq
@@ -2917,7 +2917,7 @@ lemma helper_h13_final_states_represent_completion
           rw [hWhole]; simp [buildChoiceAutomaton, finishAutomatonFragment]
         rw [hAcceptEq]
         have hShape := helper_h12_binaryChoice_shape (.choice alphabet left right) left right
-          rfl hFuelEq hRelated
+          (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
         rcases hShape with ⟨hResidualEq, hStateEq⟩ |
           ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
         · subst hResidualEq; subst hStateEq
@@ -2973,7 +2973,7 @@ lemma helper_h13_final_states_represent_completion
           rw [hWhole]; simp [buildChoiceAutomaton, finishAutomatonFragment]
         rw [hAcceptEq]
         have hShape := helper_h12_binaryChoice_shape (.fairChoice alphabet bid left right)
-          left right rfl hFuelEq hRelated
+          left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
         rcases hShape with ⟨hResidualEq, hStateEq⟩ |
           ⟨q, hStateEq, hLeftRelated⟩ | ⟨q, hStateEq, hRightRelated⟩
         · subst hResidualEq; subst hStateEq
@@ -3945,7 +3945,7 @@ theorem helper_h14_same_cycle_completion
             Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
           exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
         have hShape := helper_h12_binaryChoice_shape (.choice alphabet left right) left right
-          rfl hFuelEq hRelated
+          (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
         have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
           (buildChoiceAutomaton alphabet leftAuto rightAuto
             TypeLabel.silent TypeLabel.silent)
@@ -4026,7 +4026,7 @@ theorem helper_h14_same_cycle_completion
             Finset.mem_biUnion, Finset.mem_powerset, Finset.mem_image]
           exact Or.inr ⟨∅, Finset.empty_subset _, ∅, Finset.empty_subset _, rfl⟩
         have hShape := helper_h12_binaryChoice_shape (.fairChoice alphabet bid left right)
-          left right rfl hFuelEq hRelated
+          left right (by simp only [buildRelationSetCoreFuel]) hFuelEq hRelated
         have hTag0 := automatonSameCycleReachesAccepting_of_child_tag
           (buildChoiceAutomaton alphabet leftAuto rightAuto
             (TypeLabel.fair bid true) (TypeLabel.fair bid false))

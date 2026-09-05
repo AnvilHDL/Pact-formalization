@@ -109,7 +109,7 @@ theorem compileTypeFuel_sequence_eq_build
   rw [compileTypeFuel_eq_of_sufficient left (le_max_left _ _) le_rfl,
     compileTypeFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
 
-private theorem buildSequenceAutomaton_referencedStates_right
+theorem buildSequenceAutomaton_referencedStates_right
      (left right : AutomatonFragment)
     (state : TypeAutomatonState) :
     let sequence := buildSequenceAutomaton left right
@@ -171,7 +171,7 @@ private theorem buildSequenceAutomaton_referencedStates_right
             simpa [childPendingEdge, childFutureSpec, childState, hTock,
               hFuture] using hTaggedEq
 
-private theorem buildSequenceAutomaton_offersAt_right
+theorem buildSequenceAutomaton_offersAt_right
      (left right : AutomatonFragment)
     (state : TypeAutomatonState) :
     let sequence := buildSequenceAutomaton left right
@@ -223,6 +223,43 @@ theorem computeFutureOf_sequence_right
   let rightFragment :=
     compileTypeFuel (typeCompilationFuel right) right
   let sequence := buildSequenceAutomaton leftFragment rightFragment
+  have hCard : rightFragment.states.card ≤ sequence.states.card := by
+    have hTaggedCard :
+        (childStates 1 rightFragment).card = rightFragment.states.card := by
+      unfold childStates
+      apply Finset.card_image_of_injective
+      intro first second hEq
+      simpa [childState] using hEq
+    rw [← hTaggedCard]
+    apply Finset.card_le_card
+    intro tagged hTagged
+    simp only [sequence, buildSequenceAutomaton, finishAutomatonFragment,
+      Finset.mem_union]
+    exact Or.inr hTagged
+  have hSequenceFuel : typeCompilationFuel (.seq alphabet left right) =
+      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
+    simp only [typeCompilationFuel]
+    omega
+  have hInfo : ∀ visited,
+      stateProductInfo (.seq alphabet left right) (.child 1 visited) =
+        stateProductInfo right visited := by
+    intro visited
+    unfold stateProductInfo
+    rw [hSequenceFuel]
+    simp only [stateProductInfoFuel]
+    exact stateProductInfoFuel_eq_of_sufficient right visited
+      (le_max_right _ _) le_rfl
+  unfold computeFutureOf
+  exact computeFutureOfFuel_child_embedding (.seq alphabet left right) right
+    (typeCompilationFuel (.seq alphabet left right)) (typeCompilationFuel right)
+    sequence rightFragment 1
+    (compileTypeFuel_sequence_eq_build alphabet left right) rfl
+    le_rfl le_rfl hDisjoint hRightAlphabet
+    (by rw [hSequenceFuel]; omega) hInfo
+    (buildSequenceAutomaton_outgoing_right leftFragment rightFragment)
+    hCard state hState (menuDependencyTargets_seq_right alphabet left right)
+
+/- Previous proof for saturation without menu dependencies.
   let parent : PendingAutomaton :=
     { states := sequence.states, edges := sequence.edges }
   let child : PendingAutomaton :=
@@ -331,13 +368,12 @@ theorem computeFutureOf_sequence_right
           hLeftLarge hLeftSmall,
         computeFutureOfFuel_eq_of_sufficient productRight q2
           hRightLarge hRightSmall]
+-/
 
-/-- Proves visible sequence edges leaving a left-child state are either rewritten left edges or the entry bridge. -/
-theorem buildSequenceAutomaton_outgoing_left_visible
+/-- Every edge leaving a retained left state is a rewritten left edge. -/
+theorem buildSequenceAutomaton_outgoing_left
      (left right : AutomatonFragment)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge)
-    {label : TypeLabel}
-    (_hVisible : edge.label = .visible label)
     (hOutgoing :
       edge ∈ (buildSequenceAutomaton left right).edges ∧
         edge.source = .child 0 state) :
@@ -627,8 +663,8 @@ lemma helper_h15_sequence_left_public_edge_cases
     hPendingEnv, hPendingLabel, hPendingCurrent, hPendingFuture,
     hPendingTarget⟩
   obtain ⟨childEdge, hChildEdgeMem, hChildSource, hChildEdgeEq⟩ :=
-    buildSequenceAutomaton_outgoing_left_visible leftFragment
-      rightFragment q pendingEdge hPendingLabel ⟨hPendingMem, hPendingSource⟩
+    buildSequenceAutomaton_outgoing_left leftFragment
+      rightFragment q pendingEdge ⟨hPendingMem, hPendingSource⟩
   have hChildEnv : childEdge.environment = env := by
     have h := hPendingEnv
     rw [hChildEdgeEq] at h
