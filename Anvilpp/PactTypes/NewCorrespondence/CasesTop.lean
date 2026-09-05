@@ -7,6 +7,35 @@ open Pact.NewCorrespondence
 
 noncomputable section
 
+/-- The paper's forward and backward directions use H-current, H-menus,
+and the uniform offer law, for every pair in the compiler relation. -/
+theorem correspondence_steps_of_helpers (processType : PactType)
+    (hCurrent : CurrentOfferCorrespondence processType)
+    (hMenus : FutureOffersAgree processType) :
+    TypeAutomatonStepCorrespondence processType := by
+  constructor
+  · intro residual residual' state env label offers hRelated hSemantic
+    rcases offers with ⟨current, future⟩
+    -- Forward: H-current supplies the target; H-law and H-menus identify its future.
+    exact hCurrent.forward_with_future hMenus hRelated hSemantic
+  · intro residual state state' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    -- Backward: use the same two equations to recover the complete semantic offer.
+    exact hCurrent.backward_with_future hMenus hRelated hEdge
+
+/-- Step correspondence for every pair in the compiler relation. -/
+theorem correspondence_steps
+    (processType : PactType)
+    (hAdmissible : AdmissibleType processType) :
+    TypeAutomatonStepCorrespondence processType := by
+  -- Paper: instantiate the simultaneous helpers at the empty binder context.
+  obtain ⟨hCurrent, hMenus⟩ :=
+    correspondence_simultaneous [] processType
+      (typeWellFormedIn_nil_of_admissible hAdmissible)
+  exact correspondence_steps_of_helpers processType hCurrent hMenus
+
+/- Previous assembly, retained until cleanup. Its global H15 dependencies
+are replaced above by the menu hypothesis obtained from the simultaneous proof.
 /-- Step correspondence for every pair in the compiler relation. -/
 theorem correspondence_steps
     (processType : PactType)
@@ -65,6 +94,8 @@ theorem correspondence_steps
             hRelated hTargetRelated hEdge hTock
         exact hSemanticFuture.trans hEdgeFuture.symm
     simpa [hFuture] using hSemantic
+
+-/
 
 end
 

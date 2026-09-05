@@ -4,9 +4,8 @@ import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Sequence
 import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Parallel
 
 /-!
-Same-cycle completion at the compound fragments, the parallel product menu, and
-`correspondence_simultaneous`: the three helpers of Lemma 4.5 proved together by
-one induction on `typeCompilationFuel`.
+The retained same-cycle lemmas, parallel product menus, and the paper's
+simultaneous induction for current-offer correspondence and menu agreement.
 -/
 
 namespace Pact
@@ -1559,12 +1558,11 @@ theorem futureOffersAgree_par_of_typeWF
 #print axioms survivorMenuBound_par
 #print axioms futureOffersAgree_par_of_typeWF
 
-/-- The three helpers, proved together by induction on `typeCompilationFuel`. -/
+/-- The paper's two helpers, proved together by induction on `typeCompilationFuel`. -/
 theorem correspondence_simultaneous :
     ∀ (bound : List String) (processType : PactType),
       TypeWellFormedIn bound processType →
       CurrentOfferCorrespondence processType ∧
-        SameCycleCompletionAgrees processType ∧
         FutureOffersAgree processType := by
   intro bound processType
   induction hFuel : typeCompilationFuel processType
@@ -1574,23 +1572,18 @@ theorem correspondence_simultaneous :
     cases processType with
     | skip alphabet =>
         exact ⟨currentOfferCorrespondence_skip alphabet,
-          sameCycleCompletionAgrees_skip alphabet,
           futureOffersAgree_skip alphabet⟩
     | var alphabet name =>
         exact ⟨currentOfferCorrespondence_var alphabet name,
-          sameCycleCompletionAgrees_var alphabet name,
           futureOffersAgree_var alphabet name⟩
     | message alphabet msg dir =>
         exact ⟨currentOfferCorrespondence_message alphabet msg dir,
-          sameCycleCompletionAgrees_message alphabet msg dir,
           futureOffersAgree_message alphabet msg dir⟩
     | tock alphabet =>
         exact ⟨currentOfferCorrespondence_tock alphabet,
-          sameCycleCompletionAgrees_tock alphabet,
           futureOffersAgree_tock alphabet⟩
     | progress alphabet pid =>
         exact ⟨currentOfferCorrespondence_progress alphabet pid,
-          sameCycleCompletionAgrees_progress alphabet pid,
           futureOffersAgree_progress alphabet pid⟩
     | choice alphabet left right =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_choice hWF
@@ -1600,7 +1593,7 @@ theorem correspondence_simultaneous :
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hLeft := ih _ hLeftFuel bound left rfl hLeftWF
         have hRight := ih _ hRightFuel bound right rfl hRightWF
-        refine ⟨?_, sameCycleCompletionAgrees_choice alphabet left right hLeft.2.1 hRight.2.1, ?_⟩
+        refine ⟨?_, ?_⟩
         · exact currentOfferCorrespondence_choice alphabet left right hWF.1
             (offerBranchesDisjoint_of_ownership left hLeftWF.2.2.2.2.2.2.2.2.2.1
               hLeftWF.2.2.2.2.2.2.2.2.2.2.1
@@ -1636,7 +1629,7 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact h.2.2.1)
-            hLeft.2.2 hRight.2.2
+            hLeft.2 hRight.2
     | fairChoice alphabet bid left right =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_fairChoice hWF
         have hLeftFuel : typeCompilationFuel left < n := by
@@ -1645,7 +1638,7 @@ theorem correspondence_simultaneous :
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hLeft := ih _ hLeftFuel bound left rfl hLeftWF
         have hRight := ih _ hRightFuel bound right rfl hRightWF
-        refine ⟨?_, sameCycleCompletionAgrees_fairChoice alphabet bid left right hLeft.2.1 hRight.2.1, ?_⟩
+        refine ⟨?_, ?_⟩
         · exact currentOfferCorrespondence_fairChoice alphabet bid left right
             hWF.1
             (offerBranchesDisjoint_of_ownership left hLeftWF.2.2.2.2.2.2.2.2.2.1
@@ -1682,7 +1675,7 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact h.2.2.1)
-            hLeft.2.2 hRight.2.2
+            hLeft.2 hRight.2
     | seq alphabet left right =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_seq hWF
         have hLeftFuel : typeCompilationFuel left < n := by
@@ -1691,7 +1684,7 @@ theorem correspondence_simultaneous :
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hLeft := ih _ hLeftFuel bound left rfl hLeftWF
         have hRight := ih _ hRightFuel bound right rfl hRightWF
-        refine ⟨?_, sameCycleCompletionAgrees_seq alphabet left right hLeft.2.1 hRight.2.1, ?_⟩
+        refine ⟨?_, ?_⟩
         · exact currentOfferCorrespondence_seq alphabet left right
             (fun hRel =>
               relationMembership_alphabetWellFormed
@@ -1722,7 +1715,7 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact h.2.2.1)
-            hLeft.2.2 hRight.2.2 hLeft.1 hLeftWF
+            hLeft.2 hRight.2 hLeft.1 hLeftWF
           intro name
           have hTail := hWF.2.2.2.1 name
           simp only [PactType.TailOccurrences] at hTail
@@ -1747,21 +1740,19 @@ theorem correspondence_simultaneous :
         have hRightResign :=
           ih _ hRightResignFuel bound (right.reannotate alphabet) rfl
             hRightResignWF
-        refine ⟨?_, ?_, ?_⟩
+        refine ⟨?_, ?_⟩
         · exact currentOfferCorrespondence_par_of_typeWF hWF hLeft.1 hRight.1
-            hLeftResign.1 hRightResign.1 hLeft.2.2 hRight.2.2
-        · sorry -- same-cycle completion, `.par`
+            hLeftResign.1 hRightResign.1 hLeft.2 hRight.2
         · exact futureOffersAgree_par_of_typeWF hWF hLeft.1 hRight.1
-            hLeft.2.2 hRight.2.2 hLeftResign.2.2 hRightResign.2.2
+            hLeft.2 hRight.2 hLeftResign.2 hRightResign.2
     | recur alphabet name body =>
         have hBodyWF := typeWellFormedIn_recur hWF
         have hBodyFuel : typeCompilationFuel body < n := by
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hBody := ih _ hBodyFuel (name :: bound) body rfl hBodyWF
-        refine ⟨?_, ?_, ?_⟩
+        refine ⟨?_, ?_⟩
         · exact currentOfferCorrespondence_recur_of_typeWF alphabet name body
             hWF hBody.1
-        · sorry -- same-cycle completion, `.recur`
         · intro residual state hRelated
           have hAlphabet : body.alphabet = alphabet := by
             have h := hWF.1
@@ -1774,11 +1765,11 @@ theorem correspondence_simultaneous :
           · cases hRoot
             -- Paper: the fresh root reads the body-entry menu.
             exact futureOffersAgree_recur_root alphabet name body hAlphabet
-              hDisjoint hTail hBody.1 hBody.2.2
+              hDisjoint hTail hBody.1 hBody.2
           · cases hPair
             -- Paper: installed backedges add the body menu at marker-reachable states.
             rw [computeFutureOf_recur_child_eq alphabet name body hAlphabet
-              hDisjoint hTail hBody.1 hBody.2.2 hChildRelated]
+              hDisjoint hTail hBody.1 hBody.2 hChildRelated]
             let replacement := PactType.recur alphabet name body
             let fuel := max (sizeOf rho + 1) (sizeOf (rho.replaceVar name replacement) + 1)
             have hRhoFuel : sizeOf rho + 1 ≤ fuel := le_max_left _ _
@@ -1819,12 +1810,11 @@ theorem correspondence_simultaneous :
         have hElse := ih _ hElseFuel bound elseType rfl hElseWF
         have hBranch : ∀ entry ∈ branches,
             CurrentOfferCorrespondence entry.2 ∧
-              SameCycleCompletionAgrees entry.2 ∧ FutureOffersAgree entry.2 :=
+              FutureOffersAgree entry.2 :=
           fun entry hEntry =>
             ih _ (hBranchFuel entry hEntry) bound entry.2 rfl
               (hBranchWF entry hEntry)
-        refine ⟨?_, sameCycleCompletionAgrees_xoffer alphabet elseType branches
-            hElse.2.1 (fun entry hEntry => (hBranch entry hEntry).2.1), ?_⟩
+        refine ⟨?_, ?_⟩
         · refine currentOfferCorrespondence_xoffer alphabet elseType branches
             (offerBranchesDisjoint_of_ownership elseType
               hElseWF.2.2.2.2.2.2.2.2.2.1 hElseWF.2.2.2.2.2.2.2.2.2.2.1
@@ -1858,7 +1848,7 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact PactType.branch_alphabet_eq_of_mem h.2.2.2 hMem)
-            hElse.2.2 (fun branch hMem => (hBranch branch hMem).2.2)
+            hElse.2 (fun branch hMem => (hBranch branch hMem).2)
     | offer alphabet elseType branches =>
         have hElseFuel : typeCompilationFuel elseType < n := by
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
@@ -1874,15 +1864,11 @@ theorem correspondence_simultaneous :
         have hSelected : ∀ selected ∈ branches,
             CurrentOfferCorrespondence
                 (parallelTypeBranchesSelecting alphabet selected branches) ∧
-              SameCycleCompletionAgrees
-                (parallelTypeBranchesSelecting alphabet selected branches) ∧
               FutureOffersAgree
                 (parallelTypeBranchesSelecting alphabet selected branches) :=
           fun selected hMem =>
             ih _ (hGeneratedFuel selected) bound _ rfl (hSelectedWF selected hMem)
-        refine ⟨?_, sameCycleCompletionAgrees_offer alphabet elseType branches
-            hElse.2.1
-            (fun selected hMem => (hSelected selected hMem).2.1), ?_⟩
+        refine ⟨?_, ?_⟩
         · refine currentOfferCorrespondence_offer alphabet elseType branches
             (offerBranchesDisjoint_of_ownership elseType
               hElseWF.2.2.2.2.2.2.2.2.2.1 hElseWF.2.2.2.2.2.2.2.2.2.2.1
@@ -1921,7 +1907,7 @@ theorem correspondence_simultaneous :
               exact h.2.1)
             (fun selected hMem =>
               parallelTypeBranchesSelecting_alphabet_eq_of_mem hMem)
-            ?_ hElse.2.2 (fun selected hMem => (hSelected selected hMem).2.2)
+            ?_ hElse.2 (fun selected hMem => (hSelected selected hMem).2)
           -- The generated product's menu, from the raw branch bodies.  The gate
           -- is exactly the declaredness the syntax lemma needs.
           intro hGate selected hMem
