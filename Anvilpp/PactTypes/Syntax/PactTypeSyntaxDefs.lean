@@ -93,9 +93,6 @@ namespace PactType
     | .xoffer alphabet _ _ => alphabet
     | .offer alphabet _ _ => alphabet
 
-  def recurSelf (name : String) (body : PactType) : PactType :=
-    .recur body.alphabet name body
-
   /-! Actions a type can perform.  Needed here so a conjunctive-offer branch
   can be given the alphabet its siblings do not own. -/
   mutual

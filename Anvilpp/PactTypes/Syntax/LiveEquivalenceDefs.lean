@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Syntax.PactTypeShapeLemmas
+import Anvilpp.PactTypes.Syntax.TypeTransitionSystemLemmas
 
 /-!
 Live equivalence: two residuals with the same control skeleton whose alphabet
@@ -45,12 +45,6 @@ theorem AgreeOnNeeds.symm {env env' : TypeEnvironment}
     {used : Finset BareMessage} (h : AgreeOnNeeds env env' used) :
     AgreeOnNeeds env' env used :=
   ⟨h.1.symm, fun a ha => (h.2.1 a ha).symm, fun a ha => (h.2.2 a ha).symm⟩
-
-theorem AgreeOnNeeds.hasNeed {env env' : TypeEnvironment}
-    {used : Finset BareMessage} (h : AgreeOnNeeds env env' used)
-    {action : BareMessage} (hAction : action ∈ used) :
-    env.hasNeed action ↔ env'.hasNeed action :=
-  h.2.1 action hAction
 
 end TypeEnvironment
 

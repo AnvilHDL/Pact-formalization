@@ -1,6 +1,6 @@
+import Anvilpp.PactTypes.Syntax.TypeErasure
 import Anvilpp.PactTypes.Syntax.TypeTransitionSystemLemmas
 import Anvilpp.PactTypes.Syntax.PactTypeRegularityLemmas
-import Anvilpp.PactTypes.Syntax.TypeLabelCombine
 
 namespace Pact
 

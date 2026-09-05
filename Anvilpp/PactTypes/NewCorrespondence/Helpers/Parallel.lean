@@ -337,24 +337,6 @@ theorem decoratedTypeTransition_par_cases
 
 
 set_option maxHeartbeats 1000000 in
-private theorem branch_body_alphabetWellFormed_of_mem
-    {alphabet : PactTypeAlphabet}
-    {branches : List (BareMessage × PactType)}
-    {action : BareMessage} {branchType : PactType}
-    (hBranches : PactType.BranchesAlphabetWellFormed alphabet branches)
-    (hMem : (action, branchType) ∈ branches) :
-    branchType.AlphabetWellFormed := by
-  induction branches with
-  | nil => cases hMem
-  | cons head tail ih =>
-      rcases head with ⟨headAction, headType⟩
-      simp only [PactType.BranchesAlphabetWellFormed] at hBranches
-      simp only [List.mem_cons] at hMem
-      rcases hMem with hEq | hMem
-      · cases hEq
-        exact hBranches.2.1
-      · exact ih hBranches.2.2 hMem
-
 /-- The dedicated completed state of a parallel product represents `skip`. -/
 lemma relationMembership_par_final
      (alphabet : PactTypeAlphabet)
@@ -1036,22 +1018,6 @@ theorem survivorLeft_relationMembership
   rw [hAcc]
   exact hNotAcc
 
-
-private theorem union_subset_union_union
-    {alpha : Type} [DecidableEq alpha]
-    {left' right' left right replacement : Finset alpha}
-    (hLeft : left' ⊆ left ∪ replacement)
-    (hRight : right' ⊆ right ∪ replacement) :
-    left' ∪ right' ⊆ (left ∪ right) ∪ replacement := by
-  intro item hItem
-  simp only [Finset.mem_union] at hItem ⊢
-  rcases hItem with hItem | hItem
-  · rcases Finset.mem_union.mp (hLeft hItem) with hItem | hItem
-    · exact Or.inl (Or.inl hItem)
-    · exact Or.inr hItem
-  · rcases Finset.mem_union.mp (hRight hItem) with hItem | hItem
-    · exact Or.inl (Or.inr hItem)
-    · exact Or.inr hItem
 
 set_option maxHeartbeats 4000000 in
 -- /-- Two families of edge leave a product state.

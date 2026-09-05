@@ -52,26 +52,6 @@ namespace PendingAutomaton
         simp only [futureReachableAux, hFixed]
         exact ih
 
-  private theorem futureStep_futureReachableAux
-      (automaton : PendingAutomaton) : ∀ fuel reached,
-      automaton.futureStep (futureReachableAux automaton fuel reached) =
-        futureReachableAux automaton fuel (automaton.futureStep reached) := by
-    intro fuel
-    induction fuel with
-    | zero => intro reached; rfl
-    | succ fuel ih =>
-        intro reached
-        simp only [futureReachableAux]
-        exact ih (automaton.futureStep reached)
-
-  private theorem futureReachableAux_succ
-      (automaton : PendingAutomaton) (fuel : Nat)
-      (reached : Finset TypeAutomatonState) :
-      futureReachableAux automaton (fuel + 1) reached =
-        automaton.futureStep (futureReachableAux automaton fuel reached) := by
-    simp only [futureReachableAux]
-    exact (futureStep_futureReachableAux automaton fuel reached).symm
-
   /-- If `k` is at least the number of states still missing from `reached`,
   `k` saturation rounds reach a fixed point. -/
   private theorem futureReachableAux_fixed_after_missing
@@ -115,118 +95,6 @@ namespace PendingAutomaton
             omega
           simpa only [futureReachableAux, next] using
             ih next hNextSubset hNextCard
-
-  /-- Saturation is stable after `|states|` rounds; running any additional
-  number of rounds does not change the reached set. -/
-  theorem futureReachableAux_add_card_stable
-      (automaton : PendingAutomaton) (hClosed : automaton.ReferencesClosed)
-      (reached : Finset TypeAutomatonState)
-      (hReached : reached ⊆ automaton.states) (extra : Nat) :
-      futureReachableAux automaton (automaton.states.card + extra) reached =
-        futureReachableAux automaton automaton.states.card reached := by
-    have hFixed : automaton.futureStep
-          (futureReachableAux automaton automaton.states.card reached) =
-        futureReachableAux automaton automaton.states.card reached := by
-      apply futureReachableAux_fixed_after_missing automaton hClosed
-      · exact hReached
-      · omega
-    induction extra with
-    | zero => simp
-    | succ extra ih =>
-        rw [Nat.add_succ,
-          futureReachableAux_succ automaton (automaton.states.card + extra),
-          ih, hFixed]
-
-  /-- Pointwise preservation of references lifts to every finite saturation
-  depth.  This is the graph-theoretic core used by constructor state tags. -/
-  theorem futureReachableAux_image_of_embedding
-      (child parent : PendingAutomaton)
-      (embed : TypeAutomatonState → TypeAutomatonState)
-      (hReferences : ∀ state,
-        parent.referencedStates (embed state) =
-          (child.referencedStates state).image embed) :
-      ∀ fuel reached,
-        parent.futureReachableAux fuel (reached.image embed) =
-          (child.futureReachableAux fuel reached).image embed := by
-    intro fuel
-    induction fuel with
-    | zero => intro reached; rfl
-    | succ fuel ih =>
-        intro reached
-        simp only [futureReachableAux]
-        have hStep : parent.futureStep (reached.image embed) =
-            (child.futureStep reached).image embed := by
-          apply Finset.Subset.antisymm
-          · intro target hTarget
-            simp only [futureStep, Finset.mem_union, Finset.mem_biUnion]
-              at hTarget
-            rcases hTarget with hDirect | ⟨source, hSource, hTarget⟩
-            · rcases Finset.mem_image.mp hDirect with ⟨state, hState, rfl⟩
-              apply Finset.mem_image.mpr
-              exact ⟨state, Finset.mem_union_left _ hState, rfl⟩
-            · rcases Finset.mem_image.mp hSource with ⟨state, hState, rfl⟩
-              rw [hReferences] at hTarget
-              rcases Finset.mem_image.mp hTarget with
-                ⟨referenced, hReferenced, rfl⟩
-              apply Finset.mem_image.mpr
-              exact ⟨referenced, Finset.mem_union_right _
-                (Finset.mem_biUnion.mpr ⟨state, hState, hReferenced⟩), rfl⟩
-          · intro target hTarget
-            rcases Finset.mem_image.mp hTarget with ⟨state, hState, rfl⟩
-            simp only [futureStep, Finset.mem_union, Finset.mem_biUnion]
-              at hState ⊢
-            rcases hState with hDirect | ⟨source, hSource, hReferenced⟩
-            · exact Or.inl (Finset.mem_image.mpr ⟨state, hDirect, rfl⟩)
-            · right
-              refine ⟨embed source,
-                Finset.mem_image.mpr ⟨source, hSource, rfl⟩, ?_⟩
-              rw [hReferences]
-              exact Finset.mem_image.mpr ⟨state, hReferenced, rfl⟩
-        rw [hStep]
-        exact ih (child.futureStep reached)
-
-  /-- An exact reference-preserving state embedding preserves the saturated
-  same-cycle reachable set.  A larger parent carrier only adds redundant
-  saturation rounds. -/
-  theorem futureReachable_eq_of_embedding
-      (child parent : PendingAutomaton)
-      (embed : TypeAutomatonState → TypeAutomatonState)
-      (hReferences : ∀ state,
-        parent.referencedStates (embed state) =
-          (child.referencedStates state).image embed)
-      (hClosed : child.ReferencesClosed)
-      (state : TypeAutomatonState) (hState : state ∈ child.states)
-      (hCard : child.states.card ≤ parent.states.card) :
-      parent.futureReachable (embed state) =
-        (child.futureReachable state).image embed := by
-    obtain ⟨extra, hExtra⟩ := Nat.exists_eq_add_of_le hCard
-    unfold futureReachable
-    rw [show ({embed state} : Finset TypeAutomatonState) =
-        ({state} : Finset TypeAutomatonState).image embed by simp]
-    rw [futureReachableAux_image_of_embedding child parent embed hReferences]
-    rw [hExtra,
-      child.futureReachableAux_add_card_stable hClosed {state} (by
-        simpa using hState) extra]
-
-  /-- If a state has no same-cycle future references, saturation cannot leave
-  that state. -/
-  theorem futureReachable_eq_singleton_of_referencedStates_eq_empty
-      (automaton : PendingAutomaton) (state : TypeAutomatonState)
-      (hReferences : automaton.referencedStates state = ∅) :
-      automaton.futureReachable state = {state} := by
-    unfold futureReachable
-    have hAux : ∀ fuel,
-        futureReachableAux automaton fuel {state} = {state} := by
-      intro fuel
-      induction fuel with
-      | zero => rfl
-      | succ fuel ih =>
-          change futureReachableAux automaton fuel
-            (({state} : Finset TypeAutomatonState) ∪
-              ({state} : Finset TypeAutomatonState).biUnion
-                automaton.referencedStates) = {state}
-          simp [hReferences, ih]
-    exact hAux automaton.states.card
 
   private theorem futureStep_mono (automaton : PendingAutomaton)
       {smaller larger : Finset TypeAutomatonState}
@@ -345,66 +213,6 @@ namespace PendingAutomaton
       simpa [closure, futureReachable, hUnfoldedStable] using hMonotone
     · exact hUnfoldedSubset
 
-  /-- If an embedding preserves every child reference as a parent reference,
-  every state reachable in the child maps to a state reachable in the parent.
-  This one-sided form permits the parent to add references, as sequence does
-  when it installs continuation bridges. -/
-  theorem futureReachable_image_subset_of_embedding
-      (child parent : PendingAutomaton)
-      (embed : TypeAutomatonState → TypeAutomatonState)
-      (hReferences : ∀ state,
-        (child.referencedStates state).image embed ⊆
-          parent.referencedStates (embed state))
-      (hParentClosed : parent.ReferencesClosed)
-      (state : TypeAutomatonState) (hParentState : embed state ∈ parent.states) :
-      (child.futureReachable state).image embed ⊆
-        parent.futureReachable (embed state) := by
-    let parentReach := parent.futureReachable (embed state)
-    have hParentFixed : parent.futureStep parentReach = parentReach := by
-      apply futureReachableAux_fixed_after_missing parent hParentClosed
-      · simpa [parentReach, futureReachable] using hParentState
-      · omega
-    have hLiftAux : ∀ fuel reached,
-        reached.image embed ⊆ parentReach →
-          (child.futureReachableAux fuel reached).image embed ⊆
-            parentReach := by
-      intro fuel
-      induction fuel with
-      | zero =>
-          intro reached hReached
-          exact hReached
-      | succ fuel ih =>
-          intro reached hReached
-          apply ih (child.futureStep reached)
-          intro target hTarget
-          rcases Finset.mem_image.mp hTarget with
-            ⟨childTarget, hChildTarget, rfl⟩
-          simp only [futureStep, Finset.mem_union, Finset.mem_biUnion]
-            at hChildTarget
-          rcases hChildTarget with hDirect |
-              ⟨childSource, hSource, hReference⟩
-          · exact hReached (Finset.mem_image.mpr
-              ⟨childTarget, hDirect, rfl⟩)
-          · have hMappedSource : embed childSource ∈ parentReach :=
-              hReached (Finset.mem_image.mpr
-                ⟨childSource, hSource, rfl⟩)
-            have hMappedReference : embed childTarget ∈
-                parent.referencedStates (embed childSource) :=
-              hReferences childSource
-                (Finset.mem_image.mpr ⟨childTarget, hReference, rfl⟩)
-            rw [← hParentFixed]
-            exact Finset.mem_union_right _
-              (Finset.mem_biUnion.mpr
-                ⟨embed childSource, hMappedSource, hMappedReference⟩)
-    unfold futureReachable
-    apply hLiftAux child.states.card {state}
-    intro target hTarget
-    rcases Finset.mem_image.mp hTarget with ⟨source, hSource, rfl⟩
-    simp only [Finset.mem_singleton] at hSource
-    subst source
-    exact subset_futureReachableAux parent parent.states.card {embed state}
-      (by simp)
-
   /-- The starting state is always contained in its finite reference closure. -/
   theorem mem_futureReachable_self (automaton : PendingAutomaton)
       (state : TypeAutomatonState) :
@@ -481,61 +289,6 @@ namespace PendingAutomaton
           · exact hAllowed parent (hReached hParent) hReference
     apply hAux
     simpa using hSource
-
-  /-- A root whose immediate references are exactly a set of child entries,
-  possibly together with a self-reference, reaches precisely itself and the
-  complete closures of those child entries.  This packages the harmless
-  self-loop pattern used by the offer constructors. -/
-  theorem futureReachable_eq_self_union_biUnion
-      (automaton : PendingAutomaton) (source : TypeAutomatonState)
-      (entries : Finset TypeAutomatonState)
-      (hClosed : automaton.ReferencesClosed)
-      (hSource : source ∈ automaton.states)
-      (hReferencesUpper : automaton.referencedStates source ⊆
-        insert source entries)
-      (hEntries : entries ⊆ automaton.referencedStates source) :
-      automaton.futureReachable source =
-        {source} ∪ entries.biUnion automaton.futureReachable := by
-    apply Finset.Subset.antisymm
-    · apply automaton.futureReachable_subset_of_reference_closed source
-        ({source} ∪ entries.biUnion automaton.futureReachable)
-      · simp
-      · intro state hState reference hReference
-        simp only [Finset.mem_union, Finset.mem_singleton,
-          Finset.mem_biUnion] at hState ⊢
-        rcases hState with rfl | ⟨entry, hEntry, hReachable⟩
-        · have hClassified := hReferencesUpper hReference
-          simp only [Finset.mem_insert] at hClassified
-          rcases hClassified with rfl | hEntry
-          · exact Or.inl rfl
-          · exact Or.inr ⟨reference, hEntry,
-              automaton.mem_futureReachable_self reference⟩
-        · have hEntryState : entry ∈ automaton.states :=
-            hClosed source hSource (hEntries hEntry)
-          have hReferenceReachable : reference ∈
-              automaton.futureReachable entry := by
-            have hStateInStates : state ∈ automaton.states :=
-              (automaton.futureReachable_subset_of_reference_closed
-                entry automaton.states hEntryState
-                  (fun current hCurrent => hClosed current hCurrent))
-                hReachable
-            have hReferenceAtState :=
-              automaton.referencedStates_subset_futureReachable state
-                hClosed hStateInStates
-            have hStateClosure := automaton.futureReachable_subset_of_mem
-              hClosed hEntryState hReachable
-            exact hStateClosure (hReferenceAtState hReference)
-          exact Or.inr ⟨entry, hEntry, hReferenceReachable⟩
-    · intro state hState
-      simp only [Finset.mem_union, Finset.mem_singleton,
-        Finset.mem_biUnion] at hState
-      rcases hState with rfl | ⟨entry, hEntry, hReachable⟩
-      · exact automaton.mem_futureReachable_self _
-      · have hEntryReachable :=
-          automaton.referencedStates_subset_futureReachable source hClosed
-            hSource (hEntries hEntry)
-        exact (automaton.futureReachable_subset_of_mem hClosed hSource
-          hEntryReachable) hReachable
 
 end PendingAutomaton
 

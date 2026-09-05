@@ -1,9 +1,8 @@
+import Anvilpp.PactTypes.Syntax.TypeErasure
 import Anvilpp.PactTypes.Automata.SyncEdgesDefs
 import Anvilpp.PactTypes.Syntax.LiveEquivalenceLemmas
 import Anvilpp.PactTypes.Syntax.TypeLabelOwnershipLemmas
-import Anvilpp.PactTypes.Syntax.TypeLabelCombine
 import Anvilpp.PactTypes.Syntax.TypeOffersAlphabet
-import Anvilpp.PactTypes.Syntax.PactTypeShapeLemmas
 import Anvilpp.PactTypes.Syntax.PactTypeRegularityLemmas
 import Anvilpp.PactTypes.Syntax.TypeTransitionSystemLemmas
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.LiveStepLemmas
