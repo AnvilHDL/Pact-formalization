@@ -4,6 +4,19 @@ namespace Pact
 
 noncomputable section
 
+/-- Substitution changes branch bodies, not their head declarations. -/
+theorem replaceBranches_head_gate_iff
+    (branches : List (BareMessage × PactType)) (name : String)
+    (replacement : PactType) (alphabet : PactTypeAlphabet) :
+    (∀ b ∈ PactType.replaceBranches branches name replacement,
+        b.1 ∈ alphabet.actions) ↔
+      ∀ b ∈ branches, b.1 ∈ alphabet.actions := by
+  induction branches with
+  | nil => simp [PactType.replaceBranches]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, branchType⟩
+      simp only [PactType.replaceBranches, List.forall_mem_cons, ih]
+
 /-- Once the fuel covers the finite syntax tree, one more unit cannot change
 same-cycle completion. -/
 theorem typeCanCompleteThisCycleFuel_succ_stable :
@@ -101,6 +114,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 omega
               omega)]
       | xoffer alphabet elseType branches =>
+          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -141,6 +155,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 intro other hOther
                 exact hEvery other (by simp [hOther]))]
       | offer alphabet elseType branches =>
+          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -182,11 +197,11 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 exact hEvery other (by simp [hOther]))]
 
 /-- Once fuel covers the finite syntax tree, the bounded completion analysis
-agrees with the public structural predicate. -/
-theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
+agrees with the alphabet-aware predicate. -/
+theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
     ∀ fuel processType, sizeOf processType < fuel →
       typeCanCompleteThisCycleFuel fuel processType =
-        processType.CanCompleteBeforeTock := by
+        processType.CanCompleteDeclared := by
   intro fuel
   induction fuel with
   | zero =>
@@ -196,18 +211,18 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
       intro processType hSize
       cases processType with
       | message alphabet msg dir =>
-          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+          simp [typeCanCompleteThisCycleFuel, PactType.canCompleteDeclared_eq]
       | progress alphabet pid =>
-          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+          simp [typeCanCompleteThisCycleFuel, PactType.canCompleteDeclared_eq]
       | tock alphabet =>
-          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+          simp [typeCanCompleteThisCycleFuel, PactType.canCompleteDeclared_eq]
       | skip alphabet =>
-          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+          simp [typeCanCompleteThisCycleFuel, PactType.canCompleteDeclared_eq]
       | var alphabet name =>
-          simp [typeCanCompleteThisCycleFuel, PactType.CanCompleteBeforeTock]
+          simp [typeCanCompleteThisCycleFuel, PactType.canCompleteDeclared_eq]
       | recur alphabet name body =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
           apply ih
           have hProper : sizeOf body <
               sizeOf (PactType.recur alphabet name body) := by
@@ -215,8 +230,8 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
             omega
           omega
       | choice alphabet left right =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
           rw [ih left (by
               have : sizeOf left <
                   sizeOf (PactType.choice alphabet left right) := by
@@ -228,8 +243,8 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
                 simp_wf; omega
               omega)]
       | fairChoice alphabet bid left right =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
           rw [ih left (by
               have : sizeOf left <
                   sizeOf (PactType.fairChoice alphabet bid left right) := by
@@ -241,8 +256,8 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
                 simp_wf; omega
               omega)]
       | seq alphabet left right =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
           rw [ih left (by
               have : sizeOf left <
                   sizeOf (PactType.seq alphabet left right) := by
@@ -254,8 +269,8 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
                 simp_wf; omega
               omega)]
       | par alphabet left right interface =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
           rw [ih left (by
               have : sizeOf left <
                   sizeOf (PactType.par alphabet left right interface) := by
@@ -267,8 +282,9 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
                 simp_wf; omega
               omega)]
       | xoffer alphabet elseType branches =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
+          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.xoffer alphabet elseType branches) := by
@@ -276,10 +292,10 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
             omega)]
           congr 1
           induction branches with
-          | nil => simp [PactType.BranchCanCompleteBeforeTock]
+          | nil => simp [PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
           | cons branch rest restIH =>
               rcases branch with ⟨action, branchType⟩
-              simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
+              simp only [List.any_cons, PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
                     (PactType.xoffer alphabet elseType
@@ -293,8 +309,9 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
                   simp_wf; omega
                 omega)]
       | offer alphabet elseType branches =>
-          simp only [typeCanCompleteThisCycleFuel,
-            PactType.CanCompleteBeforeTock]
+          rw [PactType.canCompleteDeclared_eq]
+          simp only [typeCanCompleteThisCycleFuel]
+          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.offer alphabet elseType branches) := by
@@ -302,10 +319,10 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock :
             omega)]
           congr 1
           induction branches with
-          | nil => simp [PactType.BranchCanCompleteBeforeTock]
+          | nil => simp [PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
           | cons branch rest restIH =>
               rcases branch with ⟨action, branchType⟩
-              simp only [List.any_cons, PactType.BranchCanCompleteBeforeTock]
+              simp only [List.any_cons, PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
                     (PactType.offer alphabet elseType
@@ -389,9 +406,10 @@ theorem mustTock_cannotCompleteThisCycleFuel
                   rw [mustTock_cannotCompleteThisCycleFuel branchType
                     hBranch fuel, ih hRest]
                   simp
-            change (typeCanCompleteThisCycleFuel fuel elseType ||
+            suffices h : (typeCanCompleteThisCycleFuel fuel elseType ||
               branches.any (fun branch =>
-                typeCanCompleteThisCycleFuel fuel branch.2)) = false
+                typeCanCompleteThisCycleFuel fuel branch.2)) = false by
+              simp only [typeCanCompleteThisCycleFuel, h, Bool.and_false]
             rw [mustTock_cannotCompleteThisCycleFuel elseType hElse fuel,
               hNoBranches]
             simp
@@ -414,9 +432,10 @@ theorem mustTock_cannotCompleteThisCycleFuel
                   rw [mustTock_cannotCompleteThisCycleFuel branchType
                     hBranch fuel, ih hRest]
                   simp
-            change (typeCanCompleteThisCycleFuel fuel elseType ||
+            suffices h : (typeCanCompleteThisCycleFuel fuel elseType ||
               branches.any (fun branch =>
-                typeCanCompleteThisCycleFuel fuel branch.2)) = false
+                typeCanCompleteThisCycleFuel fuel branch.2)) = false by
+              simp only [typeCanCompleteThisCycleFuel, h, Bool.and_false]
             rw [mustTock_cannotCompleteThisCycleFuel elseType hElse fuel,
               hNoBranches]
             simp
@@ -521,6 +540,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
           rw [guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement elseType hElse fuel,
             hBranchesEq]
+          simp only [replaceBranches_head_gate_iff]
       | offer alphabet elseType branches =>
           simp only [PactType.GuardedOccurrences] at hGuarded
           rcases hGuarded with ⟨hElse, hBranches⟩
@@ -544,6 +564,7 @@ theorem guardedOccurrences_replace_canCompleteThisCycleFuel
           rw [guardedOccurrences_replace_canCompleteThisCycleFuel
               name replacement elseType hElse fuel,
             hBranchesEq]
+          simp only [replaceBranches_head_gate_iff]
 termination_by fuel
 decreasing_by
   all_goals

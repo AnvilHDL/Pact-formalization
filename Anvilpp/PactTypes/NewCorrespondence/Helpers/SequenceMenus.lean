@@ -342,7 +342,7 @@ theorem computeFutureOf_sequence_left
     (hSource : source ∈ (compileTypeFuel (typeCompilationFuel left) left).states)
     (hRetained : source ∉ sequenceDeleted
       (compileTypeFuel (typeCompilationFuel left) left))
-    (hComplete : ∀ q ∈ (compileTypeFuel (typeCompilationFuel left) left).states,
+    (hComplete : ∀ q ∈ (compiledMenuGraphFuel (typeCompilationFuel left) left).futureReachable source,
       ∀ r ∈ (compiledMenuGraphFuel (typeCompilationFuel left) left).referencedStates q,
       (∃ residual, (residual, r) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
         typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) →

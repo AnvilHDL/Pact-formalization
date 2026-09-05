@@ -4,20 +4,6 @@ namespace Pact
 
 noncomputable section
 
-/-- Substitution rewrites branch bodies only, so a branch-head condition is
-unaffected by it. -/
-theorem replaceBranches_head_gate_iff
-    (branches : List (BareMessage × PactType)) (name : String)
-    (replacement : PactType) (alphabet : PactTypeAlphabet) :
-    (∀ b ∈ PactType.replaceBranches branches name replacement,
-        b.1 ∈ alphabet.actions) ↔
-      ∀ b ∈ branches, b.1 ∈ alphabet.actions := by
-  induction branches with
-  | nil => simp [PactType.replaceBranches]
-  | cons branch rest ih =>
-      rcases branch with ⟨action, branchType⟩
-      simp only [PactType.replaceBranches, List.forall_mem_cons, ih]
-
 /-- Once fuel covers the finite syntax tree, one more unit cannot expose a new
 same-cycle future offer. -/
 private theorem typeFutureOffersFuel_succ_stable :
@@ -375,6 +361,7 @@ theorem typeFutureOffersFuel_eq_typeFutureOffers
   exact typeFutureOffersFuel_add_stable processType
     (sizeOf processType + 1) extra (by omega)
 
+/- Obsolete: the alphabet-aware completion test is not invariant under arbitrary re-signing.
 /-- Same-cycle completion ignores alphabet annotations. -/
 theorem typeCanCompleteThisCycleFuel_reannotate :
     ∀ (fuel : Nat) (processType : PactType) (alphabet : PactTypeAlphabet),
@@ -438,6 +425,7 @@ theorem typeCanCompleteThisCycleFuel_reannotate :
       | offer a e bs =>
           simpa [PactType.reannotate, typeCanCompleteThisCycleFuel] using
             congrArg₂ (· || ·) (ih e alphabet) (hOfferBranches bs alphabet ∅)
+-/
 
 end
 

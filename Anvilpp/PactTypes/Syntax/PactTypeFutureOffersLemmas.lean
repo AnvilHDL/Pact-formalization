@@ -9,7 +9,7 @@ the left syntax may optimistically complete before the next clock. -/
 theorem typeFutureOffers_sequence
     (alphabet : PactTypeAlphabet) (left right : PactType) :
     typeFutureOffers (.seq alphabet left right) =
-      if left.CanCompleteBeforeTock then
+      if left.CanCompleteDeclared then
         typeFutureOffers left ∪ typeFutureOffers right
       else typeFutureOffers left := by
   have hLeftFuel : sizeOf left + 1 ≤
@@ -28,7 +28,7 @@ theorem typeFutureOffers_sequence
       (sizeOf (PactType.seq alphabet left right) + 1)
       (PactType.seq alphabet left right) = _
   simp only [typeFutureOffersFuel]
-  rw [typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
+  rw [typeCanCompleteThisCycleFuel_eq_canCompleteDeclared
       _ left hCompleteFuel,
     typeFutureOffersFuel_eq_typeFutureOffers left _ hLeftFuel,
     typeFutureOffersFuel_eq_typeFutureOffers right _ hRightFuel]
@@ -508,9 +508,10 @@ theorem typeFutureOffers_parallelTypeBranchesSelecting
         (PactType.message alphabet b.1.1 b.1.2) = {b.1} := by
       simp only [typeFutureOffers, typeFutureOffersFuel, hEta]
       rw [if_pos hDecl]
-    have hCan : (PactType.message alphabet b.1.1 b.1.2).CanCompleteBeforeTock =
+    have hCan : (PactType.message alphabet b.1.1 b.1.2).CanCompleteDeclared =
         true := by
-      simp [PactType.CanCompleteBeforeTock]
+      rw [PactType.canCompleteDeclared_eq]
+      exact decide_eq_true hDecl
     have hUnfold : selectedTypeBranchAt alphabet b =
         PactType.seq alphabet (PactType.message alphabet b.1.1 b.1.2)
           (b.2.reannotate alphabet) := rfl

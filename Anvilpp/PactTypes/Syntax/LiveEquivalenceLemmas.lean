@@ -335,7 +335,45 @@ theorem mem_branchMessageActions_of_mem :
           (mem_branchMessageActions_of_mem hRest)
   termination_by bs => sizeOf bs
 
-/-- Same-cycle completion reads no alphabet, so live equivalence preserves it. -/
+/-- Live equivalence preserves the declarations read by offer-head gates. -/
+private theorem liveEqBranches_head_gate : ∀ (bs bs' : List (BareMessage × PactType))
+    (a b : PactTypeAlphabet), LiveEqBranches bs bs' →
+    PactTypeAlphabet.AgreeOn a b (BranchMessageActions bs) →
+    ((∀ x ∈ bs, x.1 ∈ a.actions) ↔ (∀ x ∈ bs', x.1 ∈ b.actions)) := by
+  intro bs
+  induction bs with
+  | nil =>
+      intro bs' a b h _
+      cases bs' with
+      | nil => simp
+      | cons _ _ => simp only [LiveEqBranches] at h
+  | cons head rest ihRest =>
+      intro bs' a b h hAgree
+      cases bs' with
+      | nil => simp only [LiveEqBranches] at h
+      | cons head' rest' =>
+          obtain ⟨action, body⟩ := head
+          obtain ⟨action', body'⟩ := head'
+          simp only [LiveEqBranches] at h
+          obtain ⟨rfl, -, hRest⟩ := h
+          rw [BranchMessageActions] at hAgree
+          have hHead : action ∈ a.actions ↔ action ∈ b.actions :=
+            hAgree action (by simp)
+          have hTail : PactTypeAlphabet.AgreeOn a b
+              (BranchMessageActions rest) := fun act hact =>
+            hAgree act (Finset.mem_union_right _ hact)
+          have hRestIff := ihRest rest' a b hRest hTail
+          constructor
+          · intro hAll x hx
+            rcases List.mem_cons.mp hx with rfl | hx'
+            · exact hHead.mp (hAll (action, body) (by simp))
+            · exact hRestIff.mp (fun y hy => hAll y (by simp [hy])) x hx'
+          · intro hAll x hx
+            rcases List.mem_cons.mp hx with rfl | hx'
+            · exact hHead.mpr (hAll (action, body') (by simp))
+            · exact hRestIff.mpr (fun y hy => hAll y (by simp [hy])) x hx'
+
+/-- Completion reads only declarations of live actions. -/
 theorem liveEqBody_canComplete : ∀ (fuel : Nat) (rho theta : PactType),
     LiveEqBody rho theta →
     typeCanCompleteThisCycleFuel fuel rho =
@@ -371,22 +409,33 @@ theorem liveEqBody_canComplete : ∀ (fuel : Nat) (rho theta : PactType),
       cases rho <;> cases theta <;>
         first
           | (simp only [LiveEqBody] at hLive; done)
-          | (simp only [typeCanCompleteThisCycleFuel]; done)
-          | (simp only [LiveEqBody] at hLive
-             simp only [typeCanCompleteThisCycleFuel,
-               ih _ _ hLive.2.1, ih _ _ hLive.2.2]
-             done)
-          | (simp only [LiveEqBody] at hLive
-             simp only [typeCanCompleteThisCycleFuel,
-               ih _ _ hLive.2.2.1, ih _ _ hLive.2.2.2]
-             done)
-          | (simp only [LiveEqBody] at hLive
-             simp only [typeCanCompleteThisCycleFuel, ih _ _ hLive.2.2]
-             done)
-          | (simp only [LiveEqBody] at hLive
-             simp only [typeCanCompleteThisCycleFuel, ih _ _ hLive.2.1,
-               branches _ _ hLive.2.2]
-             done)
+          | skip
+      case message.message =>
+        simp only [LiveEqBody] at hLive
+        obtain ⟨rfl, rfl, hA⟩ := hLive
+        simp only [typeCanCompleteThisCycleFuel,
+          hA _ (Finset.mem_singleton_self _)]
+      case progress.progress => rfl
+      case tock.tock => rfl
+      case skip.skip => rfl
+      case var.var => rfl
+      case choice.choice | seq.seq =>
+        simp only [LiveEqBody] at hLive
+        simp only [typeCanCompleteThisCycleFuel, ih _ _ hLive.2.1, ih _ _ hLive.2.2]
+      case fairChoice.fairChoice | par.par =>
+        simp only [LiveEqBody] at hLive
+        simp only [typeCanCompleteThisCycleFuel, ih _ _ hLive.2.2.1, ih _ _ hLive.2.2.2]
+      case recur.recur =>
+        simp only [LiveEqBody] at hLive
+        simp only [typeCanCompleteThisCycleFuel, ih _ _ hLive.2.2]
+      case xoffer.xoffer | offer.offer =>
+        simp only [LiveEqBody] at hLive
+        obtain ⟨hA, hElse, hBranches⟩ := hLive
+        rw [MessageActions] at hA
+        have hGate := liveEqBranches_head_gate _ _ _ _ hBranches
+          (fun act hact => hA act (Finset.mem_union_right _ hact))
+        simp only [typeCanCompleteThisCycleFuel, ih _ _ hElse,
+          branches _ _ hBranches, hGate]
 
 /-- The same-cycle menu reads an alphabet only at actions the subterm still
 uses, so live equivalence preserves it at every fuel. -/
@@ -422,42 +471,6 @@ theorem liveEqBody_futureOffersFuel : ∀ (fuel : Nat) (rho theta : PactType),
                 simp only [List.foldl_cons]
                 exact ihRest rest' _ _ hRest
                   (by rw [hAcc, ih body body' hBody])
-      have guard : ∀ (bs bs' : List (BareMessage × PactType))
-          (a b : PactTypeAlphabet), LiveEqBranches bs bs' →
-          PactTypeAlphabet.AgreeOn a b (BranchMessageActions bs) →
-          ((∀ x ∈ bs, x.1 ∈ a.actions) ↔ (∀ x ∈ bs', x.1 ∈ b.actions)) := by
-        intro bs
-        induction bs with
-        | nil =>
-            intro bs' a b h _
-            cases bs' with
-            | nil => simp
-            | cons _ _ => simp only [LiveEqBranches] at h
-        | cons head rest ihRest =>
-            intro bs' a b h hAgree
-            cases bs' with
-            | nil => simp only [LiveEqBranches] at h
-            | cons head' rest' =>
-                obtain ⟨action, body⟩ := head
-                obtain ⟨action', body'⟩ := head'
-                simp only [LiveEqBranches] at h
-                obtain ⟨rfl, -, hRest⟩ := h
-                rw [BranchMessageActions] at hAgree
-                have hHead : action ∈ a.actions ↔ action ∈ b.actions :=
-                  hAgree action (by simp)
-                have hTail : PactTypeAlphabet.AgreeOn a b
-                    (BranchMessageActions rest) := fun act hact =>
-                  hAgree act (Finset.mem_union_right _ hact)
-                have hRestIff := ihRest rest' a b hRest hTail
-                constructor
-                · intro hAll x hx
-                  rcases List.mem_cons.mp hx with rfl | hx'
-                  · exact hHead.mp (hAll (action, body) (by simp))
-                  · exact hRestIff.mp (fun y hy => hAll y (by simp [hy])) x hx'
-                · intro hAll x hx
-                  rcases List.mem_cons.mp hx with rfl | hx'
-                  · exact hHead.mpr (hAll (action, body') (by simp))
-                  · exact hRestIff.mpr (fun y hy => hAll y (by simp [hy])) x hx'
       intro rho theta hLive
       cases rho <;> cases theta <;>
         first
@@ -499,7 +512,7 @@ theorem liveEqBody_futureOffersFuel : ∀ (fuel : Nat) (rho theta : PactType),
           rw [MessageActions] at hA
           simp only [typeFutureOffersFuel]
           exact if_congr
-            (guard _ _ _ _ hbs
+            (liveEqBranches_head_gate _ _ _ _ hbs
               (fun act hact => hA act (Finset.mem_union_right _ hact)))
             (branches _ _ _ _ hbs (ih _ _ he)) rfl
       case offer.offer =>
@@ -508,7 +521,7 @@ theorem liveEqBody_futureOffersFuel : ∀ (fuel : Nat) (rho theta : PactType),
           rw [MessageActions] at hA
           simp only [typeFutureOffersFuel]
           exact if_congr
-            (guard _ _ _ _ hbs
+            (liveEqBranches_head_gate _ _ _ _ hbs
               (fun act hact => hA act (Finset.mem_union_right _ hact)))
             (branches _ _ _ _ hbs (ih _ _ he)) rfl
 

@@ -224,7 +224,7 @@ theorem typeFutureOffers_subset_sequence_left
     typeFutureOffers left ⊆ typeFutureOffers (.seq alphabet left right) := by
   intro action hAction
   rw [typeFutureOffers_sequence]
-  by_cases hComplete : left.CanCompleteBeforeTock
+  by_cases hComplete : left.CanCompleteDeclared
   · simp [hComplete, hAction]
   · simp [hComplete, hAction]
 

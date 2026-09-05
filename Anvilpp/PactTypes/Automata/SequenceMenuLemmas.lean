@@ -36,7 +36,7 @@ theorem menuFrom_sequence_left
     (hFinalClosed : ∀ q ∈ final, left.referencedStates q ⊆ final)
     (hFinalEmpty : ∀ q ∈ final, leftOffer q = ∅)
     (hFinalComplete : ∀ q ∈ final, complete q = true)
-    (hComplete : ∀ q ∈ left.states, ∀ r ∈ left.referencedStates q,
+    (hComplete : ∀ q ∈ left.futureReachable source, ∀ r ∈ left.referencedStates q,
       complete r = true → complete q = true)
     (hLeftReferences : ∀ q ∈ left.states, q ∉ deleted →
       parent.referencedStates (.child 0 q) =
@@ -78,12 +78,12 @@ theorem menuFrom_sequence_left
   -- A crossing flag propagates backwards along a finite left derivation.
   have hFlag : ∀ q ∈ leftReach, complete q = true → complete source = true := by
     have hBound := left.futureReachable_subset_of_reference_closed source
-      (left.states.filter fun q => complete q = true → complete source = true)
-      (by simp [hSource]) (by
+      (leftReach.filter fun q => complete q = true → complete source = true)
+      (by simp [leftReach, left.mem_futureReachable_self]) (by
         intro q hq r hr
-        obtain ⟨hqState, hqFlag⟩ := Finset.mem_filter.mp hq
+        obtain ⟨hqReach, hqFlag⟩ := Finset.mem_filter.mp hq
         exact Finset.mem_filter.mpr
-          ⟨hLeftClosed q hqState hr, fun hc => hqFlag (hComplete q hqState r hr hc)⟩)
+          ⟨hLeftStep q hqReach hr, fun hc => hqFlag (hComplete q hqReach r hr hc)⟩)
     intro q hq
     exact (Finset.mem_filter.mp (hBound hq)).2
   apply Finset.Subset.antisymm

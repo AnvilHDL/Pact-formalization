@@ -1,5 +1,5 @@
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.ExclusiveOffer
-import Anvilpp.PactTypes.Syntax.PactTypeSubstitutionLemmas
+import Anvilpp.PactTypes.Syntax.DeclaredCompletionLemmas
 
 namespace Pact
 
@@ -247,7 +247,7 @@ def typeFutureOffersFuelSubst (name : String) (menuValue : Finset BareMessage)
       | .seq _ left right =>
           let leftOffers :=
             typeFutureOffersFuelSubst name menuValue completeValue fuel left
-          if PactType.canCompleteBeforeTockSubst name completeValue left then
+          if PactType.canCompleteBeforeTockSubst name completeValue left.completionView then
             leftOffers ∪
               typeFutureOffersFuelSubst name menuValue completeValue fuel right
           else leftOffers
@@ -284,13 +284,13 @@ theorem replaceBranches_gate (name : String) (replacement : PactType)
       · rintro ⟨hHead, hRest⟩; exact ⟨hHead, ih.mpr hRest⟩
 
 /-- The menu of a substituted type is the substituted menu.  This is the menu
-counterpart of `replaceVar_canCompleteBeforeTock`. -/
+counterpart of `replaceVar_canCompleteDeclared`. -/
 theorem typeFutureOffersFuel_replaceVar (name : String) (replacement : PactType) :
     ∀ (fuel : Nat) (processType : PactType),
       sizeOf (processType.replaceVar name replacement) + 1 ≤ fuel →
       typeFutureOffersFuel fuel (processType.replaceVar name replacement) =
         typeFutureOffersFuelSubst name (typeFutureOffers replacement)
-          replacement.CanCompleteBeforeTock fuel processType := by
+          replacement.CanCompleteDeclared fuel processType := by
   intro fuel
   induction fuel with
   | zero => intro processType hSize; exfalso; omega
@@ -305,7 +305,7 @@ theorem typeFutureOffersFuel_replaceVar (name : String) (replacement : PactType)
             branches.foldl (fun offers branch =>
               offers ∪ {branch.1} ∪
                 typeFutureOffersFuelSubst name (typeFutureOffers replacement)
-                  replacement.CanCompleteBeforeTock fuel branch.2) init := by
+                  replacement.CanCompleteDeclared fuel branch.2) init := by
         intro branches
         induction branches with
         | nil => intro _ init; simp [PactType.replaceBranches]
@@ -374,10 +374,10 @@ theorem typeFutureOffersFuel_replaceVar (name : String) (replacement : PactType)
           have hGate : typeCanCompleteThisCycleFuel fuel
               (left.replaceVar name replacement) =
             PactType.canCompleteBeforeTockSubst name
-              replacement.CanCompleteBeforeTock left := by
-            rw [typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock fuel
+              replacement.CanCompleteDeclared left.completionView := by
+            rw [typeCanCompleteThisCycleFuel_eq_canCompleteDeclared fuel
               (left.replaceVar name replacement) (by omega)]
-            exact PactType.replaceVar_canCompleteBeforeTock name replacement left
+            exact PactType.replaceVar_canCompleteDeclared name replacement left
           rw [ih left (by omega), ih right (by omega), hGate]
       | xoffer alphabet elseType branches =>
           simp only [PactType.replaceVar] at hSize
@@ -422,7 +422,7 @@ def menuReachesVarFuel (name : String) (completeValue : Bool) :
             menuReachesVarFuel name completeValue fuel right
       | .seq _ left right =>
           menuReachesVarFuel name completeValue fuel left ||
-            (PactType.canCompleteBeforeTockSubst name completeValue left &&
+            (PactType.canCompleteBeforeTockSubst name completeValue left.completionView &&
               menuReachesVarFuel name completeValue fuel right)
       | .par _ left right _ =>
           menuReachesVarFuel name completeValue fuel left ||
@@ -521,12 +521,12 @@ theorem typeFutureOffersFuelSubst_of_absent (name : String)
           obtain ⟨hL, hRL⟩ := ih left (by simp at hFuel; omega) hTail.1
           obtain ⟨hR, hRR⟩ := ih right (by simp at hFuel; omega) hTail.2
           have hGate : PactType.canCompleteBeforeTockSubst name completeValue
-              left = left.CanCompleteBeforeTock :=
-            PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false name
+              left.completionView = left.CanCompleteDeclared :=
+            PactType.canCompleteDeclaredSubst_eq_of_tailOccurrences_false name
               completeValue left hTail.1
           have hFuelGate : typeCanCompleteThisCycleFuel fuel left =
-              left.CanCompleteBeforeTock :=
-            typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock fuel left
+              left.CanCompleteDeclared :=
+            typeCanCompleteThisCycleFuel_eq_canCompleteDeclared fuel left
               (by simp at hFuel; omega)
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel,
             menuReachesVarFuel, hL, hR, hRL, hRR, hGate, hFuelGate]
@@ -653,7 +653,7 @@ theorem typeFutureOffersFuelSubst_split (name : String)
             hLEq0, hLReach, Bool.false_or,
             ih right (by simp at hFuel; omega) hTail.2]
           by_cases hGate : PactType.canCompleteBeforeTockSubst name
-              completeValue left <;>
+              completeValue left.completionView <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
             simp [hGate, hR, Finset.union_assoc]
       | xoffer alphabet elseType branches =>
@@ -814,12 +814,12 @@ theorem typeFutureOffersFuelSubst_empty (name : String) (completeValue : Bool) :
           simp only [PactType.TailOccurrences] at hTail
           obtain ⟨hLEq, -⟩ := hAbsent left (by simp at hFuel ⊢; omega) hTail.1
           have hGate : PactType.canCompleteBeforeTockSubst name completeValue
-              left = left.CanCompleteBeforeTock :=
-            PactType.canCompleteBeforeTockSubst_eq_of_tailOccurrences_false name
+              left.completionView = left.CanCompleteDeclared :=
+            PactType.canCompleteDeclaredSubst_eq_of_tailOccurrences_false name
               completeValue left hTail.1
           have hFuelGate : typeCanCompleteThisCycleFuel fuel left =
-              left.CanCompleteBeforeTock :=
-            typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock fuel left
+              left.CanCompleteDeclared :=
+            typeCanCompleteThisCycleFuel_eq_canCompleteDeclared fuel left
               (by simp at hFuel; omega)
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel, hLEq,
             hGate, hFuelGate,

@@ -4239,18 +4239,6 @@ re-signed component's.  Re-signing a child by the parent alphabet only narrows
 the `.message` gate, because `ParallelCompatible` puts the parent's actions
 inside the child's. -/
 
-/-- Completing before the next clock only gets harder when the alphabet
-narrows: every firing step needs its action declared. -/
-theorem typeCanCompleteThisCycle_reannotate_subset
-    (processType : PactType) (target : PactTypeAlphabet)
-    (hWF : processType.AlphabetWellFormed)
-    (hActions : target.actions ⊆ processType.alphabet.actions) :
-    ∀ fuel : Nat,
-      typeCanCompleteThisCycleFuel fuel (processType.reannotate target) = true →
-        typeCanCompleteThisCycleFuel fuel processType = true := by
-  intro fuel h
-  rwa [typeCanCompleteThisCycleFuel_reannotate] at h
-
 /-- Re-signing branches rewrites each branch type and keeps the action. -/
 private theorem reannotateBranches_eq_map (target : PactTypeAlphabet) :
     ∀ branches : List (BareMessage × PactType),
@@ -4328,6 +4316,72 @@ private theorem offerBranchesWF_mem {alphabet : PactTypeAlphabet}
       · exact ⟨hWF.1, hWF.2.1⟩
       · exact ih hWF.2.2 b hb
 
+/-- Narrowing declarations cannot enable optimistic completion. -/
+theorem typeCanCompleteThisCycle_reannotate_subset
+    (processType : PactType) (target : PactTypeAlphabet)
+    (hWF : processType.AlphabetWellFormed)
+    (hActions : target.actions ⊆ processType.alphabet.actions) :
+    ∀ fuel : Nat,
+      typeCanCompleteThisCycleFuel fuel (processType.reannotate target) = true →
+        typeCanCompleteThisCycleFuel fuel processType = true := by
+  intro fuel
+  induction fuel generalizing processType target with
+  | zero => simp [typeCanCompleteThisCycleFuel]
+  | succ fuel ih =>
+      cases processType with
+      | message alphabet msg dir =>
+          simpa only [PactType.reannotate, typeCanCompleteThisCycleFuel, decide_eq_true_eq]
+            using (fun h => hActions h : (msg, dir) ∈ target.actions → (msg, dir) ∈ alphabet.actions)
+      | progress _ _ | skip _ | tock _ | var _ _ =>
+          simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.reannotate, typeCanCompleteThisCycleFuel]
+          exact ih body target hWF.2.2 (by rw [hWF.2.1]; exact hActions)
+      | choice alphabet left right | fairChoice alphabet bid left right
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          have hL := ih left target hWF.2.2.2.1 (by rw [hWF.2.1]; exact hActions)
+          have hR := ih right target hWF.2.2.2.2 (by rw [hWF.2.2.1]; exact hActions)
+          simp only [PactType.reannotate, typeCanCompleteThisCycleFuel,
+            Bool.or_eq_true, Bool.and_eq_true]
+          first | exact Or.imp hL hR | exact fun h => ⟨hL h.1, hR h.2⟩
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          obtain ⟨_, hCompat, hL, hR⟩ := hWF
+          have hSubL : (PactTypeAlphabet.projectParallel target left.alphabet interface).actions ⊆
+              left.alphabet.actions := by
+            intro a ha
+            rcases Finset.mem_union.mp ha with ha | ha
+            · exact (Finset.mem_filter.mp ha).1
+            · exact PactTypeAlphabet.parent_actions_subset_left hCompat (hActions ha)
+          have hSubR : (PactTypeAlphabet.projectParallel target right.alphabet interface).actions ⊆
+              right.alphabet.actions := by
+            intro a ha
+            rcases Finset.mem_union.mp ha with ha | ha
+            · exact (Finset.mem_filter.mp ha).1
+            · exact PactTypeAlphabet.parent_actions_subset_right hCompat (hActions ha)
+          simp only [PactType.reannotate, typeCanCompleteThisCycleFuel, Bool.and_eq_true]
+          exact fun h => ⟨ih left _ hL hSubL h.1, ih right _ hR hSubR h.2⟩
+      | xoffer alphabet other branches | offer alphabet other branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          obtain ⟨_, hOtherA, hOther, hBranches⟩ := hWF
+          have hEvery : ∀ b ∈ branches, b.2.alphabet = alphabet ∧ b.2.AlphabetWellFormed := by
+            first | exact branchesWF_mem branches hBranches | exact offerBranchesWF_mem branches hBranches
+          simp only [PactType.reannotate, typeCanCompleteThisCycleFuel,
+            reannotateBranches_eq_map, reannotateOfferBranches_eq_map,
+            Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, List.any_eq_true]
+          rintro ⟨hGate, hElse | ⟨b, hMem, hComplete⟩⟩
+          · refine ⟨?_, Or.inl (ih other target hOther (by rw [hOtherA]; exact hActions) hElse)⟩
+            intro b hb
+            exact hActions (hGate (b.1, b.2.reannotate target) (List.mem_map_of_mem hb))
+          · obtain ⟨original, hOriginal, rfl⟩ := List.mem_map.mp hMem
+            refine ⟨?_, Or.inr ⟨original, hOriginal, ?_⟩⟩
+            · intro b hb
+              exact hActions (hGate (b.1, b.2.reannotate target) (List.mem_map_of_mem hb))
+            · obtain ⟨hA, hW⟩ := hEvery original hOriginal
+              exact ih original.2 target hW (by rw [hA]; exact hActions) hComplete
+
 /-- Fuel-indexed form of the menu bound. -/
 private theorem typeFutureOffersFuel_reannotate_subset :
     ∀ (fuel : Nat) (processType : PactType) (target : PactTypeAlphabet),
@@ -4377,12 +4431,15 @@ private theorem typeFutureOffersFuel_reannotate_subset :
           simp only [PactType.alphabet] at hActions
           have hL := ih left target hWF.2.2.2.1 (by rw [hWF.2.1]; exact hActions)
           have hR := ih right target hWF.2.2.2.2 (by rw [hWF.2.2.1]; exact hActions)
-          rw [typeCanCompleteThisCycleFuel_reannotate]
-          by_cases hc : typeCanCompleteThisCycleFuel fuel left = true
-          · simp only [hc, if_true]
+          by_cases hc : typeCanCompleteThisCycleFuel fuel (left.reannotate target) = true
+          · have hc' := typeCanCompleteThisCycle_reannotate_subset left target hWF.2.2.2.1
+              (by rw [hWF.2.1]; exact hActions) fuel hc
+            simp only [hc, hc', if_true]
             exact Finset.union_subset_union hL hR
-          · simp only [hc, if_false, Bool.false_eq_true]
-            exact hL
+          · simp only [hc, Bool.false_eq_true, if_false]
+            split_ifs
+            · exact Finset.Subset.trans hL (Finset.subset_union_left)
+            · exact hL
       | par alphabet left right interface =>
           simp only [PactType.reannotate, typeFutureOffersFuel]
           simp only [PactType.AlphabetWellFormed] at hWF

@@ -1733,9 +1733,11 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact h.2.2.1)
-            hLeft.2.2 hRight.2.2
-          -- Paper: propagate the optimistic flag backwards through execution references and L.
-          sorry -- remaining part of the original `.seq` menu obligation
+            hLeft.2.2 hRight.2.2 hLeft.1 hLeftWF
+          intro name
+          have hTail := hWF.2.2.2.1 name
+          simp only [PactType.TailOccurrences] at hTail
+          exact hTail.1
     | par alphabet left right interface =>
         obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_par hWF
         have hLeftFuel : typeCompilationFuel left < n := by

@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.Base
+import Anvilpp.PactTypes.NewCorrespondence.Simultaneous.CompletionFlag
 import Anvilpp.PactTypes.NewCorrespondence.Helpers.SequenceMenus
 
 namespace Pact
@@ -7,8 +7,8 @@ noncomputable section
 
 open Classical
 
-/-- Sequence menus follow from the child menus and backward propagation of the
-left completion flag along execution references and optimistic dependencies. -/
+/-- Sequence menus follow from the child hypotheses. Tail closure excludes
+unbound markers in the left component. -/
 theorem futureOffersAgree_seq
     (alphabet : PactTypeAlphabet) (left right : PactType)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
@@ -17,12 +17,9 @@ theorem futureOffersAgree_seq
     (hRightAlphabet : right.alphabet = alphabet)
     (hLeftMenus : FutureOffersAgree left)
     (hRightMenus : FutureOffersAgree right)
-    (hComplete : ∀ q ∈ (compileTypeFuel (typeCompilationFuel left) left).states,
-      ∀ r ∈ (compiledMenuGraphFuel (typeCompilationFuel left) left).referencedStates q,
-      (∃ residual, (residual, r) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
-        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) →
-      ∃ residual, (residual, q) ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left ∧
-        typeCanCompleteThisCycleFuel (sizeOf residual + 1) residual = true) :
+    (hLeftCurrent : CurrentOfferCorrespondence left)
+    {bound : List String} (hLeftWF : TypeWellFormedIn bound left)
+    (hLeftTail : ∀ name, left.TailOccurrences name False) :
     FutureOffersAgree (.seq alphabet left right) := by
   intro residual state hRelated
   rcases relationMembership_seq_cases alphabet left right hRelated with hLeft | hRight
@@ -34,6 +31,9 @@ theorem futureOffersAgree_seq
       · exact not_mem_sequenceDeleted_of_not_accepting hNotFinal
       · exact hInitial ▸ initial_not_mem_sequenceDeleted _
     -- The left equation has exactly the completion flag of its related residual.
+    have hComplete := completionFlag_backward_of_menuReachable left hLeftWF hLeftDisjoint
+      (fun name => compileTypeFuel_noMarkerFor name _ left (hLeftTail name))
+      hLeftCurrent hRelatedLeft
     rw [computeFutureOf_sequence_left alphabet left right hLeftDisjoint hRightDisjoint
       hLeftAlphabet hRightAlphabet q
       (relationMembership_state_mem left residualLeft q hLeftDisjoint hRelatedLeft)
@@ -54,7 +54,7 @@ theorem futureOffersAgree_seq
         (typeCompilationFuel_sufficient right))]
     -- Apply the two child hypotheses to obtain the syntax's sequence clause.
     rw [typeFutureOffers_sequence,
-      ← typeCanCompleteThisCycleFuel_eq_canCompleteBeforeTock
+      ← typeCanCompleteThisCycleFuel_eq_canCompleteDeclared
         (sizeOf residualLeft + 1) residualLeft (by omega)]
     split_ifs <;> simp
   · obtain ⟨q, hState, hRelatedRight⟩ := hRight
