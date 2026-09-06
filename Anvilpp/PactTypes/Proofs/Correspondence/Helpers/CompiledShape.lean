@@ -390,10 +390,12 @@ theorem buildRecursionAutomaton_shapeEq
 
 theorem buildSequenceAutomaton_shapeEq
     (firstLeft firstRight secondLeft secondRight : AutomatonFragment)
+    {firstFuture secondFuture : TypeAutomatonState → Finset BareMessage}
+    {firstCompletes secondCompletes : TypeAutomatonState → Bool}
     (hLeft : ShapeEq firstLeft secondLeft)
     (hRight : ShapeEq firstRight secondRight) :
-    ShapeEq (buildSequenceAutomaton firstLeft firstRight)
-      (buildSequenceAutomaton secondLeft secondRight) :=
+    ShapeEq (buildSequenceAutomaton firstLeft firstRight firstFuture firstCompletes)
+      (buildSequenceAutomaton secondLeft secondRight secondFuture secondCompletes) :=
   ⟨by simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
       sequenceDeleted, hLeft.1, hLeft.2.1, hLeft.2.2, hRight.1],
    by simp [buildSequenceAutomaton, finishAutomatonFragment, childState,

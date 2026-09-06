@@ -23,7 +23,24 @@ namespace PendingAutomaton
       | «at» referenced removed =>
           simp only [hSpec, Finset.mem_singleton] at hFuture
           subst target
-          exact hTargets edge hEdge referenced removed hSpec
+          exact hTargets edge hEdge referenced (by simp [hSpec, FutureSpec.referenced])
+      | atUnion offers referenced removed =>
+          simp only [hSpec, Finset.mem_singleton] at hFuture
+          subst target
+          exact hTargets edge hEdge referenced (by simp [hSpec, FutureSpec.referenced])
+
+  theorem menuClosed_of_edgeTargetsInStates
+      (fragment : AutomatonFragment)
+      (hTargets : fragment.EdgeTargetsInStates) :
+      ({ states := fragment.states, edges := fragment.edges } :
+        PendingAutomaton).MenuClosed := by
+    intro state _ target hTarget
+    simp only [menuStep, Finset.mem_biUnion, Finset.mem_filter] at hTarget
+    obtain ⟨edge, ⟨hEdge, _⟩, hTarget⟩ := hTarget
+    split at hTarget
+    · exact False.elim (Finset.notMem_empty _ hTarget)
+    · have hEq := Finset.mem_singleton.mp hTarget
+      exact hEq ▸ hTargets edge hEdge
 
   private theorem subset_futureStep (automaton : PendingAutomaton)
       (reached : Finset TypeAutomatonState) :
@@ -32,7 +49,7 @@ namespace PendingAutomaton
 
   private theorem futureStep_subset_states
       (automaton : PendingAutomaton) (reached : Finset TypeAutomatonState)
-      (hClosed : automaton.ReferencesClosed)
+      (hClosed : automaton.MenuClosed)
       (hReached : reached ⊆ automaton.states) :
       automaton.futureStep reached ⊆ automaton.states := by
     intro state hState
@@ -55,7 +72,7 @@ namespace PendingAutomaton
   /-- If `k` is at least the number of states still missing from `reached`,
   `k` saturation rounds reach a fixed point. -/
   private theorem futureReachableAux_fixed_after_missing
-      (automaton : PendingAutomaton) (hClosed : automaton.ReferencesClosed) :
+      (automaton : PendingAutomaton) (hClosed : automaton.MenuClosed) :
       ∀ k reached,
         reached ⊆ automaton.states →
         automaton.states.card ≤ reached.card + k →
@@ -125,19 +142,16 @@ namespace PendingAutomaton
         exact (subset_futureStep automaton reached).trans
           (ih (automaton.futureStep reached))
 
-  /-- Saturated same-cycle reachability unfolds by one symbolic-reference
-  step.  This is the finite-graph fixed-point equation behind constructor
-  roots: a state reaches itself and everything reachable from each of its
-  immediate same-cycle references. -/
+  /-- Saturation unfolds along the non-clock execution edges. -/
   theorem futureReachable_unfold (automaton : PendingAutomaton)
-      (state : TypeAutomatonState) (hClosed : automaton.ReferencesClosed)
+      (state : TypeAutomatonState) (hClosed : automaton.MenuClosed)
       (hState : state ∈ automaton.states) :
       automaton.futureReachable state =
-        {state} ∪ (automaton.referencedStates state).biUnion
+        {state} ∪ (automaton.menuStep state).biUnion
           automaton.futureReachable := by
     let closure := automaton.futureReachable state
     let unfolded := ({state} : Finset TypeAutomatonState) ∪
-      (automaton.referencedStates state).biUnion automaton.futureReachable
+      (automaton.menuStep state).biUnion automaton.futureReachable
     have hClosureFixed : automaton.futureStep closure = closure := by
       apply futureReachableAux_fixed_after_missing automaton hClosed
       · simpa [closure, futureReachable] using hState
@@ -146,7 +160,7 @@ namespace PendingAutomaton
       apply subset_futureReachableAux automaton automaton.states.card {state}
       simp [closure, futureReachable]
     have hReferenceClosure : ∀ reference,
-        reference ∈ automaton.referencedStates state →
+        reference ∈ automaton.menuStep state →
           automaton.futureReachable reference ⊆ closure := by
       intro reference hReference target hTarget
       have hReferenceState : reference ∈ automaton.states :=
@@ -213,31 +227,30 @@ namespace PendingAutomaton
       simpa [closure, futureReachable, hUnfoldedStable] using hMonotone
     · exact hUnfoldedSubset
 
-  /-- The starting state is always contained in its finite reference closure. -/
+  /-- The starting state belongs to its non-clock execution closure. -/
   theorem mem_futureReachable_self (automaton : PendingAutomaton)
       (state : TypeAutomatonState) :
       state ∈ automaton.futureReachable state := by
     apply subset_futureReachableAux automaton automaton.states.card {state}
     simp [futureReachable]
 
-  /-- Every immediate same-cycle reference is contained in the finite
-  reference closure of its source. -/
-  theorem referencedStates_subset_futureReachable
+  /-- Every non-clock target belongs to its source's execution closure. -/
+  theorem menuStep_subset_futureReachable
       (automaton : PendingAutomaton) (source : TypeAutomatonState)
-      (hClosed : automaton.ReferencesClosed)
+      (hClosed : automaton.MenuClosed)
       (hSource : source ∈ automaton.states) :
-      automaton.referencedStates source ⊆
+      automaton.menuStep source ⊆
         automaton.futureReachable source := by
     rw [automaton.futureReachable_unfold source hClosed hSource]
     intro target hTarget
     exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr
       ⟨target, hTarget, automaton.mem_futureReachable_self target⟩)
 
-  /-- Reference closure is transitive: the closure of any already reached
+  /-- Execution closure is transitive: the closure of any already reached
   state is contained in the original closure. -/
   theorem futureReachable_subset_of_mem
       (automaton : PendingAutomaton) {source target : TypeAutomatonState}
-      (hClosed : automaton.ReferencesClosed)
+      (hClosed : automaton.MenuClosed)
       (hSource : source ∈ automaton.states)
       (hTarget : target ∈ automaton.futureReachable source) :
       automaton.futureReachable target ⊆
@@ -261,14 +274,13 @@ namespace PendingAutomaton
     rw [← hClosureStable]
     exact hMonotone
 
-  /-- A finite reference closure is contained in any set which contains its
-  source and is closed under immediate references. -/
-  theorem futureReachable_subset_of_reference_closed
+  /-- Execution closure stays in any set closed under non-clock edges. -/
+  theorem futureReachable_subset_of_menu_closed
       (automaton : PendingAutomaton) (source : TypeAutomatonState)
       (allowed : Finset TypeAutomatonState)
       (hSource : source ∈ allowed)
       (hAllowed : ∀ state ∈ allowed,
-        automaton.referencedStates state ⊆ allowed) :
+        automaton.menuStep state ⊆ allowed) :
       automaton.futureReachable source ⊆ allowed := by
     unfold futureReachable
     have hAux : ∀ fuel reached, reached ⊆ allowed →

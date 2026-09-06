@@ -376,6 +376,11 @@ def procFutureOffersFuel : Nat → Proc → Finset BareMessage
 def procFutureOffers (process : Proc) : Finset BareMessage :=
   procFutureOffersFuel (sizeOf process + 1) process
 
+/-- `F_2` of the sequence offer clause: the right operand's menu, admitted
+when the left operand passes the optimistic completion test at the source. -/
+def procSequenceRightMenu (left right : Proc) : Finset BareMessage :=
+  if Proc.CanCompleteBeforeTock left then procFutureOffers right else ∅
+
 /-!
 ## Offer menu and local parallel environments
 
@@ -473,25 +478,29 @@ inductive Offers :
       env.WellFormed alphabet ∧ env.clock = false ∧
         Semantics.ExprEval expr true →
       Offers env (Proc.ifunfair alphabet expr ifTrue ifFalse) Label.silent
-        ifTrue ∅ (procFutureOffers ifTrue)
+        ifTrue ∅
+        (procFutureOffers (Proc.ifunfair alphabet expr ifTrue ifFalse))
   | if_false (env : Environment) (alphabet : PactTypeAlphabet) (expr : Expr)
       (ifTrue ifFalse : Proc) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         Semantics.ExprEval expr false →
       Offers env (Proc.ifunfair alphabet expr ifTrue ifFalse) Label.silent
-        ifFalse ∅ (procFutureOffers ifFalse)
+        ifFalse ∅
+        (procFutureOffers (Proc.ifunfair alphabet expr ifTrue ifFalse))
   | fair_true (env : Environment) (alphabet : PactTypeAlphabet)
       (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         Semantics.ExprEval expr true →
       Offers env (Proc.iffair alphabet bid expr ifTrue ifFalse)
-        (Label.fair bid true) ifTrue ∅ (procFutureOffers ifTrue)
+        (Label.fair bid true) ifTrue ∅
+        (procFutureOffers (Proc.iffair alphabet bid expr ifTrue ifFalse))
   | fair_false (env : Environment) (alphabet : PactTypeAlphabet)
       (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         Semantics.ExprEval expr false →
       Offers env (Proc.iffair alphabet bid expr ifTrue ifFalse)
-        (Label.fair bid false) ifFalse ∅ (procFutureOffers ifFalse)
+        (Label.fair bid false) ifFalse ∅
+        (procFutureOffers (Proc.iffair alphabet bid expr ifTrue ifFalse))
   | recur (env : Environment) (alphabet : PactTypeAlphabet) (varName : String)
       (body : Proc) :
       env.WellFormed alphabet ∧ env.clock = false →
@@ -507,7 +516,7 @@ inductive Offers :
       label ≠ Label.tock →
       Offers env (Proc.seq alphabet left right) label
         (Proc.seq alphabet left' right) current
-        (procFutureOffers (Proc.seq alphabet left' right) \
+        ((childFuture ∪ procSequenceRightMenu left right) \
           current.image Offer.bare)
   | seq_tock (env : Environment) (alphabet : PactTypeAlphabet)
       (left left' right : Proc)
@@ -522,7 +531,8 @@ inductive Offers :
       Offers env left label (Proc.skip skipAlphabet) current childFuture →
       label ≠ Label.tock →
       Offers env (Proc.seq alphabet left right) label right current
-        (procFutureOffers right \ current.image Offer.bare)
+        ((childFuture ∪ procSequenceRightMenu left right) \
+          current.image Offer.bare)
   | seq_fuse_tock (env : Environment)
       (alphabet skipAlphabet : PactTypeAlphabet) (left right : Proc)
       (current : Finset Offer) (childFuture : Finset BareMessage) :
@@ -537,7 +547,8 @@ inductive Offers :
       BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches)
         (Label.message msg .send value) process {Offer.send msg value}
-        (procFutureOffers process \ {(msg, MessageDir.send)})
+        (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
+          branchActions branches)
   | xoffer_recv (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId)
       (varName : String) (process : Proc) (value : Bool) :
@@ -548,15 +559,17 @@ inductive Offers :
       Offers env (Proc.xoffer alphabet elseProcess branches)
         (Label.message msg .recv value)
         (Semantics.procExprReplace process varName value) {Offer.recv msg}
-        (procFutureOffers (Semantics.procExprReplace process varName value) \
-          {(msg, MessageDir.recv)})
+        (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
+          branchActions branches)
   | xoffer_else (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         NoImmediateBranch env branches ∧ Resolved env branches →
       BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
-        elseProcess ∅ (procFutureOffers elseProcess)
+        elseProcess ∅
+        (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
+          branchActions branches)
   | xoffer_wait (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ ¬ Resolved env branches ∧ env.clock = false →
@@ -613,9 +626,7 @@ inductive Offers :
         (hideOfferSet interface (leftCurrent ∪ rightCurrent))
         (if Label.combine interface leftLabel rightLabel = Label.tock
           then ∅
-          else procFutureOffers (Proc.par alphabet left' right' interface) \
-            (hideOfferSet interface (leftCurrent ∪ rightCurrent)).image
-              Offer.bare)
+          else hideProcOffers interface (leftFuture ∪ rightFuture))
   | par_fuse (outer leftEnv rightEnv : Environment) (interface : Interface)
       (alphabet : PactTypeAlphabet) (left right : Proc)
       (leftLabel rightLabel : Label)
@@ -677,8 +688,7 @@ inductive Offers :
         rightLabel
         (Proc.reannotate alphabet right')
         (hideOfferSet interface rightCurrent)
-        (procFutureOffers (Proc.reannotate alphabet right') \
-          (hideOfferSet interface rightCurrent).image Offer.bare)
+        (hideProcOffers interface rightFuture)
   -- P-Par-Right: mirror of `left_complete`.
   | right_complete (outer leftEnv rightEnv : Environment)
       (interface : Interface) (alphabet : PactTypeAlphabet)
@@ -700,8 +710,7 @@ inductive Offers :
         leftLabel
         (Proc.reannotate alphabet left')
         (hideOfferSet interface leftCurrent)
-        (procFutureOffers (Proc.reannotate alphabet left') \
-          (hideOfferSet interface leftCurrent).image Offer.bare)
+        (hideProcOffers interface leftFuture)
 
 /-! ## Process transition system
 

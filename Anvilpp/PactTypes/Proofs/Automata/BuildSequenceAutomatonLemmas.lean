@@ -4,6 +4,9 @@ namespace Pact
 
 noncomputable section
 
+variable {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool}
+
 theorem mem_sequenceDeleted_iff {left : AutomatonFragment}
     {state : TypeAutomatonState} :
     state ∈ sequenceDeleted left ↔
@@ -26,7 +29,7 @@ right fragment. Neither the left-edge nor redirect clause can have a
 theorem buildSequenceAutomaton_outgoing_right
      (left right : AutomatonFragment)
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    edge ∈ (buildSequenceAutomaton left right).edges ∧
+    edge ∈ (buildSequenceAutomaton left right leftFuture leftCompletes).edges ∧
         edge.source = .child 1 state ↔
       ∃ childEdge ∈ right.edges,
         childEdge.source = state ∧ edge = childPendingEdge 1 childEdge := by
@@ -73,35 +76,35 @@ environment, label, and current offers from the left child. -/
 
 @[simp] theorem sequenceLeftEdge_source (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).source = childState 0 edge.source := by
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).source = childState 0 edge.source := by
   by_cases hAccepting : edge.target ∈ left.accepting
   · simp [sequenceLeftEdge, sequenceRedirectEdge, hAccepting]
   · simp [sequenceLeftEdge, sequenceKeptLeftEdge, hAccepting]
 
 @[simp] theorem sequenceLeftEdge_environment (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).environment = edge.environment := by
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).environment = edge.environment := by
   by_cases hAccepting : edge.target ∈ left.accepting
   · simp [sequenceLeftEdge, sequenceRedirectEdge, hAccepting]
   · simp [sequenceLeftEdge, sequenceKeptLeftEdge, hAccepting]
 
 @[simp] theorem sequenceLeftEdge_label (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).label = edge.label := by
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).label = edge.label := by
   by_cases hAccepting : edge.target ∈ left.accepting
   · simp [sequenceLeftEdge, sequenceRedirectEdge, hAccepting]
   · simp [sequenceLeftEdge, sequenceKeptLeftEdge, hAccepting]
 
 @[simp] theorem sequenceLeftEdge_current (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).current = edge.current := by
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).current = edge.current := by
   by_cases hAccepting : edge.target ∈ left.accepting
   · simp [sequenceLeftEdge, sequenceRedirectEdge, hAccepting]
   · simp [sequenceLeftEdge, sequenceKeptLeftEdge, hAccepting]
 
 @[simp] theorem sequenceLeftEdge_target (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).target =
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).target =
       sequenceRedirect left right edge.target := by
   by_cases hAccepting : edge.target ∈ left.accepting
   · simp [sequenceLeftEdge, sequenceRedirectEdge, sequenceRedirect, hAccepting]
@@ -116,7 +119,7 @@ theorem sequenceRedirect_mem_states
     (state : TypeAutomatonState)
     (hState : state ∈ left.states) :
     sequenceRedirect left right state ∈
-      (buildSequenceAutomaton left right).states := by
+      (buildSequenceAutomaton left right leftFuture leftCompletes).states := by
   classical
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, childStates, childState,
@@ -135,7 +138,7 @@ theorem buildSequenceAutomaton_clockEdgesAreTock
      (left right : AutomatonFragment)
     (hLeftClock : left.ClockEdgesAreTock)
     (hRightClock : right.ClockEdgesAreTock) :
-    (buildSequenceAutomaton left right).ClockEdgesAreTock := by
+    (buildSequenceAutomaton left right leftFuture leftCompletes).ClockEdgesAreTock := by
   classical
   intro edge hEdge hClock
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
@@ -155,42 +158,63 @@ theorem buildSequenceAutomaton_futureTargetsInStates
     (hRightTargets : right.FutureTargetsInStates)
     (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
-    (buildSequenceAutomaton left right).FutureTargetsInStates := by
+    (buildSequenceAutomaton left right leftFuture leftCompletes).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
     childPendingEdges, Finset.mem_union, Finset.mem_image,
     Finset.mem_filter] at hEdge
+  have hEntry : childState 1 right.initial ∈
+      (buildSequenceAutomaton left right leftFuture leftCompletes).states := by
+    simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
+      childState, hRightInitial]
   rcases hEdge with (hLeft | hRight) | hRedirect
   · rcases hLeft with ⟨leftEdge, hLeftEdge, rfl⟩
-    simp only [sequenceKeptLeftEdge, sequenceRedirectFutureSpec] at hFuture
+    simp only [sequenceKeptLeftEdge, sequenceLeftFutureSpec] at hFuture
     by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
-    · simp [hClock] at hFuture
+    · simp [hClock, FutureSpec.referenced] at hFuture
     · rw [if_neg hClock] at hFuture
-      injection hFuture with hTargetEq _
-      subst hTargetEq
-      apply sequenceRedirect_mem_states left right hRightInitial
-      exact hLeftEdgeTargets leftEdge hLeftEdge.1
+      by_cases hDone : leftCompletes leftEdge.source = true
+      · rw [if_pos hDone] at hFuture
+        simp only [FutureSpec.referenced, Option.some.injEq] at hFuture
+        subst hFuture
+        exact hEntry
+      · rw [if_neg hDone] at hFuture
+        simp [FutureSpec.referenced] at hFuture
   · rcases hRight with ⟨rightEdge, hRightEdge, rfl⟩
     cases hSpec : rightEdge.future with
     | explicit offers =>
-        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced]
+          at hFuture
     | «at» rightTarget rightRemoved =>
-        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
-        cases hFuture
+        simp only [childPendingEdge, childFutureSpec, hSpec,
+          FutureSpec.referenced, Option.some.injEq] at hFuture
+        subst hFuture
         have hRightTarget := hRightTargets rightEdge hRightEdge
-          rightTarget removed hSpec
+          rightTarget (by simp [hSpec, FutureSpec.referenced])
+        simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
+          childState, hRightTarget]
+    | atUnion offers rightTarget rightRemoved =>
+        simp only [childPendingEdge, childFutureSpec, hSpec,
+          FutureSpec.referenced, Option.some.injEq] at hFuture
+        subst hFuture
+        have hRightTarget := hRightTargets rightEdge hRightEdge
+          rightTarget (by simp [hSpec, FutureSpec.referenced])
         simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
           childState, hRightTarget]
   · rcases hRedirect with ⟨leftEdge, _hLeftEdge, rfl⟩
-    simp only [sequenceRedirectEdge, sequenceRedirectFutureSpec] at hFuture
+    simp only [sequenceRedirectEdge, sequenceLeftFutureSpec] at hFuture
     by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
-    · simp [hClock] at hFuture
+    · simp [hClock, FutureSpec.referenced] at hFuture
     · rw [if_neg hClock] at hFuture
-      cases hFuture
-      simp [buildSequenceAutomaton, finishAutomatonFragment, childStates,
-        childState, hRightInitial]
+      by_cases hDone : leftCompletes leftEdge.source = true
+      · rw [if_pos hDone] at hFuture
+        simp only [FutureSpec.referenced, Option.some.injEq] at hFuture
+        subst hFuture
+        exact hEntry
+      · rw [if_neg hDone] at hFuture
+        simp [FutureSpec.referenced] at hFuture
 
 end
 

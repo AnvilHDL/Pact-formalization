@@ -6,6 +6,9 @@ noncomputable section
 
 open Classical Pact.NewCorrespondence
 
+/- Archived target-only upgrade. Source-menu choice/offer fields and stored
+component futures invalidate this argument. Full child pairs are supplied by
+the staged correspondence induction instead.
 private def FutureRemoval (accepting : Finset TypeAutomatonState)
     (edge : PendingAutomatonEdge) : Prop :=
   ∀ q removed, edge.future = .at q removed →
@@ -282,6 +285,23 @@ theorem edge_offers_empty_of_clock {ty residual : PactType}
   simp only [hLabel, AutomatonConstructionLabel.semantic] at hTock
   exact ⟨hCurrent.symm.trans hEmpty,
     by simpa only [if_pos hTock] using edge_future_eq_of_menuAgree hMenus hTarget hEdge⟩
+-/
+
+/-- A related clock edge has the semantic clock's empty offer pair. -/
+theorem edge_offers_empty_of_clock {ty residual : PactType}
+    (hFull : TypeAutomatonStepCorrespondence ty) {source target : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {current future : Finset BareMessage}
+    (hSource : relationMembership (buildRelationSet ty (compileType ty)) residual source)
+    (hEdge : (compileType ty).HasEdge source env label ⟨current, future⟩ target)
+    (hClock : env.clock = true) : current = ∅ ∧ future = ∅ := by
+  obtain ⟨rho', hStep, _⟩ := hFull.2 hSource hEdge
+  obtain ⟨edge, hMem, _, hEnv, hLabel, _, _, _⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge _ _ _ _ _ _).mp hEdge
+  have hTock := (compileTypeFuel_clockEdgesAreTock
+    (typeCompilationFuel ty) ty le_rfl edge hMem (by rw [hEnv]; exact hClock)).1
+  simp only [hLabel, AutomatonConstructionLabel.semantic] at hTock
+  exact ⟨hStep.2.current_eq_empty_of_label_tock hTock,
+    hStep.2.future_eq_empty_of_label_tock hTock⟩
 
 end
 end Pact

@@ -125,6 +125,7 @@ def compileTypeFuel :
       { states := {.root}
         initial := .root
         accepting := ∅
+        completes := ∅
         edges := ∅ }
   | fuel + 1, processType => by
       classical
@@ -134,7 +135,7 @@ def compileTypeFuel :
           let idleEnvironments :=
             (alphabet.localEnvironments).filter fun environment =>
             environment.clock = false
-          exact finishAutomatonFragment {.root} .root {.root} <|
+          exact finishAutomatonFragment {.root} .root {.root} {.root} <|
             idleEnvironments.image fun environment =>
               { source := .root
                 environment := environment
@@ -182,6 +183,7 @@ def compileTypeFuel :
                 future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
+            (if (msg, dir) ∈ alphabet.actions then {.root, .final} else {.final})
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
@@ -214,6 +216,7 @@ def compileTypeFuel :
                 future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
+            {.final}
             (actionEdges ∪ finalEdges)
 
       -- progress: emit the marker and enter final; final then idles silently.
@@ -239,6 +242,7 @@ def compileTypeFuel :
                 future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
+            {.root, .final}
             (actionEdges ∪ finalEdges)
 
       -- variable: create a temporary labelled edge for an enclosing binder.
@@ -247,7 +251,7 @@ def compileTypeFuel :
       -- environment, so a clocked marker would become a back-edge with no
       -- semantic counterpart.  Guard it exactly like every other family.
       | .var alphabet name =>
-          exact finishAutomatonFragment {.root, .final} .root ∅  <|
+          exact finishAutomatonFragment {.root, .final} .root ∅ ∅ <|
             ((alphabet.localEnvironments).filter fun environment =>
               environment.clock = false).image fun environment =>
               { source := .root
@@ -280,6 +284,11 @@ def compileTypeFuel :
           exact buildSequenceAutomaton
             (compileTypeFuel fuel left)
             (compileTypeFuel fuel right)
+            (computeFutureOfFuel (min fuel (typeCompilationFuel left)) left)
+            (fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+                (min fuel (typeCompilationFuel left)) left,
+              entry.2 = state ∧
+                typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true))
 
       -- parallel: form the reachable synchronized product on `interface`.
       | .par alphabet left right interface =>
@@ -590,7 +599,9 @@ def AutomatonFragment.HasResolvedEdge
       edge.label = .visible label ∧ edge.current = offers.current ∧
       (match edge.future with
         | .explicit future => future
-        | .at state removed => computeFutureOf processType state \ removed)
+        | .at state removed => computeFutureOf processType state \ removed
+        | .atUnion offers state removed =>
+            (offers ∪ computeFutureOf processType state) \ removed)
         = offers.future ∧
       edge.target = target
 

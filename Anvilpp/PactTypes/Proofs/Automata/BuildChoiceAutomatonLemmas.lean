@@ -121,7 +121,7 @@ theorem buildChoiceAutomaton_futureTargetsInStates
     (buildChoiceAutomaton alphabet left right
       selectionLeft selectionRight).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildChoiceAutomaton, finishAutomatonFragment,
     childPendingEdges, Finset.mem_union, Finset.mem_image,
     Finset.mem_biUnion, Finset.mem_filter, Finset.mem_insert,
@@ -130,23 +130,37 @@ theorem buildChoiceAutomaton_futureTargetsInStates
   · rcases hLeft with ⟨childEdge, hChildEdge, rfl⟩
     cases hSpec : childEdge.future with
     | explicit offers =>
-        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
     | «at» childTarget removed =>
-        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
         cases hFuture
         have hChildTarget := hLeftTargets childEdge hChildEdge
-          childTarget removed hSpec
+          childTarget (by simp [hSpec, FutureSpec.referenced])
+        simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+          childState, hChildTarget]
+    | atUnion offers childTarget removed =>
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
+        cases hFuture
+        have hChildTarget := hLeftTargets childEdge hChildEdge
+          childTarget (by simp [hSpec, FutureSpec.referenced])
         simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
           childState, hChildTarget]
   · rcases hRight with ⟨childEdge, hChildEdge, rfl⟩
     cases hSpec : childEdge.future with
     | explicit offers =>
-        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
     | «at» childTarget removed =>
-        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
         cases hFuture
         have hChildTarget := hRightTargets childEdge hChildEdge
-          childTarget removed hSpec
+          childTarget (by simp [hSpec, FutureSpec.referenced])
+        simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
+          childState, hChildTarget]
+    | atUnion offers childTarget removed =>
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
+        cases hFuture
+        have hChildTarget := hRightTargets childEdge hChildEdge
+          childTarget (by simp [hSpec, FutureSpec.referenced])
         simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
           childState, hChildTarget]
   · rcases hSelection with ⟨environment, _, hEdge | hEdge⟩
@@ -177,13 +191,13 @@ theorem buildChoiceAutomaton_outgoing_root
                  environment := environment
                  label := .visible selectionLeft
                  current := ∅
-                 future := .at (childState 0 left.initial) ∅
+                 future := .at TypeAutomatonState.root ∅
                  target := childState 0 left.initial } ∨
           edge = { source := TypeAutomatonState.root
                    environment := environment
                    label := .visible selectionRight
                    current := ∅
-                   future := .at (childState 1 right.initial) ∅
+                   future := .at TypeAutomatonState.root ∅
                    target := childState 1 right.initial } := by
   classical
   constructor
@@ -229,17 +243,13 @@ theorem buildChoiceAutomaton_offersAt_root
   simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
     Finset.mem_filter] at hAction
   obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hAction
-  by_cases hTock : edge.label.semantic = TypeLabel.tock
-  · rw [if_pos hTock] at hIn
-    exact absurd hIn (Finset.notMem_empty _)
-  · rw [if_neg hTock] at hIn
-    obtain ⟨environment, -, hShape | hShape⟩ :=
-      (buildChoiceAutomaton_outgoing_root alphabet left right selectionLeft
-        selectionRight edge).mp ⟨hEdge, hSource⟩ <;>
-      · subst hShape
-        simp at hIn
+  obtain ⟨environment, -, hShape | hShape⟩ :=
+    (buildChoiceAutomaton_outgoing_root alphabet left right selectionLeft
+      selectionRight edge).mp ⟨hEdge, hSource⟩ <;>
+    · subst hShape
+      simp at hIn
 
-/-- A binary-choice root references exactly the two child entry states. -/
+/-- Both selection fields refer to the unresolved source menu. -/
 theorem buildChoiceAutomaton_referencedStates_root
     (alphabet : PactTypeAlphabet)
     (left right : AutomatonFragment)
@@ -252,7 +262,7 @@ theorem buildChoiceAutomaton_referencedStates_root
       selectionLeft selectionRight
     ({ states := choice.states, edges := choice.edges } :
         PendingAutomaton).referencedStates TypeAutomatonState.root =
-      {childState 0 left.initial, childState 1 right.initial} := by
+      {TypeAutomatonState.root} := by
   classical
   intro choice
   obtain ⟨environment, hMem, hClock⟩ := hEnvironment
@@ -275,27 +285,63 @@ theorem buildChoiceAutomaton_referencedStates_root
           simp only [Finset.mem_singleton] at hIn
           simp [hIn]
   · intro hTarget
-    rcases hTarget with rfl | rfl
-    · refine ⟨{ source := TypeAutomatonState.root
-                environment := environment
-                label := .visible selectionLeft
-                current := ∅
-                future := .at (childState 0 left.initial) ∅
-                target := childState 0 left.initial }, ?_, ?_⟩
+    rcases hTarget with rfl
+    refine ⟨{ source := TypeAutomatonState.root
+              environment := environment
+              label := .visible selectionLeft
+              current := ∅
+              future := .at TypeAutomatonState.root ∅
+              target := childState 0 left.initial }, ?_, ?_⟩
+    · exact (buildChoiceAutomaton_outgoing_root alphabet left right
+        selectionLeft selectionRight _).mpr ⟨environment, hFilter, Or.inl rfl⟩
+    · rw [if_neg (by simpa using hLeftNotTock)]
+      exact Finset.mem_singleton_self _
+
+/-- The menu graph nevertheless reaches both branch entries. -/
+theorem buildChoiceAutomaton_menuStep_root
+    (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment)
+    (selectionLeft selectionRight : TypeLabel)
+    (hLeftNotTock : selectionLeft ≠ TypeLabel.tock)
+    (hRightNotTock : selectionRight ≠ TypeLabel.tock)
+    (hEnvironment : ∃ environment ∈ alphabet.localEnvironments,
+      environment.clock = false) :
+    let choice := buildChoiceAutomaton alphabet left right
+      selectionLeft selectionRight
+    ({ states := choice.states, edges := choice.edges } :
+        PendingAutomaton).menuStep .root =
+      {childState 0 left.initial, childState 1 right.initial} := by
+  classical
+  intro choice
+  obtain ⟨environment, hMem, hClock⟩ := hEnvironment
+  have hFilter : environment ∈ alphabet.localEnvironments.filter
+      fun environment => environment.clock = false :=
+    Finset.mem_filter.mpr ⟨hMem, hClock⟩
+  ext target
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
+    Finset.mem_filter, Finset.mem_insert, Finset.mem_singleton]
+  constructor
+  · rintro ⟨edge, ⟨hEdge, hSource⟩, hIn⟩
+    obtain ⟨environment', -, hShape | hShape⟩ :=
+      (buildChoiceAutomaton_outgoing_root alphabet left right selectionLeft
+        selectionRight edge).mp ⟨hEdge, hSource⟩
+    · subst edge
+      exact Or.inl (by simpa [AutomatonConstructionLabel.semantic, hLeftNotTock] using hIn)
+    · subst edge
+      exact Or.inr (by simpa [AutomatonConstructionLabel.semantic, hRightNotTock] using hIn)
+  · rintro (rfl | rfl)
+    · refine ⟨{ source := .root, environment := environment,
+                label := .visible selectionLeft, current := ∅,
+                future := .at .root ∅, target := childState 0 left.initial }, ?_, ?_⟩
       · exact (buildChoiceAutomaton_outgoing_root alphabet left right
           selectionLeft selectionRight _).mpr ⟨environment, hFilter, Or.inl rfl⟩
-      · rw [if_neg (by simpa using hLeftNotTock)]
-        exact Finset.mem_singleton_self _
-    · refine ⟨{ source := TypeAutomatonState.root
-                environment := environment
-                label := .visible selectionRight
-                current := ∅
-                future := .at (childState 1 right.initial) ∅
-                target := childState 1 right.initial }, ?_, ?_⟩
+      · simpa [AutomatonConstructionLabel.semantic, hLeftNotTock]
+    · refine ⟨{ source := .root, environment := environment,
+                label := .visible selectionRight, current := ∅,
+                future := .at .root ∅, target := childState 1 right.initial }, ?_, ?_⟩
       · exact (buildChoiceAutomaton_outgoing_root alphabet left right
           selectionLeft selectionRight _).mpr ⟨environment, hFilter, Or.inr rfl⟩
-      · rw [if_neg (by simpa using hRightNotTock)]
-        exact Finset.mem_singleton_self _
+      · simpa [AutomatonConstructionLabel.semantic, hRightNotTock]
 
 end
 

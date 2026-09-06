@@ -40,7 +40,9 @@ def buildRecursionAutomaton
         current := edge.current
         future := childFutureSpec 0 edge.future
         target := childState 0 edge.target }
-  finishAutomatonFragment states .root accepting
+  let completes := childCompletes 0 body ∪
+    (if body.initial ∈ body.completes then {TypeAutomatonState.root} else ∅)
+  finishAutomatonFragment states .root accepting completes
     (headerEdges ∪ bodyEdges)
 
 end

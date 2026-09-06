@@ -34,9 +34,8 @@ theorem correspondence_steps
       (typeWellFormedIn_nil_of_admissible hAdmissible)
   exact correspondence_steps_of_helpers processType hCurrent hMenus
 
-/- Previous assembly, retained until cleanup. Its global H15 dependencies
-are replaced above by the menu hypothesis obtained from the simultaneous proof.
-/-- Step correspondence for every pair in the compiler relation. -/
+/- Obsolete assembly using the former target-only future law.
+Retained for comparison during the paper migration.
 theorem correspondence_steps
     (processType : PactType)
     (hAdmissible : AdmissibleType processType) :

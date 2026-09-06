@@ -20,6 +20,10 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
   let l := compileTypeFuel (typeCompilationFuel left) left
   let r := compileTypeFuel (typeCompilationFuel right) right
   let whole := PactType.seq alphabet left right
+  let leftFuture := computeFutureOf left
+  let leftCompletes := fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+    (typeCompilationFuel left) left, entry.2 = state ∧
+      typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true)
   have hEntry := relationMembership_seq_right alphabet left right right
     (buildRelationSet_initial right (compileType right))
   -- The paper's left injection retains the source and redirects final targets.
@@ -37,13 +41,13 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
       rcases hKept with hn | hi
       · exact fun h => hn (Finset.mem_sdiff.mp h).1
       · simp [sequenceDeleted, l, hi, compileType]
-    have hMem := sequenceLeftEdge_mem l r e he hSource
-    refine ⟨match (sequenceLeftEdge l r e).future with
-      | .explicit f => f
-      | .at t removed => computeFutureOf whole t \ removed, ?_⟩
+    have hMem := sequenceLeftEdge_mem l r (leftFuture := leftFuture)
+      (leftCompletes := leftCompletes) e he hSource
+    refine ⟨resolveFutureSpec (computeFutureOf whole)
+      (sequenceLeftEdge l r leftFuture leftCompletes e).future, ?_⟩
     apply (compileType_hasEdge_iff_hasResolvedEdge whole _ _ _ _ _).mpr
     rw [compileTypeFuel_sequence_eq_build]
-    exact ⟨sequenceLeftEdge l r e, hMem, by simpa using congrArg (childState 0) hs,
+    exact ⟨sequenceLeftEdge l r leftFuture leftCompletes e, hMem, by simpa using congrArg (childState 0) hs,
       by simpa using henv, by simpa using hl, by simpa using hc, rfl,
       by simp [ht]⟩
   -- The right injection copies the entire edge family.
@@ -55,13 +59,11 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
     obtain ⟨e, he, hs, henv, hl, hc, _, ht⟩ :=
       (compileType_hasEdge_iff_hasResolvedEdge right q q' env label
         ⟨current, future⟩).mp hEdge
-    refine ⟨match (childPendingEdge 1 e).future with
-      | .explicit f => f
-      | .at t removed => computeFutureOf whole t \ removed, ?_⟩
+    refine ⟨resolveFutureSpec (computeFutureOf whole) (childPendingEdge 1 e).future, ?_⟩
     apply (compileType_hasEdge_iff_hasResolvedEdge whole _ _ _ _ _).mpr
     rw [compileTypeFuel_sequence_eq_build]
     refine ⟨childPendingEdge 1 e, ?_, ?_, henv, hl, hc, rfl, ?_⟩
-    · change childPendingEdge 1 e ∈ (buildSequenceAutomaton l r).edges
+    · change childPendingEdge 1 e ∈ (buildSequenceAutomaton l r leftFuture leftCompletes).edges
       simp only [buildSequenceAutomaton, finishAutomatonFragment, Finset.mem_union]
       exact Or.inl (Or.inr (Finset.mem_image.mpr ⟨e, he, rfl⟩))
     · simpa [childPendingEdge, childState] using hs
@@ -139,9 +141,7 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
       simp only [sequenceLeftEdge_environment, sequenceLeftEdge_label,
         sequenceLeftEdge_current, sequenceLeftEdge_target] at henv hl hc ht
       have hChild : (compileType left).HasEdge s env label
-          ⟨current, match ce.future with
-            | .explicit f => f
-            | .at t removed => computeFutureOf left t \ removed⟩ ce.target :=
+          ⟨current, resolveFutureSpec (computeFutureOf left) ce.future⟩ ce.target :=
         (compileType_hasEdge_iff_hasResolvedEdge left _ _ _ _ _).mpr
           ⟨ce, hce, hcs, henv, hl, hc, rfl, rfl⟩
       obtain ⟨target, cf, hStep, hTarget⟩ := hLeft.2 hSource hChild
@@ -156,7 +156,7 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
           refine ⟨right, ∅, ⟨.seq_fuse _ _ _ _ _ _ hStep.1, ?_⟩, hEntry⟩
           exact hC ▸ TypeOffers.seq_fuse_tock env alphabet a source right
             current cf hStep.2
-        · exact ⟨right, typeFutureOffers right \ current,
+        · exact ⟨right, (cf ∪ sequenceRightMenu source right) \ current,
             ⟨.seq_fuse _ _ _ _ _ _ hStep.1,
             .seq_fuse _ _ _ _ _ _ _ _ hStep.2 hClock⟩, hEntry⟩
       · have hn : target ≠ .skip target.alphabet := by
@@ -172,22 +172,94 @@ theorem currentOfferCorrespondence_seq (alphabet : PactTypeAlphabet)
           exact hC ▸ TypeOffers.seq_tock env alphabet source target right
             current cf hStep.2 hn
         · exact ⟨.seq alphabet target right,
-            typeFutureOffers (.seq alphabet target right) \ current,
+            (cf ∪ sequenceRightMenu source right) \ current,
             ⟨.seq _ _ _ _ _ _ hStep.1 hn,
               .seq _ _ _ _ _ _ _ _ hStep.2 hn hClock⟩, hr⟩
     · subst hState
       obtain ⟨ce, hce, hcs, rfl⟩ :=
         (buildSequenceAutomaton_outgoing_right l r s e).mp ⟨he, hs⟩
       have hChild : (compileType right).HasEdge s env label
-          ⟨current, match ce.future with
-            | .explicit f => f
-            | .at t removed => computeFutureOf right t \ removed⟩ ce.target :=
+          ⟨current, resolveFutureSpec (computeFutureOf right) ce.future⟩ ce.target :=
         (compileType_hasEdge_iff_hasResolvedEdge right _ _ _ _ _).mpr
           ⟨ce, hce, hcs, henv, hl, hc, rfl, rfl⟩
       obtain ⟨target, cf, hStep, hTarget⟩ := hRight.2 hSource hChild
       subst q'
       exact ⟨target, cf, hStep,
         relationMembership_seq_right alphabet left right target hTarget⟩
+
+/-- The compiler flag is the completion test of the represented source. -/
+theorem sequenceCompletionFlag_eq (left rho : PactType) (q : TypeAutomatonState)
+    (hRelated : relationMembership (buildRelationSet left (compileType left)) rho q) :
+    decide (∃ entry ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left,
+      entry.2 = q ∧ typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true) =
+      rho.CanCompleteDeclared := by
+  have hFlag : (∃ entry ∈ buildRelationSetCoreFuel (typeCompilationFuel left) left,
+      entry.2 = q ∧ typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true) ↔
+      rho.CanCompleteDeclared = true := by
+    constructor
+    · rintro ⟨⟨candidate, state⟩, hCandidate, hState, hComplete⟩
+      dsimp only at hState hComplete
+      subst state
+      have hEq := buildRelationSetCoreFuel_functional (typeCompilationFuel left)
+        left hCandidate hRelated
+      subst candidate
+      rwa [typeCanCompleteThisCycleFuel_eq_canCompleteDeclared
+        (sizeOf rho + 1) rho (by omega)] at hComplete
+    · intro hComplete
+      refine ⟨(rho, q), hRelated, rfl, ?_⟩
+      rwa [typeCanCompleteThisCycleFuel_eq_canCompleteDeclared
+        (sizeOf rho + 1) rho (by omega)]
+  cases hComplete : rho.CanCompleteDeclared <;> simp [hFlag, hComplete]
+
+/-- Retained and redirected edges resolve the same left-field clause. -/
+theorem sequenceLeftEdge_resolve_future (alphabet : PactTypeAlphabet)
+    (left right rho : PactType) (edge : PendingAutomatonEdge)
+    (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet)
+    (hRightMenus : FutureOffersAgree right)
+    (hRelated : relationMembership (buildRelationSet left (compileType left)) rho edge.source) :
+    let leftCompletes := fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+      (typeCompilationFuel left) left, entry.2 = state ∧
+        typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true)
+    resolveFutureSpec (computeFutureOf (.seq alphabet left right))
+      (sequenceLeftEdge (compileTypeFuel (typeCompilationFuel left) left)
+        (compileTypeFuel (typeCompilationFuel right) right)
+        (computeFutureOf left) leftCompletes edge).future =
+      if edge.label.semantic = TypeLabel.tock then ∅ else
+        (resolveFutureSpec (computeFutureOf left) edge.future ∪
+          sequenceRightMenu rho right) \ edge.current := by
+  intro leftCompletes
+  have hFlag : leftCompletes edge.source = rho.CanCompleteDeclared :=
+    sequenceCompletionFlag_eq left rho edge.source hRelated
+  have hEntry :
+      computeFutureOf (.seq alphabet left right)
+        (.child 1 (compileTypeFuel (typeCompilationFuel right) right).initial) =
+      typeFutureOffers right :=
+    (computeFutureOf_sequence_right alphabet left right hRightDisjoint hRightAlphabet
+      _ (compileTypeFuel_initial_mem _ right le_rfl)).trans
+      (hRightMenus (buildRelationSet_initial right (compileType right)))
+  rw [sequenceLeftEdge_future, hFlag]
+  by_cases hClock : edge.label.semantic = TypeLabel.tock
+  · simp [sequenceLeftFutureSpec, hClock, resolveFutureSpec]
+  · cases hComplete : rho.CanCompleteDeclared <;>
+      simp [sequenceLeftFutureSpec, hClock, hComplete, resolveFutureSpec,
+        sequenceRightMenu, childState, hEntry]
+
+/-- A right copy preserves every field, including a stored union contribution. -/
+theorem sequenceChildFuture_resolve (alphabet : PactTypeAlphabet)
+    (left right : PactType) (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel (typeCompilationFuel right) right).edges)
+    (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hRightAlphabet : right.alphabet = alphabet) :
+    resolveFutureSpec (computeFutureOf (.seq alphabet left right))
+      (childFutureSpec 1 edge.future) =
+      resolveFutureSpec (computeFutureOf right) edge.future := by
+  apply resolve_childFutureSpec
+  intro q hReference
+  exact computeFutureOf_sequence_right alphabet left right hRightDisjoint hRightAlphabet q
+    (compileTypeFuel_futureTargetsInStates _ right le_rfl hRightDisjoint
+      edge hEdge q hReference)
+
 
 end
 

@@ -89,10 +89,12 @@ private theorem buildRecursionAutomaton_edgeTargetsInStates
 
 private theorem buildSequenceAutomaton_edgeTargetsInStates
      (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool}
     (hLeftTargets : left.EdgeTargetsInStates)
     (hRightTargets : right.EdgeTargetsInStates)
     (hRightInitial : right.initial ∈ right.states) :
-    (buildSequenceAutomaton left right).EdgeTargetsInStates := by
+    (buildSequenceAutomaton left right leftFuture leftCompletes).EdgeTargetsInStates := by
   intro edge hEdge
   simp only [buildSequenceAutomaton, finishAutomatonFragment,
     sequenceLeftEdges, sequenceRightEdges, sequenceRedirectEdges,
@@ -752,50 +754,50 @@ theorem compileTypeFuel_futureTargetsInStates  :
       intro processType hFuel hDisjoint
       cases processType with
       | message _ msg dir =>
-          intro edge hEdge target removed hFuture
+          intro edge hEdge target hFuture
           simp only [compileTypeFuel, finishAutomatonFragment,
             Finset.mem_union, Finset.mem_image] at hEdge
           rcases hEdge with
             (⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩) |
               ⟨environment, _, rfl⟩ <;>
-            simp at hFuture <;>
-            rcases hFuture with ⟨rfl, rfl⟩ <;>
+            simp [FutureSpec.referenced] at hFuture <;>
+            subst target <;>
             simp [compileTypeFuel, finishAutomatonFragment]
 
       | progress _ pid =>
-          intro edge hEdge target removed hFuture
+          intro edge hEdge target hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩ <;>
-            simp at hFuture <;>
-            rcases hFuture with ⟨rfl, rfl⟩ <;>
+            simp [FutureSpec.referenced] at hFuture <;>
+            subst target <;>
             simp [compileTypeFuel, finishAutomatonFragment]
       | tock _ =>
-          intro edge hEdge target removed hFuture
+          intro edge hEdge target hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩
-          · split at hFuture <;> simp at hFuture <;>
-              rcases hFuture with ⟨rfl, rfl⟩ <;>
+          · split at hFuture <;> simp [FutureSpec.referenced] at hFuture <;>
+              subst target <;>
               simp [compileTypeFuel, finishAutomatonFragment]
-          · simp at hFuture
-            rcases hFuture with ⟨rfl, rfl⟩
+          · simp [FutureSpec.referenced] at hFuture
+            subst target
             simp [compileTypeFuel, finishAutomatonFragment]
       | skip _ =>
-          intro edge hEdge target removed hFuture
+          intro edge hEdge target hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
-          simp at hFuture
-          rcases hFuture with ⟨rfl, rfl⟩
+          simp [FutureSpec.referenced] at hFuture
+          subst target
           simp [compileTypeFuel, finishAutomatonFragment]
       | var _ name =>
-          intro edge hEdge target removed hFuture
+          intro edge hEdge target hFuture
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_image]
             at hEdge
           obtain ⟨environment, _, rfl⟩ := hEdge
-          simp at hFuture
-          rcases hFuture with ⟨rfl, rfl⟩
+          simp [FutureSpec.referenced] at hFuture
+          subst target
           simp [compileTypeFuel, finishAutomatonFragment]
       | recur _ name body =>
           have hBody : TypeCompilationFuelSufficient body fuel := by
@@ -984,7 +986,17 @@ theorem compileTypeFuel_referencesClosed
     (compileTypeFuel fuel processType)
     (compileTypeFuel_futureTargetsInStates fuel processType hFuel hDisjoint)
 
-/-- Both execution references and menu-only dependencies stay in the carrier. -/
+/-- Non-clock execution targets stay in the compiled carrier. -/
+theorem compileTypeFuel_menuClosed
+    (fuel : Nat) (processType : PactType)
+    (hFuel : TypeCompilationFuelSufficient processType fuel)
+    (hDisjoint : processType.OfferBranchesDisjoint) :
+    (compileTypeFuel fuel processType).toPending.MenuClosed :=
+  PendingAutomaton.menuClosed_of_edgeTargetsInStates
+    (compileTypeFuel fuel processType)
+    (compileTypeFuel_edgeTargetsInStates fuel processType hFuel hDisjoint)
+
+/-- Both execution targets and menu-only dependencies stay in the carrier. -/
 theorem compiledMenuGraphFuel_referencesClosed
     (fuel : Nat) (processType : PactType)
     (hFuel : TypeCompilationFuelSufficient processType fuel)
@@ -992,7 +1004,7 @@ theorem compiledMenuGraphFuel_referencesClosed
     (compiledMenuGraphFuel fuel processType).ReferencesClosed := by
   unfold compiledMenuGraphFuel
   apply PendingAutomaton.referencesClosed_withMenuDependencies
-  · exact compileTypeFuel_referencesClosed fuel processType hFuel hDisjoint
+  · exact compileTypeFuel_menuClosed fuel processType hFuel hDisjoint
   · intro link hLink
     simp only [Nat.min_eq_right hFuel] at hLink
     rw [compileTypeFuel_eq_of_sufficient processType hFuel le_rfl]
@@ -1520,11 +1532,7 @@ private theorem offersAt_of_outgoing_childPendingEdge
     · refine ⟨childEdge, ⟨hChildEdge, hChildSource⟩, ?_⟩
       rw [if_neg hTock]
       rw [if_neg (by simpa [childPendingEdge] using hTock)] at hAction
-      cases hFuture : childEdge.future with
-      | explicit offers =>
-          simpa [childPendingEdge, childFutureSpec, hFuture] using hAction
-      | «at» target removed =>
-          simpa [childPendingEdge, childFutureSpec, hFuture] using hAction
+      exact hAction
   · rintro ⟨childEdge, ⟨hChildEdge, hChildSource⟩, hAction⟩
     obtain ⟨hEdge, hSource⟩ :=
       (hOutgoing (childPendingEdge index childEdge)).mpr
@@ -1535,11 +1543,7 @@ private theorem offersAt_of_outgoing_childPendingEdge
       simp at hAction
     · rw [if_neg hTock] at hAction
       rw [if_neg (by simpa [childPendingEdge] using hTock)]
-      cases hFuture : childEdge.future with
-      | explicit offers =>
-          simpa [childPendingEdge, childFutureSpec, hFuture] using hAction
-      | «at» target removed =>
-          simpa [childPendingEdge, childFutureSpec, hFuture] using hAction
+      exact hAction
 
 theorem computeFutureOfFuel_child_embedding
 
@@ -1612,12 +1616,14 @@ theorem computeFutureOfFuel_child_embedding
     apply FiniteMenuGraph.futureReachable_eq_of_embedding childMenu parentMenu
       (childState index)
     · intro visited
-      change parent.referencedStates (childState index visited) ∪
+      change parent.menuStep (childState index visited) ∪
         menuDependencyTargets _ (childState index visited) =
-          (child.referencedStates visited ∪ menuDependencyTargets _ visited).image (childState index)
-      rw [referencedStates_of_outgoing_childPendingEdge
-        parentFragment childFragment index visited (hOutgoing visited),
-        hMenuReferences visited, Finset.image_union]
+          (child.menuStep visited ∪ menuDependencyTargets _ visited).image (childState index)
+      have hEdges := menuStep_of_outgoing_childPendingEdge
+        parentFragment childFragment index visited (hOutgoing visited)
+      change parent.menuStep (childState index visited) =
+        (child.menuStep visited).image (childState index) at hEdges
+      rw [hEdges, hMenuReferences visited, Finset.image_union]
     · simpa only [childMenu, child, compiledMenuGraphFuel, hChildCompile,
         Nat.min_eq_right hChildFuel] using
         compiledMenuGraphFuel_referencesClosed (childRest + 1) childType hChildFuel hChildDisjoint
@@ -2075,26 +2081,8 @@ theorem referencesClosed_compileTypeFuel (processType : PactType) (fuel : Nat)
     (hDisjoint : processType.OfferBranchesDisjoint) :
     PendingAutomaton.ReferencesClosed
       { states := (compileTypeFuel fuel processType).states,
-        edges := (compileTypeFuel fuel processType).edges } := by
-  classical
-  have hTargets :=
-    compileTypeFuel_futureTargetsInStates fuel processType hFuel hDisjoint
-  intro state _ reference hReference
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-    Finset.mem_filter] at hReference
-  obtain ⟨edge, ⟨hEdge, -⟩, hIn⟩ := hReference
-  by_cases hTock : edge.label.semantic = TypeLabel.tock
-  · rw [if_pos hTock] at hIn
-    exact absurd hIn (Finset.notMem_empty _)
-  · rw [if_neg hTock] at hIn
-    cases hFuture : edge.future with
-    | explicit offers =>
-        rw [hFuture] at hIn
-        exact absurd hIn (Finset.notMem_empty _)
-    | «at» target removed =>
-        rw [hFuture, Finset.mem_singleton] at hIn
-        rw [hIn]
-        exact hTargets edge hEdge target removed hFuture
+        edges := (compileTypeFuel fuel processType).edges } :=
+  compileTypeFuel_referencesClosed fuel processType hFuel hDisjoint
 
 /-- A binary-choice root carries no product term of its own. -/
 theorem stateProductInfo_choice_root (alphabet : PactTypeAlphabet)
@@ -2228,10 +2216,10 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     (hPending : pending =
       { states := (compileTypeFuel (typeCompilationFuel whole) whole).states,
         edges := (compileTypeFuel (typeCompilationFuel whole) whole).edges })
-    (hClosed : pending.ReferencesClosed)
+    (hClosed : pending.MenuClosed)
     (hSource : source ∈ pending.states)
-    (hUpper : pending.referencedStates source ⊆ insert source entries)
-    (hEntries : entries ⊆ pending.referencedStates source)
+    (hUpper : pending.menuStep source ⊆ insert source entries)
+    (hEntries : entries ⊆ pending.menuStep source)
     (hNoProduct : stateProductInfo whole source = none)
     (hOffersDeclared : ∀ action ∈ pending.offersAt source,
       action ∈ whole.alphabet.actions)
@@ -2250,8 +2238,8 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
   have hGraphClosed : graph.ReferencesClosed := by
     simpa only [graph, hPending, compiledMenuGraphFuel, hk, Nat.min_self] using
       compiledMenuGraphFuel_referencesClosed (typeCompilationFuel whole) whole le_rfl hWholeDisjoint
-  have hGraphReferences : graph.referencedStates source = pending.referencedStates source := by
-    change pending.referencedStates source ∪ menuDependencyTargets
+  have hGraphReferences : graph.referencedStates source = pending.menuStep source := by
+    change pending.menuStep source ∪ menuDependencyTargets
       (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source = _
     rw [hRoot, compileTypeMenuLinksFuel_root, Finset.union_empty]
   set summand : TypeAutomatonState → Finset BareMessage := fun visited =>

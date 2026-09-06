@@ -7,11 +7,14 @@ noncomputable section
 
 open Classical
 
+variable {leftFuture : TypeAutomatonState → Finset BareMessage}
+  {leftCompletes : TypeAutomatonState → Bool}
+
 /-- A retained source keeps every left edge, redirecting final targets. -/
 theorem sequenceLeftEdge_mem (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) (hEdge : edge ∈ left.edges)
     (hRetained : edge.source ∉ sequenceDeleted left) :
-    sequenceLeftEdge left right edge ∈ (buildSequenceAutomaton left right).edges := by
+    sequenceLeftEdge left right leftFuture leftCompletes edge ∈ (buildSequenceAutomaton left right leftFuture leftCompletes).edges := by
   by_cases hFinal : edge.target ∈ left.accepting
   · apply Finset.mem_union_right
     exact Finset.mem_image.mpr
@@ -25,123 +28,80 @@ theorem sequenceLeftEdge_mem (left right : AutomatonFragment)
 
 @[simp] theorem sequenceLeftEdge_future (left right : AutomatonFragment)
     (edge : PendingAutomatonEdge) :
-    (sequenceLeftEdge left right edge).future =
-      sequenceRedirectFutureSpec edge.label
-        (sequenceRedirect left right edge.target) edge.current := by
+    (sequenceLeftEdge left right leftFuture leftCompletes edge).future =
+      sequenceLeftFutureSpec edge.label (childState 1 right.initial)
+        (resolveFutureSpec leftFuture edge.future) edge.current (leftCompletes edge.source) := by
   by_cases hFinal : edge.target ∈ left.accepting <;>
     simp [sequenceLeftEdge, sequenceRedirectEdge, sequenceKeptLeftEdge,
       sequenceRedirect, hFinal]
 
-/-- Before a left final, the sequence redirects exactly the child's references. -/
-theorem buildSequenceAutomaton_referencedStates_left
+/-- A retained left source redirects exactly its child's non-clock targets. -/
+theorem buildSequenceAutomaton_menuStep_left
     (left right : AutomatonFragment)
-    (hTargets : left.FutureTargetsAreEdgeTargets)
-    (hExplicit : left.ExplicitOnlyAtAccepting)
-    (source : TypeAutomatonState) (hNotFinal : source ∉ left.accepting) :
-    (⟨(buildSequenceAutomaton left right).states,
-      (buildSequenceAutomaton left right).edges⟩ : PendingAutomaton).referencedStates
+    (source : TypeAutomatonState) (hRetained : source ∉ sequenceDeleted left) :
+    (⟨(buildSequenceAutomaton left right leftFuture leftCompletes).states,
+      (buildSequenceAutomaton left right leftFuture leftCompletes).edges⟩ : PendingAutomaton).menuStep
         (.child 0 source) =
-      ((⟨left.states, left.edges⟩ : PendingAutomaton).referencedStates source).image
+      ((⟨left.states, left.edges⟩ : PendingAutomaton).menuStep source).image
         (sequenceRedirect left right) := by
-  have hRetained := not_mem_sequenceDeleted_of_not_accepting hNotFinal
   ext target
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion, Finset.mem_filter,
+    Finset.mem_image]
   constructor
-  · intro hTarget
-    obtain ⟨edge, hEdge, hReference⟩ := Finset.mem_biUnion.mp hTarget
+  · rintro ⟨edge, hEdge, hReference⟩
     obtain ⟨childEdge, hChild, hSource, rfl⟩ :=
-      buildSequenceAutomaton_outgoing_left left right source edge
-        (Finset.mem_filter.mp hEdge)
+      buildSequenceAutomaton_outgoing_left left right source edge hEdge
     by_cases hClock : childEdge.label.semantic = .tock
     · simp [hClock] at hReference
     · have hTarget : target = sequenceRedirect left right childEdge.target := by
-        simpa [sequenceRedirectFutureSpec, hClock] using hReference
-      cases hFuture : childEdge.future with
-      | explicit offers =>
-          exact (hNotFinal (hSource ▸ hExplicit childEdge hChild hClock offers hFuture)).elim
-      | «at» childTarget removed =>
-          have hChildTarget := hTargets childEdge hChild childTarget removed hFuture
-          apply Finset.mem_image.mpr
-          refine ⟨childTarget, ?_, ?_⟩
-          · apply Finset.mem_biUnion.mpr
-            exact ⟨childEdge, Finset.mem_filter.mpr ⟨hChild, hSource⟩,
-              by simp [hClock, hFuture]⟩
-          · rw [hChildTarget, hTarget]
-  · intro hTarget
-    obtain ⟨childTarget, hChildTarget, rfl⟩ := Finset.mem_image.mp hTarget
-    obtain ⟨edge, hEdge, hReference⟩ := Finset.mem_biUnion.mp hChildTarget
-    obtain ⟨hEdge, hSource⟩ := Finset.mem_filter.mp hEdge
+        simpa [hClock] using hReference
+      exact ⟨childEdge.target,
+        ⟨childEdge, ⟨hChild, hSource⟩, by simp [hClock]⟩, hTarget.symm⟩
+  · rintro ⟨childTarget, ⟨edge, ⟨hEdge, hSource⟩, hReference⟩, rfl⟩
     by_cases hClock : edge.label.semantic = .tock
     · simp [hClock] at hReference
-    · cases hFuture : edge.future with
-      | explicit offers => simp [hClock, hFuture] at hReference
-      | «at» referenced removed =>
-          have hEq : childTarget = referenced := by simpa [hClock, hFuture] using hReference
-          have hTarget := hTargets edge hEdge referenced removed hFuture
-          apply Finset.mem_biUnion.mpr
-          refine ⟨sequenceLeftEdge left right edge,
-            Finset.mem_filter.mpr ⟨sequenceLeftEdge_mem left right edge hEdge
-              (hSource ▸ hRetained), by simp [hSource, childState]⟩, ?_⟩
-          simp [sequenceRedirectFutureSpec, hClock, hEq, hTarget]
+    · have hEq : childTarget = edge.target := by simpa [hClock] using hReference
+      refine ⟨sequenceLeftEdge left right leftFuture leftCompletes edge,
+        ⟨sequenceLeftEdge_mem left right edge hEdge (hSource ▸ hRetained),
+          by simp [hSource, childState]⟩, ?_⟩
+      simp [hClock, hEq]
 
-/-- A retained left final can only refer to the right entry. -/
-theorem buildSequenceAutomaton_referencedStates_left_final
+/-- Every edge from a retained left final enters the right copy. -/
+theorem buildSequenceAutomaton_menuStep_left_final
     (left right : AutomatonFragment) (hInert : left.AcceptingInert)
     (source : TypeAutomatonState) (hFinal : source ∈ left.accepting) :
-    (⟨(buildSequenceAutomaton left right).states,
-      (buildSequenceAutomaton left right).edges⟩ : PendingAutomaton).referencedStates
+    (⟨(buildSequenceAutomaton left right leftFuture leftCompletes).states,
+      (buildSequenceAutomaton left right leftFuture leftCompletes).edges⟩ : PendingAutomaton).menuStep
         (.child 0 source) ⊆ {TypeAutomatonState.child 1 right.initial} := by
   intro target hTarget
-  obtain ⟨edge, hEdge, hReference⟩ := Finset.mem_biUnion.mp hTarget
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion, Finset.mem_filter] at hTarget
+  obtain ⟨edge, hEdge, hReference⟩ := hTarget
   obtain ⟨childEdge, hChild, hSource, rfl⟩ :=
-    buildSequenceAutomaton_outgoing_left left right source edge
-      (Finset.mem_filter.mp hEdge)
+    buildSequenceAutomaton_outgoing_left left right source edge hEdge
   have hTargetFinal := (hInert childEdge hChild (hSource ▸ hFinal)).2.1
   by_cases hClock : childEdge.label.semantic = .tock
   · simp [hClock] at hReference
-  · simpa [sequenceRedirectFutureSpec, sequenceRedirect, hClock, hTargetFinal,
-      childState] using hReference
+  · simpa [sequenceRedirect, hClock, hTargetFinal, childState] using hReference
 
-/-- Rebuilding future pointers does not change a retained state's direct offers. -/
+/-- Rewriting a left edge preserves its current offer. -/
 theorem buildSequenceAutomaton_offersAt_left
-    (left right : AutomatonFragment) (hStored : left.StoredMenusEmpty)
+    (left right : AutomatonFragment)
     (source : TypeAutomatonState) (hRetained : source ∉ sequenceDeleted left) :
-    (⟨(buildSequenceAutomaton left right).states,
-      (buildSequenceAutomaton left right).edges⟩ : PendingAutomaton).offersAt
+    (⟨(buildSequenceAutomaton left right leftFuture leftCompletes).states,
+      (buildSequenceAutomaton left right leftFuture leftCompletes).edges⟩ : PendingAutomaton).offersAt
         (.child 0 source) =
       (⟨left.states, left.edges⟩ : PendingAutomaton).offersAt source := by
-  have hOffer (edge : PendingAutomatonEdge) (hEdge : edge ∈ left.edges)
-      (action : BareMessage) :
-      action ∈ (if (sequenceLeftEdge left right edge).label.semantic = .tock then ∅ else
-        (sequenceLeftEdge left right edge).current ∪
-          match (sequenceLeftEdge left right edge).future with
-          | .explicit offers => offers | .at _ _ => ∅) ↔
-      action ∈ (if edge.label.semantic = .tock then ∅ else
-        edge.current ∪ match edge.future with
-          | .explicit offers => offers | .at _ _ => ∅) := by
-    by_cases hClock : edge.label.semantic = .tock
-    · simp [hClock]
-    · cases hFuture : edge.future with
-      | explicit offers =>
-          simp [sequenceRedirectFutureSpec, hClock, hStored edge hEdge offers hFuture]
-      | «at» target removed => simp [sequenceRedirectFutureSpec, hClock]
   ext action
+  simp only [PendingAutomaton.offersAt, Finset.mem_biUnion, Finset.mem_filter]
   constructor
-  · intro hAction
-    obtain ⟨edge, hEdge, hOfferEdge⟩ := Finset.mem_biUnion.mp hAction
+  · rintro ⟨edge, hEdge, hOfferEdge⟩
     obtain ⟨childEdge, hChild, hSource, rfl⟩ :=
-      buildSequenceAutomaton_outgoing_left left right source edge
-        (Finset.mem_filter.mp hEdge)
-    exact Finset.mem_biUnion.mpr
-      ⟨childEdge, Finset.mem_filter.mpr ⟨hChild, hSource⟩,
-        (hOffer childEdge hChild action).mp hOfferEdge⟩
-  · intro hAction
-    obtain ⟨edge, hEdge, hOfferEdge⟩ := Finset.mem_biUnion.mp hAction
-    obtain ⟨hEdge, hSource⟩ := Finset.mem_filter.mp hEdge
-    exact Finset.mem_biUnion.mpr
-      ⟨sequenceLeftEdge left right edge,
-        Finset.mem_filter.mpr ⟨sequenceLeftEdge_mem left right edge hEdge
-          (hSource ▸ hRetained), by simp [hSource, childState]⟩,
-        (hOffer edge hEdge action).mpr hOfferEdge⟩
+      buildSequenceAutomaton_outgoing_left left right source edge hEdge
+    exact ⟨childEdge, ⟨hChild, hSource⟩, by simpa using hOfferEdge⟩
+  · rintro ⟨edge, ⟨hEdge, hSource⟩, hOfferEdge⟩
+    exact ⟨sequenceLeftEdge left right leftFuture leftCompletes edge,
+      ⟨sequenceLeftEdge_mem left right edge hEdge (hSource ▸ hRetained),
+        by simp [hSource, childState]⟩, by simpa using hOfferEdge⟩
 
 /-- Finals carry the true completion flag in the canonical relation. -/
 theorem accepting_state_completionFlag (fuel : Nat) (processType : PactType)
@@ -181,38 +141,10 @@ theorem compiledMenuGraphFuel_sequence_left_references
     Nat.min_eq_right hLeftFuel, PendingAutomaton.withMenuDependencies]
   rw [← hParentLinks, ← hLeftLinks, menuDependencyTargets_seq_left
     fuel alphabet left right source hRetained]
-  rw [compileTypeFuel]
-  change (⟨(buildSequenceAutomaton (compileTypeFuel fuel left)
-      (compileTypeFuel fuel right)).states,
-      (buildSequenceAutomaton (compileTypeFuel fuel left)
-        (compileTypeFuel fuel right)).edges⟩ : PendingAutomaton).referencedStates
-      (.child 0 source) ∪ _ = _
-  rw [Finset.image_union]
-  by_cases hFinal : source ∈ (compileTypeFuel fuel left).accepting
-  · have hComplete := accepting_state_completionFlag fuel left hLeftFuel source hFinal
-    rw [if_pos hComplete, compileTypeMenuLinksFuel_accepting fuel left source hFinal]
-    simp only [Finset.image_empty, Finset.empty_union, Finset.union_empty]
-    have hParent := buildSequenceAutomaton_referencedStates_left_final
-      (compileTypeFuel fuel left) (compileTypeFuel fuel right)
-      (compileTypeFuel_acceptingInert fuel left) source hFinal
-    have hChild := acceptingInert_referencedStates_subset (compileTypeFuel fuel left)
-      (compileTypeFuel_acceptingInert fuel left)
-      (compileTypeFuel_futureTargetsAreEdgeTargets fuel left) source hFinal
-    have hImage :
-        ((⟨(compileTypeFuel fuel left).states,
-            (compileTypeFuel fuel left).edges⟩ : PendingAutomaton).referencedStates
-          source).image (sequenceRedirect (compileTypeFuel fuel left)
-            (compileTypeFuel fuel right)) ⊆
-          {TypeAutomatonState.child 1 (compileTypeFuel fuel right).initial} := by
-      intro target hTarget
-      obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hTarget
-      simp [sequenceRedirect, hChild hq, childState]
-    rw [Finset.union_eq_right.mpr hParent, Finset.union_eq_right.mpr hImage]
-  · rw [buildSequenceAutomaton_referencedStates_left
-      (compileTypeFuel fuel left) (compileTypeFuel fuel right)
-      (compileTypeFuel_futureTargetsAreEdgeTargets fuel left)
-      (compileTypeFuel_explicitOnlyAtAccepting fuel left) source hFinal]
-    exact (Finset.union_assoc _ _ _).symm
+  rw [compileTypeFuel, buildSequenceAutomaton_menuStep_left
+    (compileTypeFuel fuel left) (compileTypeFuel fuel right) source hRetained,
+    Finset.image_union]
+  exact (Finset.union_assoc _ _ _).symm
 
 /-- The fixed contribution at a state: direct offers and the product clause. -/
 def compiledMenuContribution (processType : PactType)
@@ -287,7 +219,7 @@ theorem compiledMenuContribution_sequence_left
   rw [compileTypeFuel_sequence_eq_build]
   dsimp only
   rw [buildSequenceAutomaton_offersAt_left
-    _ _ (compileTypeFuel_storedMenusEmpty _ left) source hRetained, hInfo]
+    _ _ source hRetained, hInfo]
 
 /-- The right copy preserves the same fixed contribution. -/
 theorem compiledMenuContribution_sequence_right
@@ -317,7 +249,7 @@ theorem compiledMenuContribution_accepting (processType : PactType)
   unfold compiledMenuContribution
   dsimp only
   rw [acceptingInert_offersAt_empty _ (compileTypeFuel_acceptingInert _ processType)
-    (compileTypeFuel_storedMenusEmpty _ processType) source hFinal]
+    source hFinal]
   have hInfo := compileTypeFuel_accepting_stateProductInfoFuel_none
     (typeCompilationFuel processType) processType source hFinal
   change stateProductInfo processType source = none at hInfo
@@ -401,12 +333,11 @@ theorem compiledMenuFrom_sequence_left
   have hFinalClosed : ∀ q ∈ leftFragment.accepting,
       leftGraph.referencedStates q ⊆ leftFragment.accepting := by
     intro q hq
-    change (⟨leftFragment.states, leftFragment.edges⟩ : PendingAutomaton).referencedStates q ∪
+    change (⟨leftFragment.states, leftFragment.edges⟩ : PendingAutomaton).menuStep q ∪
       menuDependencyTargets _ q ⊆ _
     simp only [Nat.min_self, compileTypeMenuLinksFuel_accepting
       (typeCompilationFuel left) left q hq, Finset.union_empty]
-    exact acceptingInert_referencedStates_subset _ (compileTypeFuel_acceptingInert _ left)
-      (compileTypeFuel_futureTargetsAreEdgeTargets _ left) q hq
+    exact acceptingInert_menuStep_subset _ (compileTypeFuel_acceptingInert _ left) q hq
   have hLeftReferences : ∀ q ∈ leftGraph.states, q ∉ sequenceDeleted leftFragment →
       parentGraph.referencedStates (.child 0 q) =
         (leftGraph.referencedStates q).image (sequenceRedirect leftFragment rightFragment) ∪
@@ -428,10 +359,10 @@ theorem compiledMenuFrom_sequence_left
       (rightGraph.referencedStates q).image (.child 1) := by
     intro q
     change (⟨(compileTypeFuel _ _).states, (compileTypeFuel _ _).edges⟩ :
-      PendingAutomaton).referencedStates (.child 1 q) ∪ menuDependencyTargets _ _ = _
+      PendingAutomaton).menuStep (.child 1 q) ∪ menuDependencyTargets _ _ = _
     rw [compileTypeFuel_sequence_eq_build]
     simp only [Nat.min_self]
-    rw [buildSequenceAutomaton_referencedStates_right,
+    rw [buildSequenceAutomaton_menuStep_right,
       menuDependencyTargets_seq_right alphabet left right]
     simp only [rightGraph, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
       Nat.min_self, Finset.image_union]

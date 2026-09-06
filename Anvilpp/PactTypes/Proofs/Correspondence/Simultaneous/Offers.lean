@@ -50,12 +50,11 @@ private lemma indexedFragment_edgeLocal
       edge.environment ∈ alphabet.localEnvironments)
     (hOffers : ∀ entry ∈ automata, ∀ edge ∈ entry.2.edges,
       edge.current ⊆ alphabet.actions ∧
-        ∀ offers, edge.future = .explicit offers → offers ⊆ alphabet.actions) :
+        edge.future.AlphabetLocal alphabet.actions) :
     ∀ edge ∈ indexedFragmentEdges automata,
       edge.environment ∈ alphabet.localEnvironments ∧
         edge.current ⊆ alphabet.actions ∧
-        ∀ offers, edge.future = .explicit offers →
-          offers ⊆ alphabet.actions := by
+        edge.future.AlphabetLocal alphabet.actions := by
   classical
   intro edge hEdge
   rw [indexedFragmentEdges, mem_foldl_union_iff] at hEdge
@@ -69,15 +68,7 @@ private lemma indexedFragment_edgeLocal
     obtain ⟨childEdge, hChildMem, rfl⟩ := hChildEdge
     obtain ⟨hCur, hFut⟩ := hOffers indexed.1 hEntry childEdge hChildMem
     refine ⟨hFamilies indexed.1 hEntry childEdge hChildMem, hCur, ?_⟩
-    intro offers hSpecEq
-    simp only [childPendingEdge, childFutureSpec] at hSpecEq
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hSpecEq
-        simp only [FutureSpec.explicit.injEq] at hSpecEq
-        subst hSpecEq
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hSpecEq; simp at hSpecEq
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
 
 private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
     (elseType : PactType) (branches : List (BareMessage × PactType))
@@ -101,8 +92,7 @@ private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
       (branch.1, compileTypeFuel (typeCompilationFuel branch.2) branch.2)),
       ∀ edge ∈ entry.2.edges,
         edge.current ⊆ alphabet.actions ∧
-          ∀ offers, edge.future = .explicit offers →
-            offers ⊆ alphabet.actions := by
+          edge.future.AlphabetLocal alphabet.actions := by
     intro entry hEntry edge hEdgeMem
     obtain ⟨branch, hBranchMem, rfl⟩ := List.mem_map.mp hEntry
     have := (hBranch branch hBranchMem).2 edge hEdgeMem
@@ -137,15 +127,7 @@ private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
     obtain ⟨hCur, hFut⟩ := hElse.2 childEdge hChildMem
     rw [hElseAlphabet] at hCur hFut
     refine ⟨by simpa [childPendingEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [childPendingEdge, childFutureSpec] at hOffers
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hOffers
-        simp only [FutureSpec.explicit.injEq] at hOffers
-        subst hOffers
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hOffers; simp at hOffers
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
   · exact (indexedFragment_edgeLocal alphabet _ hIndexedFamilies
       hIndexedOffers edge hIndexed).2
   · rw [mem_foldl_union_iff] at hBranchEdge
@@ -161,13 +143,13 @@ private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
           List.mem_map_of_mem (f := Prod.fst) hIndexedMem
         simpa using hMapped
       obtain ⟨branch, hBranchMem, hEq⟩ := List.mem_map.mp hEntry
-      refine ⟨?_, by intro _ h; simp at h⟩
+      refine ⟨?_, by simp [FutureSpec.AlphabetLocal]⟩
       have hActionEq : indexed.1.1 = branch.1 := by rw [← hEq]
       simp only [Finset.singleton_subset_iff, hActionEq]
       exact hGate branch hBranchMem
   · simp only [Finset.mem_image, Finset.mem_filter] at hWait
     obtain ⟨environment, ⟨-, -, -, hGate⟩, rfl⟩ := hWait
-    refine ⟨?_, by intro _ h; simp at h⟩
+    refine ⟨?_, by simp [FutureSpec.AlphabetLocal]⟩
     intro action hAction
     have hIn : action ∈ typeBranchActions branches :=
       (Finset.mem_inter.mp hAction).2
@@ -176,7 +158,7 @@ private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
     exact hGate branch hBranchMem
   · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
     obtain ⟨environment, -, rfl⟩ := hResolved
-    exact ⟨by simp, by intro _ h; simp at h⟩
+    exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 private lemma edgeLocal_offer (alphabet : PactTypeAlphabet)
     (elseType : PactType) (branches : List (BareMessage × PactType))
@@ -211,8 +193,7 @@ private lemma edgeLocal_offer (alphabet : PactTypeAlphabet)
         (parallelTypeBranchesSelecting alphabet selected branches))),
       ∀ edge ∈ entry.2.edges,
         edge.current ⊆ alphabet.actions ∧
-          ∀ offers, edge.future = .explicit offers →
-            offers ⊆ alphabet.actions := by
+          edge.future.AlphabetLocal alphabet.actions := by
     intro entry hEntry edge hEdgeMem
     obtain ⟨selected, hSelectedMem, rfl⟩ := List.mem_map.mp hEntry
     have := (hSelected selected hSelectedMem).2 edge hEdgeMem
@@ -246,15 +227,7 @@ private lemma edgeLocal_offer (alphabet : PactTypeAlphabet)
     obtain ⟨hCur, hFut⟩ := hElse.2 childEdge hChildMem
     rw [hElseAlphabet] at hCur hFut
     refine ⟨by simpa [childPendingEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [childPendingEdge, childFutureSpec] at hOffers
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hOffers
-        simp only [FutureSpec.explicit.injEq] at hOffers
-        subst hOffers
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hOffers; simp at hOffers
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
   · exact (indexedFragment_edgeLocal alphabet _ hIndexedFamilies
       hIndexedOffers edge hIndexed).2
   · rw [mem_foldl_union_iff] at hEnabled
@@ -262,17 +235,17 @@ private lemma edgeLocal_offer (alphabet : PactTypeAlphabet)
     · simp at hEmpty
     · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
       obtain ⟨environment, -, rfl⟩ := hNewEdge
-      exact ⟨by simp, by intro _ h; simp at h⟩
+      exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
   · simp only [Finset.mem_image, Finset.mem_filter] at hWait
     obtain ⟨environment, ⟨-, -, -, -, hGate⟩, rfl⟩ := hWait
-    refine ⟨?_, by intro _ h; simp at h⟩
+    refine ⟨?_, by simp [FutureSpec.AlphabetLocal]⟩
     intro action hAction
     simp only [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
     obtain ⟨branch, hBranchMem, rfl⟩ := hAction
     exact hGate branch hBranchMem
   · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
     obtain ⟨environment, ⟨-, -, -, -, hGate⟩, rfl⟩ := hResolved
-    refine ⟨?_, by intro _ h; simp at h⟩
+    refine ⟨?_, by simp [FutureSpec.AlphabetLocal]⟩
     intro action hAction
     simp only [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
     obtain ⟨branch, hBranchMem, rfl⟩ := hAction
@@ -558,6 +531,22 @@ theorem edgeLocalAt_holds :
               (fun e he => by
                 have := (hRightRestamp e he).2.1
                 rwa [PactType.reannotate_alphabet] at this)
+              (fun e he => (hLeftLocal e he).2.2.resolve _
+                (computeFutureOfFuel_subset_alphabet _ left))
+              (fun e he => (hRightLocal e he).2.2.resolve _
+                (computeFutureOfFuel_subset_alphabet _ right))
+              (fun e he => by
+                have hResolved := (hLeftRestamp e he).2.2.resolve
+                  (computeFutureOfFuel (min fuel (typeCompilationFuel left))
+                    (left.reannotate alphabet))
+                  (computeFutureOfFuel_subset_alphabet _ (left.reannotate alphabet))
+                simpa only [PactType.reannotate_alphabet] using hResolved)
+              (fun e he => by
+                have hResolved := (hRightRestamp e he).2.2.resolve
+                  (computeFutureOfFuel (min fuel (typeCompilationFuel right))
+                    (right.reannotate alphabet))
+                  (computeFutureOfFuel_subset_alphabet _ (right.reannotate alphabet))
+                simpa only [PactType.reannotate_alphabet] using hResolved)
               edge hEdge
 
 /-- A copied default-arm edge of an exclusive offer restricts to an edge of
@@ -631,16 +620,18 @@ theorem xoffer_else_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEq]; rfl
   · rw [← hPCurrent, hChildEq]; rfl
   · rw [← hPFuture, hChildEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.xoffer alphabet elseType branches))
+      (computeFutureOf elseType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_exclusiveOffer_else elseType branches
+          (typeCompilationFuel elseType) elseType le_rfl
+          hElseDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_exclusiveOffer_else elseType branches
           (.xoffer alphabet elseType branches) hWhole hFuelElse hElseDisjoint
-          hElseAlphabet hProductInfo t hStateMem]
+          hElseAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
+
 
 /-- A default-arm edge lifts to the copied edge of an exclusive offer. -/
 theorem xoffer_else_edge_lift (alphabet : PactTypeAlphabet)
@@ -676,17 +667,17 @@ theorem xoffer_else_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.xoffer alphabet elseType branches))
+      (computeFutureOf elseType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_exclusiveOffer_else elseType branches
+          (typeCompilationFuel elseType) elseType le_rfl
+          hElseDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_exclusiveOffer_else elseType branches
           (.xoffer alphabet elseType branches) hWhole hFuelElse hElseDisjoint
-          hElseAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hElseAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 theorem xoffer_branch_edge_restrict (alphabet : PactTypeAlphabet)
@@ -777,16 +768,18 @@ theorem xoffer_branch_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEq]; rfl
   · rw [← hPCurrent, hChildEq]; rfl
   · rw [← hPFuture, hChildEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec (i + 1) childEdge.future
+      (computeFutureOf (.xoffer alphabet elseType branches))
+      (computeFutureOf branchType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel branchType) branchType le_rfl hBranchDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_exclusiveOffer_branch elseType branches
+          (typeCompilationFuel branchType) branchType le_rfl
+          hBranchDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_exclusiveOffer_branch elseType branches
           (.xoffer alphabet elseType branches) hWhole i action branchType hGet
-          hFuelBranch hBranchDisjoint hBranchAlphabet hProductInfo t hStateMem]
+          hFuelBranch hBranchDisjoint hBranchAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
+
 
 /-- A branch-body edge lifts to the copied edge of an exclusive offer. -/
 theorem xoffer_branch_edge_lift (alphabet : PactTypeAlphabet)
@@ -837,17 +830,17 @@ theorem xoffer_branch_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec (i + 1) childEdge.future
+      (computeFutureOf (.xoffer alphabet elseType branches))
+      (computeFutureOf branchType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel branchType) branchType le_rfl hBranchDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_exclusiveOffer_branch elseType branches
+          (typeCompilationFuel branchType) branchType le_rfl
+          hBranchDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_exclusiveOffer_branch elseType branches
           (.xoffer alphabet elseType branches) hWhole i action branchType hGet
-          hFuelBranch hBranchDisjoint hBranchAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hFuelBranch hBranchDisjoint hBranchAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- Current-offer correspondence at an exclusive offer.  Following the paper:
@@ -888,9 +881,7 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
               (typeCompilationFuel residual') residual').initial)
             (Exists.intro
               (computeFutureOf (.xoffer alphabet elseType branches)
-                (.child (index + 1) (compileTypeFuel
-                  (typeCompilationFuel residual') residual').initial) \
-                {cAction}) ⟨?_, ?_⟩)
+                TypeAutomatonState.root \ typeBranchActions branches) ⟨?_, ?_⟩)
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               (.xoffer alphabet elseType branches) TypeAutomatonState.root
               (.child (index + 1) (compileTypeFuel
@@ -901,9 +892,8 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
                 label := AutomatonConstructionLabel.visible
                   (TypeLabel.message cAction.1 cAction.2),
                 current := {cAction},
-                future := FutureSpec.at (childState (index + 1)
-                  (compileTypeFuel (typeCompilationFuel residual') residual').initial)
-                  {cAction},
+                future := FutureSpec.at TypeAutomatonState.root
+                  (typeBranchActions branches),
                 target := childState (index + 1) (compileTypeFuel
                   (typeCompilationFuel residual') residual').initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -931,8 +921,7 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
               elseType).initial)
             (Exists.intro
               (computeFutureOf (.xoffer alphabet elseType branches)
-                (.child 0 (compileTypeFuel (typeCompilationFuel elseType)
-                  elseType).initial)) ⟨?_, ?_⟩)
+                TypeAutomatonState.root \ typeBranchActions branches) ⟨?_, ?_⟩)
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               (.xoffer alphabet elseType branches) TypeAutomatonState.root
               (.child 0 (compileTypeFuel (typeCompilationFuel elseType)
@@ -941,8 +930,8 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
                 current := (∅ : Finset BareMessage),
-                future := FutureSpec.at (childState 0 (compileTypeFuel
-                  (typeCompilationFuel elseType) elseType).initial) ∅,
+                future := FutureSpec.at TypeAutomatonState.root
+                  (typeBranchActions branches),
                 target := childState 0 (compileTypeFuel
                   (typeCompilationFuel elseType) elseType).initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -1054,7 +1043,8 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
           subst hLabelEq
           have hCurrentEq : current = {indexed.1.1} := hPCurrent.symm
           subst hCurrentEq
-          refine ⟨entry.2, typeFutureOffers entry.2 \ {entry.1}, ?_, ?_⟩
+          refine ⟨entry.2, typeFutureOffers (.xoffer alphabet elseType branches) \
+            typeBranchActions branches, ?_, ?_⟩
           · rw [hActionEq]
             exact ⟨TypeTransition.xoffer_branch environment alphabet elseType
                 branches entry.1 entry.2
@@ -1110,7 +1100,8 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
         subst hLabelEq
         have hCurrentEq : current = ∅ := hPCurrent.symm
         subst hCurrentEq
-        refine ⟨elseType, typeFutureOffers elseType, ?_, ?_⟩
+        refine ⟨elseType, typeFutureOffers (.xoffer alphabet elseType branches) \
+          typeBranchActions branches, ?_, ?_⟩
         · exact ⟨TypeTransition.xoffer_else environment alphabet elseType
               branches ⟨PactTypeAlphabet.environment_wellFormed hEnvMem, hClock,
                 hNoImmediate, hResolvedNeeds⟩ hGate,
@@ -1253,16 +1244,18 @@ theorem offer_else_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEq]; rfl
   · rw [← hPCurrent, hChildEq]; rfl
   · rw [← hPFuture, hChildEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.offer alphabet elseType branches))
+      (computeFutureOf elseType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_selectedConjunctiveOffer_else elseType branches
+          (typeCompilationFuel elseType) elseType le_rfl
+          hElseDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_selectedConjunctiveOffer_else elseType branches
           (.offer alphabet elseType branches) hWhole hElseAlphabet hFuelElse
-          hElseDisjoint hProductInfo t hStateMem]
+          hElseDisjoint hProductInfo t hStateMem)
+    exact hResolve.symm
+
 
 /-- A default-arm edge lifts to the copied edge of a conjunctive offer. -/
 theorem offer_else_edge_lift (alphabet : PactTypeAlphabet)
@@ -1298,17 +1291,17 @@ theorem offer_else_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.offer alphabet elseType branches))
+      (computeFutureOf elseType) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel elseType) elseType le_rfl hElseDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_selectedConjunctiveOffer_else elseType branches
+          (typeCompilationFuel elseType) elseType le_rfl
+          hElseDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_selectedConjunctiveOffer_else elseType branches
           (.offer alphabet elseType branches) hWhole hElseAlphabet hFuelElse
-          hElseDisjoint hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hElseDisjoint hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- A copied selected-conjunction edge of a conjunctive offer restricts to an
@@ -1414,18 +1407,18 @@ theorem offer_selected_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEq]; rfl
   · rw [← hPCurrent, hChildEq]; rfl
   · rw [← hPFuture, hChildEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec (i + 1) childEdge.future
+      (computeFutureOf (.offer alphabet elseType branches))
+      (computeFutureOf (parallelTypeBranchesSelecting alphabet selected branches)) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel
-            (parallelTypeBranchesSelecting alphabet selected branches))
-          (parallelTypeBranchesSelecting alphabet selected branches) le_rfl
-          hSelDisjoint childEdge hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_selectedConjunctiveOffer_branch elseType branches
+          (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches)) (parallelTypeBranchesSelecting alphabet selected branches) le_rfl
+          hSelDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_selectedConjunctiveOffer_branch elseType branches
           (.offer alphabet elseType branches) hWhole i selected hGet hFuelSel
-          hSelAlphabet hDisjoint hProductInfo t hStateMem]
+          hSelAlphabet hDisjoint hProductInfo t hStateMem)
+    exact hResolve.symm
+
 
 /-- A selected-conjunction edge lifts to the copied edge of a conjunctive
 offer. -/
@@ -1494,19 +1487,17 @@ theorem offer_selected_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec (i + 1) childEdge.future
+      (computeFutureOf (.offer alphabet elseType branches))
+      (computeFutureOf (parallelTypeBranchesSelecting alphabet selected branches)) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
-          (typeCompilationFuel
-            (parallelTypeBranchesSelecting alphabet selected branches))
-          (parallelTypeBranchesSelecting alphabet selected branches) le_rfl
-          hSelDisjoint childEdge hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_selectedConjunctiveOffer_branch elseType branches
+          (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches)) (parallelTypeBranchesSelecting alphabet selected branches) le_rfl
+          hSelDisjoint childEdge hChildEdgeMem t hRef
+        exact computeFutureOf_selectedConjunctiveOffer_branch elseType branches
           (.offer alphabet elseType branches) hWhole i selected hGet hFuelSel
-          hSelAlphabet hDisjoint hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hSelAlphabet hDisjoint hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- Current-offer correspondence at a conjunctive offer.  The construction has
@@ -2007,9 +1998,9 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
           exact hGuard hEnv.2.2.2.2
       -- With no root-sourced edge the root references nothing, so its
       -- same-cycle reach is itself and it publishes no offer.
-      have hRefs : pending.referencedStates TypeAutomatonState.root = ∅ := by
+      have hRefs : pending.menuStep TypeAutomatonState.root = ∅ := by
         rw [hPending]
-        simp only [PendingAutomaton.referencedStates]
+        simp only [PendingAutomaton.menuStep]
         rw [Finset.filter_eq_empty_iff.mpr (fun edge hEdge => hNoRootEdge edge
           hEdge)]
         simp
@@ -2031,7 +2022,7 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
                 {TypeAutomatonState.root} = {TypeAutomatonState.root} := by
               simp only [PendingAutomaton.futureStep]
               rw [show ({TypeAutomatonState.root} : Finset TypeAutomatonState).biUnion
-                  pending.referencedStates = ∅ by
+                  pending.menuStep = ∅ by
                 rw [Finset.singleton_biUnion]; exact hRefs]
               simp
             rw [hStep]
@@ -2061,7 +2052,7 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
     have hDecomp := computeFutureOf_root_decomposition whole
       TypeAutomatonState.root
       (exclusiveOfferEntries elseFragment branchAutomata) pending hPending
-      (referencesClosed_compileTypeFuel whole (typeCompilationFuel whole)
+      (compileTypeFuel_menuClosed (typeCompilationFuel whole) whole
         (Nat.le_refl _) hWholeDisjoint)
       (by
         rw [hPending]
@@ -2073,11 +2064,11 @@ theorem futureOffersAgree_xoffer (alphabet : PactTypeAlphabet)
           (Finset.mem_union_left _ (Finset.mem_singleton_self _)))
       (by
         rw [hPending, hWhole]
-        exact buildExclusiveOfferAutomaton_referencedStates_root_subset
+        exact buildExclusiveOfferAutomaton_menuStep_root_subset
           alphabet branches elseFragment branchAutomata)
       (by
         rw [hPending, hWhole]
-        exact buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
+        exact buildExclusiveOfferAutomaton_entries_subset_menuStep_root
           alphabet branches elseFragment branchAutomata hHeads hGuard)
       (by
         simp only [hWholeDef]
@@ -2305,9 +2296,9 @@ theorem futureOffersAgree_offer (alphabet : PactTypeAlphabet)
           exact hGuard hEnv.2.2.2.2
       -- With no root-sourced edge the root references nothing, so its
       -- same-cycle reach is itself and it publishes no offer.
-      have hRefs : pending.referencedStates TypeAutomatonState.root = ∅ := by
+      have hRefs : pending.menuStep TypeAutomatonState.root = ∅ := by
         rw [hPending]
-        simp only [PendingAutomaton.referencedStates]
+        simp only [PendingAutomaton.menuStep]
         rw [Finset.filter_eq_empty_iff.mpr (fun edge hEdge => hNoRootEdge edge
           hEdge)]
         simp
@@ -2329,7 +2320,7 @@ theorem futureOffersAgree_offer (alphabet : PactTypeAlphabet)
                 {TypeAutomatonState.root} = {TypeAutomatonState.root} := by
               simp only [PendingAutomaton.futureStep]
               rw [show ({TypeAutomatonState.root} : Finset TypeAutomatonState).biUnion
-                  pending.referencedStates = ∅ by
+                  pending.menuStep = ∅ by
                 rw [Finset.singleton_biUnion]; exact hRefs]
               simp
             rw [hStep]
@@ -2359,7 +2350,7 @@ theorem futureOffersAgree_offer (alphabet : PactTypeAlphabet)
     have hDecomp := computeFutureOf_root_decomposition whole
       TypeAutomatonState.root
       (conjunctiveOfferEntries elseFragment selectedAutomata) pending hPending
-      (referencesClosed_compileTypeFuel whole (typeCompilationFuel whole)
+      (compileTypeFuel_menuClosed (typeCompilationFuel whole) whole
         (Nat.le_refl _) hWholeDisjoint)
       (by
         rw [hPending]
@@ -2372,12 +2363,12 @@ theorem futureOffersAgree_offer (alphabet : PactTypeAlphabet)
           (Finset.mem_union_left _ (Finset.mem_singleton_self _)))
       (by
         rw [hPending, hWhole]
-        exact buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
+        exact buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset
           alphabet branches elseFragment selectedAutomata)
       (by
         rw [hPending, hWhole]
         exact
-          buildSelectedConjunctiveOfferAutomaton_entries_subset_referencedStates_root
+          buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
             alphabet branches elseFragment selectedAutomata hHeads hGuard)
       (by
         simp only [hWholeDef]
@@ -2512,6 +2503,243 @@ offer, and its guard drops the future-resolution condition. -/
 the children's completion statements as hypotheses so that the simultaneous
 induction supplies them. -/
 
+
+/-- Resolved exclusive roots remove every head; unresolved roots remove their current offers. -/
+theorem TypeOffers.xoffer_future_eq {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {elseType target : PactType} {branches : List (BareMessage × PactType)}
+    {label : TypeLabel} {current future : Finset BareMessage}
+    (h : TypeOffers env (.xoffer alphabet elseType branches) label target current future) :
+    future = typeFutureOffers (.xoffer alphabet elseType branches) \
+      (if TypeResolved env branches then typeBranchActions branches
+       else typeWaitingOffers env branches) := by
+  cases h with
+  | xoffer_branch _ _ _ _ _ _ hCond _ => simp only [if_pos hCond.2.2.2]
+  | xoffer_else _ _ _ _ hCond _ => simp only [if_pos hCond.2.2.2]
+  | xoffer_wait _ _ _ _ hCond _ => simp only [if_neg hCond.2.1]
+
+/-- Every conjunctive root field reads the rule's target menu. -/
+theorem TypeOffers.offer_future_eq {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {elseType target : PactType} {branches : List (BareMessage × PactType)}
+    {label : TypeLabel} {current future : Finset BareMessage}
+    (h : TypeOffers env (.offer alphabet elseType branches) label target current future) :
+    future = typeFutureOffers target \ current := by
+  cases h <;> simp only [Finset.sdiff_empty]
+
+private theorem exclusiveOffer_root_future_spec (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType)) (elseFragment : AutomatonFragment)
+    (branchFragments : List (BareMessage × AutomatonFragment))
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildExclusiveOfferAutomaton alphabet branches
+      elseFragment branchFragments).edges)
+    (hSource : edge.source = .root) :
+    edge.future = .at .root
+      (if TypeResolved edge.environment branches then typeBranchActions branches
+       else typeWaitingOffers edge.environment branches) := by
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with (((hElse | hIndexed) | hBranch) | hWait) | hDefault
+  · obtain ⟨child, _, rfl⟩ := Finset.mem_image.mp hElse
+    simp [childPendingEdge, childState] at hSource
+  · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+    rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+    · exact (Finset.notMem_empty _ hEmpty).elim
+    · obtain ⟨child, _, rfl⟩ := Finset.mem_image.mp hChild
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, _, hRoot⟩
+    · exact (Finset.notMem_empty _ hEmpty).elim
+    · obtain ⟨env, hEnv, rfl⟩ := Finset.mem_image.mp hRoot
+      have hResolved := (Finset.mem_filter.mp hEnv).2.2.1
+      simp [TypeResolved, hResolved]
+  · obtain ⟨env, hEnv, rfl⟩ := Finset.mem_image.mp hWait
+    have hUnresolved := (Finset.mem_filter.mp hEnv).2.2.1
+    simp [TypeResolved, hUnresolved, typeWaitingOffers]
+  · obtain ⟨env, hEnv, rfl⟩ := Finset.mem_image.mp hDefault
+    have hResolved := (Finset.mem_filter.mp hEnv).2.2.2.1
+    simp [TypeResolved, hResolved]
+
+private theorem conjunctiveOffer_root_future_spec (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType)) (elseFragment : AutomatonFragment)
+    (branchFragments : List (BareMessage × AutomatonFragment))
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildSelectedConjunctiveOfferAutomaton alphabet branches
+      elseFragment branchFragments).edges)
+    (hSource : edge.source = .root) :
+    edge.future = .at edge.target edge.current := by
+  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    Finset.mem_union] at hEdge
+  rcases hEdge with (((hElse | hIndexed) | hBranch) | hWait) | hDefault
+  · obtain ⟨child, _, rfl⟩ := Finset.mem_image.mp hElse
+    simp [childPendingEdge, childState] at hSource
+  · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+    rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+    · exact (Finset.notMem_empty _ hEmpty).elim
+    · obtain ⟨child, _, rfl⟩ := Finset.mem_image.mp hChild
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, _, hRoot⟩
+    · exact (Finset.notMem_empty _ hEmpty).elim
+    · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hRoot
+      rfl
+  · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hWait
+    rfl
+  · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hDefault
+    rfl
+
+theorem xoffer_root_future (alphabet : PactTypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    {env : TypeEnvironment} {label : TypeLabel} {current future : Finset BareMessage}
+    {target : TypeAutomatonState}
+    (hEdge : (compileType (.xoffer alphabet elseType branches)).HasEdge
+      .root env label ⟨current, future⟩ target) :
+    future = computeFutureOf (.xoffer alphabet elseType branches) .root \
+      (if TypeResolved env branches then typeBranchActions branches
+       else typeWaitingOffers env branches) := by
+  obtain ⟨edge, hMem, hSource, hEnv, _, _, hFuture, _⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge _ _ _ _ _ _).mp hEdge
+  change resolveFutureSpec (computeFutureOf (.xoffer alphabet elseType branches))
+    edge.future = future at hFuture
+  rw [compileTypeFuel_xoffer_eq] at hMem
+  rw [exclusiveOffer_root_future_spec alphabet branches _ _ edge hMem hSource] at hFuture
+  simpa only [resolveFutureSpec, hEnv] using hFuture.symm
+
+theorem offer_root_future (alphabet : PactTypeAlphabet) (elseType : PactType)
+    (branches : List (BareMessage × PactType))
+    {env : TypeEnvironment} {label : TypeLabel} {current future : Finset BareMessage}
+    {target : TypeAutomatonState}
+    (hEdge : (compileType (.offer alphabet elseType branches)).HasEdge
+      .root env label ⟨current, future⟩ target) :
+    future = computeFutureOf (.offer alphabet elseType branches) target \ current := by
+  obtain ⟨edge, hMem, hSource, _, _, hCurrent, hFuture, hTarget⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge _ _ _ _ _ _).mp hEdge
+  change resolveFutureSpec (computeFutureOf (.offer alphabet elseType branches))
+    edge.future = future at hFuture
+  rw [compileTypeFuel_offer_eq] at hMem
+  rw [conjunctiveOffer_root_future_spec alphabet branches _ _ edge hMem hSource] at hFuture
+  simpa only [resolveFutureSpec, hTarget, hCurrent] using hFuture.symm
+
+
+/-- The exclusive root uses the source menu; copied continuations use full child pairs. -/
+theorem offerCorrespondence_xoffer (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hElseDisjoint : elseType.OfferBranchesDisjoint)
+    (hElseAlphabet : elseType.alphabet = (PactType.xoffer alphabet elseType branches).alphabet)
+    (hBranchDisjoint : ∀ action branchType, (action, branchType) ∈ branches →
+      branchType.OfferBranchesDisjoint)
+    (hBranchAlphabet : ∀ action branchType, (action, branchType) ∈ branches →
+      branchType.alphabet = (PactType.xoffer alphabet elseType branches).alphabet)
+    (hMenus : FutureOffersAgree (.xoffer alphabet elseType branches))
+    (hElse : TypeAutomatonStepCorrespondence elseType)
+    (hBranches : ∀ action branchType, (action, branchType) ∈ branches →
+      TypeAutomatonStepCorrespondence branchType) :
+    TypeAutomatonStepCorrespondence (.xoffer alphabet elseType branches) := by
+  have hCurrent := currentOfferCorrespondence_xoffer alphabet elseType branches
+    hElseDisjoint hElseAlphabet hBranchDisjoint hBranchAlphabet hElse.toCurrent
+    (fun action ty hMem => (hBranches action ty hMem).toCurrent)
+  constructor
+  · intro rho rho' q env label offers hRelated hStep
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_xoffer_cases alphabet elseType branches hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨i, action, ty, child, hGet, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨q', edgeFuture, hEdge, hTarget⟩ := hCurrent.1 hRelated hStep
+      have hAuto := xoffer_root_future alphabet elseType branches hEdge
+      rw [hMenus hRelated] at hAuto
+      have hEqual : edgeFuture = future := hAuto.trans hStep.2.xoffer_future_eq.symm
+      exact ⟨q', hEqual ▸ hEdge, hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hElse.1 hChild hStep
+      exact ⟨.child 0 child',
+        xoffer_else_edge_lift alphabet elseType branches hElseDisjoint hElseAlphabet hEdge,
+        relationMembership_xoffer_else alphabet elseType branches hTarget⟩
+    · have hMem := List.mem_of_getElem? hGet
+      obtain ⟨child', hEdge, hTarget⟩ := (hBranches action ty hMem).1 hChild hStep
+      exact ⟨.child (i + 1) child',
+        xoffer_branch_edge_lift alphabet elseType branches i action ty hGet
+          (hBranchDisjoint action ty hMem) (hBranchAlphabet action ty hMem) hEdge,
+        relationMembership_xoffer_branch alphabet elseType branches hGet hTarget⟩
+  · intro rho q q' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_xoffer_cases alphabet elseType branches hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨i, action, ty, child, hGet, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨rho', semanticFuture, hStep, hTarget⟩ := hCurrent.2 hRelated hEdge
+      have hAuto := xoffer_root_future alphabet elseType branches hEdge
+      rw [hMenus hRelated] at hAuto
+      have hEqual : semanticFuture = future := hStep.2.xoffer_future_eq.trans hAuto.symm
+      exact ⟨rho', hEqual ▸ hStep, hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        xoffer_else_edge_restrict alphabet elseType branches hElseDisjoint hElseAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hElse.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_xoffer_else alphabet elseType branches hTarget⟩
+    · have hMem := List.mem_of_getElem? hGet
+      obtain ⟨child', rfl, hChildEdge⟩ :=
+        xoffer_branch_edge_restrict alphabet elseType branches i action ty hGet
+          (hBranchDisjoint action ty hMem) (hBranchAlphabet action ty hMem) hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := (hBranches action ty hMem).2 hChild hChildEdge
+      exact ⟨rho', hStep,
+        relationMembership_xoffer_branch alphabet elseType branches hGet hTarget⟩
+
+/-- The conjunctive root uses its related target menu; copied states retain full pairs. -/
+theorem offerCorrespondence_offer (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType))
+    (hElseDisjoint : elseType.OfferBranchesDisjoint)
+    (hElseAlphabet : elseType.alphabet = (PactType.offer alphabet elseType branches).alphabet)
+    (hDisjoint : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint)
+    (hSelDisjoint : ∀ selected ∈ branches,
+      (parallelTypeBranchesSelecting alphabet selected branches).OfferBranchesDisjoint)
+    (hSelAlphabet : ∀ selected ∈ branches,
+      (parallelTypeBranchesSelecting alphabet selected branches).alphabet =
+        (PactType.offer alphabet elseType branches).alphabet)
+    (hMenus : FutureOffersAgree (.offer alphabet elseType branches))
+    (hElse : TypeAutomatonStepCorrespondence elseType)
+    (hSelected : ∀ selected ∈ branches,
+      TypeAutomatonStepCorrespondence (parallelTypeBranchesSelecting alphabet selected branches)) :
+    TypeAutomatonStepCorrespondence (.offer alphabet elseType branches) := by
+  have hCurrent := currentOfferCorrespondence_offer alphabet elseType branches
+    hElseDisjoint hElseAlphabet hDisjoint hSelDisjoint hSelAlphabet hElse.toCurrent
+    (fun selected hMem => (hSelected selected hMem).toCurrent)
+  constructor
+  · intro rho rho' q env label offers hRelated hStep
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_offer_cases alphabet elseType branches hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨i, selected, child, hGet, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨q', edgeFuture, hEdge, hTarget⟩ := hCurrent.1 hRelated hStep
+      have hAuto := offer_root_future alphabet elseType branches hEdge
+      rw [hMenus hTarget] at hAuto
+      have hEqual : edgeFuture = future := hAuto.trans hStep.2.offer_future_eq.symm
+      exact ⟨q', hEqual ▸ hEdge, hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hElse.1 hChild hStep
+      exact ⟨.child 0 child',
+        offer_else_edge_lift alphabet elseType branches hElseDisjoint hElseAlphabet hEdge,
+        relationMembership_offer_else alphabet elseType branches hTarget⟩
+    · have hMem := List.mem_of_getElem? hGet
+      obtain ⟨child', hEdge, hTarget⟩ := (hSelected selected hMem).1 hChild hStep
+      exact ⟨.child (i + 1) child',
+        offer_selected_edge_lift alphabet elseType branches i selected hGet
+          hDisjoint (hSelDisjoint selected hMem) (hSelAlphabet selected hMem) hEdge,
+        relationMembership_offer_selected alphabet elseType branches hGet hTarget⟩
+  · intro rho q q' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_offer_cases alphabet elseType branches hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨i, selected, child, hGet, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨rho', semanticFuture, hStep, hTarget⟩ := hCurrent.2 hRelated hEdge
+      have hAuto := offer_root_future alphabet elseType branches hEdge
+      rw [hMenus hTarget] at hAuto
+      have hEqual : semanticFuture = future := hStep.2.offer_future_eq.trans hAuto.symm
+      exact ⟨rho', hEqual ▸ hStep, hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        offer_else_edge_restrict alphabet elseType branches hElseDisjoint hElseAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hElse.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_offer_else alphabet elseType branches hTarget⟩
+    · have hMem := List.mem_of_getElem? hGet
+      obtain ⟨child', rfl, hChildEdge⟩ :=
+        offer_selected_edge_restrict alphabet elseType branches i selected hGet
+          hDisjoint (hSelDisjoint selected hMem) (hSelAlphabet selected hMem) hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := (hSelected selected hMem).2 hChild hChildEdge
+      exact ⟨rho', hStep,
+        relationMembership_offer_selected alphabet elseType branches hGet hTarget⟩
 
 end
 

@@ -1,5 +1,6 @@
 import Anvilpp.ProofHelpers.Composition
 import Anvilpp.ProofHelpers.Objectives
+import Anvilpp.PactTypes.Spec.Syntax.OfferMenuLinearityDefs
 
 namespace Pact
 
@@ -20,7 +21,8 @@ def ClosedGuardedRegular (processType : PactType) : Prop :=
     PactType.ParallelMessageOwnership processType ∧
     PactType.InterfaceScoped processType ∧
     PactType.InterfaceAlphabetScoped processType ∧
-    PactType.ConjunctiveMessageOwnership processType
+    PactType.ConjunctiveMessageOwnership processType ∧
+    OfferMenuLinear processType
 
 /-- Types admitted by the canonical construction. -/
 def AdmissibleType (processType : PactType) : Prop :=

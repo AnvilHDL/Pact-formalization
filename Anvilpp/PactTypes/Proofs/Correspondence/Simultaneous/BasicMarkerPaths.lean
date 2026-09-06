@@ -39,8 +39,10 @@ theorem compiledMenuMarkerPath_child (parent child : PactType) (index : Nat)
     (fun source => by
       simp only [compiledMenuGraphFuel, Nat.min_self,
         PendingAutomaton.withMenuDependencies]
-      rw [referencedStates_of_outgoing_childPendingEdge _ _ index source
-        (hOutgoing source), hLinks, Finset.image_union])
+      have hStep := menuStep_of_outgoing_childPendingEdge _ _ index source
+        (hOutgoing source)
+      dsimp only [AutomatonFragment.toPending] at hStep
+      rw [hStep, hLinks, Finset.image_union])
     (compiledMenuGraphFuel_referencesClosed _ child le_rfl hDisjoint) q hq
     (by
       change (compileTypeFuel (typeCompilationFuel child) child).states.card ≤
@@ -76,10 +78,10 @@ theorem compiledMenuMarkerPath_root (ty : PactType) (name : String)
     (hNoMarker : ¬ MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty)
       name .root)
     (hUpper : ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-        PendingAutomaton).referencedStates .root ⊆ insert .root entries)
+        PendingAutomaton).menuStep .root ⊆ insert .root entries)
     (hEntries : entries ⊆
       ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-          PendingAutomaton).referencedStates .root) :
+          PendingAutomaton).menuStep .root) :
     (∃ r ∈ (compiledMenuGraphFuel (typeCompilationFuel ty) ty).futureReachable .root,
       MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty) name r) ↔
     ∃ entry ∈ entries,
@@ -87,7 +89,7 @@ theorem compiledMenuMarkerPath_root (ty : PactType) (name : String)
         MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty) name r := by
   have hRefs : (compiledMenuGraphFuel (typeCompilationFuel ty) ty).referencedStates
       .root = ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-          PendingAutomaton).referencedStates .root := by
+          PendingAutomaton).menuStep .root := by
     simp only [compiledMenuGraphFuel, Nat.min_self,
       PendingAutomaton.withMenuDependencies, compileTypeMenuLinksFuel_root,
       Finset.union_empty]
@@ -118,8 +120,8 @@ theorem compiledMenuMarkerPath_root_of_no_outgoing (ty : PactType) (name : Strin
   have hReferences :
       ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states,
           edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-        PendingAutomaton).referencedStates .root = ∅ := by
-    simp only [PendingAutomaton.referencedStates]
+        PendingAutomaton).menuStep .root = ∅ := by
+    simp only [PendingAutomaton.menuStep]
     rw [Finset.filter_eq_empty_iff.mpr (fun edge hEdge => hNoOutgoing edge hEdge)]
     simp
   have hPath := compiledMenuMarkerPath_root ty name ∅ hDisjoint hRoot hNoMarker
@@ -271,7 +273,7 @@ private theorem compiledMenuMarkerPath_binaryChoice (a : PactTypeAlphabet)
     · exact hq
   rcases hShape with hRoot | ⟨state, rfl, hRelated⟩ | ⟨state, rfl, hRelated⟩
   · cases hRoot
-    have hRefs := buildChoiceAutomaton_referencedStates_root a
+    have hRefs := buildChoiceAutomaton_menuStep_root a
       (compileTypeFuel (typeCompilationFuel left) left)
       (compileTypeFuel (typeCompilationFuel right) right) leftLabel rightLabel
       hLeftLabel hRightLabel
@@ -467,9 +469,9 @@ theorem compiledMenuMarkerPath_xoffer (a : PactTypeAlphabet) (elseType : PactTyp
         (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
             exact buildExclusiveOfferAutomaton_markerSource_root a branches _ _ name)
         (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            exact buildExclusiveOfferAutomaton_referencedStates_root_subset a branches _ _)
+            exact buildExclusiveOfferAutomaton_menuStep_root_subset a branches _ _)
         (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            exact buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
+            exact buildExclusiveOfferAutomaton_entries_subset_menuStep_root
               a branches _ _ hHeads hGuard)
       rw [hRootPath]
       constructor
@@ -691,11 +693,11 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
             exact buildSelectedConjunctiveOfferAutomaton_markerSource_root
               a branches _ _ name)
         (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-            exact buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
+            exact buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset
               a branches _ _)
         (by rw [show whole = .offer a elseType branches by rfl, hCompile]
             exact
-              buildSelectedConjunctiveOfferAutomaton_entries_subset_referencedStates_root
+              buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
                 a branches _ _ hHeads hGuard)
       rw [hRootPath]
       constructor

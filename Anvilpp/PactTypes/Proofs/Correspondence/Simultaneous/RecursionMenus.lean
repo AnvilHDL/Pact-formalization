@@ -10,7 +10,7 @@ noncomputable section
 open Classical Pact.NewCorrespondence
 
 /-- Before installation, a marker represents a variable and has an empty menu
-by the child hypothesis. Suppressing its bookkeeping reference loses no offer. -/
+by the child hypothesis. Stopping its execution edge loses no offer. -/
 theorem computeFutureOf_markerStopped (ty : PactType) (name : String)
     (hDisjoint : ty.OfferBranchesDisjoint) (hTail : ty.TailClosed)
     (hCurrent : CurrentOfferCorrespondence ty) (hMenus : FutureOffersAgree ty)
@@ -34,10 +34,10 @@ theorem computeFutureOf_markerStopped (ty : PactType) (name : String)
     simp only [original, compiledMenuGraphFuel, Nat.min_self,
       PendingAutomaton.withMenuDependencies]
     change _ ∪ _ ⊆ _
-    change _ ⊆ fragment.toPending.referencedStates q ∪
+    change _ ⊆ fragment.toPending.menuStep q ∪
       menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) q
     exact Finset.union_subset_union
-      (markerStoppedFragment_referencedStates_subset fragment name q) (Finset.Subset.refl _)
+      (markerStoppedFragment_menuStep_subset fragment name q) (Finset.Subset.refl _)
   have hStep : ∀ q,
       (∃ theta, relationMembership (buildRelationSet ty (compileType ty)) theta q) →
       ∀ t ∈ original.referencedStates q,
@@ -46,7 +46,7 @@ theorem computeFutureOf_markerStopped (ty : PactType) (name : String)
     intro q ⟨theta, hTheta⟩ t ht
     simp only [original, compiledMenuGraphFuel, Nat.min_self,
       PendingAutomaton.withMenuDependencies] at ht
-    change t ∈ fragment.toPending.referencedStates q ∪
+    change t ∈ fragment.toPending.menuStep q ∪
       menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) q at ht
     rcases Finset.mem_union.mp ht with hExecution | hLink
     · obtain ⟨e, hE, hRef⟩ := Finset.mem_biUnion.mp hExecution
@@ -62,23 +62,17 @@ theorem computeFutureOf_markerStopped (ty : PactType) (name : String)
         by_cases hClock : e.label.semantic = .tock
         · simp [hClock] at hRef
         have hTarget : t = e.target := by
-          cases hFuture : e.future with
-          | explicit offers => simp [hClock, hFuture] at hRef
-          | «at» s removed =>
-            have hs : t = s := by simpa [hClock, hFuture] using hRef
-            rw [hs, compileTypeFuel_futureTargetsAreEdgeTargets _ ty e hE s removed hFuture]
+          simpa only [if_neg hClock, Finset.mem_singleton] using hRef
         subst t
         have hEdge : (compileType ty).HasEdge q e.environment label
-            ⟨e.current, match e.future with
-              | .explicit f => f
-              | .at s removed => computeFutureOf ty s \ removed⟩ e.target :=
+            ⟨e.current, resolveFutureSpec (computeFutureOf ty) e.future⟩ e.target :=
           (compileType_hasEdge_iff_hasResolvedEdge ty _ _ _ _ _).mpr
             ⟨e, hE, hSource, rfl, hLabel, rfl, rfl, rfl⟩
         obtain ⟨target, _, _, hTarget⟩ := hCurrent.2 hTheta hEdge
         refine Or.inl ⟨⟨target, hTarget⟩, Finset.mem_union_left _ ?_⟩
         apply Finset.mem_biUnion.mpr
         refine ⟨e, Finset.mem_filter.mpr ⟨?_, hSource⟩, hRef⟩
-        exact Finset.mem_image.mpr ⟨e, hE, by simp [hLabel]⟩
+        exact Finset.mem_filter.mpr ⟨hE, by simp [hLabel]⟩
     · obtain ⟨link, hLink', hTarget⟩ := Finset.mem_image.mp hLink
       obtain ⟨hLink', _⟩ := Finset.mem_filter.mp hLink'
       obtain ⟨_, target, _, hTargetRelated, _⟩ :=
@@ -131,7 +125,7 @@ theorem compiledMenuContribution_recur_child (alphabet : PactTypeAlphabet)
 
 /-- The copied-state equation before identifying marker paths with `b_X`.
 Stopping markers retains the old carrier and L; it only suppresses their
-private bookkeeping references while the new backedges are accounted for. -/
+execution edges while the new backedges are accounted for. -/
 theorem computeFutureOf_recur_child_split (alphabet : PactTypeAlphabet)
     (name : String) (body : PactType)
     (hDisjoint : body.OfferBranchesDisjoint) (hTail : body.TailOccurrences name True)
@@ -149,7 +143,7 @@ theorem computeFutureOf_recur_child_split (alphabet : PactTypeAlphabet)
   intro fragment stopped menu
   have hReach := buildRecursionAutomaton_menuReachable_child alphabet name fragment
     (compileTypeMenuLinksFuel (typeCompilationFuel body) body)
-    (referencesClosed_compileTypeFuel body _ le_rfl hDisjoint)
+    (compileTypeFuel_menuClosed _ body le_rfl hDisjoint)
     (compileTypeMenuLinksFuel_targets_mem _ body le_rfl hDisjoint)
     (compileTypeFuel_initial_mem _ body le_rfl) source hSource
   rw [computeFutureOf_eq_menuFrom]
@@ -190,12 +184,12 @@ theorem computeFutureOf_recur_root (alphabet : PactTypeAlphabet)
   let pending := fragment.toPending
   have hWholeDisjoint : whole.OfferBranchesDisjoint := by
     simpa only [whole, PactType.OfferBranchesDisjoint] using hDisjoint
-  have hRefs : pending.referencedStates .root =
+  have hRefs : pending.menuStep .root =
       {.child 0 (compileType body).initial} := by
-    change (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).referencedStates .root = _
+    change (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).menuStep .root = _
     dsimp only [fragment, whole]
     rw [compileTypeFuel_recur_eq]
-    exact buildRecursionAutomaton_referencedStates_root alphabet name _
+    exact buildRecursionAutomaton_menuStep_root alphabet name _
   have hOffers : pending.offersAt .root = ∅ := by
     change (⟨fragment.states, fragment.edges⟩ : PendingAutomaton).offersAt .root = ∅
     dsimp only [fragment, whole]
@@ -209,7 +203,7 @@ theorem computeFutureOf_recur_root (alphabet : PactTypeAlphabet)
     · split at hs <;> simp [childState] at hs
   have hRoot := computeFutureOf_root_decomposition whole .root
     {.child 0 (compileType body).initial} pending rfl
-    (referencesClosed_compileTypeFuel whole _ le_rfl hWholeDisjoint)
+    (compileTypeFuel_menuClosed _ whole le_rfl hWholeDisjoint)
     (by
       change TypeAutomatonState.root ∈ (compileTypeFuel (typeCompilationFuel whole) whole).states
       rw [compileTypeFuel_recur_eq]
@@ -251,7 +245,7 @@ theorem computeFutureOf_recur_child_eq (alphabet : PactTypeAlphabet)
   have hMarker := markerStoppedFragment_menuMarkerReachable_self
     (compileTypeFuel (typeCompilationFuel body) body) name
     (compileTypeMenuLinksFuel (typeCompilationFuel body) body)
-    (referencesClosed_compileTypeFuel body _ le_rfl hDisjoint)
+    (compileTypeFuel_menuClosed _ body le_rfl hDisjoint)
     (compileTypeMenuLinksFuel_targets_mem _ body le_rfl hDisjoint) source hSource
   simp only [hMarker] at hEq
   simpa only [compiledMenuGraphFuel, Nat.min_self, AutomatonFragment.toPending] using hEq

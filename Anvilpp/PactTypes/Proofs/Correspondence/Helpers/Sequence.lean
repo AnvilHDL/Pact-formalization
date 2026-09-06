@@ -92,89 +92,42 @@ theorem compileTypeFuel_sequence_eq_build
         (.seq alphabet left right) =
       buildSequenceAutomaton
         (compileTypeFuel (typeCompilationFuel left) left)
-        (compileTypeFuel (typeCompilationFuel right) right) := by
+        (compileTypeFuel (typeCompilationFuel right) right)
+        (computeFutureOfFuel (typeCompilationFuel left) left)
+        (fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+            (typeCompilationFuel left) left,
+          entry.2 = state ∧
+            typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true)) := by
   have hFuelEq : typeCompilationFuel (.seq alphabet left right) =
       max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
     simp only [typeCompilationFuel]; omega
   rw [hFuelEq]
   rw [compileTypeFuel.eq_def]
-  show buildSequenceAutomaton
-      (compileTypeFuel
-        (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-      (compileTypeFuel
-        (max (typeCompilationFuel left) (typeCompilationFuel right)) right) =
-    buildSequenceAutomaton
-      (compileTypeFuel (typeCompilationFuel left) left)
-      (compileTypeFuel (typeCompilationFuel right) right)
+  simp only [Nat.min_eq_right (le_max_left _ _)]
   rw [compileTypeFuel_eq_of_sufficient left (le_max_left _ _) le_rfl,
     compileTypeFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
 
-theorem buildSequenceAutomaton_referencedStates_right
+theorem buildSequenceAutomaton_menuStep_right
      (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool}
     (state : TypeAutomatonState) :
-    let sequence := buildSequenceAutomaton left right
+    let sequence := buildSequenceAutomaton left right leftFuture leftCompletes
     let parent : PendingAutomaton :=
       { states := sequence.states, edges := sequence.edges }
     let child : PendingAutomaton :=
       { states := right.states, edges := right.edges }
-    parent.referencedStates (.child 1 state) =
-      (child.referencedStates state).image (.child 1) := by
-  classical
-  ext target
-  constructor
-  · intro hTarget
-    simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-      Finset.mem_filter] at hTarget
-    rcases hTarget with ⟨edge, ⟨hEdgeMem, hEdgeSource⟩, hReference⟩
-    obtain ⟨childEdge, hChildEdgeMem, hChildSource, hEdgeEq⟩ :=
-      (buildSequenceAutomaton_outgoing_right left right state edge).mp
-        ⟨hEdgeMem, hEdgeSource⟩
-    subst edge
-    by_cases hTock : childEdge.label.semantic = TypeLabel.tock
-    · simp [childPendingEdge, hTock] at hReference
-    · cases hFuture : childEdge.future with
-      | explicit offers =>
-          simp [childPendingEdge, childFutureSpec, hTock, hFuture] at hReference
-      | «at» childTarget removed =>
-          have hTargetEq : target = childState 1 childTarget := by
-            simpa [childPendingEdge, childFutureSpec, childState, hTock,
-              hFuture] using hReference
-          apply Finset.mem_image.mpr
-          refine ⟨childTarget, ?_, hTargetEq.symm⟩
-          simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-            Finset.mem_filter]
-          refine ⟨childEdge, ⟨hChildEdgeMem, hChildSource⟩, ?_⟩
-          simp [hTock, hFuture]
-  · intro hTarget
-    rcases Finset.mem_image.mp hTarget with
-      ⟨childTarget, hChildTarget, hTargetEq⟩
-    simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-      Finset.mem_filter] at hChildTarget ⊢
-    rcases hChildTarget with
-      ⟨childEdge, ⟨hChildEdgeMem, hChildSource⟩, hChildReference⟩
-    refine ⟨childPendingEdge 1 childEdge, ?_, ?_⟩
-    · exact (buildSequenceAutomaton_outgoing_right left right state
-        (childPendingEdge 1 childEdge)).mpr
-          ⟨childEdge, hChildEdgeMem, hChildSource, rfl⟩
-    · rw [← hTargetEq]
-      cases hFuture : childEdge.future with
-      | explicit offers =>
-          by_cases hTock : childEdge.label.semantic = TypeLabel.tock
-          · simp [hTock] at hChildReference
-          · simp [hTock, hFuture] at hChildReference
-      | «at» referencedTarget removed =>
-          by_cases hTock : childEdge.label.semantic = TypeLabel.tock
-          · simp [hTock] at hChildReference
-          · have hChildEq : childTarget = referencedTarget := by
-              simpa [hTock, hFuture] using hChildReference
-            have hTaggedEq := congrArg (childState 1) hChildEq
-            simpa [childPendingEdge, childFutureSpec, childState, hTock,
-              hFuture] using hTaggedEq
+    parent.menuStep (.child 1 state) =
+      (child.menuStep state).image (.child 1) := by
+  exact menuStep_of_outgoing_childPendingEdge _ right 1 state
+    (buildSequenceAutomaton_outgoing_right left right state)
 
 theorem buildSequenceAutomaton_offersAt_right
      (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool}
     (state : TypeAutomatonState) :
-    let sequence := buildSequenceAutomaton left right
+    let sequence := buildSequenceAutomaton left right leftFuture leftCompletes
     let parent : PendingAutomaton :=
       { states := sequence.states, edges := sequence.edges }
     let child : PendingAutomaton :=
@@ -192,8 +145,7 @@ theorem buildSequenceAutomaton_offersAt_right
         ⟨hEdgeMem, hEdgeSource⟩
     subst edge
     refine ⟨childEdge, ⟨hChildEdgeMem, hChildSource⟩, ?_⟩
-    cases hFuture : childEdge.future <;>
-      simpa [childPendingEdge, childFutureSpec, childState, hFuture] using hOffer
+    simpa [childPendingEdge] using hOffer
   · intro hAction
     simp only [PendingAutomaton.offersAt, Finset.mem_biUnion,
       Finset.mem_filter] at hAction ⊢
@@ -203,8 +155,7 @@ theorem buildSequenceAutomaton_offersAt_right
     · exact (buildSequenceAutomaton_outgoing_right left right state
         (childPendingEdge 1 childEdge)).mpr
           ⟨childEdge, hChildEdgeMem, hChildSource, rfl⟩
-    · cases hFuture : childEdge.future <;>
-        simpa [childPendingEdge, childFutureSpec, childState, hFuture] using hOffer
+    · simpa [childPendingEdge] using hOffer
 
 /-- Proves a `.child 1`-tagged state's future menu, in a compiled sequence, agrees with the right child's own. -/
 theorem computeFutureOf_sequence_right
@@ -223,6 +174,11 @@ theorem computeFutureOf_sequence_right
   let rightFragment :=
     compileTypeFuel (typeCompilationFuel right) right
   let sequence := buildSequenceAutomaton leftFragment rightFragment
+    (computeFutureOfFuel (typeCompilationFuel left) left)
+    (fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+        (typeCompilationFuel left) left,
+      entry.2 = state ∧
+        typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true))
   have hCard : rightFragment.states.card ≤ sequence.states.card := by
     have hTaggedCard :
         (childStates 1 rightFragment).card = rightFragment.states.card := by
@@ -373,12 +329,15 @@ theorem computeFutureOf_sequence_right
 /-- Every edge leaving a retained left state is a rewritten left edge. -/
 theorem buildSequenceAutomaton_outgoing_left
      (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool}
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge)
     (hOutgoing :
-      edge ∈ (buildSequenceAutomaton left right).edges ∧
+      edge ∈ (buildSequenceAutomaton left right leftFuture leftCompletes).edges ∧
         edge.source = .child 0 state) :
     ∃ childEdge ∈ left.edges,
-      childEdge.source = state ∧ edge = sequenceLeftEdge left right childEdge := by
+      childEdge.source = state ∧
+        edge = sequenceLeftEdge left right leftFuture leftCompletes childEdge := by
   classical
   rcases hOutgoing with ⟨hEdge, hSource⟩
   simp only [buildSequenceAutomaton, finishAutomatonFragment, sequenceLeftEdges,
@@ -413,7 +372,7 @@ inductive SeqDecoratedStepCase
       DecoratedTypeTransition env source label
         (TypeOfferSummary.mk current childFuture) leftTarget →
       label ≠ TypeLabel.tock →
-      future = typeFutureOffers (.seq alphabet leftTarget right) \ current →
+      future = (childFuture ∪ sequenceRightMenu source right) \ current →
       SeqDecoratedStepCase alphabet right source target env label current future
   | stepTock (leftTarget : PactType)
       (childCurrent childFuture : Finset BareMessage) :
@@ -430,7 +389,7 @@ inductive SeqDecoratedStepCase
       TypeTransition env source label (.skip transitionSkipAlphabet) →
       TypeOffers env source label (.skip offerSkipAlphabet) current childFuture →
       label ≠ TypeLabel.tock →
-      future = typeFutureOffers right \ current →
+      future = (childFuture ∪ sequenceRightMenu source right) \ current →
       SeqDecoratedStepCase alphabet right source target env label current future
   | fuse_tock (transitionSkipAlphabet offerSkipAlphabet : PactTypeAlphabet)
       (childCurrent childFuture : Finset BareMessage) :

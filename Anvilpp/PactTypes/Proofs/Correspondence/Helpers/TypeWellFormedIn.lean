@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.OwnershipTransport
+import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.OfferMenuLinearity
 
 /-!
 `TypeWF_Γ` and its descent to every written child.  Split out of `Simultaneous`
@@ -34,7 +34,8 @@ def TypeWellFormedIn (bound : List String) (processType : PactType) : Prop :=
     PactType.ParallelFairChoiceOwnership processType ∧
     PactType.InterfaceScoped processType ∧
     PactType.InterfaceAlphabetScoped processType ∧
-    PactType.ConjunctiveMessageOwnership processType
+    PactType.ConjunctiveMessageOwnership processType ∧
+    OfferMenuLinear processType
 
 /-- An admissible type is well formed in the empty binder context. -/
 
@@ -240,7 +241,8 @@ private lemma branchesWellFormedIn_of_conjuncts {bound : List String}
     (hFO : PactType.ParallelFairChoiceOwnershipBranches branches)
     (hIS : PactType.InterfaceScopedBranches branches)
     (hIAS : PactType.InterfaceAlphabetScopedBranches branches)
-    (hCMO : ∀ entry ∈ branches, PactType.ConjunctiveMessageOwnership entry.2) :
+    (hCMO : ∀ entry ∈ branches, PactType.ConjunctiveMessageOwnership entry.2)
+    (hMenu : ∀ entry ∈ branches, OfferMenuLinear entry.2) :
     ∀ entry ∈ branches, TypeWellFormedIn bound entry.2 := by
   induction branches with
   | nil => intro entry hEntry; cases hEntry
@@ -267,11 +269,13 @@ private lemma branchesWellFormedIn_of_conjuncts {bound : List String}
       rcases hEntry with rfl | hRest
       · exact ⟨hA _ (by simp), hB.1, hH.1,
           fun other => (hTCsplit other).1, hCG.1, hTR.1, hSC.1, hPL.1, hFL.1,
-          hMO _ (by simp), hPO.1, hFO.1, hIS.1, hIAS.1, hCMO _ (by simp)⟩
+          hMO _ (by simp), hPO.1, hFO.1, hIS.1, hIAS.1, hCMO _ (by simp),
+          hMenu _ (by simp)⟩
       · exact ih (fun e hE => hA e (by simp [hE])) hB.2 hH.2
           (fun other => (hTCsplit other).2) hCG.2 hTR.2 hSC.2.2 hPL.2.2 hFL.2.2
           (fun e hE => hMO e (by simp [hE])) hPO.2.2 hFO.2.2 hIS.2 hIAS.2
-          (fun e hE => hCMO e (by simp [hE])) entry hRest
+          (fun e hE => hCMO e (by simp [hE]))
+          (fun e hE => hMenu e (by simp [hE])) entry hRest
 
 theorem PactType.reannotate_allVariablesBound (bound : List String) :
     ∀ (processType : PactType) (alphabet : PactTypeAlphabet),
@@ -2004,7 +2008,7 @@ lemma typeWellFormedIn_xoffer {bound : List String}
     TypeWellFormedIn bound elseType ∧
       ∀ entry ∈ branches, TypeWellFormedIn bound entry.2 := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2019,6 +2023,7 @@ lemma typeWellFormedIn_xoffer {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hTCsplit : ∀ other : String,
       PactType.TailOccurrences other True elseType ∧
         PactType.TailBranchOccurrences other True branches := by
@@ -2076,10 +2081,11 @@ lemma typeWellFormedIn_xoffer {bound : List String}
           · exact ihList hList.2 entry hTail
     exact hAux branches hCMO.2
   exact ⟨⟨hA.2.2.1, hB.1, hH.1, fun other => (hTCsplit other).1, hCG.1, hTR.1,
-      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1⟩,
+      hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1, hMenu.2.2.1⟩,
     branchesWellFormedIn_of_conjuncts branches hBranchAlphabet hB.2 hH.2
       (fun other => (hTCsplit other).2) hCG.2 hTR.2 hSC.2.1 hPL.2.1 hFL.2.1
-      hBranchOwnership hPO.2 hFO.2 hIS.2 hIAS.2.2 hBranchConjunctive⟩
+      hBranchOwnership hPO.2 hFO.2 hIS.2 hIAS.2.2 hBranchConjunctive
+      ((offerMenuLinearBranches_iff branches).mp hMenu.2.2.2)⟩
 
 /-! ### Same-cycle completion at the base fragments
 
@@ -2092,7 +2098,7 @@ lemma typeWellFormedIn_choice {bound : List String}
     (h : TypeWellFormedIn bound (.choice alphabet left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2107,6 +2113,7 @@ lemma typeWellFormedIn_choice {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other True left ∧
         PactType.TailOccurrences other True right := by
@@ -2116,17 +2123,17 @@ lemma typeWellFormedIn_choice {bound : List String}
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed,
       hCG.1, hTR.1, hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1,
-      hIAS.2.1, hCMO.1⟩,
+      hIAS.2.1, hCMO.1, hMenu.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2, hCMO.2⟩⟩
+      hIAS.2.2, hCMO.2, hMenu.2⟩⟩
 
 lemma typeWellFormedIn_fairChoice {bound : List String}
     {alphabet : PactTypeAlphabet} {bid : BranchId} {left right : PactType}
     (h : TypeWellFormedIn bound (.fairChoice alphabet bid left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2141,6 +2148,7 @@ lemma typeWellFormedIn_fairChoice {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other True left ∧
         PactType.TailOccurrences other True right := by
@@ -2150,17 +2158,17 @@ lemma typeWellFormedIn_fairChoice {bound : List String}
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed,
       hCG.1, hTR.1, hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1,
-      hIAS.2.1, hCMO.1⟩,
+      hIAS.2.1, hCMO.1, hMenu.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2, hCMO.2⟩⟩
+      hIAS.2.2, hCMO.2, hMenu.2⟩⟩
 
 lemma typeWellFormedIn_seq {bound : List String}
     {alphabet : PactTypeAlphabet} {left right : PactType}
     (h : TypeWellFormedIn bound (.seq alphabet left right)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2175,6 +2183,7 @@ lemma typeWellFormedIn_seq {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other False left ∧
         PactType.TailOccurrences other True right := by
@@ -2184,17 +2193,17 @@ lemma typeWellFormedIn_seq {bound : List String}
     PactType.tailOccurrences_mono other False.elim left (hSplit other).1
   have hRightClosed : right.TailClosed := fun other => (hSplit other).2
   exact ⟨⟨hA.2.2.2.1, hB.1, hH.1, hLeftClosed, hCG.1, hTR.1, hSC.1, hPL.1,
-      hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1⟩,
+      hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1, hCMO.1, hMenu.1⟩,
     ⟨hA.2.2.2.2, hB.2, hH.2, hRightClosed,
       hCG.2, hTR.2, hSC.2.1, hPL.2.1, hFL.2.1, hMO.2, hPO.2, hFO.2, hIS.2,
-      hIAS.2.2, hCMO.2⟩⟩
+      hIAS.2.2, hCMO.2, hMenu.2⟩⟩
 
 lemma typeWellFormedIn_par {bound : List String}
     {alphabet : PactTypeAlphabet} {left right : PactType} {interface : Interface}
     (h : TypeWellFormedIn bound (.par alphabet left right interface)) :
     TypeWellFormedIn bound left ∧ TypeWellFormedIn bound right := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2209,6 +2218,7 @@ lemma typeWellFormedIn_par {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hSplit : ∀ other : String,
       PactType.TailOccurrences other False left ∧
         PactType.TailOccurrences other False right := by
@@ -2219,16 +2229,16 @@ lemma typeWellFormedIn_par {bound : List String}
   have hRightClosed : right.TailClosed := fun other =>
     PactType.tailOccurrences_mono other False.elim right (hSplit other).2
   exact ⟨⟨hA.2.2.1, hB.1, hH.1, hLeftClosed, hCG.1, hTR.1, hSC.1, hPL.1, hFL.1,
-      hMO.2.1, hPO.2.1, hFO.2.1, hIS.2.1, hIAS.2.1, hCMO.1⟩,
+      hMO.2.1, hPO.2.1, hFO.2.1, hIS.2.1, hIAS.2.1, hCMO.1, hMenu.1⟩,
     ⟨hA.2.2.2, hB.2, hH.2, hRightClosed, hCG.2, hTR.2, hSC.2, hPL.2.1, hFL.2.1,
-      hMO.2.2, hPO.2.2, hFO.2.2, hIS.2.2, hIAS.2.2, hCMO.2⟩⟩
+      hMO.2.2, hPO.2.2, hFO.2.2, hIS.2.2, hIAS.2.2, hCMO.2, hMenu.2⟩⟩
 
 lemma typeWellFormedIn_recur {bound : List String}
     {alphabet : PactTypeAlphabet} {name : String} {body : PactType}
     (h : TypeWellFormedIn bound (.recur alphabet name body)) :
     TypeWellFormedIn (name :: bound) body := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   simp only [PactType.AlphabetWellFormed] at hA
   simp only [PactType.AllVariablesBound] at hB
   simp only [PactType.BinderHygienic] at hH
@@ -2243,6 +2253,7 @@ lemma typeWellFormedIn_recur {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hBodyClosed : body.TailClosed := by
     intro other
     by_cases hName : name = other
@@ -2250,7 +2261,7 @@ lemma typeWellFormedIn_recur {bound : List String}
     · have hOther := hTC other
       simpa only [PactType.TailOccurrences, if_neg hName] using hOther
   exact ⟨hA.2.2, hB, hH.2, hBodyClosed, hCG.2, hTR.2, hSC.1, hPL, hFL, hMO,
-    hPO, hFO, hIS, hIAS.2, hCMO⟩
+    hPO, hFO, hIS, hIAS.2, hCMO, hMenu⟩
 
 /-! ### Re-signing preserves the structural well-formedness conjuncts
 
@@ -2271,9 +2282,8 @@ lemma typeWellFormedIn_survivor {bound : List String}
       TypeWellFormedIn bound (right.reannotate alphabet) := by
   obtain ⟨hLeftWF, hRightWF⟩ := typeWellFormedIn_par h
   obtain ⟨hA, -, -, -, -, -, -, -, -, -, -, -, -, hIAS, -⟩ := h
-  have hAlphaWF : alphabet.WellFormed := by
-    simp only [PactType.AlphabetWellFormed] at hA
-    exact hA.1
+  simp only [PactType.AlphabetWellFormed] at hA
+  have hAlphaWF : alphabet.WellFormed := hA.1
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   have hAvoid : ∀ (child : PactType),
       PactType.ParallelInterfaces child ⊆
@@ -2289,7 +2299,7 @@ lemma typeWellFormedIn_survivor {bound : List String}
   have hRightAvoid := hAvoid right Finset.subset_union_right
   refine ⟨?_, ?_⟩
   · obtain ⟨gA, gB, gH, gTC, gCG, gTR, gSC, gPL, gFL, gMO, gPO, gFO, gIS,
-      gIAS⟩ := hLeftWF
+      gIAS, gCMO, gMenu⟩ := hLeftWF
     have hOwn := PactType.reannotate_ownership_data alphabet left
     exact ⟨PactType.reannotate_alphabetWellFormed_avoiding left alphabet gA
         hAlphaWF gIS hLeftAvoid,
@@ -2305,12 +2315,13 @@ lemma typeWellFormedIn_survivor {bound : List String}
       hOwn.2.2.2.2.1.mpr gMO, hOwn.2.2.2.2.2.1.mpr gPO,
       hOwn.2.2.2.2.2.2.mpr gFO,
       PactType.reannotate_interfaceScoped left alphabet gIS,
-      PactType.reannotate_interfaceAlphabetScoped left alphabet gIAS.1
+      PactType.reannotate_interfaceAlphabetScoped left alphabet gIAS
         hLeftAvoid,
-      (PactType.reannotate_conjunctiveMessageOwnership left alphabet).mpr
-        gIAS.2⟩
+      (PactType.reannotate_conjunctiveMessageOwnership left alphabet).mpr gCMO,
+      offerMenuLinear_reannotate left alphabet gA
+        (PactTypeAlphabet.parent_actions_subset_left hA.2.1) gMenu⟩
   · obtain ⟨gA, gB, gH, gTC, gCG, gTR, gSC, gPL, gFL, gMO, gPO, gFO, gIS,
-      gIAS⟩ := hRightWF
+      gIAS, gCMO, gMenu⟩ := hRightWF
     have hOwn := PactType.reannotate_ownership_data alphabet right
     exact ⟨PactType.reannotate_alphabetWellFormed_avoiding right alphabet gA
         hAlphaWF gIS hRightAvoid,
@@ -2326,10 +2337,11 @@ lemma typeWellFormedIn_survivor {bound : List String}
       hOwn.2.2.2.2.1.mpr gMO, hOwn.2.2.2.2.2.1.mpr gPO,
       hOwn.2.2.2.2.2.2.mpr gFO,
       PactType.reannotate_interfaceScoped right alphabet gIS,
-      PactType.reannotate_interfaceAlphabetScoped right alphabet gIAS.1
+      PactType.reannotate_interfaceAlphabetScoped right alphabet gIAS
         hRightAvoid,
-      (PactType.reannotate_conjunctiveMessageOwnership right alphabet).mpr
-        gIAS.2⟩
+      (PactType.reannotate_conjunctiveMessageOwnership right alphabet).mpr gCMO,
+      offerMenuLinear_reannotate right alphabet gA
+        (PactTypeAlphabet.parent_actions_subset_right hA.2.1) gMenu⟩
 
 /-- The paper's `<compiler-call-decrease>` at a conjunctive offer: the default
 continuation and every generated child are well formed in the same context. -/
@@ -2343,7 +2355,7 @@ theorem typeWellFormedIn_offer {bound : List String}
         TypeWellFormedIn bound
           (parallelTypeBranchesSelecting alphabet selected branches) := by
   obtain ⟨hA, hB, hH, hTC, hCG, hTR, hSC, hPL, hFL, hMO, hPO, hFO, hIS, hIAS,
-    hCMO⟩ := h
+    hCMO, hMenu⟩ := h
   have hAoffer := hA
   have hISoffer := hIS
   have hIASoffer := hIAS
@@ -2361,6 +2373,7 @@ theorem typeWellFormedIn_offer {bound : List String}
   simp only [PactType.InterfaceScoped] at hIS
   simp only [PactType.InterfaceAlphabetScoped] at hIAS
   simp only [PactType.ConjunctiveMessageOwnership] at hCMO
+  simp only [OfferMenuLinear] at hMenu
   have hBundle := PactType.parallelMessageOwnershipBranches_of_conjuncts
     branches hMO.2 hCMO.2
   have hTCsplit : ∀ other : String,
@@ -2374,7 +2387,7 @@ theorem typeWellFormedIn_offer {bound : List String}
     hB.2 hH.2 hIS.2 hPL.2.1 hFL.2.1 hBundle hPO.2 hFO.2
   refine ⟨⟨hA.2.2.1, hB.1, hH.1, fun other => (hTCsplit other).1, hCG.1, hTR.1,
       hSC.1, hPL.1, hFL.1, hMO.1, hPO.1, hFO.1, hIS.1, hIAS.2.1,
-      hCMO.1⟩, ?_⟩
+      hCMO.1, hMenu.2.2.1⟩, ?_⟩
   intro selected hSelected
   obtain ⟨gB, gH, gS, gP, gF, gM, gPo, gFo⟩ :=
     parallelTypeBranchesSelecting_conjuncts (bound := bound) alphabet selected
@@ -2421,7 +2434,11 @@ theorem typeWellFormedIn_offer {bound : List String}
           (Finset.mem_image.mpr ⟨action, hAction, rfl⟩)
           (Finset.mem_union_right _ hIn)),
     parallelTypeBranchesSelecting_conjunctiveMessageOwnership alphabet selected
-      branches hCMO.2⟩
+      branches hCMO.2,
+    parallelTypeBranchesSelecting_offerMenuLinear alphabet selected branches
+      (fun branch hBranch => (offerBranchesWF_mem branches hA.2.2.2 branch hBranch).2)
+      (fun branch hBranch => (offerBranchesWF_mem branches hA.2.2.2 branch hBranch).1)
+      ((offerMenuLinearBranches_iff branches).mp hMenu.2.2.2) hMenu.2.1⟩
 
 end
 

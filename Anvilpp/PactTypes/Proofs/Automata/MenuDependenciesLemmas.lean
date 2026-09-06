@@ -55,21 +55,21 @@ theorem referencedStates_withMenuDependencies (automaton : PendingAutomaton)
     (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
     (source : TypeAutomatonState) :
     (automaton.withMenuDependencies dependencies).referencedStates source =
-      automaton.referencedStates source ∪
+      automaton.menuStep source ∪
         (dependencies.filter fun link => link.1 = source).image Prod.snd := rfl
 
-/-- With no extra dependencies, saturation is exactly the old edge closure. -/
+/-- With no dependencies, saturation follows only non-clock execution edges. -/
 @[simp] theorem withMenuDependencies_empty (automaton : PendingAutomaton)
     (source : TypeAutomatonState) :
     (automaton.withMenuDependencies ∅).futureReachable source =
       automaton.futureReachable source := by
   classical
   have hGraph : automaton.withMenuDependencies ∅ =
-      { states := automaton.states, referencedStates := automaton.referencedStates } := by
+      { states := automaton.states, referencedStates := automaton.menuStep } := by
     simp [withMenuDependencies]
   rw [hGraph]
   have hAux : ∀ fuel reached,
-      (⟨automaton.states, automaton.referencedStates⟩ : FiniteMenuGraph).futureReachableAux fuel reached =
+      (⟨automaton.states, automaton.menuStep⟩ : FiniteMenuGraph).futureReachableAux fuel reached =
         automaton.futureReachableAux fuel reached := by
     intro fuel
     induction fuel with
@@ -83,7 +83,7 @@ theorem referencedStates_withMenuDependencies (automaton : PendingAutomaton)
 
 theorem referencesClosed_withMenuDependencies (automaton : PendingAutomaton)
     (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
-    (hClosed : automaton.ReferencesClosed)
+    (hClosed : automaton.MenuClosed)
     (hTargets : ∀ dependency ∈ dependencies, dependency.2 ∈ automaton.states) :
     (automaton.withMenuDependencies dependencies).ReferencesClosed := by
   classical
@@ -94,7 +94,7 @@ theorem referencesClosed_withMenuDependencies (automaton : PendingAutomaton)
   · obtain ⟨dependency, hDependency, rfl⟩ := Finset.mem_image.mp hNew
     exact hTargets dependency (Finset.mem_filter.mp hDependency).1
 
-/-- Adding menu dependencies retains every old non-clock reference path. -/
+/-- Adding menu dependencies retains every non-clock execution path. -/
 theorem futureReachable_subset_withMenuDependencies (automaton : PendingAutomaton)
     (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
     (hClosed : (automaton.withMenuDependencies dependencies).ReferencesClosed)
@@ -104,7 +104,7 @@ theorem futureReachable_subset_withMenuDependencies (automaton : PendingAutomato
   let graph := automaton.withMenuDependencies dependencies
   have hCarrier := graph.futureReachable_subset_of_reference_closed source
     graph.states hSource hClosed
-  apply automaton.futureReachable_subset_of_reference_closed
+  apply automaton.futureReachable_subset_of_menu_closed
   · exact graph.mem_futureReachable_self source
   · intro q hq r hr
     exact graph.futureReachable_subset_of_mem hClosed hSource hq

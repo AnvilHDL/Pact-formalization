@@ -11,98 +11,67 @@ theorem TypeTransition.exists_typeOffers
     ∃ current future, TypeOffers env source label target current future := by
   induction transition with
   | action env alphabet msg dir conditions hAlphabet =>
-      exact ⟨{(msg, dir)}, typeFutureOffers (.skip alphabet),
-        TypeOffers.action env alphabet msg dir conditions hAlphabet⟩
+      exact ⟨_, _, TypeOffers.action env alphabet msg dir conditions hAlphabet⟩
   | action_wait env alphabet msg dir conditions hAlphabet =>
-      exact ⟨{(msg, dir)},
-        typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)},
-        TypeOffers.action_wait env alphabet msg dir conditions hAlphabet⟩
+      exact ⟨_, _, TypeOffers.action_wait env alphabet msg dir conditions hAlphabet⟩
   | choice_left env alphabet left right hEnv hClock =>
-      exact ⟨∅, typeFutureOffers left,
-        TypeOffers.choice_left env alphabet left right ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.choice_left env alphabet left right ⟨hEnv, hClock⟩⟩
   | choice_right env alphabet left right hEnv hClock =>
-      exact ⟨∅, typeFutureOffers right,
-        TypeOffers.choice_right env alphabet left right ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.choice_right env alphabet left right ⟨hEnv, hClock⟩⟩
   | fair_left env alphabet bid left right hEnv hClock =>
-      exact ⟨∅, typeFutureOffers left,
-        TypeOffers.fair_left env alphabet bid left right ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.fair_left env alphabet bid left right ⟨hEnv, hClock⟩⟩
   | fair_right env alphabet bid left right hEnv hClock =>
-      exact ⟨∅, typeFutureOffers right,
-        TypeOffers.fair_right env alphabet bid left right ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.fair_right env alphabet bid left right ⟨hEnv, hClock⟩⟩
   | cycle env alphabet conditions =>
-      exact ⟨∅, ∅, TypeOffers.cycle env alphabet conditions⟩
+      exact ⟨_, _, TypeOffers.cycle env alphabet conditions⟩
   | cycle_wait env alphabet conditions =>
-      exact ⟨∅, ∅, TypeOffers.cycle_wait env alphabet conditions⟩
+      exact ⟨_, _, TypeOffers.cycle_wait env alphabet conditions⟩
   | skip env alphabet conditions =>
-      exact ⟨∅, ∅, TypeOffers.skip env alphabet conditions⟩
+      exact ⟨_, _, TypeOffers.skip env alphabet conditions⟩
   | seq_fuse env alphabet skipAlphabet left right label _ ihLeft =>
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
       by_cases hTock : label = TypeLabel.tock
       · subst hTock
-        exact ⟨∅, ∅,
-          TypeOffers.seq_fuse_tock env alphabet skipAlphabet left right current
+        exact ⟨_, _, TypeOffers.seq_fuse_tock env alphabet skipAlphabet left right current
             childFuture hOffers⟩
-      · exact ⟨current, typeFutureOffers right \ current,
-          TypeOffers.seq_fuse env alphabet skipAlphabet left right label current
+      · exact ⟨_, _, TypeOffers.seq_fuse env alphabet skipAlphabet left right label current
             childFuture hOffers hTock⟩
   | progress env alphabet pid hEnv hClock =>
-      exact ⟨∅, ∅, TypeOffers.progress env alphabet pid ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.progress env alphabet pid ⟨hEnv, hClock⟩⟩
   | recur env alphabet name body hEnv hClock =>
-      exact ⟨∅,
-        typeFutureOffers (body.replaceVar name (.recur alphabet name body)),
-        TypeOffers.recur env alphabet name body ⟨hEnv, hClock⟩⟩
+      exact ⟨_, _, TypeOffers.recur env alphabet name body ⟨hEnv, hClock⟩⟩
   | seq env alphabet left left' right label _ hNotSkip ihLeft =>
       obtain ⟨current, childFuture, hOffers⟩ := ihLeft
       by_cases hTock : label = TypeLabel.tock
       · subst hTock
-        exact ⟨∅, ∅,
-          TypeOffers.seq_tock env alphabet left left' right current childFuture
+        exact ⟨_, _, TypeOffers.seq_tock env alphabet left left' right current childFuture
             hOffers hNotSkip⟩
-      · exact ⟨current, typeFutureOffers (.seq alphabet left' right) \ current,
-          TypeOffers.seq env alphabet left left' right label current childFuture
+      · exact ⟨_, _, TypeOffers.seq env alphabet left left' right label current childFuture
             hOffers hNotSkip hTock⟩
   | xoffer_branch env alphabet elseType branches action processType conditions
       hAlphabet =>
-      exact ⟨{action}, typeFutureOffers processType \ {action},
-        TypeOffers.xoffer_branch env alphabet elseType branches action
+      exact ⟨_, _, TypeOffers.xoffer_branch env alphabet elseType branches action
           processType conditions hAlphabet⟩
   | xoffer_else env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨∅, typeFutureOffers elseType,
-        TypeOffers.xoffer_else env alphabet elseType branches conditions
+      exact ⟨_, _, TypeOffers.xoffer_else env alphabet elseType branches conditions
           hAlphabet⟩
   | xoffer_wait env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨typeWaitingOffers env branches,
-        typeFutureOffers (.xoffer alphabet elseType branches) \
-          typeWaitingOffers env branches,
-        TypeOffers.xoffer_wait env alphabet elseType branches conditions
+      exact ⟨_, _, TypeOffers.xoffer_wait env alphabet elseType branches conditions
           hAlphabet⟩
   | offer_some env alphabet elseType branches enabled conditions hAlphabet =>
-      exact ⟨∅,
-        typeFutureOffers
-          (parallelTypeBranchesSelecting alphabet enabled branches),
-        TypeOffers.offer_some env alphabet elseType branches enabled conditions
+      exact ⟨_, _, TypeOffers.offer_some env alphabet elseType branches enabled conditions
           hAlphabet⟩
   | offer_else env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨typeBranchActions branches,
-        typeFutureOffers elseType \ typeBranchActions branches,
-        TypeOffers.offer_else env alphabet elseType branches conditions
+      exact ⟨_, _, TypeOffers.offer_else env alphabet elseType branches conditions
           hAlphabet⟩
   | offer_wait env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨typeBranchActions branches,
-        typeFutureOffers (.offer alphabet elseType branches) \
-          typeBranchActions branches,
-        TypeOffers.offer_wait env alphabet elseType branches conditions
+      exact ⟨_, _, TypeOffers.offer_wait env alphabet elseType branches conditions
           hAlphabet⟩
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip _ hLeftOffers
       _ hRightOffers hNotBothSkip conditions ihLeft ihRight =>
-      exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-        (if TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
-          then ∅
-          else typeFutureOffers (.par alphabet left' right' interface) \
-            hideTypeOffers interface (leftCurrent ∪ rightCurrent)),
-        TypeOffers.par outer leftEnv rightEnv interface alphabet left left' right right'
+      exact ⟨_, _, TypeOffers.par outer leftEnv rightEnv interface alphabet left left' right right'
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hLeftNotSkip hRightNotSkip
           hLeftOffers hRightOffers hNotBothSkip conditions.2.1
@@ -112,14 +81,11 @@ theorem TypeTransition.exists_typeOffers
       hRightOffers conditions ihLeft ihRight =>
       by_cases hTock :
           TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
-      · exact ⟨∅, ∅,
-          TypeOffers.par_fuse_tock outer leftEnv rightEnv interface alphabet left right
+      · exact ⟨_, _, TypeOffers.par_fuse_tock outer leftEnv rightEnv interface alphabet left right
             leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
             hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
-      · exact ⟨hideTypeOffers interface (leftCurrent ∪ rightCurrent),
-          hideTypeOffers interface (leftFuture ∪ rightFuture),
-          TypeOffers.par_fuse outer leftEnv rightEnv interface alphabet left right
+      · exact ⟨_, _, TypeOffers.par_fuse outer leftEnv rightEnv interface alphabet left right
             leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
             hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
@@ -127,10 +93,7 @@ theorem TypeTransition.exists_typeOffers
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftSkip
       hRightNotSkip _ hLeftOffers _ hRightOffers hNotSkip hLocalLeft hLocalRight
       hWF hSync ihLeft ihRight =>
-      exact ⟨hideTypeOffers interface rightCurrent,
-        typeFutureOffers (right'.reannotate alphabet) \
-          hideTypeOffers interface rightCurrent,
-        TypeOffers.left_complete outer leftEnv rightEnv interface alphabet left
+      exact ⟨_, _, TypeOffers.left_complete outer leftEnv rightEnv interface alphabet left
           right right' rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hLeftSkip hRightNotSkip hLeftOffers hRightOffers hNotSkip hLocalLeft
           hLocalRight hWF hSync⟩
@@ -138,10 +101,7 @@ theorem TypeTransition.exists_typeOffers
       leftLabel leftCurrent leftFuture rightCurrent rightFuture hRightSkip
       hLeftNotSkip _ hRightOffers _ hLeftOffers hNotSkip hLocalLeft hLocalRight
       hWF hSync ihRight ihLeft =>
-      exact ⟨hideTypeOffers interface leftCurrent,
-        typeFutureOffers (left'.reannotate alphabet) \
-          hideTypeOffers interface leftCurrent,
-        TypeOffers.right_complete outer leftEnv rightEnv interface alphabet left
+      exact ⟨_, _, TypeOffers.right_complete outer leftEnv rightEnv interface alphabet left
           left' right leftLabel leftCurrent leftFuture rightCurrent rightFuture
           hRightSkip hLeftNotSkip hRightOffers hLeftOffers hNotSkip hLocalLeft
           hLocalRight hWF hSync⟩

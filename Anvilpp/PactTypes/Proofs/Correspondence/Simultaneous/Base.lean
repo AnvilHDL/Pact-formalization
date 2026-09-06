@@ -20,8 +20,8 @@ open Pact.NewCorrespondence
 
 /-- Current-offer correspondence: a step and an edge that carry the same
 environment, label and current offer have related targets, in both directions.
-The future components are left free here; they are pinned afterwards by the
-uniform offer law and the menu equation. -/
+This is the current-and-target stage. Full offer correspondence is established
+constructor by constructor after the same-rank menu equation. -/
 def CurrentOfferCorrespondence (processType : PactType) : Prop :=
   (∀ {residual residual' : PactType} {state : TypeAutomatonState}
       {env : TypeEnvironment} {label : TypeLabel}
@@ -71,7 +71,7 @@ private lemma computeFutureOfFuel_eq_empty_of_pair
       { states := (compileTypeFuel (fuel + 1) processType).states,
         edges := (compileTypeFuel (fuel + 1) processType).edges })
     (hClosed : ∀ state ∈ ({a, b} : Finset TypeAutomatonState),
-      hFragment.referencedStates state ⊆ {a, b})
+      hFragment.menuStep state ⊆ {a, b})
     (hOffersA : hFragment.offersAt a = ∅)
     (hOffersB : hFragment.offersAt b = ∅)
     (hProductA : stateProductInfo processType a = none)
@@ -82,7 +82,7 @@ private lemma computeFutureOfFuel_eq_empty_of_pair
     computeFutureOfFuel (fuel + 1) processType a = ∅ := by
   classical
   have hReach : hFragment.futureReachable a ⊆ ({a, b} : Finset TypeAutomatonState) :=
-    hFragment.futureReachable_subset_of_reference_closed a {a, b}
+    hFragment.futureReachable_subset_of_menu_closed a {a, b}
       (by simp) hClosed
   simp only [computeFutureOfFuel, hNoLinks, PendingAutomaton.withMenuDependencies_empty]
   rw [← hFragmentDef]
@@ -114,7 +114,7 @@ lemma computeFutureOf_progress_root
       edges := (compileTypeFuel 1 (.progress alphabet pid)).edges }
     rfl ?_ ?_ ?_ ?_ ?_
   · intro state _ reference hReference
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_union, Finset.mem_image] at hReference
     obtain ⟨edge, ⟨hEdgeMem, -⟩, hReference⟩ := hReference
@@ -163,7 +163,7 @@ lemma computeFutureOf_var_root
       edges := (compileTypeFuel 1 (.var alphabet name)).edges }
     rfl ?_ ?_ ?_ ?_ ?_
   · intro state _ reference hReference
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image] at hReference
     obtain ⟨edge, ⟨hEdgeMem, -⟩, hReference⟩ := hReference
@@ -210,9 +210,9 @@ lemma computeFutureOf_message_root_of_not_declared
   have hReferences :
       ({ states := (compileTypeFuel 1 (.message alphabet msg dir)).states,
           edges := (compileTypeFuel 1 (.message alphabet msg dir)).edges } :
-        PendingAutomaton).referencedStates .root ⊆
+        PendingAutomaton).menuStep .root ⊆
         {TypeAutomatonState.root} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -223,7 +223,7 @@ lemma computeFutureOf_message_root_of_not_declared
     · exact absurd hAction hDeclared
     · exact absurd hAction hDeclared
     · rw [← hEq] at hSource; simp at hSource
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.message alphabet msg dir)
@@ -698,9 +698,19 @@ private lemma var_guard (alphabet : PactTypeAlphabet) (name : String) :
 
 /-! ### Current-offer correspondence at the base fragments -/
 
-/-- The full step correspondence is stronger than its current-offer half, once
-every edge target is known to be related to some residual. -/
-theorem currentOfferCorrespondence_of_stepIff {processType : PactType}
+/-- Forgetting the future equality gives the current-and-target stage. -/
+theorem TypeAutomatonStepCorrespondence.toCurrent {ty : PactType}
+    (h : TypeAutomatonStepCorrespondence ty) : CurrentOfferCorrespondence ty := by
+  constructor
+  · intro rho rho' q env label current future hRelated hStep
+    obtain ⟨q', hEdge, hTarget⟩ := h.1 hRelated hStep
+    exact ⟨q', future, hEdge, hTarget⟩
+  · intro rho q q' env label current future hRelated hEdge
+    obtain ⟨rho', hStep, hTarget⟩ := h.2 hRelated hEdge
+    exact ⟨rho', future, hStep, hTarget⟩
+
+/-- The fixed-target lemma and target coverage give both full-pair simulations. -/
+theorem offerCorrespondence_of_stepIff {processType : PactType}
     (hStep : StepIffStatement processType)
     (hGuard : BaseGuard processType)
     (hTargets : ∀ {residual : PactType} {state state' : TypeAutomatonState}
@@ -712,21 +722,21 @@ theorem currentOfferCorrespondence_of_stepIff {processType : PactType}
         relationMembership
           (buildRelationSet processType (compileType processType))
           residual' state') :
-    CurrentOfferCorrespondence processType := by
+    TypeAutomatonStepCorrespondence processType := by
   constructor
-  · intro residual residual' state env label current future hRelated hTransition
+  · intro residual residual' state env label offers hRelated hTransition
     have hSymbol := hGuard hRelated (Or.inl ⟨residual', hTransition⟩)
     obtain ⟨state', hEdge, hRelated'⟩ := (hStep hRelated hSymbol).mp hTransition
-    exact ⟨state', future, hEdge, hRelated'⟩
-  · intro residual state state' env label current future hRelated hEdge
+    exact ⟨state', hEdge, hRelated'⟩
+  · intro residual state state' env label offers hRelated hEdge
     have hSymbol := hGuard hRelated (Or.inr ⟨state', hEdge⟩)
     obtain ⟨residual', hRelated'⟩ := hTargets hRelated hEdge
-    exact ⟨residual', future,
+    exact ⟨residual',
       (hStep hRelated hSymbol).mpr ⟨state', hEdge, hRelated'⟩, hRelated'⟩
 
-lemma currentOfferCorrespondence_skip (alphabet : PactTypeAlphabet) :
-    CurrentOfferCorrespondence (.skip alphabet) := by
-  refine currentOfferCorrespondence_of_stepIff
+lemma offerCorrespondence_skip (alphabet : PactTypeAlphabet) :
+    TypeAutomatonStepCorrespondence (.skip alphabet) := by
+  refine offerCorrespondence_of_stepIff
     (fun hRelated hSymbol => correspondence_skip_stepIff alphabet hRelated hSymbol)
     (skip_guard alphabet) ?_
   intro residual state state' env label offers hRelated hEdge
@@ -737,10 +747,10 @@ lemma currentOfferCorrespondence_skip (alphabet : PactTypeAlphabet) :
     simp [relationMembership, buildRelationSet, buildRelationSetCore,
       typeCompilationFuel, buildRelationSetCoreFuel]⟩
 
-lemma currentOfferCorrespondence_message (alphabet : PactTypeAlphabet)
+lemma offerCorrespondence_message (alphabet : PactTypeAlphabet)
     (msg : MessageId) (dir : MessageDir) :
-    CurrentOfferCorrespondence (.message alphabet msg dir) := by
-  refine currentOfferCorrespondence_of_stepIff
+    TypeAutomatonStepCorrespondence (.message alphabet msg dir) := by
+  refine offerCorrespondence_of_stepIff
     (fun hRelated hSymbol =>
       correspondence_message_stepIff alphabet msg dir hRelated hSymbol)
     (message_guard alphabet msg dir) ?_
@@ -758,9 +768,9 @@ lemma currentOfferCorrespondence_message (alphabet : PactTypeAlphabet)
       simp [relationMembership, buildRelationSet, buildRelationSetCore,
         typeCompilationFuel, buildRelationSetCoreFuel]⟩
 
-lemma currentOfferCorrespondence_tock (alphabet : PactTypeAlphabet) :
-    CurrentOfferCorrespondence (.tock alphabet) := by
-  refine currentOfferCorrespondence_of_stepIff
+lemma offerCorrespondence_tock (alphabet : PactTypeAlphabet) :
+    TypeAutomatonStepCorrespondence (.tock alphabet) := by
+  refine offerCorrespondence_of_stepIff
     (fun hRelated hSymbol => correspondence_tock_stepIff alphabet hRelated hSymbol)
     (tock_guard alphabet) ?_
   intro residual state state' env label offers hRelated hEdge
@@ -777,10 +787,10 @@ lemma currentOfferCorrespondence_tock (alphabet : PactTypeAlphabet) :
       simp [relationMembership, buildRelationSet, buildRelationSetCore,
         typeCompilationFuel, buildRelationSetCoreFuel]⟩
 
-lemma currentOfferCorrespondence_progress (alphabet : PactTypeAlphabet)
+lemma offerCorrespondence_progress (alphabet : PactTypeAlphabet)
     (pid : ProcId) :
-    CurrentOfferCorrespondence (.progress alphabet pid) := by
-  refine currentOfferCorrespondence_of_stepIff
+    TypeAutomatonStepCorrespondence (.progress alphabet pid) := by
+  refine offerCorrespondence_of_stepIff
     (fun hRelated hSymbol =>
       correspondence_progress_stepIff alphabet pid hRelated hSymbol)
     (progress_guard alphabet pid) ?_
@@ -792,10 +802,10 @@ lemma currentOfferCorrespondence_progress (alphabet : PactTypeAlphabet)
       simp [relationMembership, buildRelationSet, buildRelationSetCore,
         typeCompilationFuel, buildRelationSetCoreFuel]⟩
 
-lemma currentOfferCorrespondence_var (alphabet : PactTypeAlphabet)
+lemma offerCorrespondence_var (alphabet : PactTypeAlphabet)
     (name : String) :
-    CurrentOfferCorrespondence (.var alphabet name) := by
-  refine currentOfferCorrespondence_of_stepIff
+    TypeAutomatonStepCorrespondence (.var alphabet name) := by
+  refine offerCorrespondence_of_stepIff
     (correspondence_var_stepIff alphabet name) (var_guard alphabet name) ?_
   intro residual state state' env label offers hRelated hEdge
   exfalso
@@ -806,6 +816,26 @@ lemma currentOfferCorrespondence_var (alphabet : PactTypeAlphabet)
     Finset.mem_image] at hPending
   obtain ⟨environment, -, rfl⟩ := hPending
   simp at hLabel
+
+lemma currentOfferCorrespondence_skip (alphabet : PactTypeAlphabet) :
+    CurrentOfferCorrespondence (.skip alphabet) :=
+  (offerCorrespondence_skip alphabet).toCurrent
+
+lemma currentOfferCorrespondence_message (alphabet : PactTypeAlphabet) (msg : MessageId) (dir : MessageDir) :
+    CurrentOfferCorrespondence (.message alphabet msg dir) :=
+  (offerCorrespondence_message alphabet msg dir).toCurrent
+
+lemma currentOfferCorrespondence_tock (alphabet : PactTypeAlphabet) :
+    CurrentOfferCorrespondence (.tock alphabet) :=
+  (offerCorrespondence_tock alphabet).toCurrent
+
+lemma currentOfferCorrespondence_progress (alphabet : PactTypeAlphabet) (pid : ProcId) :
+    CurrentOfferCorrespondence (.progress alphabet pid) :=
+  (offerCorrespondence_progress alphabet pid).toCurrent
+
+lemma currentOfferCorrespondence_var (alphabet : PactTypeAlphabet) (name : String) :
+    CurrentOfferCorrespondence (.var alphabet name) :=
+  (offerCorrespondence_var alphabet name).toCurrent
 
 /-! ### `TypeWF_Γ` descends to every written child -/
 
@@ -1104,15 +1134,57 @@ theorem computeFutureOf_subset_alphabet (processType : PactType)
   intro action hAction
   exact (Finset.mem_filter.mp hAction).2
 
-/-- Every offer a builder publishes at an edge is declared by the type's own
-alphabet.  The `.explicit` clause is cheap: every explicit future a builder
-emits is `∅`, except on `.variable` edges, which `compileType` drops. -/
+theorem computeFutureOfFuel_subset_alphabet (fuel : Nat) (processType : PactType)
+    (state : TypeAutomatonState) :
+    computeFutureOfFuel fuel processType state ⊆ processType.alphabet.actions := by
+  cases fuel with
+  | zero => simp [computeFutureOfFuel]
+  | succ fuel =>
+      rw [computeFutureOfFuel]
+      intro action hAction
+      exact (Finset.mem_filter.mp hAction).2
+
+/-- The stored part of a future field stays within the declared alphabet. -/
+def FutureSpec.AlphabetLocal (actions : Finset BareMessage) : FutureSpec → Prop
+  | .explicit offers => offers ⊆ actions
+  | .at _ _ => True
+  | .atUnion offers _ _ => offers ⊆ actions
+
+theorem FutureSpec.AlphabetLocal.resolve {actions : Finset BareMessage}
+    {spec : FutureSpec} (hLocal : spec.AlphabetLocal actions)
+    (futureAt : TypeAutomatonState → Finset BareMessage)
+    (hMenus : ∀ state, futureAt state ⊆ actions) :
+    resolveFutureSpec futureAt spec ⊆ actions := by
+  cases spec with
+  | explicit offers => exact hLocal
+  | «at» state removed => exact Finset.Subset.trans Finset.sdiff_subset (hMenus state)
+  | atUnion offers state removed =>
+      exact Finset.Subset.trans Finset.sdiff_subset
+        (Finset.union_subset hLocal (hMenus state))
+
+theorem childFutureSpec_alphabetLocal (index : Nat) (spec : FutureSpec)
+    (actions : Finset BareMessage) :
+    (childFutureSpec index spec).AlphabetLocal actions ↔ spec.AlphabetLocal actions := by
+  cases spec <;> rfl
+
+/-- A child copy changes state references, not the resolved offer set. -/
+theorem resolve_childFutureSpec (index : Nat) (spec : FutureSpec)
+    (parent child : TypeAutomatonState → Finset BareMessage)
+    (hMenus : ∀ state, spec.referenced = some state →
+      parent (childState index state) = child state) :
+    resolveFutureSpec parent (childFutureSpec index spec) =
+      resolveFutureSpec child spec := by
+  cases spec with
+  | explicit offers => rfl
+  | «at» state removed | atUnion offers state removed =>
+      simp only [childFutureSpec, resolveFutureSpec, hMenus state rfl]
+
+/-- Current offers and stored future contributions are declared by the type. -/
 def EdgeOffersLocal (processType : PactType) : Prop :=
   ∀ edge ∈ (compileTypeFuel (typeCompilationFuel processType)
       processType).edges,
     edge.current ⊆ processType.alphabet.actions ∧
-      ∀ offers, edge.future = .explicit offers →
-        offers ⊆ processType.alphabet.actions
+      edge.future.AlphabetLocal processType.alphabet.actions
 
 /-- Every environment on a compiled fragment's edges comes from the type's own
 alphabet.  This is the edge half of the composite `BaseGuard`; the builders all
@@ -1167,7 +1239,7 @@ lemma sumBuilder_edge_offers (alphabet : PactTypeAlphabet)
       (compileTypeFuel (typeCompilationFuel right) right)
       selLeft selRight).edges) :
     edge.current ⊆ alphabet.actions ∧
-      ∀ offers, edge.future = .explicit offers → offers ⊆ alphabet.actions := by
+      edge.future.AlphabetLocal alphabet.actions := by
   simp only [buildChoiceAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with (hChild | hChild) | hSelect
@@ -1176,33 +1248,17 @@ lemma sumBuilder_edge_offers (alphabet : PactTypeAlphabet)
     obtain ⟨hCur, hFut⟩ := hLeft childEdge hChildMem
     rw [hLeftAlphabet] at hCur hFut
     refine ⟨by simpa [childPendingEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [childPendingEdge, childFutureSpec] at hOffers
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hOffers
-        simp only [FutureSpec.explicit.injEq] at hOffers
-        subst hOffers
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hOffers; simp at hOffers
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
   · simp only [childPendingEdges, Finset.mem_image] at hChild
     obtain ⟨childEdge, hChildMem, rfl⟩ := hChild
     obtain ⟨hCur, hFut⟩ := hRight childEdge hChildMem
     rw [hRightAlphabet] at hCur hFut
     refine ⟨by simpa [childPendingEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [childPendingEdge, childFutureSpec] at hOffers
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hOffers
-        simp only [FutureSpec.explicit.injEq] at hOffers
-        subst hOffers
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hOffers; simp at hOffers
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
   · simp only [Finset.mem_biUnion, Finset.mem_filter] at hSelect
     obtain ⟨environment, -, hMem⟩ := hSelect
     simp only [Finset.mem_insert, Finset.mem_singleton] at hMem
-    rcases hMem with rfl | rfl <;> exact ⟨by simp, by intro _ h; simp at h⟩
+    rcases hMem with rfl | rfl <;> exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 /-- The fuel-parametrized form of both locality predicates.  The `.par` builder
 compiles re-stamped children at the same fuel, and `reannotate` preserves size,
@@ -1211,8 +1267,7 @@ def EdgeLocalAt (fuel : Nat) (processType : PactType) : Prop :=
   ∀ edge ∈ (compileTypeFuel fuel processType).edges,
     edge.environment ∈ processType.alphabet.localEnvironments ∧
       edge.current ⊆ processType.alphabet.actions ∧
-      ∀ offers, edge.future = .explicit offers →
-        offers ⊆ processType.alphabet.actions
+      edge.future.AlphabetLocal processType.alphabet.actions
 
 /-- At a sufficient budget the fuel-parametrized form is the pair of predicates
 the guard consumes. -/
@@ -1250,7 +1305,7 @@ lemma edgeLocal_skip (alphabet : PactTypeAlphabet) :
       Finset.mem_image, Finset.mem_filter] at hEdge <;>
     obtain ⟨environment, ⟨hLocal, -⟩, rfl⟩ := hEdge
   · exact hLocal
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_var (alphabet : PactTypeAlphabet) (name : String) :
     EdgeEnvironmentsLocal (.var alphabet name) ∧
@@ -1261,7 +1316,7 @@ lemma edgeLocal_var (alphabet : PactTypeAlphabet) (name : String) :
       Finset.mem_image, Finset.mem_filter] at hEdge <;>
     obtain ⟨environment, ⟨hLocal, -⟩, rfl⟩ := hEdge
   · exact hLocal
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_message (alphabet : PactTypeAlphabet)
     (msg : MessageId) (dir : MessageDir) :
@@ -1276,9 +1331,9 @@ lemma edgeLocal_message (alphabet : PactTypeAlphabet)
   · exact hLocal
   · exact hLocal
   · exact hLocal
-  · exact ⟨by simpa using hCond.2, by intro _ h; simp at h⟩
-  · exact ⟨by simpa using hCond.2.2, by intro _ h; simp at h⟩
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+  · exact ⟨by simpa using hCond.2, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨by simpa using hCond.2.2, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_tock (alphabet : PactTypeAlphabet) :
     EdgeEnvironmentsLocal (.tock alphabet) ∧ EdgeOffersLocal (.tock alphabet) := by
@@ -1290,14 +1345,8 @@ lemma edgeLocal_tock (alphabet : PactTypeAlphabet) :
   · split <;> exact hLocal
   · exact hLocal
   · split <;>
-      exact ⟨by simp, by
-        intro _ h
-        simp only [] at h
-        cases h
-        first
-          | (simp; done)
-          | done⟩
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+      exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_progress (alphabet : PactTypeAlphabet)
     (pid : ProcId) :
@@ -1310,8 +1359,8 @@ lemma edgeLocal_progress (alphabet : PactTypeAlphabet)
     rcases hEdge with ⟨environment, ⟨hLocal, -⟩, rfl⟩ | ⟨environment, ⟨hLocal, -⟩, rfl⟩
   · exact hLocal
   · exact hLocal
-  · exact ⟨by simp, by intro _ h; simp at h⟩
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_choice (alphabet : PactTypeAlphabet)
     (left right : PactType)
@@ -1336,16 +1385,13 @@ theorem compileTypeFuel_seq_eq (alphabet : PactTypeAlphabet)
         (.seq alphabet left right) =
       buildSequenceAutomaton
         (compileTypeFuel (typeCompilationFuel left) left)
-        (compileTypeFuel (typeCompilationFuel right) right) := by
-  have hFuelEq : typeCompilationFuel (.seq alphabet left right) =
-      max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
-    simp only [typeCompilationFuel]; omega
-  rw [hFuelEq]
-  simp only [compileTypeFuel]
-  rw [compileTypeFuel_eq_of_sufficient left (Nat.le_max_left _ _)
-      (Nat.le_refl _),
-    compileTypeFuel_eq_of_sufficient right (Nat.le_max_right _ _)
-      (Nat.le_refl _)]
+        (compileTypeFuel (typeCompilationFuel right) right)
+        (computeFutureOfFuel (typeCompilationFuel left) left)
+        (fun state => decide (∃ entry ∈ buildRelationSetCoreFuel
+            (typeCompilationFuel left) left,
+          entry.2 = state ∧
+            typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true)) :=
+  compileTypeFuel_sequence_eq_build alphabet left right
 
 lemma edgeLocal_seq (alphabet : PactTypeAlphabet)
     (left right : PactType)
@@ -1373,34 +1419,30 @@ lemma edgeLocal_seq (alphabet : PactTypeAlphabet)
   · have := hLeft.1 childEdge hChildMem
     rw [hLeftAlphabet] at this
     simpa [sequenceRedirectEdge] using this
-  · obtain ⟨hCur, -⟩ := hLeft.2 childEdge hChildMem
-    rw [hLeftAlphabet] at hCur
+  · obtain ⟨hCur, hFut⟩ := hLeft.2 childEdge hChildMem
+    have hResolved := hFut.resolve (computeFutureOf left)
+      (computeFutureOf_subset_alphabet left)
+    rw [hLeftAlphabet] at hCur hResolved
     refine ⟨by simpa [sequenceKeptLeftEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [sequenceKeptLeftEdge, sequenceRedirectFutureSpec] at hOffers
-    split at hOffers
-    · cases hOffers; simp
-    · exact absurd hOffers (by simp)
+    simp only [sequenceKeptLeftEdge, sequenceLeftFutureSpec]
+    split_ifs
+    · exact Finset.empty_subset _
+    · exact hResolved
+    · exact Finset.Subset.trans Finset.sdiff_subset hResolved
   · obtain ⟨hCur, hFut⟩ := hRight.2 childEdge hChildMem
     rw [hRightAlphabet] at hCur hFut
     refine ⟨by simpa [childPendingEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [childPendingEdge, childFutureSpec] at hOffers
-    cases hSpec : childEdge.future with
-    | explicit childOffers =>
-        rw [hSpec] at hOffers
-        simp only [FutureSpec.explicit.injEq] at hOffers
-        subst hOffers
-        exact hFut childOffers hSpec
-    | «at» t r => rw [hSpec] at hOffers; simp at hOffers
-  · obtain ⟨hCur, -⟩ := hLeft.2 childEdge hChildMem
-    rw [hLeftAlphabet] at hCur
+    exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
+  · obtain ⟨hCur, hFut⟩ := hLeft.2 childEdge hChildMem
+    have hResolved := hFut.resolve (computeFutureOf left)
+      (computeFutureOf_subset_alphabet left)
+    rw [hLeftAlphabet] at hCur hResolved
     refine ⟨by simpa [sequenceRedirectEdge] using hCur, ?_⟩
-    intro offers hOffers
-    simp only [sequenceRedirectEdge, sequenceRedirectFutureSpec] at hOffers
-    split at hOffers
-    · cases hOffers; simp
-    · exact absurd hOffers (by simp)
+    simp only [sequenceRedirectEdge, sequenceLeftFutureSpec]
+    split_ifs
+    · exact Finset.empty_subset _
+    · exact hResolved
+    · exact Finset.Subset.trans Finset.sdiff_subset hResolved
 
 /-- Compiling a recursion at its own budget builds the recursion automaton over
 the body compiled at its own. -/
@@ -1433,21 +1475,13 @@ lemma edgeLocal_recur (alphabet : PactTypeAlphabet)
   · have := hBody.1 childEdge hChildMem
     rw [hBodyAlphabet] at this
     split <;> exact this
-  · exact ⟨by simp, by intro _ h; simp at h⟩
+  · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
   · obtain ⟨hCur, hFut⟩ := hBody.2 childEdge hChildMem
     rw [hBodyAlphabet] at hCur hFut
     split
-    · exact ⟨by simp, by intro _ h; simp at h⟩
+    · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
     · refine ⟨hCur, ?_⟩
-      intro offers hOffers
-      simp only [childFutureSpec] at hOffers
-      cases hSpec : childEdge.future with
-      | explicit childOffers =>
-          rw [hSpec] at hOffers
-          simp only [FutureSpec.explicit.injEq] at hOffers
-          subst hOffers
-          exact hFut childOffers hSpec
-      | «at» t r => rw [hSpec] at hOffers; simp at hOffers
+      exact (childFutureSpec_alphabetLocal _ _ _).mpr hFut
 
 /-- A hidden child need is a parent need.  `typeNeed` preserves the message id
 and both hiding operators filter on that id, so hiding commutes with
@@ -1743,9 +1777,8 @@ theorem hideOffers_union_subset_actions {parent left right : PactTypeAlphabet}
     exact ⟨hRightOffers hRight, hNotInterface⟩
 
 /-- The offer half of parallel edge locality.  The three synchronized families
-hide the union of the two component currents; the survivor and done families
-copy a re-stamped child's current unchanged.  Every family's future field is
-`.explicit` only at `∅`, by `parallelFutureSpec`. -/
+hide the component offer pairs. Survivor families retain the resolved child
+pair; the done family contributes nothing. -/
 lemma buildParallelAutomaton_edge_offers
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
@@ -1762,23 +1795,29 @@ lemma buildParallelAutomaton_edge_offers
       edge.current ⊆ parentAlphabet.actions)
     (hRestampedRightCurrent : ∀ edge ∈ restampedRight.edges,
       edge.current ⊆ parentAlphabet.actions)
+    (hLeftResolved : ∀ edge ∈ left.edges,
+      resolveFutureSpec leftFuture edge.future ⊆ leftAlphabet.actions)
+    (hRightResolved : ∀ edge ∈ right.edges,
+      resolveFutureSpec rightFuture edge.future ⊆ rightAlphabet.actions)
+    (hRestampedLeftResolved : ∀ edge ∈ restampedLeft.edges,
+      resolveFutureSpec restampedLeftFuture edge.future ⊆ parentAlphabet.actions)
+    (hRestampedRightResolved : ∀ edge ∈ restampedRight.edges,
+      resolveFutureSpec restampedRightFuture edge.future ⊆ parentAlphabet.actions)
     (edge : PendingAutomatonEdge)
     (hEdge : edge ∈ (buildParallelAutomaton parentAlphabet leftAlphabet
       rightAlphabet interface left right restampedLeft restampedRight
       leftFuture rightFuture restampedLeftFuture restampedRightFuture).edges) :
     edge.current ⊆ parentAlphabet.actions ∧
-      ∀ offers, edge.future = .explicit offers →
-        offers ⊆ parentAlphabet.actions := by
+      edge.future.AlphabetLocal parentAlphabet.actions := by
   classical
-  have hSpec : ∀ (label : AutomatonConstructionLabel) (target : TypeAutomatonState)
-      (removed : Finset BareMessage) (offers : Finset BareMessage),
-      parallelFutureSpec label target removed = .explicit offers →
-      offers ⊆ parentAlphabet.actions := by
-    intro label target removed offers hEq
-    simp only [parallelFutureSpec] at hEq
-    split at hEq
-    · cases hEq; simp
-    · exact absurd hEq (by simp)
+  have hSpec : ∀ (label : AutomatonConstructionLabel) (offers : Finset BareMessage),
+      offers ⊆ parentAlphabet.actions →
+      (parallelFutureSpec label offers).AlphabetLocal parentAlphabet.actions := by
+    intro label offers hOffers
+    unfold parallelFutureSpec
+    split_ifs
+    · exact Finset.empty_subset _
+    · exact hOffers
   simp only [buildParallelAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with
@@ -1790,40 +1829,53 @@ lemma buildParallelAutomaton_edge_offers
       ⟨⟨rightPending, hRightPending, rfl⟩, -⟩, rfl⟩ := hRaw
     exact ⟨hideOffers_union_subset_actions hLeftHide hRightHide
       (hLeftCurrent leftPending hLeftPending)
-      (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
+      (hRightCurrent rightPending hRightPending), hSpec _ _
+        (hideOffers_union_subset_actions hLeftHide hRightHide
+          (hLeftResolved leftPending hLeftPending)
+          (hRightResolved rightPending hRightPending))⟩
   · simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftComplete
     obtain ⟨leftEdge, ⟨leftPending, hLeftPending, rfl⟩, rightEdge,
       ⟨⟨rightPending, hRightPending, rfl⟩, -⟩, rfl⟩ := hLeftComplete
     exact ⟨hideOffers_union_subset_actions hLeftHide hRightHide
       (hLeftCurrent leftPending hLeftPending)
-      (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
+      (hRightCurrent rightPending hRightPending), hSpec _ _
+        (hideOffers_union_subset_actions hLeftHide hRightHide
+          (hLeftResolved leftPending hLeftPending)
+          (hRightResolved rightPending hRightPending))⟩
   · simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hRightComplete
     obtain ⟨leftEdge, ⟨leftPending, hLeftPending, rfl⟩, rightEdge,
       ⟨⟨rightPending, hRightPending, rfl⟩, -⟩, rfl⟩ := hRightComplete
     exact ⟨hideOffers_union_subset_actions hLeftHide hRightHide
       (hLeftCurrent leftPending hLeftPending)
-      (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
+      (hRightCurrent rightPending hRightPending), hSpec _ _
+        (hideOffers_union_subset_actions hLeftHide hRightHide
+          (hLeftResolved leftPending hLeftPending)
+          (hRightResolved rightPending hRightPending))⟩
   · simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftSurvivor
     obtain ⟨resolved, ⟨⟨pending, hPending, rfl⟩, -⟩, rfl⟩ := hLeftSurvivor
-    exact ⟨hRestampedRightCurrent pending hPending, hSpec _ _ _⟩
+    exact ⟨hRestampedRightCurrent pending hPending,
+      hSpec _ _ (hRestampedRightResolved pending hPending)⟩
   · simp only [parallelRightCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hRightSurvivor
     obtain ⟨resolved, ⟨⟨pending, hPending, rfl⟩, -⟩, rfl⟩ := hRightSurvivor
-    exact ⟨hRestampedLeftCurrent pending hPending, hSpec _ _ _⟩
+    exact ⟨hRestampedLeftCurrent pending hPending,
+      hSpec _ _ (hRestampedLeftResolved pending hPending)⟩
   · simp only [parallelLeftCompleteDoneEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftDone
     obtain ⟨resolved, ⟨⟨pending, hPending, rfl⟩, -⟩, rfl⟩ := hLeftDone
-    exact ⟨hRestampedRightCurrent pending hPending, hSpec _ _ _⟩
+    exact ⟨hRestampedRightCurrent pending hPending,
+      hSpec _ _ (hRestampedRightResolved pending hPending)⟩
   · simp only [parallelRightCompleteDoneEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hRightDone
     obtain ⟨resolved, ⟨⟨pending, hPending, rfl⟩, -⟩, rfl⟩ := hRightDone
-    exact ⟨hRestampedLeftCurrent pending hPending, hSpec _ _ _⟩
+    exact ⟨hRestampedLeftCurrent pending hPending,
+      hSpec _ _ (hRestampedLeftResolved pending hPending)⟩
   · simp only [parallelDoneEdges, Finset.mem_image, Finset.mem_filter] at hDone
     obtain ⟨environment, -, rfl⟩ := hDone
-    exact ⟨by simp, by intro _ h; simp only [] at h; cases h; simp⟩
+    exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 /-- Compiling a conjunctive offer at its own budget builds the selected
 conjunctive automaton over the else arm and every selected product, each
@@ -1900,17 +1952,17 @@ theorem choice_child0_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEdgeEq]; rfl
   · rw [← hPCurrent, hChildEdgeEq]; rfl
   · rw [← hPFuture, hChildEdgeEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.choice alphabet left right)) (computeFutureOf left) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel left) left le_rfl hLeftDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_left alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_left alphabet left right
           TypeLabel.silent TypeLabel.silent
           (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint
-          hLeftAlphabet hProductInfo t hStateMem]
+          hLeftAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
 
 /-- The forward direction of `choice_child0_edge_restrict`: a left-child edge
 lifts to the copied edge of the binary choice. -/
@@ -1947,18 +1999,17 @@ theorem choice_child0_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.choice alphabet left right)) (computeFutureOf left) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel left) left le_rfl hLeftDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_left alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_left alphabet left right
           TypeLabel.silent TypeLabel.silent
           (.choice alphabet left right) hWhole hFuelLeft hLeftDisjoint
-          hLeftAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hLeftAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- The forward direction of `choice_child1_edge_restrict`: a left-child edge
@@ -1996,18 +2047,17 @@ theorem choice_child1_edge_lift (alphabet : PactTypeAlphabet)
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 1 childEdge.future
+      (computeFutureOf (.choice alphabet left right)) (computeFutureOf right) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel right) right le_rfl hRightDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_right alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_right alphabet left right
           TypeLabel.silent TypeLabel.silent
           (.choice alphabet left right) hWhole hFuelRight hRightDisjoint
-          hRightAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          hRightAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- A copied right-child edge of a binary choice restricts to an edge of the
@@ -2051,17 +2101,17 @@ theorem choice_child1_edge_restrict (alphabet : PactTypeAlphabet)
   · rw [← hPLabel, hChildEdgeEq]; rfl
   · rw [← hPCurrent, hChildEdgeEq]; rfl
   · rw [← hPFuture, hChildEdgeEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 1 childEdge.future
+      (computeFutureOf (.choice alphabet left right)) (computeFutureOf right) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel right) right le_rfl hRightDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_right alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_right alphabet left right
           TypeLabel.silent TypeLabel.silent
           (.choice alphabet left right) hWhole hFuelRight hRightDisjoint
-          hRightAlphabet hProductInfo t hStateMem]
+          hRightAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
 
 end
 

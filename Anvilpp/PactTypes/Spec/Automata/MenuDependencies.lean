@@ -18,7 +18,7 @@ def withMenuDependencies (automaton : PendingAutomaton)
     FiniteMenuGraph :=
   { states := automaton.states
     referencedStates := fun source =>
-      automaton.referencedStates source ∪
+      automaton.menuStep source ∪
         menuDependencyTargets dependencies source }
 
 

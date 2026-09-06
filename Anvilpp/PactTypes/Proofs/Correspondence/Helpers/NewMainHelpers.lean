@@ -47,46 +47,6 @@ theorem final_state_represents_skip
 
 /-! ### Re-signing invariance -/
 
-/-- Non-clock half of the uniform offer law: a non-clock step's future offer is
-the menu at its own target, less what it already offers now. -/
-theorem TypeOffers.future_eq_sdiff_of_label_ne_tock
-    {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
-    {current future : Finset BareMessage}
-    (hOffers : TypeOffers env source label target current future)
-    (hLabel : label ≠ TypeLabel.tock) :
-    future = typeFutureOffers target \ current := by
-  induction hOffers using TypeOffers.rec with
-  | action => simp [typeFutureOffers, typeFutureOffersFuel]
-  | action_wait => rfl
-  | choice_left => simp
-  | choice_right => simp
-  | fair_left => simp
-  | fair_right => simp
-  | cycle => exact absurd rfl hLabel
-  | cycle_wait => simp
-  | skip => simp
-  | progress => simp
-  | recur => simp
-  | seq => rfl
-  | seq_tock => exact absurd rfl hLabel
-  | seq_fuse => rfl
-  | seq_fuse_tock => exact absurd rfl hLabel
-  | xoffer_branch => rfl
-  | xoffer_else => simp
-  | xoffer_wait => rfl
-  | offer_some => simp
-  | offer_else => rfl
-  | offer_wait => rfl
-  | par _ _ _ interface alphabet _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _ _ _ _ =>
-      simp only [if_neg hLabel]
-  | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ hLeft hRight _ _ _ _ _ _ =>
-      rw [hLeft.future_eq_empty_of_target_skip rfl,
-        hRight.future_eq_empty_of_target_skip rfl]
-      simp [hideTypeOffers, typeFutureOffers, typeFutureOffersFuel]
-  | par_fuse_tock => simp_all
-  | left_complete => rfl
-  | right_complete => rfl
-
 /-- A residual whose body is `skip` sits at an accepting state.  Converse half
 of `final_state_represents_skip`. -/
 theorem accepting_of_skip_residual
@@ -220,15 +180,8 @@ theorem accepting_of_skip_residual
           show (compileTypeFuel
             (typeCompilationFuel (.seq alphabet left right))
             (.seq alphabet left right)).accepting = _
-          rw [hFuelEq, compileTypeFuel.eq_def]
-          show (buildSequenceAutomaton
-            (compileTypeFuel
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel
-              (max (typeCompilationFuel left) (typeCompilationFuel right))
-              right)).accepting = _
-          rw [compileTypeFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
-          simp [buildSequenceAutomaton, finishAutomatonFragment]
+          rw [compileTypeFuel_sequence_eq_build]
+          rfl
         rcases relationMembership_seq_cases alphabet left right
             hRelated with ⟨q, residualLeft, hEntry, -, -⟩ | ⟨q, hState, hChild⟩
         · exact absurd (congrArg Prod.fst hEntry) (by simp)
@@ -687,21 +640,7 @@ theorem markerSource_iff_var_residual
         have hFuelEq : typeCompilationFuel (.seq alphabet left right) =
             max (typeCompilationFuel left) (typeCompilationFuel right) + 1 := by
           simp only [typeCompilationFuel]; omega
-        have hCompileEq :
-            compileTypeFuel (typeCompilationFuel (.seq alphabet left right))
-                (.seq alphabet left right) =
-              buildSequenceAutomaton
-                (compileTypeFuel (typeCompilationFuel left) left)
-                (compileTypeFuel (typeCompilationFuel right) right) := by
-          rw [hFuelEq, compileTypeFuel.eq_def]
-          show buildSequenceAutomaton
-            (compileTypeFuel
-              (max (typeCompilationFuel left) (typeCompilationFuel right)) left)
-            (compileTypeFuel
-              (max (typeCompilationFuel left) (typeCompilationFuel right))
-              right) = _
-          rw [compileTypeFuel_eq_of_sufficient left (le_max_left _ _) le_rfl,
-            compileTypeFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
+        have hCompileEq := compileTypeFuel_sequence_eq_build alphabet left right
         rw [PactType.TailOccurrences] at hTail
         rcases relationMembership_seq_cases alphabet left right hRelated with
           ⟨q, residualLeft, hEntry, -, -⟩ | ⟨q, hState, hChild⟩

@@ -42,8 +42,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
       | choice_left cEnv cAlpha cLeft cRight hChoiceEnv =>
           refine ⟨.child 0 (compileTypeFuel (typeCompilationFuel left)
             left).initial, computeFutureOf (.choice alphabet left right)
-              (.child 0 (compileTypeFuel (typeCompilationFuel left)
-                left).initial), ?_, ?_⟩
+              TypeAutomatonState.root, ?_, ?_⟩
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               (.choice alphabet left right) TypeAutomatonState.root
               (.child 0 (compileTypeFuel (typeCompilationFuel left)
@@ -52,8 +51,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
                 current := (∅ : Finset BareMessage),
-                future := FutureSpec.at (childState 0 (compileTypeFuel
-                  (typeCompilationFuel left) left).initial) ∅,
+                future := FutureSpec.at TypeAutomatonState.root ∅,
                 target := childState 0 (compileTypeFuel
                   (typeCompilationFuel left) left).initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -68,8 +66,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
       | choice_right cEnv cAlpha cLeft cRight hChoiceEnv =>
           refine ⟨.child 1 (compileTypeFuel (typeCompilationFuel right)
             right).initial, computeFutureOf (.choice alphabet left right)
-              (.child 1 (compileTypeFuel (typeCompilationFuel right)
-                right).initial), ?_, ?_⟩
+              TypeAutomatonState.root, ?_, ?_⟩
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               (.choice alphabet left right) TypeAutomatonState.root
               (.child 1 (compileTypeFuel (typeCompilationFuel right)
@@ -78,8 +75,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
                 current := (∅ : Finset BareMessage),
-                future := FutureSpec.at (childState 1 (compileTypeFuel
-                  (typeCompilationFuel right) right).initial) ∅,
+                future := FutureSpec.at TypeAutomatonState.root ∅,
                 target := childState 1 (compileTypeFuel
                   (typeCompilationFuel right) right).initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -137,7 +133,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
         subst hLabelEq hCurrentEq
         have hEnvEq : environment = env := hPEnv
         subst hEnvEq
-        refine ⟨left, typeFutureOffers left, ?_, ?_⟩
+        refine ⟨left, typeFutureOffers (.choice alphabet left right), ?_, ?_⟩
         · exact ⟨TypeTransition.choice_left _ alphabet left right
               (PactTypeAlphabet.environment_wellFormed hEnvMem) hEnvClock,
             TypeOffers.choice_left _ alphabet left right
@@ -154,7 +150,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
         subst hLabelEq hCurrentEq
         have hEnvEq : environment = env := hPEnv
         subst hEnvEq
-        refine ⟨right, typeFutureOffers right, ?_, ?_⟩
+        refine ⟨right, typeFutureOffers (.choice alphabet left right), ?_, ?_⟩
         · exact ⟨TypeTransition.choice_right _ alphabet left right
               (PactTypeAlphabet.environment_wellFormed hEnvMem) hEnvClock,
             TypeOffers.choice_right _ alphabet left right
@@ -463,13 +459,13 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
     have hRefs :
         ({ states := (compileTypeFuel (typeCompilationFuel whole) whole).states
            edges := (compileTypeFuel (typeCompilationFuel whole)
-             whole).edges } : PendingAutomaton).referencedStates
+             whole).edges } : PendingAutomaton).menuStep
           TypeAutomatonState.root =
         {childState 0 (compileTypeFuel (typeCompilationFuel left) left).initial,
           childState 1
             (compileTypeFuel (typeCompilationFuel right) right).initial} := by
       rw [hWhole]
-      exact buildChoiceAutomaton_referencedStates_root alphabet _ _ _ _
+      exact buildChoiceAutomaton_menuStep_root alphabet _ _ _ _
         (by simp [TypeLabel.silent]) (by simp [TypeLabel.silent]) hEnv
     have hDecomp := computeFutureOf_root_decomposition whole
       TypeAutomatonState.root
@@ -477,7 +473,7 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
         childState 1
           (compileTypeFuel (typeCompilationFuel right) right).initial}
       _ rfl
-      (referencesClosed_compileTypeFuel whole (typeCompilationFuel whole)
+      (compileTypeFuel_menuClosed (typeCompilationFuel whole) whole
         (Nat.le_refl _) hWholeDisjoint)
       (by
         show TypeAutomatonState.root ∈
@@ -597,17 +593,17 @@ theorem fairChoice_child0_edge_restrict (alphabet : PactTypeAlphabet) (bid : Bra
   · rw [← hPLabel, hChildEdgeEq]; rfl
   · rw [← hPCurrent, hChildEdgeEq]; rfl
   · rw [← hPFuture, hChildEdgeEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.fairChoice alphabet bid left right)) (computeFutureOf left) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel left) left le_rfl hLeftDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_left alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_left alphabet left right
           (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-          ((.fairChoice alphabet bid left right)) hWhole hFuelLeft hLeftDisjoint
-          hLeftAlphabet hProductInfo t hStateMem]
+          (.fairChoice alphabet bid left right) hWhole hFuelLeft hLeftDisjoint
+          hLeftAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
 
 /-- The forward direction of `fairChoice_child0_edge_restrict`: a left-child edge
 lifts to the copied edge of the fair choice. -/
@@ -644,18 +640,17 @@ theorem fairChoice_child0_edge_lift (alphabet : PactTypeAlphabet) (bid : BranchI
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 0 childEdge.future
+      (computeFutureOf (.fairChoice alphabet bid left right)) (computeFutureOf left) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel left) left le_rfl hLeftDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_left alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_left alphabet left right
           (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-          ((.fairChoice alphabet bid left right)) hWhole hFuelLeft hLeftDisjoint
-          hLeftAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          (.fairChoice alphabet bid left right) hWhole hFuelLeft hLeftDisjoint
+          hLeftAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- The forward direction of `fairChoice_child1_edge_restrict`: a left-child edge
@@ -693,18 +688,17 @@ theorem fairChoice_child1_edge_lift (alphabet : PactTypeAlphabet) (bid : BranchI
   · simp [childPendingEdge, hCEnv]
   · simp [childPendingEdge, hCLabel]
   · simp [childPendingEdge, hCCurrent]
-  · cases hSpec : childEdge.future with
-    | explicit offers => simpa [childPendingEdge, childFutureSpec, hSpec] using hCFuture
-    | «at» t r =>
+  · have hResolve := resolve_childFutureSpec 1 childEdge.future
+      (computeFutureOf (.fairChoice alphabet bid left right)) (computeFutureOf right) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel right) right le_rfl hRightDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_right alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_right alphabet left right
           (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-          ((.fairChoice alphabet bid left right)) hWhole hFuelRight hRightDisjoint
-          hRightAlphabet hProductInfo t hStateMem]
-        simpa [childFutureSpec, hSpec] using hCFuture
+          (.fairChoice alphabet bid left right) hWhole hFuelRight hRightDisjoint
+          hRightAlphabet hProductInfo t hStateMem)
+    exact hResolve.trans hCFuture
   · simp [childPendingEdge, childState, hCTarget]
 
 /-- A copied right-child edge of a fair choice restricts to an edge of the
@@ -748,17 +742,17 @@ theorem fairChoice_child1_edge_restrict (alphabet : PactTypeAlphabet) (bid : Bra
   · rw [← hPLabel, hChildEdgeEq]; rfl
   · rw [← hPCurrent, hChildEdgeEq]; rfl
   · rw [← hPFuture, hChildEdgeEq]
-    cases hSpec : childEdge.future with
-    | explicit offers => simp [childPendingEdge, childFutureSpec, hSpec]
-    | «at» t r =>
+    have hResolve := resolve_childFutureSpec 1 childEdge.future
+      (computeFutureOf (.fairChoice alphabet bid left right)) (computeFutureOf right) (by
+        intro t hRef
         have hStateMem := compileTypeFuel_futureTargetsInStates
           (typeCompilationFuel right) right le_rfl hRightDisjoint childEdge
-          hChildEdgeMem t r hSpec
-        simp only [childPendingEdge, childFutureSpec, hSpec, childState]
-        rw [computeFutureOf_binaryChoice_right alphabet left right
+          hChildEdgeMem t hRef
+        exact computeFutureOf_binaryChoice_right alphabet left right
           (TypeLabel.fair bid true) (TypeLabel.fair bid false)
-          ((.fairChoice alphabet bid left right)) hWhole hFuelRight hRightDisjoint
-          hRightAlphabet hProductInfo t hStateMem]
+          (.fairChoice alphabet bid left right) hWhole hFuelRight hRightDisjoint
+          hRightAlphabet hProductInfo t hStateMem)
+    exact hResolve.symm
 
 /-- Current-offer correspondence at a fair choice.  Following the paper: the
 root's guards, labels, current offers and targets are identical in the semantic
@@ -789,8 +783,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
       | fair_left cEnv cAlpha cBid cLeft cRight hChoiceEnv =>
           refine ⟨.child 0 (compileTypeFuel (typeCompilationFuel left)
             left).initial, computeFutureOf ((.fairChoice alphabet bid left right))
-              (.child 0 (compileTypeFuel (typeCompilationFuel left)
-                left).initial), ?_, ?_⟩
+              TypeAutomatonState.root, ?_, ?_⟩
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               ((.fairChoice alphabet bid left right)) TypeAutomatonState.root
               (.child 0 (compileTypeFuel (typeCompilationFuel left)
@@ -799,8 +792,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible (TypeLabel.fair bid true),
                 current := (∅ : Finset BareMessage),
-                future := FutureSpec.at (childState 0 (compileTypeFuel
-                  (typeCompilationFuel left) left).initial) ∅,
+                future := FutureSpec.at TypeAutomatonState.root ∅,
                 target := childState 0 (compileTypeFuel
                   (typeCompilationFuel left) left).initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -815,8 +807,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
       | fair_right cEnv cAlpha cBid cLeft cRight hChoiceEnv =>
           refine ⟨.child 1 (compileTypeFuel (typeCompilationFuel right)
             right).initial, computeFutureOf ((.fairChoice alphabet bid left right))
-              (.child 1 (compileTypeFuel (typeCompilationFuel right)
-                right).initial), ?_, ?_⟩
+              TypeAutomatonState.root, ?_, ?_⟩
           · rw [compileType_hasEdge_iff_hasResolvedEdge
               ((.fairChoice alphabet bid left right)) TypeAutomatonState.root
               (.child 1 (compileTypeFuel (typeCompilationFuel right)
@@ -825,8 +816,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible (TypeLabel.fair bid false),
                 current := (∅ : Finset BareMessage),
-                future := FutureSpec.at (childState 1 (compileTypeFuel
-                  (typeCompilationFuel right) right).initial) ∅,
+                future := FutureSpec.at TypeAutomatonState.root ∅,
                 target := childState 1 (compileTypeFuel
                   (typeCompilationFuel right) right).initial }
               ⟨?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
@@ -884,7 +874,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
         subst hLabelEq hCurrentEq
         have hEnvEq : environment = env := hPEnv
         subst hEnvEq
-        refine ⟨left, typeFutureOffers left, ?_, ?_⟩
+        refine ⟨left, typeFutureOffers (.fairChoice alphabet bid left right), ?_, ?_⟩
         · exact ⟨TypeTransition.fair_left _ alphabet bid left right
               (PactTypeAlphabet.environment_wellFormed hEnvMem) hEnvClock,
             TypeOffers.fair_left _ alphabet bid left right
@@ -901,7 +891,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
         subst hLabelEq hCurrentEq
         have hEnvEq : environment = env := hPEnv
         subst hEnvEq
-        refine ⟨right, typeFutureOffers right, ?_, ?_⟩
+        refine ⟨right, typeFutureOffers (.fairChoice alphabet bid left right), ?_, ?_⟩
         · exact ⟨TypeTransition.fair_right _ alphabet bid left right
               (PactTypeAlphabet.environment_wellFormed hEnvMem) hEnvClock,
             TypeOffers.fair_right _ alphabet bid left right
@@ -990,13 +980,13 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
     have hRefs :
         ({ states := (compileTypeFuel (typeCompilationFuel whole) whole).states
            edges := (compileTypeFuel (typeCompilationFuel whole)
-             whole).edges } : PendingAutomaton).referencedStates
+             whole).edges } : PendingAutomaton).menuStep
           TypeAutomatonState.root =
         {childState 0 (compileTypeFuel (typeCompilationFuel left) left).initial,
           childState 1
             (compileTypeFuel (typeCompilationFuel right) right).initial} := by
       rw [hWhole]
-      exact buildChoiceAutomaton_referencedStates_root alphabet _ _ _ _
+      exact buildChoiceAutomaton_menuStep_root alphabet _ _ _ _
         (by simp [TypeLabel.fair]) (by simp [TypeLabel.fair]) hEnv
     have hDecomp := computeFutureOf_root_decomposition whole
       TypeAutomatonState.root
@@ -1004,7 +994,7 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
         childState 1
           (compileTypeFuel (typeCompilationFuel right) right).initial}
       _ rfl
-      (referencesClosed_compileTypeFuel whole (typeCompilationFuel whole)
+      (compileTypeFuel_menuClosed (typeCompilationFuel whole) whole
         (Nat.le_refl _) hWholeDisjoint)
       (by
         show TypeAutomatonState.root ∈
@@ -1047,6 +1037,148 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
     rw [hTransportRight q
       (relationMembership_state_mem right _ q hRightDisjoint hChild)]
     exact hRight hChild
+
+/-- Both selection edges read the choice source, independently of their targets. -/
+theorem binaryChoice_root_future (whole : PactType) (alphabet : PactTypeAlphabet)
+    (left right : AutomatonFragment) (selectionLeft selectionRight : TypeLabel)
+    (hCompile : compileTypeFuel (typeCompilationFuel whole) whole =
+      buildChoiceAutomaton alphabet left right selectionLeft selectionRight)
+    {env : TypeEnvironment} {label : TypeLabel} {current future : Finset BareMessage}
+    {target : TypeAutomatonState}
+    (hEdge : (compileType whole).HasEdge .root env label ⟨current, future⟩ target) :
+    future = computeFutureOf whole .root := by
+  obtain ⟨edge, hMem, hSource, _, _, _, hFuture, _⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge _ _ _ _ _ _).mp hEdge
+  rw [hCompile] at hMem
+  obtain ⟨environment, _, rfl | rfl⟩ :=
+    (buildChoiceAutomaton_outgoing_root alphabet left right selectionLeft selectionRight
+      edge).mp ⟨hMem, hSource⟩ <;>
+    simpa using hFuture.symm
+
+/-- After menu agreement, selection roots and full child hypotheses identify both fields. -/
+theorem offerCorrespondence_choice (alphabet : PactTypeAlphabet)
+    (left right : PactType)
+    (hWF : (PactType.choice alphabet left right).AlphabetWellFormed)
+    (hLeftDisjoint : left.OfferBranchesDisjoint)
+    (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hLeftAlphabet : left.alphabet = (PactType.choice alphabet left right).alphabet)
+    (hRightAlphabet : right.alphabet = (PactType.choice alphabet left right).alphabet)
+    (hMenus : FutureOffersAgree (PactType.choice alphabet left right))
+    (hLeft : TypeAutomatonStepCorrespondence left)
+    (hRight : TypeAutomatonStepCorrespondence right) :
+    TypeAutomatonStepCorrespondence (PactType.choice alphabet left right) := by
+  have hCurrent := currentOfferCorrespondence_choice alphabet left right hWF
+    hLeftDisjoint hRightDisjoint hLeftAlphabet hRightAlphabet hLeft.toCurrent hRight.toCurrent
+  have hRootFuture : ∀ {env label current future target},
+      (compileType (.choice alphabet left right)).HasEdge .root env label
+        ⟨current, future⟩ target →
+      future = computeFutureOf (.choice alphabet left right) .root :=
+    binaryChoice_root_future (PactType.choice alphabet left right) alphabet
+    (compileTypeFuel (typeCompilationFuel left) left)
+    (compileTypeFuel (typeCompilationFuel right) right) TypeLabel.silent TypeLabel.silent
+    (compileTypeFuel_choice_eq alphabet left right)
+  constructor
+  · intro rho rho' q env label offers hRelated hStep
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_choice_cases alphabet left right hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨child, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨q', edgeFuture, hEdge, hTarget⟩ := hCurrent.1 hRelated hStep
+      have hSemantic : future = typeFutureOffers (PactType.choice alphabet left right) := by
+        cases hStep.2 <;> rfl
+      have hEqual : edgeFuture = future :=
+        (hRootFuture hEdge).trans ((hMenus hRelated).trans hSemantic.symm)
+      exact ⟨q', hEqual ▸ hEdge, hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hLeft.1 hChild hStep
+      exact ⟨.child 0 child',
+        choice_child0_edge_lift alphabet left right hLeftDisjoint hLeftAlphabet hEdge,
+        relationMembership_choice_left alphabet left right rho' hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hRight.1 hChild hStep
+      exact ⟨.child 1 child',
+        choice_child1_edge_lift alphabet left right hRightDisjoint hRightAlphabet hEdge,
+        relationMembership_choice_right alphabet left right rho' hTarget⟩
+  · intro rho q q' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_choice_cases alphabet left right hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨child, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨rho', semanticFuture, hStep, hTarget⟩ := hCurrent.2 hRelated hEdge
+      have hSemantic : semanticFuture = typeFutureOffers (PactType.choice alphabet left right) := by
+        cases hStep.2 <;> rfl
+      have hEqual : semanticFuture = future :=
+        hSemantic.trans ((hMenus hRelated).symm.trans (hRootFuture hEdge).symm)
+      exact ⟨rho', hEqual ▸ hStep, hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        choice_child0_edge_restrict alphabet left right hLeftDisjoint hLeftAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hLeft.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_choice_left alphabet left right rho' hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        choice_child1_edge_restrict alphabet left right hRightDisjoint hRightAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hRight.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_choice_right alphabet left right rho' hTarget⟩
+
+/-- After menu agreement, selection roots and full child hypotheses identify both fields. -/
+theorem offerCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid : BranchId)
+    (left right : PactType)
+    (hWF : (PactType.fairChoice alphabet bid left right).AlphabetWellFormed)
+    (hLeftDisjoint : left.OfferBranchesDisjoint)
+    (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hLeftAlphabet : left.alphabet = (PactType.fairChoice alphabet bid left right).alphabet)
+    (hRightAlphabet : right.alphabet = (PactType.fairChoice alphabet bid left right).alphabet)
+    (hMenus : FutureOffersAgree (PactType.fairChoice alphabet bid left right))
+    (hLeft : TypeAutomatonStepCorrespondence left)
+    (hRight : TypeAutomatonStepCorrespondence right) :
+    TypeAutomatonStepCorrespondence (PactType.fairChoice alphabet bid left right) := by
+  have hCurrent := currentOfferCorrespondence_fairChoice alphabet bid left right hWF
+    hLeftDisjoint hRightDisjoint hLeftAlphabet hRightAlphabet hLeft.toCurrent hRight.toCurrent
+  have hRootFuture : ∀ {env label current future target},
+      (compileType (.fairChoice alphabet bid left right)).HasEdge .root env label
+        ⟨current, future⟩ target →
+      future = computeFutureOf (.fairChoice alphabet bid left right) .root :=
+    binaryChoice_root_future (PactType.fairChoice alphabet bid left right) alphabet
+    (compileTypeFuel (typeCompilationFuel left) left)
+    (compileTypeFuel (typeCompilationFuel right) right) (TypeLabel.fair bid true) (TypeLabel.fair bid false)
+    (compileTypeFuel_fairChoice_eq alphabet bid left right)
+  constructor
+  · intro rho rho' q env label offers hRelated hStep
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_fairChoice_cases alphabet bid left right hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨child, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨q', edgeFuture, hEdge, hTarget⟩ := hCurrent.1 hRelated hStep
+      have hSemantic : future = typeFutureOffers (PactType.fairChoice alphabet bid left right) := by
+        cases hStep.2 <;> rfl
+      have hEqual : edgeFuture = future :=
+        (hRootFuture hEdge).trans ((hMenus hRelated).trans hSemantic.symm)
+      exact ⟨q', hEqual ▸ hEdge, hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hLeft.1 hChild hStep
+      exact ⟨.child 0 child',
+        fairChoice_child0_edge_lift alphabet bid left right hLeftDisjoint hLeftAlphabet hEdge,
+        relationMembership_fairChoice_left alphabet bid left right rho' hTarget⟩
+    · obtain ⟨child', hEdge, hTarget⟩ := hRight.1 hChild hStep
+      exact ⟨.child 1 child',
+        fairChoice_child1_edge_lift alphabet bid left right hRightDisjoint hRightAlphabet hEdge,
+        relationMembership_fairChoice_right alphabet bid left right rho' hTarget⟩
+  · intro rho q q' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_fairChoice_cases alphabet bid left right hRelated with
+      hRoot | ⟨child, rfl, hChild⟩ | ⟨child, rfl, hChild⟩
+    · obtain ⟨rfl, rfl⟩ := Prod.ext_iff.mp hRoot
+      obtain ⟨rho', semanticFuture, hStep, hTarget⟩ := hCurrent.2 hRelated hEdge
+      have hSemantic : semanticFuture = typeFutureOffers (PactType.fairChoice alphabet bid left right) := by
+        cases hStep.2 <;> rfl
+      have hEqual : semanticFuture = future :=
+        hSemantic.trans ((hMenus hRelated).symm.trans (hRootFuture hEdge).symm)
+      exact ⟨rho', hEqual ▸ hStep, hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        fairChoice_child0_edge_restrict alphabet bid left right hLeftDisjoint hLeftAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hLeft.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_fairChoice_left alphabet bid left right rho' hTarget⟩
+    · obtain ⟨child', rfl, hChildEdge⟩ :=
+        fairChoice_child1_edge_restrict alphabet bid left right hRightDisjoint hRightAlphabet hEdge
+      obtain ⟨rho', hStep, hTarget⟩ := hRight.2 hChild hChildEdge
+      exact ⟨rho', hStep, relationMembership_fairChoice_right alphabet bid left right rho' hTarget⟩
+
 
 end
 

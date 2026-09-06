@@ -4,48 +4,69 @@ namespace Pact
 
 noncomputable section
 
-theorem markerStoppedFragment_referencedStates_subset
+theorem markerStoppedFragment_menuStep_subset
     (fragment : AutomatonFragment) (name : String)
     (state : TypeAutomatonState) :
-    (markerStoppedFragment fragment name : AutomatonFragment).toPending.referencedStates
+    (markerStoppedFragment fragment name : AutomatonFragment).toPending.menuStep
         state ⊆
-      (fragment : AutomatonFragment).toPending.referencedStates state := by
+      (fragment : AutomatonFragment).toPending.menuStep state := by
   classical
   intro target hTarget
-  simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
-    markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
-    Finset.mem_image] at hTarget ⊢
-  rcases hTarget with
-    ⟨edge, ⟨⟨original, hOriginal, hEdge⟩, hSource⟩, hReference⟩
-  rw [← hEdge] at hSource hReference
-  by_cases hMarker : original.label =
-      AutomatonConstructionLabel.variable name
-  · simp [hMarker] at hReference
-  · simp only [if_neg hMarker] at hSource hReference
-    exact ⟨original, ⟨hOriginal, hSource⟩, hReference⟩
+  simp only [PendingAutomaton.menuStep, AutomatonFragment.toPending,
+    markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter] at hTarget ⊢
+  obtain ⟨edge, ⟨⟨hEdge, _⟩, hSource⟩, hTarget⟩ := hTarget
+  exact ⟨edge, ⟨hEdge, hSource⟩, hTarget⟩
 
-theorem markerStoppedFragment_referencedStates_eq_of_not_markerSource
+theorem markerStoppedFragment_menuStep_eq_of_not_markerSource
     (fragment : AutomatonFragment) (name : String)
     (state : TypeAutomatonState)
     (hNoMarker : ¬ MarkerSource fragment name state) :
-    (markerStoppedFragment fragment name).toPending.referencedStates state =
-      fragment.toPending.referencedStates state := by
+    (markerStoppedFragment fragment name).toPending.menuStep state =
+      fragment.toPending.menuStep state := by
   classical
   apply Finset.Subset.antisymm
-  · exact markerStoppedFragment_referencedStates_subset fragment name state
+  · exact markerStoppedFragment_menuStep_subset fragment name state
   · intro target hTarget
-    simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
+    simp only [PendingAutomaton.menuStep, AutomatonFragment.toPending,
       Finset.mem_biUnion, Finset.mem_filter] at hTarget
     rcases hTarget with ⟨edge, ⟨hEdge, hSource⟩, hReference⟩
     have hNotMarker : edge.label ≠
         AutomatonConstructionLabel.variable name := by
       intro hLabel
       exact hNoMarker ⟨edge, hEdge, hSource, hLabel⟩
-    simp only [PendingAutomaton.referencedStates, AutomatonFragment.toPending,
-      markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter,
-      Finset.mem_image]
-    exact ⟨edge, ⟨⟨edge, hEdge, by simp [hNotMarker]⟩,
-      by simp [hNotMarker, hSource]⟩, by simpa [hNotMarker] using hReference⟩
+    simp only [PendingAutomaton.menuStep, AutomatonFragment.toPending,
+      markerStoppedFragment, Finset.mem_biUnion, Finset.mem_filter]
+    exact ⟨edge, ⟨⟨hEdge, hNotMarker⟩, hSource⟩, hReference⟩
+
+/-- A child copy carries each non-clock execution target through its tag. -/
+theorem menuStep_of_outgoing_childPendingEdge
+    (parent child : AutomatonFragment) (index : Nat)
+    (state : TypeAutomatonState)
+    (hOutgoing : ∀ edge : PendingAutomatonEdge,
+      (edge ∈ parent.edges ∧ edge.source = childState index state) ↔
+        ∃ childEdge ∈ child.edges,
+          childEdge.source = state ∧ edge = childPendingEdge index childEdge) :
+    parent.toPending.menuStep (childState index state) =
+      (child.toPending.menuStep state).image (childState index) := by
+  classical
+  ext target
+  simp only [PendingAutomaton.menuStep, AutomatonFragment.toPending,
+    Finset.mem_biUnion, Finset.mem_filter, Finset.mem_image]
+  constructor
+  · rintro ⟨edge, hEdge, hTarget⟩
+    obtain ⟨inner, hInner, hSource, rfl⟩ := (hOutgoing edge).mp hEdge
+    by_cases hClock : inner.label.semantic = TypeLabel.tock
+    · simp [childPendingEdge, hClock] at hTarget
+    · have hEq : target = childState index inner.target := by
+        simpa [childPendingEdge, hClock] using hTarget
+      exact ⟨inner.target, ⟨inner, ⟨hInner, hSource⟩, by simp [hClock]⟩, hEq.symm⟩
+  · rintro ⟨innerTarget, ⟨inner, hInner, hTarget⟩, rfl⟩
+    by_cases hClock : inner.label.semantic = TypeLabel.tock
+    · simp [hClock] at hTarget
+    · have hEq : innerTarget = inner.target := by simpa [hClock] using hTarget
+      refine ⟨childPendingEdge index inner,
+        (hOutgoing _).mpr ⟨inner, hInner.1, hInner.2, rfl⟩, ?_⟩
+      simp [childPendingEdge, hClock, hEq]
 
 /-- Same-cycle references at a tagged child state are the tagged images of the
 child's own references, whenever the constructor's outgoing edges there are
@@ -87,6 +108,14 @@ theorem referencedStates_of_outgoing_childPendingEdge
           subst hTarget
           exact ⟨inner, ⟨childEdge, ⟨hChildEdge, hChildSource⟩, by
             simp [if_neg hTock, hSpec]⟩, rfl⟩
+      | atUnion offers inner removed =>
+          rw [show (childPendingEdge index childEdge).future =
+            .atUnion offers (childState index inner) removed by
+              simp [childPendingEdge, hSpec, childFutureSpec]] at hTarget
+          rw [Finset.mem_singleton] at hTarget
+          subst hTarget
+          exact ⟨inner, ⟨childEdge, ⟨hChildEdge, hChildSource⟩, by
+            simp [if_neg hTock, hSpec]⟩, rfl⟩
   · rintro ⟨inner, ⟨childEdge, ⟨hChildEdge, hChildSource⟩, hInner⟩, rfl⟩
     by_cases hTock : childEdge.label.semantic = TypeLabel.tock
     · rw [if_pos hTock] at hInner
@@ -105,6 +134,17 @@ theorem referencedStates_of_outgoing_childPendingEdge
           rw [if_neg (by simpa [childPendingEdge] using hTock),
             show (childPendingEdge index childEdge).future =
               .at (childState index dest) removed by
+                simp [childPendingEdge, hSpec, childFutureSpec]]
+          simp [hInner]
+      | atUnion offers dest removed =>
+          rw [hSpec, Finset.mem_singleton] at hInner
+          obtain ⟨hEdge, hSource⟩ :=
+            (hOutgoing (childPendingEdge index childEdge)).mpr
+              ⟨childEdge, hChildEdge, hChildSource, rfl⟩
+          refine ⟨childPendingEdge index childEdge, ⟨hEdge, hSource⟩, ?_⟩
+          rw [if_neg (by simpa [childPendingEdge] using hTock),
+            show (childPendingEdge index childEdge).future =
+              .atUnion offers (childState index dest) removed by
                 simp [childPendingEdge, hSpec, childFutureSpec]]
           simp [hInner]
 

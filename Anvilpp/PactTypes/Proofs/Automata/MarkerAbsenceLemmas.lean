@@ -59,9 +59,11 @@ theorem buildChoiceAutomaton_noMarkerFor
     rcases hEq with rfl | rfl <;> simp
 
 theorem buildSequenceAutomaton_noMarkerFor
-    (left right : AutomatonFragment) (name : String)
+    (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool} (name : String)
     (hLeft : left.NoMarkerFor name) (hRight : right.NoMarkerFor name) :
-    (buildSequenceAutomaton left right).NoMarkerFor name := by
+    (buildSequenceAutomaton left right leftFuture leftCompletes).NoMarkerFor name := by
   classical
   intro edge hEdge
   simp only [buildSequenceAutomaton, finishAutomatonFragment, Finset.mem_union,
@@ -402,6 +404,8 @@ theorem childPendingEdges_markerOffersInert
   | «at» target removed =>
       rw [hSpec] at hOffers
       simp [childFutureSpec] at hOffers
+  | atUnion offers target removed =>
+      simp [hSpec, childFutureSpec] at hOffers
 
 theorem indexedFragmentEdges_markerOffersInert
     (automata : List (BareMessage × AutomatonFragment)) (name : String)
@@ -438,9 +442,11 @@ theorem buildChoiceAutomaton_markerOffersInert
     rcases hEq with rfl | rfl <;> (intro hLabel; simp at hLabel)
 
 theorem buildSequenceAutomaton_markerOffersInert
-    (left right : AutomatonFragment) (name : String)
+    (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool} (name : String)
     (hLeft : left.NoMarkerFor name) (hRight : right.MarkerOffersInert name) :
-    (buildSequenceAutomaton left right).MarkerOffersInert name := by
+    (buildSequenceAutomaton left right leftFuture leftCompletes).MarkerOffersInert name := by
   classical
   intro edge hEdge hLabel
   simp only [buildSequenceAutomaton, finishAutomatonFragment, Finset.mem_union,
@@ -511,6 +517,8 @@ theorem buildRecursionAutomaton_markerOffersInert
         | «at» target removed =>
             rw [hSpec] at hOffers
             simp [childFutureSpec] at hOffers
+        | atUnion offers target removed =>
+            simp [hSpec, childFutureSpec] at hOffers
 
 theorem buildSelectedConjunctiveOfferAutomaton_markerOffersInert
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
@@ -794,8 +802,10 @@ theorem indexedFragmentEdges_markerSource
     · simp [childPendingEdge, childState, hSource]
 
 theorem buildSequenceAutomaton_markerSource_child0
-    (left right : AutomatonFragment) (name : String) (q : TypeAutomatonState)
-    (hMarker : MarkerSource (buildSequenceAutomaton left right) name
+    (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool} (name : String) (q : TypeAutomatonState)
+    (hMarker : MarkerSource (buildSequenceAutomaton left right leftFuture leftCompletes) name
       (childState 0 q)) :
     MarkerSource left name q := by
   classical
@@ -815,8 +825,10 @@ theorem buildSequenceAutomaton_markerSource_child0
       using hSource, hLabel⟩
 
 theorem buildSequenceAutomaton_markerSource_child1
-    (left right : AutomatonFragment) (name : String) (q : TypeAutomatonState) :
-    MarkerSource (buildSequenceAutomaton left right) name (childState 1 q) ↔
+    (left right : AutomatonFragment)
+    {leftFuture : TypeAutomatonState → Finset BareMessage}
+    {leftCompletes : TypeAutomatonState → Bool} (name : String) (q : TypeAutomatonState) :
+    MarkerSource (buildSequenceAutomaton left right leftFuture leftCompletes) name (childState 1 q) ↔
       MarkerSource right name q := by
   classical
   constructor

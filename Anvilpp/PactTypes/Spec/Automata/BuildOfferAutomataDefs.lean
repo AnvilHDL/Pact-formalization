@@ -17,6 +17,27 @@ def indexedFragmentAccepting
     states ∪ childAccepting (indexed.2 + 1) indexed.1.2) ∅
 
 
+def indexedFragmentCompletes
+    (automata : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState :=
+  automata.zipIdx.foldl (fun states indexed =>
+    states ∪ childCompletes (indexed.2 + 1) indexed.1.2) ∅
+
+/-- `c(⊕(τ₀,B)) = c(∧(τ₀,B))`: the head gate, and either the default or some
+selected branch. -/
+def offerRootCompletes (alphabet : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment)
+    (branchAutomata : List (BareMessage × AutomatonFragment)) :
+    Finset TypeAutomatonState := by
+  classical
+  exact
+    if (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) ∧
+        (elseAutomaton.initial ∈ elseAutomaton.completes ∨
+          ∃ entry ∈ branchAutomata, entry.2.initial ∈ entry.2.completes) then
+      {TypeAutomatonState.root}
+    else ∅
+
 def indexedFragmentEdges
     (automata : List (BareMessage × AutomatonFragment)) :
     Finset PendingAutomatonEdge :=
@@ -64,7 +85,7 @@ def buildExclusiveOfferAutomaton
             environment := environment
             label := .visible (TypeLabel.message action.1 action.2)
             current := {action}
-            future := .at (childState (index + 1) automaton.initial) {action}
+            future := .at TypeAutomatonState.root actions
             target := childState (index + 1) automaton.initial }
       edges ∪ newEdges) ∅
   let waitEdges : Finset PendingAutomatonEdge :=
@@ -93,9 +114,12 @@ def buildExclusiveOfferAutomaton
         environment := environment
         label := .visible TypeLabel.silent
         current := ∅
-        future := .at (childState 0 elseAutomaton.initial) ∅
+        future := .at TypeAutomatonState.root actions
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting
+  let completes := childCompletes 0 elseAutomaton ∪
+    indexedFragmentCompletes branchAutomata ∪
+    offerRootCompletes alphabet branches elseAutomaton branchAutomata
+  exact finishAutomatonFragment states .root accepting completes
     (childPendingEdges 0 elseAutomaton ∪ indexedFragmentEdges branchAutomata ∪
       branchEdges ∪ waitEdges ∪ elseEdges)
 
@@ -161,7 +185,10 @@ def buildSelectedConjunctiveOfferAutomaton
         current := actions
         future := .at (childState 0 elseAutomaton.initial) actions
         target := childState 0 elseAutomaton.initial }
-  exact finishAutomatonFragment states .root accepting
+  let completes := childCompletes 0 elseAutomaton ∪
+    indexedFragmentCompletes selectedConjunctions ∪
+    offerRootCompletes alphabet branches elseAutomaton selectedConjunctions
+  exact finishAutomatonFragment states .root accepting completes
     (childPendingEdges 0 elseAutomaton ∪
       indexedFragmentEdges selectedConjunctions ∪ enabledEdges ∪
         waitEdges ∪ elseEdges)

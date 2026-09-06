@@ -4,13 +4,8 @@ namespace Pact
 
 noncomputable section
 
-/-- Installing backedges does not change the offers directly visible at a
-tagged body state.  A matching marker contributes nothing before installation
-(it is inert) and nothing after installation either, because the backedge it
-becomes carries empty `current` and a symbolic `.at` future; every other body
-edge keeps its `current`, and `childFutureSpec` preserves `.explicit`
-payloads while sending `.at` to `.at`.  Header edges leave from `.root`, which
-is never a tagged state. -/
+/-- Installing backedges preserves direct current-offer contributions.
+Markers and their installed backedges both contribute nothing. -/
 theorem buildRecursionAutomaton_offersAt_child
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
@@ -37,54 +32,37 @@ theorem buildRecursionAutomaton_offersAt_child
       · rw [if_neg hMarker] at hSource hAction
         refine ⟨original, ⟨hOriginal, ?_⟩, ?_⟩
         · simpa [childState] using hSource
-        · cases hSpec : original.future with
-          | explicit offers => simpa [hSpec, childFutureSpec] using hAction
-          | «at» target removed =>
-              simpa [hSpec, childFutureSpec] using hAction
+        · exact hAction
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hAction⟩
     by_cases hMarker : edge.label = AutomatonConstructionLabel.variable name
     · exfalso
-      obtain ⟨hCurrent, hFuture⟩ := hInert edge hEdge hMarker
+      obtain ⟨hCurrent, _⟩ := hInert edge hEdge hMarker
       have hSem : ¬ (AutomatonConstructionLabel.variable name).semantic =
           TypeLabel.tock := by
         simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
       rw [hMarker] at hAction
-      rw [if_neg hSem, hCurrent, Finset.empty_union] at hAction
-      cases hSpec : edge.future with
-      | explicit offers =>
-          rw [hSpec, hFuture offers hSpec] at hAction
-          simp at hAction
-      | «at» target removed =>
-          rw [hSpec] at hAction
-          simp at hAction
+      simpa [hSem, hCurrent] using hAction
     · refine ⟨_, ⟨Or.inr ⟨edge, hEdge, rfl⟩, ?_⟩, ?_⟩
       · rw [if_neg hMarker]
         simp [childState, hSource]
       · rw [if_neg hMarker]
-        cases hSpec : edge.future with
-        | explicit offers => simpa [hSpec, childFutureSpec] using hAction
-        | «at» target removed =>
-            simpa [hSpec, childFutureSpec] using hAction
+        exact hAction
 
-/-- Installing backedges changes the same-cycle reference structure at a
-tagged body state in exactly one way: a marker source additionally references
-the tagged body entry.  Every other reference is the tagged image of a body
-reference.  This is the precise sense in which the installed graph is the
-body's own graph plus the recursive back-reference. -/
-theorem mem_buildRecursionAutomaton_referencedStates_child
+/-- A copied state follows an ordinary body edge or an installed backedge. -/
+theorem mem_buildRecursionAutomaton_menuStep_child
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment)
     (q target : TypeAutomatonState) :
     target ∈ (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
-      PendingAutomaton).referencedStates (childState 0 q) ↔
+      PendingAutomaton).menuStep (childState 0 q) ↔
       (∃ inner ∈ (⟨(markerStoppedFragment body name).states,
           (markerStoppedFragment body name).edges⟩ :
-          PendingAutomaton).referencedStates q,
+          PendingAutomaton).menuStep q,
         target = childState 0 inner) ∨
         (MarkerSource body name q ∧ target = childState 0 body.initial) := by
   classical
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter, buildRecursionAutomaton, markerStoppedFragment,
     finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
   constructor
@@ -107,44 +85,19 @@ theorem mem_buildRecursionAutomaton_referencedStates_child
         · exfalso
           simp only [hTock, if_pos rfl] at hTarget
           simp at hTarget
-        · cases hSpec : original.future with
-          | explicit offers =>
-              exfalso
-              simp only [hSpec, childFutureSpec, if_neg hTock] at hTarget
-              simp at hTarget
-          | «at» inner removed =>
-              simp only [hSpec, childFutureSpec, if_neg hTock] at hTarget
-              refine ⟨inner, ⟨_, ⟨⟨original, hOriginal, rfl⟩, ?_⟩, ?_⟩, ?_⟩
-              · rw [if_neg hMarker]; exact hSourceEq
-              · rw [if_neg hMarker]
-                simp [hSpec, if_neg hTock]
-              · simpa using hTarget
-  · rintro (⟨inner, ⟨stopped, ⟨⟨original, hOriginal, hStopped⟩, hSourceEq⟩,
+        · refine ⟨original.target,
+            ⟨original, ⟨⟨hOriginal, hMarker⟩, hSourceEq⟩, by simp [hTock]⟩, ?_⟩
+          simpa [hTock] using hTarget
+  · rintro (⟨inner, ⟨original, ⟨⟨hOriginal, hMarker⟩, hSourceEq⟩,
         hInner⟩, rfl⟩ |
       ⟨⟨original, hOriginal, hSourceEq, hMarker⟩, rfl⟩)
-    -- A stopped marker edge publishes `.explicit ∅`, so it references nothing:
-    -- the witness has to be an ordinary body edge, copied unchanged.
-    · have hMarker : original.label ≠ AutomatonConstructionLabel.variable name := by
-        intro hEq
-        rw [← hStopped, if_pos hEq] at hInner
-        simp at hInner
-      rw [← hStopped, if_neg hMarker] at hSourceEq hInner
+    · -- The stopped view supplies an ordinary body edge.
       by_cases hTock : original.label.semantic = TypeLabel.tock
       · exfalso; simp [hTock] at hInner
-      · cases hSpec : original.future with
-        | explicit offers =>
-            exfalso
-            simp only [hSpec, if_neg hTock] at hInner
-            simp at hInner
-        | «at» innerTarget removed =>
-            simp only [hSpec, if_neg hTock] at hInner
-            refine ⟨_, ⟨Or.inr ⟨original, hOriginal, rfl⟩, ?_⟩, ?_⟩
-            · rw [if_neg hMarker]
-              simp [childState, hSourceEq]
-            · rw [if_neg hMarker]
-              simp only [hSpec, childFutureSpec, if_neg hTock]
-              exact Finset.mem_singleton.mpr
-                (congrArg (childState 0) (by simpa using hInner))
+      · have hEq : inner = original.target := by simpa [hTock] using hInner
+        refine ⟨_, ⟨Or.inr ⟨original, hOriginal, rfl⟩, ?_⟩, ?_⟩
+        · simp [hMarker, childState, hSourceEq]
+        · simp [hMarker, hTock, hEq]
     · refine ⟨_, ⟨Or.inr ⟨original, hOriginal, rfl⟩, ?_⟩, ?_⟩
       · rw [if_pos hMarker]
         simp [childState, hSourceEq]
@@ -207,16 +160,16 @@ theorem not_buildRecursionAutomaton_markerSource_root
 
 /-- The recursion header's only same-cycle reference is the tagged body
 entry. -/
-theorem buildRecursionAutomaton_referencedStates_root
+theorem buildRecursionAutomaton_menuStep_root
      (alphabet : PactTypeAlphabet)
     (name : String) (body : AutomatonFragment) :
     (⟨(buildRecursionAutomaton alphabet name body).states,
         (buildRecursionAutomaton alphabet name body).edges⟩ :
-      PendingAutomaton).referencedStates TypeAutomatonState.root =
+      PendingAutomaton).menuStep TypeAutomatonState.root =
       {childState 0 body.initial} := by
   classical
   ext target
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter, Finset.mem_singleton, buildRecursionAutomaton,
     finishAutomatonFragment, Finset.mem_union, Finset.mem_image]
   constructor
@@ -291,7 +244,7 @@ theorem buildRecursionAutomaton_futureTargetsInStates
     (hBodyInitial : body.initial ∈ body.states) :
     (buildRecursionAutomaton alphabet name body).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildRecursionAutomaton, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image] at hEdge
   rcases hEdge with hHeader | hBody
@@ -309,12 +262,20 @@ theorem buildRecursionAutomaton_futureTargetsInStates
     · simp only [hVariable, if_false] at hFuture
       cases hSpec : bodyEdge.future with
       | explicit offers =>
-          simp [childFutureSpec, hSpec] at hFuture
+          simp [childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
       | «at» bodyTarget removed =>
-          simp only [childFutureSpec, hSpec] at hFuture
+          simp only [childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
           cases hFuture
           have hBodyTarget := hBodyTargets bodyEdge hBodyEdge
-            bodyTarget removed hSpec
+            bodyTarget (by simp [hSpec, FutureSpec.referenced])
+          simp [buildRecursionAutomaton, finishAutomatonFragment, childStates,
+            childState, hBodyTarget]
+
+      | atUnion offers bodyTarget removed =>
+          simp only [childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
+          cases hFuture
+          have hBodyTarget := hBodyTargets bodyEdge hBodyEdge
+            bodyTarget (by simp [hSpec, FutureSpec.referenced])
           simp [buildRecursionAutomaton, finishAutomatonFragment, childStates,
             childState, hBodyTarget]
 

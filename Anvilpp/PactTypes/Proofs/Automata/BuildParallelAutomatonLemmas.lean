@@ -183,10 +183,8 @@ theorem buildParallelAutomaton_clockEdgesAreTock
     rw [hNotClock] at hClock
     exact absurd hClock (by simp)
 
-/-- Every symbolic future reference of the product points at a declared product
-state: the pair families land in `Q₁ × Q₂`, the survivor families in the
-`survivor` images of the component carriers, and the completing families in
-`q_done`. -/
+/-- Product and survivor fields are resolved component fields, so contain no
+symbolic references. -/
 theorem buildParallelAutomaton_futureTargetsInStates
 
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
@@ -205,7 +203,7 @@ theorem buildParallelAutomaton_futureTargetsInStates
       leftFuture rightFuture restampedLeftFuture
       restampedRightFuture).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union,
     parallelRawTransitionEdges, parallelLeftCompleteEdges,
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
@@ -221,84 +219,8 @@ theorem buildParallelAutomaton_futureTargetsInStates
         ⟨rightEdge, ⟨hRightEdge, _hAllowed⟩, rfl⟩) |
         ⟨leftEdge, ⟨hLeftEdge, _hAllowed⟩, rfl⟩) |
       ⟨environment, _, rfl⟩
-  · by_cases hClock :
-        (AutomatonConstructionLabel.combine interface leftEdge.label
-          rightEdge.label).semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · by_cases hAccept :
-        leftEdge.target ∈ left.accepting ∧ rightEdge.target ∈ right.accepting
-      · simp [hAccept, parallelFutureSpec, hClock] at hFuture
-        obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-        rw [← hTargetEq]
-        simp [buildParallelAutomaton, finishAutomatonFragment]
-      · simp [hAccept, parallelFutureSpec, hClock] at hFuture
-        obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-        rw [← hTargetEq]
-        simp only [resolveAutomatonEdgesWith, Finset.mem_image]
-          at hLeftEdge hRightEdge
-        obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
-        obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
-        rw [← hLeftEq, ← hRightEq]
-        simp [buildParallelAutomaton, finishAutomatonFragment,
-          hLeftEdgeTargets leftRaw hLeftRaw,
-          hRightEdgeTargets rightRaw hRightRaw]
-  · by_cases hClock :
-        (AutomatonConstructionLabel.combine interface leftEdge.label
-          rightEdge.label).semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
-      obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
-      rw [← hRightEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment,
-        hRightEdgeTargets rightRaw hRightRaw]
-  · by_cases hClock :
-        (AutomatonConstructionLabel.combine interface leftEdge.label
-          rightEdge.label).semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
-      obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
-      rw [← hLeftEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment,
-        hLeftEdgeTargets leftRaw hLeftRaw]
-  · by_cases hClock : rightEdge.label.semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
-      obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
-      rw [← hRightEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment,
-        hRestampedRightEdgeTargets rightRaw hRightRaw]
-  · by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hLeftEdge
-      obtain ⟨leftRaw, hLeftRaw, hLeftEq⟩ := hLeftEdge
-      rw [← hLeftEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment,
-        hRestampedLeftEdgeTargets leftRaw hLeftRaw]
-  · by_cases hClock : rightEdge.label.semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment]
-  · by_cases hClock : leftEdge.label.semantic = TypeLabel.tock
-    · simp [parallelFutureSpec, hClock] at hFuture
-    · simp [parallelFutureSpec, hClock] at hFuture
-      obtain ⟨hTargetEq, _hRemovedEq⟩ := hFuture
-      rw [← hTargetEq]
-      simp [buildParallelAutomaton, finishAutomatonFragment]
-  · simp at hFuture
+  all_goals simp only [parallelFutureSpec] at hFuture
+  all_goals (try split_ifs at hFuture) <;> simp_all [FutureSpec.referenced]
 
 end
 end Pact

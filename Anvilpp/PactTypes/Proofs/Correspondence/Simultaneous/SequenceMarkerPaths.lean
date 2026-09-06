@@ -55,11 +55,9 @@ theorem menuMarkerReachable_sequence_left
         (.seq alphabet left right)) (.child 1 q) =
       observe (compileTypeFuel (typeCompilationFuel right) right) q := by
     intro q
-    have hMarker := buildSequenceAutomaton_markerSource_child1
-      (compileTypeFuel (typeCompilationFuel left) left)
-      (compileTypeFuel (typeCompilationFuel right) right) name q
-    simp only [childState] at hMarker
-    simp only [observe, compileTypeFuel_sequence_eq_build, hMarker]
+    simp only [observe, compileTypeFuel_sequence_eq_build]
+    congr 1
+    exact propext (buildSequenceAutomaton_markerSource_child1 _ _ name q)
   have hMenus := compiledMenuFrom_sequence_left alphabet left right hLeftDisjoint hRightDisjoint
     (observe (compileTypeFuel (typeCompilationFuel left) left))
     (observe (compileTypeFuel (typeCompilationFuel right) right))
@@ -113,10 +111,10 @@ theorem menuMarkerReachable_sequence_right
       (child.referencedStates q).image (.child 1) := by
     intro q
     change (⟨(compileTypeFuel _ _).states, (compileTypeFuel _ _).edges⟩ :
-      PendingAutomaton).referencedStates (.child 1 q) ∪ menuDependencyTargets _ _ = _
+      PendingAutomaton).menuStep (.child 1 q) ∪ menuDependencyTargets _ _ = _
     rw [compileTypeFuel_sequence_eq_build]
     simp only [Nat.min_self]
-    rw [buildSequenceAutomaton_referencedStates_right,
+    rw [buildSequenceAutomaton_menuStep_right,
       menuDependencyTargets_seq_right alphabet left right]
     simp only [child, compiledMenuGraphFuel, PendingAutomaton.withMenuDependencies,
       Nat.min_self, Finset.image_union]

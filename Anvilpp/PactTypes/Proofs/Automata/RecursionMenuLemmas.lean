@@ -22,8 +22,8 @@ theorem mem_buildRecursionAutomaton_menuReferences_child
       (MarkerSource body name q ∧ target = .child 0 body.initial) := by
   simp only [PendingAutomaton.withMenuDependencies, Finset.mem_union,
     menuDependencyTargets_child, ite_true, Finset.mem_image]
-  have hOld := mem_buildRecursionAutomaton_referencedStates_child alphabet name body q target
-  change (target ∈ (buildRecursionAutomaton alphabet name body).toPending.referencedStates
+  have hOld := mem_buildRecursionAutomaton_menuStep_child alphabet name body q target
+  change (target ∈ (buildRecursionAutomaton alphabet name body).toPending.menuStep
     (.child 0 q) ↔ _) at hOld
   rw [hOld]
   simp only [childState]
@@ -176,7 +176,7 @@ The same argument applies when the graph also contains optimistic L links. -/
 theorem markerStoppedFragment_menuMarkerReachable_self
     (fragment : AutomatonFragment) (name : String)
     (links : Finset (TypeAutomatonState × TypeAutomatonState))
-    (hClosed : fragment.toPending.ReferencesClosed)
+    (hClosed : fragment.toPending.MenuClosed)
     (hTargets : ∀ link ∈ links, link.2 ∈ fragment.states)
     (source : TypeAutomatonState) (hSource : source ∈ fragment.states) :
     (∃ q ∈ ((markerStoppedFragment fragment name).toPending.withMenuDependencies
@@ -189,7 +189,7 @@ theorem markerStoppedFragment_menuMarkerReachable_self
     PendingAutomaton.referencesClosed_withMenuDependencies _ links hClosed hTargets
   have hSubset : ∀ q, stopped.referencedStates q ⊆ original.referencedStates q :=
     fun q => Finset.union_subset_union
-      (markerStoppedFragment_referencedStates_subset fragment name q) (Finset.Subset.refl _)
+      (markerStoppedFragment_menuStep_subset fragment name q) (Finset.Subset.refl _)
   have hStoppedClosed : stopped.ReferencesClosed := by
     intro q hq t ht
     exact hOriginalClosed q hq (hSubset q ht)
@@ -206,9 +206,9 @@ theorem markerStoppedFragment_menuMarkerReachable_self
       intro s hs t ht
       have hNot : ¬ MarkerSource fragment name s := fun h => hNone ⟨s, hs, h⟩
       have hRefs : original.referencedStates s = stopped.referencedStates s := by
-        change fragment.toPending.referencedStates s ∪ _ =
-          (markerStoppedFragment fragment name).toPending.referencedStates s ∪ _
-        rw [markerStoppedFragment_referencedStates_eq_of_not_markerSource fragment name s hNot]
+        change fragment.toPending.menuStep s ∪ _ =
+          (markerStoppedFragment fragment name).toPending.menuStep s ∪ _
+        rw [markerStoppedFragment_menuStep_eq_of_not_markerSource fragment name s hNot]
       rw [hRefs] at ht
       have hState := stopped.futureReachable_subset_of_reference_closed source stopped.states
         hSource hStoppedClosed hs
@@ -220,7 +220,7 @@ theorem markerStoppedFragment_menuMarkerReachable_self
 theorem buildRecursionAutomaton_menuReachable_child
     (alphabet : PactTypeAlphabet) (name : String) (body : AutomatonFragment)
     (links : Finset (TypeAutomatonState × TypeAutomatonState))
-    (hBodyClosed : body.toPending.ReferencesClosed)
+    (hBodyClosed : body.toPending.MenuClosed)
     (hTargets : ∀ link ∈ links, link.2 ∈ body.states)
     (hInitial : body.initial ∈ body.states)
     (source : TypeAutomatonState) (hSource : source ∈ body.states) :
@@ -236,7 +236,7 @@ theorem buildRecursionAutomaton_menuReachable_child
     apply PendingAutomaton.referencesClosed_withMenuDependencies
     · intro q hq t ht
       exact hBodyClosed q hq
-        (markerStoppedFragment_referencedStates_subset body name q ht)
+        (markerStoppedFragment_menuStep_subset body name q ht)
     · exact hTargets
   have hCarrier : ∀ q ∈ stopped.states, TypeAutomatonState.child 0 q ∈ parent.states := by
     intro q hq
@@ -256,10 +256,10 @@ theorem buildRecursionAutomaton_menuReachable_child
         exact Or.inr ⟨s, hs, rfl⟩
     rcases hq' with rfl | ⟨s, hs, rfl⟩
     · have hRoot : parent.referencedStates .root = {.child 0 body.initial} := by
-        change (buildRecursionAutomaton alphabet name body).toPending.referencedStates .root ∪
+        change (buildRecursionAutomaton alphabet name body).toPending.menuStep .root ∪
           menuDependencyTargets _ .root = _
         rw [menuDependencyTargets_child_root, Finset.union_empty]
-        exact buildRecursionAutomaton_referencedStates_root alphabet name body
+        exact buildRecursionAutomaton_menuStep_root alphabet name body
       rw [hRoot, Finset.mem_singleton] at ht
       subst t
       exact hCarrier body.initial hInitial

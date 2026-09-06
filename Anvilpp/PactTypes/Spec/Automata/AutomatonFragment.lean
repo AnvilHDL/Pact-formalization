@@ -45,11 +45,29 @@ How to fill an edge's future-offer field.
 * `at state removed` computes `OF(state) \ removed` after the parent graph is
   complete. This is what prevents a constructor from inspecting a partial
   automaton during recursive construction.
+* `atUnion offers state removed` computes `(offers ∪ OF(state)) \ removed`.
+  A sequence's left copy needs it: its field combines the copied child field
+  with the right-entry menu.
 -/
 inductive FutureSpec : Type where
   | explicit : Finset BareMessage → FutureSpec
   | at : TypeAutomatonState → Finset BareMessage → FutureSpec
+  | atUnion : Finset BareMessage → TypeAutomatonState → Finset BareMessage →
+      FutureSpec
   deriving DecidableEq
+
+/-- The state a symbolic future field refers to, if any. -/
+def FutureSpec.referenced : FutureSpec → Option TypeAutomatonState
+  | .explicit _ => none
+  | .at state _ => some state
+  | .atUnion _ state _ => some state
+
+/-- Resolve a future field against a menu function. -/
+def resolveFutureSpec (futureAt : TypeAutomatonState → Finset BareMessage) :
+    FutureSpec → Finset BareMessage
+  | .explicit offers => offers
+  | .at state removed => futureAt state \ removed
+  | .atUnion offers state removed => (offers ∪ futureAt state) \ removed
 
 /-- An edge whose future-offer field has not necessarily been resolved yet. -/
 structure PendingAutomatonEdge : Type where
@@ -74,12 +92,16 @@ structure AutomatonFragment : Type where
   initial : TypeAutomatonState
   accepting : Finset TypeAutomatonState
   edges : Finset PendingAutomatonEdge
+  /-- `κ_τ`: the states whose canonical annotation passes the optimistic
+  completion test.  Retained by the fragment because it is computed from the
+  constructor tags and final sets, without inspecting menus or reachability. -/
+  completes : Finset TypeAutomatonState
 
 /-- Every symbolic future reference in a fragment points to a declared state. -/
 def AutomatonFragment.FutureTargetsInStates
     (fragment : AutomatonFragment) : Prop :=
-  ∀ edge ∈ fragment.edges, ∀ target removed,
-    edge.future = .at target removed → target ∈ fragment.states
+  ∀ edge ∈ fragment.edges, ∀ target,
+    edge.future.referenced = some target → target ∈ fragment.states
 
 /-- Every edge target of a fragment belongs to its declared state carrier. -/
 def AutomatonFragment.EdgeTargetsInStates

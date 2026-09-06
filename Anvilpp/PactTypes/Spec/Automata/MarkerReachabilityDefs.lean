@@ -30,19 +30,16 @@ def AutomatonFragment.MarkerOffersInert (fragment : AutomatonFragment)
     edge.label = AutomatonConstructionLabel.variable name →
       edge.current = ∅ ∧ ∀ offers, edge.future = .explicit offers → offers = ∅
 
-/-- Stop unresolved calls of one name without changing the carrier or any
-other edge.  This is useful when an execution view has followed a temporary
-variable edge to its bookkeeping target, while an enclosing recursion
-constructor is about to replace that edge by a backedge. -/
+/-- Auxiliary graph for paths before the first call of `name`.
+The actual recursion compiler still installs a backedge at each such call. -/
 def markerStoppedFragment (fragment : AutomatonFragment) (name : String) :
     AutomatonFragment :=
   { states := fragment.states
     initial := fragment.initial
     accepting := fragment.accepting
-    edges := fragment.edges.image fun edge =>
-      if edge.label = AutomatonConstructionLabel.variable name then
-        { edge with current := ∅, future := .explicit ∅ }
-      else edge }
+    completes := fragment.completes
+    edges := fragment.edges.filter fun edge =>
+      edge.label ≠ AutomatonConstructionLabel.variable name }
 
 
 /-! ### Same-cycle marker reachability
@@ -56,11 +53,13 @@ constructor. -/
 def finishAutomatonFragment
     (states : Finset TypeAutomatonState) (initial : TypeAutomatonState)
     (accepting : Finset TypeAutomatonState)
+    (completes : Finset TypeAutomatonState)
     (edges : Finset PendingAutomatonEdge) : AutomatonFragment :=
   { states := states
     initial := initial
     accepting := accepting
-    edges := edges }
+    edges := edges
+    completes := completes }
 
 /-- Resolve symbolic future fields with the supplied global future-menu
 function. Constructor code instantiates this with the type-aware
@@ -70,10 +69,7 @@ def resolveAutomatonEdgesWith
     (futureAt : TypeAutomatonState → Finset BareMessage) :
     Finset AutomatonFragmentEdge :=
   automaton.edges.image fun edge =>
-      let resolvedFuture :=
-        match edge.future with
-        | .explicit offers => offers
-        | .at state removed => futureAt state \ removed
+      let resolvedFuture := resolveFutureSpec futureAt edge.future
       { source := edge.source
         environment := edge.environment
         label := edge.label
@@ -92,9 +88,16 @@ def childAccepting (index : Nat) (automaton : AutomatonFragment) :
     Finset TypeAutomatonState :=
   automaton.accepting.image (childState index)
 
+/-- `κ` transported into child copy `index`. -/
+def childCompletes (index : Nat) (automaton : AutomatonFragment) :
+    Finset TypeAutomatonState :=
+  automaton.completes.image (childState index)
+
 def childFutureSpec (index : Nat) : FutureSpec → FutureSpec
   | .explicit offers => .explicit offers
   | .at state removed => .at (childState index state) removed
+  | .atUnion offers state removed =>
+      .atUnion offers (childState index state) removed
 
 def childPendingEdge (index : Nat)
     (edge : PendingAutomatonEdge) : PendingAutomatonEdge :=

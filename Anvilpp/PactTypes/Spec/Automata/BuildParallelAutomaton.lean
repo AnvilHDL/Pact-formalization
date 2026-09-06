@@ -9,17 +9,12 @@ namespace Pact
 
 noncomputable section
 
-/-- Future spec used by parallel product edges.
-
-A synchronized clock edge ends the current cycle, so its public future offers
-are empty — whether or not it redirects to the completed state.  All other
-product edges keep the usual symbolic reference to the target product state's
-global `OF` equation. -/
+/-- Parallel edges retain the future offers of their component witnesses. -/
 def parallelFutureSpec (label : AutomatonConstructionLabel)
-    (target : TypeAutomatonState) (removed : Finset BareMessage) :
+    (offers : Finset BareMessage) :
     FutureSpec :=
   if label.semantic = TypeLabel.tock then .explicit ∅
-  else .at target removed
+  else .explicit offers
 
 /-- The unfiltered synchronized edges of a parallel product. Completing
 component pairs are redirected to the dedicated `.final` state.  A
@@ -56,7 +51,8 @@ def parallelRawTransitionEdges
             leftEdge.environment rightEdge.environment
           label := label
           current := current
-          future := parallelFutureSpec label target current
+          future := parallelFutureSpec label
+            (hideOffers interface (leftEdge.future ∪ rightEdge.future))
           target := target }
 
 /-- Survivor entry for a completed left component: `δ_par^left`.
@@ -93,7 +89,8 @@ def parallelLeftCompleteEdges
             leftEdge.environment rightEdge.environment
           label := label
           current := current
-          future := parallelFutureSpec label target current
+          future := parallelFutureSpec label
+            (hideOffers interface (leftEdge.future ∪ rightEdge.future))
           target := target }
 
 /-- Survivor entry for a completed right component: `δ_par^right`.  Mirror of
@@ -123,7 +120,8 @@ def parallelRightCompleteEdges
             leftEdge.environment rightEdge.environment
           label := label
           current := current
-          future := parallelFutureSpec label target current
+          future := parallelFutureSpec label
+            (hideOffers interface (leftEdge.future ∪ rightEdge.future))
           target := target }
 
 /-- The continuation of `parallelLeftCompleteEdges` inside the survivor
@@ -144,7 +142,7 @@ def parallelLeftCompleteSurvivorEdges
           environment := rightEdge.environment
           label := rightEdge.label
           current := rightEdge.current
-          future := parallelFutureSpec rightEdge.label target rightEdge.current
+          future := parallelFutureSpec rightEdge.label rightEdge.future
           target := target }
 
 /-- The survivor's completing step: the re-stamped right component reaches an
@@ -164,7 +162,7 @@ def parallelLeftCompleteDoneEdges
           environment := rightEdge.environment
           label := rightEdge.label
           current := rightEdge.current
-          future := parallelFutureSpec rightEdge.label .final rightEdge.current
+          future := parallelFutureSpec rightEdge.label rightEdge.future
           target := .final }
 
 /-- The mirror of `parallelLeftCompleteSurvivorEdges` for a surviving left
@@ -185,7 +183,7 @@ def parallelRightCompleteSurvivorEdges
           environment := leftEdge.environment
           label := leftEdge.label
           current := leftEdge.current
-          future := parallelFutureSpec leftEdge.label target leftEdge.current
+          future := parallelFutureSpec leftEdge.label leftEdge.future
           target := target }
 
 /-- The mirror of `parallelLeftCompleteDoneEdges` for a surviving left
@@ -205,7 +203,7 @@ def parallelRightCompleteDoneEdges
           environment := leftEdge.environment
           label := leftEdge.label
           current := leftEdge.current
-          future := parallelFutureSpec leftEdge.label .final leftEdge.current
+          future := parallelFutureSpec leftEdge.label leftEdge.future
           target := .final }
 
 /-- The non-clock idle edges attached to the completed parallel state. -/
@@ -265,8 +263,15 @@ def buildParallelAutomaton
         restampedRightFuture ∪
       parallelRightCompleteDoneEdges interface restampedLeft
         restampedLeftFuture)
+  let completes : Finset TypeAutomatonState :=
+    insert TypeAutomatonState.final
+      ((left.completes.biUnion fun leftState =>
+        right.completes.image fun rightState =>
+          TypeAutomatonState.pair leftState rightState) ∪
+        (restampedLeft.completes.image (TypeAutomatonState.survivor 0)) ∪
+        (restampedRight.completes.image (TypeAutomatonState.survivor 1)))
   let product := finishAutomatonFragment
-    states (.pair left.initial right.initial) accepting
+    states (.pair left.initial right.initial) accepting completes
       (transitionEdges ∪ parallelDoneEdges parentAlphabet)
   exact product
 

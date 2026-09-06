@@ -21,21 +21,28 @@ theorem mem_foldl_union_iff
 private theorem childPendingEdges_futureTargetsInStates
     (index : Nat) (fragment : AutomatonFragment)
     (hTargets : fragment.FutureTargetsInStates) :
-    ∀ edge ∈ childPendingEdges index fragment, ∀ target removed,
-      edge.future = .at target removed →
+    ∀ edge ∈ childPendingEdges index fragment, ∀ target,
+      edge.future.referenced = some target →
         target ∈ childStates index fragment := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [childPendingEdges, Finset.mem_image] at hEdge
   rcases hEdge with ⟨childEdge, hChildEdge, rfl⟩
   cases hSpec : childEdge.future with
   | explicit offers =>
-      simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+      simp [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
   | «at» childTarget childRemoved =>
-      simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+      simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
       cases hFuture
       have hChildTarget := hTargets childEdge hChildEdge childTarget
-        removed hSpec
+        (by simp [hSpec, FutureSpec.referenced])
+      simp [childStates, childState, hChildTarget]
+
+  | atUnion offers childTarget childRemoved =>
+      simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
+      cases hFuture
+      have hChildTarget := hTargets childEdge hChildEdge childTarget
+        (by simp [hSpec, FutureSpec.referenced])
       simp [childStates, childState, hChildTarget]
 
 private theorem childPendingEdges_clockEdgesAreTock
@@ -71,11 +78,11 @@ private theorem indexedFragment_clockEdgesAreTock
 private theorem indexedFragment_futureTargetsInStates
     (automata : List (BareMessage × AutomatonFragment))
     (hTargets : ∀ entry ∈ automata, entry.2.FutureTargetsInStates) :
-    ∀ edge ∈ indexedFragmentEdges automata, ∀ target removed,
-      edge.future = .at target removed →
+    ∀ edge ∈ indexedFragmentEdges automata, ∀ target,
+      edge.future.referenced = some target →
         target ∈ indexedFragmentStates automata := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   rw [indexedFragmentEdges, mem_foldl_union_iff] at hEdge
   rcases hEdge with hEmpty | ⟨indexed, hIndexed, hChildEdge⟩
   · simp at hEmpty
@@ -87,12 +94,22 @@ private theorem indexedFragment_futureTargetsInStates
     rcases hChildEdge with ⟨childEdge, hChildEdge, rfl⟩
     cases hSpec : childEdge.future with
     | explicit offers =>
-        simp [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
     | «at» childTarget childRemoved =>
-        simp only [childPendingEdge, childFutureSpec, hSpec] at hFuture
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
         cases hFuture
         have hChildTarget := hTargets indexed.1 hEntry childEdge hChildEdge
-          childTarget removed hSpec
+          childTarget (by simp [hSpec, FutureSpec.referenced])
+        rw [indexedFragmentStates, mem_foldl_union_iff]
+        right
+        refine ⟨indexed, hIndexed, ?_⟩
+        simp [childStates, childState, hChildTarget]
+
+    | atUnion offers childTarget childRemoved =>
+        simp only [childPendingEdge, childFutureSpec, hSpec, FutureSpec.referenced] at hFuture
+        cases hFuture
+        have hChildTarget := hTargets indexed.1 hEntry childEdge hChildEdge
+          childTarget (by simp [hSpec, FutureSpec.referenced])
         rw [indexedFragmentStates, mem_foldl_union_iff]
         right
         refine ⟨indexed, hIndexed, ?_⟩
@@ -156,15 +173,15 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
       branchAutomata).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with ((((hElse | hIndexed) | hBranch) | hWait) | hResolved)
   · have hTarget := childPendingEdges_futureTargetsInStates 0 elseAutomaton
-      hElseTargets edge hElse target removed hFuture
+      hElseTargets edge hElse target hFuture
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment, hTarget]
   · have hTarget := indexedFragment_futureTargetsInStates branchAutomata
-      hBranchTargets edge hIndexed target removed hFuture
+      hBranchTargets edge hIndexed target hFuture
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment, hTarget]
   · rw [mem_foldl_union_iff] at hBranch
     rcases hBranch with hEmpty | ⟨indexed, hIndexedEntry, hNewEdge⟩
@@ -257,15 +274,15 @@ theorem buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
     (buildSelectedConjunctiveOfferAutomaton alphabet branches
       elseAutomaton selectedConjunctions).FutureTargetsInStates := by
   classical
-  intro edge hEdge target removed hFuture
+  intro edge hEdge target hFuture
   simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with ((((hElse | hConjunction) | hEnabled) | hWait) | hResolved)
   · have hTarget := childPendingEdges_futureTargetsInStates 0 elseAutomaton
-      hElseTargets edge hElse target removed hFuture
+      hElseTargets edge hElse target hFuture
     simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
   · have hTarget := indexedFragment_futureTargetsInStates
-      selectedConjunctions hConjunctionTargets edge hConjunction target removed
+      selectedConjunctions hConjunctionTargets edge hConjunction target
         hFuture
     simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, hTarget]
   · rw [mem_foldl_union_iff] at hEnabled
@@ -315,8 +332,8 @@ theorem buildExclusiveOfferAutomaton_root_edge_cases
     (hSource : edge.source = TypeAutomatonState.root) :
     (∃ indexed ∈ branchAutomata.zipIdx,
         edge.current = {indexed.1.1} ∧
-          edge.future = .at (childState (indexed.2 + 1)
-            indexed.1.2.initial) {indexed.1.1} ∧
+          edge.future = .at TypeAutomatonState.root
+            (typeBranchActions branches) ∧
           edge.target = childState (indexed.2 + 1) indexed.1.2.initial ∧
           edge.label = .visible (TypeLabel.message indexed.1.1.1
             indexed.1.1.2)) ∨
@@ -328,7 +345,8 @@ theorem buildExclusiveOfferAutomaton_root_edge_cases
               typeBranchActions branches) ∧
           edge.target = TypeAutomatonState.root) ∨
       (edge.current = ∅ ∧
-        edge.future = .at (childState 0 elseAutomaton.initial) ∅ ∧
+        edge.future = .at TypeAutomatonState.root
+          (typeBranchActions branches) ∧
         edge.target = childState 0 elseAutomaton.initial) := by
   classical
   simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
@@ -394,7 +412,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
           elseAutomaton branchAutomata edge hEdge hSource with
         ⟨indexed, hIndexed, hCurrent, hFuture, -, -⟩ |
         ⟨environment, hCurrent, hFuture, -⟩ | ⟨hCurrent, hFuture, -⟩
-      · rw [hFuture, hCurrent, Finset.union_empty, Finset.mem_singleton] at hIn
+      · rw [hCurrent, Finset.mem_singleton] at hIn
         subst hIn
         have hGet : branchAutomata[indexed.2]? = some indexed.1 := by
           rw [← List.mk_mem_zipIdx_iff_getElem?]
@@ -404,9 +422,9 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
           List.mem_map_of_mem hMem
         rw [hHeads] at hHead
         exact List.mem_toFinset.mpr hHead
-      · rw [hFuture, hCurrent, Finset.union_empty] at hIn
+      · rw [hCurrent] at hIn
         exact (Finset.mem_inter.mp hIn).2
-      · rw [hFuture, hCurrent, Finset.union_empty] at hIn
+      · rw [hCurrent] at hIn
         exact absurd hIn (Finset.notMem_empty _)
   · intro action hAction
     rw [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
@@ -430,7 +448,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
         environment := environment
         label := .visible (TypeLabel.message entry.1.1 entry.1.2)
         current := {entry.1}
-        future := .at (childState (index + 1) entry.2.initial) {entry.1}
+        future := .at TypeAutomatonState.root (typeBranchActions branches)
         target := childState (index + 1) entry.2.initial }
       with hEdgeDef
     refine Finset.mem_biUnion.mpr ⟨edge, Finset.mem_filter.mpr ⟨?_, rfl⟩, ?_⟩
@@ -468,8 +486,8 @@ def conjunctiveOfferEntries (elseAutomaton : AutomatonFragment)
     (selectedConjunctions.zipIdx.map fun indexed =>
       childState (indexed.2 + 1) indexed.1.2.initial).toFinset
 
-/-- A root references nothing beyond itself and those entries. -/
-theorem buildExclusiveOfferAutomaton_referencedStates_root_subset
+/-- A root's non-clock targets are itself and the branch entries. -/
+theorem buildExclusiveOfferAutomaton_menuStep_root_subset
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -477,13 +495,13 @@ theorem buildExclusiveOfferAutomaton_referencedStates_root_subset
     ({ states := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
          branchAutomata).states
        edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
-         branchAutomata).edges } : PendingAutomaton).referencedStates
+         branchAutomata).edges } : PendingAutomaton).menuStep
         TypeAutomatonState.root ⊆
       insert TypeAutomatonState.root
         (exclusiveOfferEntries elseAutomaton branchAutomata) := by
   classical
   intro state hState
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter] at hState
   obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hState
   by_cases hTock : edge.label.semantic = TypeLabel.tock
@@ -492,24 +510,24 @@ theorem buildExclusiveOfferAutomaton_referencedStates_root_subset
   · rw [if_neg hTock] at hIn
     rcases buildExclusiveOfferAutomaton_root_edge_cases alphabet branches
         elseAutomaton branchAutomata edge hEdge hSource with
-      ⟨indexed, hIndexed, -, hFuture, -, -⟩ |
-      ⟨environment, -, hFuture, -⟩ | ⟨-, hFuture, -⟩
-    · rw [hFuture, Finset.mem_singleton] at hIn
-      subst hIn
-      refine Finset.mem_insert_of_mem ?_
+      ⟨indexed, hIndexed, -, -, hTarget, -⟩ |
+      ⟨environment, -, -, hTarget⟩ | ⟨-, -, hTarget⟩
+    · rw [hTarget, Finset.mem_singleton] at hIn
+      subst state
+      apply Finset.mem_insert_of_mem
       simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
         List.mem_map]
       exact Or.inr ⟨indexed, hIndexed, rfl⟩
-    · rw [hFuture, Finset.mem_singleton] at hIn
+    · rw [hTarget, Finset.mem_singleton] at hIn
       subst hIn
       exact Finset.mem_insert_self _ _
-    · rw [hFuture, Finset.mem_singleton] at hIn
+    · rw [hTarget, Finset.mem_singleton] at hIn
       subst hIn
       exact Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
 
 /-- And it references every one of them: the default is taken by the empty
 environment, each branch by the environment demanding exactly its head. -/
-theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
+theorem buildExclusiveOfferAutomaton_entries_subset_menuStep_root
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -520,13 +538,13 @@ theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
       ({ states := (buildExclusiveOfferAutomaton alphabet branches
            elseAutomaton branchAutomata).states
          edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
-           branchAutomata).edges } : PendingAutomaton).referencedStates
+           branchAutomata).edges } : PendingAutomaton).menuStep
         TypeAutomatonState.root := by
   classical
   intro state hState
   simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
     List.mem_map] at hState
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter]
   rcases hState with rfl | ⟨indexed, hIndexed, rfl⟩
   · -- the default entry, taken when nothing is demanded or pending
@@ -534,7 +552,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
               environment := TypeEnvironment.empty
               label := .visible TypeLabel.silent
               current := ∅
-              future := .at (childState 0 elseAutomaton.initial) ∅
+              future := .at TypeAutomatonState.root (typeBranchActions branches)
               target := childState 0 elseAutomaton.initial },
       ⟨?_, rfl⟩, ?_⟩
     · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
@@ -568,8 +586,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
               environment := environment
               label := .visible (TypeLabel.message indexed.1.1.1 indexed.1.1.2)
               current := {indexed.1.1}
-              future := .at (childState (indexed.2 + 1) indexed.1.2.initial)
-                {indexed.1.1}
+              future := .at TypeAutomatonState.root (typeBranchActions branches)
               target := childState (indexed.2 + 1) indexed.1.2.initial },
       ⟨?_, rfl⟩, ?_⟩
     · simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
@@ -588,7 +605,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_referencedStates_root
 
 /-- A conjunctive-offer root references nothing beyond itself and those
 entries. -/
-theorem buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
+theorem buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -597,12 +614,12 @@ theorem buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
          elseAutomaton selectedConjunctions).states
        edges := (buildSelectedConjunctiveOfferAutomaton alphabet branches
          elseAutomaton selectedConjunctions).edges } :
-        PendingAutomaton).referencedStates TypeAutomatonState.root ⊆
+        PendingAutomaton).menuStep TypeAutomatonState.root ⊆
       insert TypeAutomatonState.root
         (conjunctiveOfferEntries elseAutomaton selectedConjunctions) := by
   classical
   intro state hState
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter] at hState
   obtain ⟨edge, ⟨hEdge, hSource⟩, hIn⟩ := hState
   by_cases hTock : edge.label.semantic = TypeLabel.tock
@@ -633,10 +650,10 @@ theorem buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
       · exact absurd hEmpty (Finset.notMem_empty _)
       · rw [Finset.mem_image] at hNewEdge
         obtain ⟨environment, -, hEq⟩ := hNewEdge
-        have hFuture : edge.future =
-            .at (childState (indexed.2 + 1) indexed.1.2.initial) ∅ := by
+        have hTarget : edge.target =
+            childState (indexed.2 + 1) indexed.1.2.initial := by
           rw [← hEq]
-        rw [hFuture, Finset.mem_singleton] at hIn
+        rw [hTarget, Finset.mem_singleton] at hIn
         subst hIn
         refine Finset.mem_insert_of_mem ?_
         simp only [conjunctiveOfferEntries, Finset.mem_insert,
@@ -644,25 +661,22 @@ theorem buildSelectedConjunctiveOfferAutomaton_referencedStates_root_subset
         exact Or.inr ⟨indexed, hIndexed, rfl⟩
     · rw [Finset.mem_image] at hWait
       obtain ⟨environment, -, hEq⟩ := hWait
-      have hFuture : edge.future =
-          .at TypeAutomatonState.root (typeBranchActions branches) := by
+      have hTarget : edge.target = TypeAutomatonState.root := by
         rw [← hEq]
-      rw [hFuture, Finset.mem_singleton] at hIn
+      rw [hTarget, Finset.mem_singleton] at hIn
       subst hIn
       exact Finset.mem_insert_self _ _
     · rw [Finset.mem_image] at hResolved
       obtain ⟨environment, -, hEq⟩ := hResolved
-      have hFuture : edge.future =
-          .at (childState 0 elseAutomaton.initial)
-            (typeBranchActions branches) := by
+      have hTarget : edge.target = childState 0 elseAutomaton.initial := by
         rw [← hEq]
-      rw [hFuture, Finset.mem_singleton] at hIn
+      rw [hTarget, Finset.mem_singleton] at hIn
       subst hIn
       exact Finset.mem_insert_of_mem (Finset.mem_insert_self _ _)
 
 /-- And it references every one of them: the default is taken by the empty
 environment, each conjunction by the environment demanding exactly its head. -/
-theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_referencedStates_root
+theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -674,12 +688,12 @@ theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_referencedStates_r
            elseAutomaton selectedConjunctions).states
          edges := (buildSelectedConjunctiveOfferAutomaton alphabet branches
            elseAutomaton selectedConjunctions).edges } :
-          PendingAutomaton).referencedStates TypeAutomatonState.root := by
+          PendingAutomaton).menuStep TypeAutomatonState.root := by
   classical
   intro state hState
   simp only [conjunctiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
     List.mem_map] at hState
-  simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
+  simp only [PendingAutomaton.menuStep, Finset.mem_biUnion,
     Finset.mem_filter]
   rcases hState with rfl | ⟨indexed, hIndexed, rfl⟩
   · -- the default entry, taken when nothing is demanded or pending

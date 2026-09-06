@@ -9,14 +9,13 @@ namespace NewCorrespondence
 
 noncomputable section
 
-/-- A state whose only same-cycle reference is itself closes at once: its
-reference closure is the singleton. -/
-lemma futureReachable_eq_singleton_of_referencedStates_subset_self
+/-- A state whose non-clock edges return to itself has singleton closure. -/
+lemma futureReachable_eq_singleton_of_menuStep_subset_self
     (automaton : PendingAutomaton) (state : TypeAutomatonState)
-    (hReferences : automaton.referencedStates state ⊆ {state}) :
+    (hReferences : automaton.menuStep state ⊆ {state}) :
     automaton.futureReachable state = {state} :=
   Finset.Subset.antisymm
-    (automaton.futureReachable_subset_of_reference_closed state {state}
+    (automaton.futureReachable_subset_of_menu_closed state {state}
       (Finset.mem_singleton_self _)
       (fun other hOther => by
         rw [Finset.mem_singleton] at hOther
@@ -40,9 +39,9 @@ lemma computeFutureOf_skip_root
   have hReferences :
       ({ states := (compileTypeFuel 1 (.skip alphabet)).states,
           edges := (compileTypeFuel 1 (.skip alphabet)).edges } :
-        PendingAutomaton).referencedStates .root ⊆
+        PendingAutomaton).menuStep .root ⊆
         {TypeAutomatonState.root} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter,
@@ -52,7 +51,7 @@ lemma computeFutureOf_skip_root
     rw [← hEq] at hReference
     simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
       using hReference
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.skip alphabet) TypeAutomatonState.root = none := by
@@ -141,9 +140,9 @@ lemma computeFutureOf_message_final
             (.message alphabet msg dir)).states,
           edges := (compileTypeFuel 1
             (.message alphabet msg dir)).edges } :
-        PendingAutomaton).referencedStates .final ⊆
+        PendingAutomaton).menuStep .final ⊆
         {TypeAutomatonState.final} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -155,7 +154,7 @@ lemma computeFutureOf_message_final
     · rw [← hEq] at hReference
       simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
         using hReference
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.message alphabet msg dir)
@@ -222,10 +221,10 @@ lemma computeFutureOf_message_root
           (.message alphabet msg dir)).states,
       edges := (compileTypeFuel 1
           (.message alphabet msg dir)).edges } with hPendingDef
-  have hReferencesFinal : pending.referencedStates .final ⊆
+  have hReferencesFinal : pending.menuStep .final ⊆
       insert TypeAutomatonState.root
         ({TypeAutomatonState.final} : Finset _) := by
-    simp only [hPendingDef, PendingAutomaton.referencedStates,
+    simp only [hPendingDef, PendingAutomaton.menuStep,
       compileTypeFuel, finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -239,9 +238,9 @@ lemma computeFutureOf_message_root
       simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
         at hReference
       exact Or.inr hReference
-  have hReferencesRoot : pending.referencedStates .root ⊆
+  have hReferencesRoot : pending.menuStep .root ⊆
       insert TypeAutomatonState.root ({TypeAutomatonState.final} : Finset _) := by
-    simp only [hPendingDef, PendingAutomaton.referencedStates, typeCompilationFuel,
+    simp only [hPendingDef, PendingAutomaton.menuStep, typeCompilationFuel,
       compileTypeFuel, finishAutomatonFragment, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image]
     intro reference hReference
@@ -266,7 +265,7 @@ lemma computeFutureOf_message_root
   -- enough without pinning down reachability exactly.
   have hUpper : pending.futureReachable TypeAutomatonState.root ⊆
       insert TypeAutomatonState.root ({TypeAutomatonState.final} : Finset _) := by
-    apply pending.futureReachable_subset_of_reference_closed TypeAutomatonState.root
+    apply pending.futureReachable_subset_of_menu_closed TypeAutomatonState.root
       (insert TypeAutomatonState.root {TypeAutomatonState.final})
     · simp
     · intro state hState
@@ -486,9 +485,9 @@ lemma computeFutureOf_tock_root
   have hReferences :
       ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
           edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
-        PendingAutomaton).referencedStates .root ⊆
+        PendingAutomaton).menuStep .root ⊆
         {TypeAutomatonState.root} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -504,7 +503,7 @@ lemma computeFutureOf_tock_root
         simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
           using hReference
     · rw [← hEq] at hSource; simp at hSource
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.tock alphabet) TypeAutomatonState.root = none := by
@@ -543,9 +542,9 @@ lemma computeFutureOf_tock_final
   have hReferences :
       ({ states := (compileTypeFuel 1 (.tock alphabet)).states,
           edges := (compileTypeFuel 1 (.tock alphabet)).edges } :
-        PendingAutomaton).referencedStates .final ⊆
+        PendingAutomaton).menuStep .final ⊆
         {TypeAutomatonState.final} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -560,7 +559,7 @@ lemma computeFutureOf_tock_final
     · rw [← hEq] at hReference
       simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
         using hReference
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.tock alphabet) TypeAutomatonState.final = none := by
@@ -697,9 +696,9 @@ lemma computeFutureOf_progress_final
             (.progress alphabet pid)).states,
           edges := (compileTypeFuel 1
             (.progress alphabet pid)).edges } :
-        PendingAutomaton).referencedStates .final ⊆
+        PendingAutomaton).menuStep .final ⊆
         {TypeAutomatonState.final} := by
-    simp only [PendingAutomaton.referencedStates, compileTypeFuel,
+    simp only [PendingAutomaton.menuStep, compileTypeFuel,
       finishAutomatonFragment]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
@@ -710,7 +709,7 @@ lemma computeFutureOf_progress_final
     · rw [← hEq] at hReference
       simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent]
         using hReference
-  rw [futureReachable_eq_singleton_of_referencedStates_subset_self _ _
+  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
     hReferences, Finset.singleton_biUnion]
   have hNoProduct :
       stateProductInfo (.progress alphabet pid)

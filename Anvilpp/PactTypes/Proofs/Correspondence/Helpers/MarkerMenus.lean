@@ -117,6 +117,30 @@ theorem menuReachesVar_of_absent (name : String) (ty : PactType)
   (typeFutureOffersFuelSubst_of_absent name ∅ false (sizeOf ty + 1) ty
     (by omega) hTail).2
 
+/-- Paper: substitution adds the replacement menu exactly when `b_X` holds. -/
+theorem typeFutureOffers_replaceVar_tail (name : String)
+    (replacement ty : PactType) (hTail : ty.TailOccurrences name True) :
+    typeFutureOffers (ty.replaceVar name replacement) =
+      typeFutureOffers ty ∪
+        (if menuReachesVar name ty then typeFutureOffers replacement else ∅) := by
+  let fuel := max (sizeOf ty + 1) (sizeOf (ty.replaceVar name replacement) + 1)
+  have hTyFuel : sizeOf ty + 1 ≤ fuel := le_max_left _ _
+  have hReplacedFuel : sizeOf (ty.replaceVar name replacement) + 1 ≤ fuel :=
+    le_max_right _ _
+  rw [← typeFutureOffersFuel_eq_typeFutureOffers _ fuel hReplacedFuel,
+    typeFutureOffersFuel_replaceVar name replacement fuel ty hReplacedFuel,
+    typeFutureOffersFuelSubst_split name _ _ fuel ty (by omega) hTail,
+    typeFutureOffersFuelSubst_empty name _ fuel ty (by omega) hTail,
+    typeFutureOffersFuel_eq_typeFutureOffers ty fuel hTyFuel,
+    menuReachesVarFuel_eq_menuReachesVar name replacement.CanCompleteDeclared
+      fuel ty (by omega) hTail]
+
+theorem typeFutureOffers_subset_replaceVar_tail (name : String)
+    (replacement ty : PactType) (hTail : ty.TailOccurrences name True) :
+    typeFutureOffers ty ⊆ typeFutureOffers (ty.replaceVar name replacement) := by
+  rw [typeFutureOffers_replaceVar_tail name replacement ty hTail]
+  exact Finset.subset_union_left
+
 private theorem menuReachesVarFuel_branches (name : String) (fuel : Nat)
     (branches : List (BareMessage × PactType))
     (hSize : sizeOf branches < fuel)

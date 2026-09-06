@@ -21,21 +21,23 @@ namespace PendingAutomaton
         match edge.future with
         | .explicit _ => ∅
         | .at target _ => {target}
+        | .atUnion _ target _ => {target}
 
-  /-- Offers already visible directly on outgoing edges from `state`. -/
+  /-- Non-clock execution targets in the paper's menu equation. -/
+  def menuStep (automaton : PendingAutomaton)
+      (state : TypeAutomatonState) : Finset TypeAutomatonState :=
+    (automaton.edges.filter fun edge => edge.source = state).biUnion fun edge =>
+      if edge.label.semantic = TypeLabel.tock then ∅ else {edge.target}
+
+  /-- Direct contributions to the menu equation come only from current offers. -/
   def offersAt (automaton : PendingAutomaton)
       (state : TypeAutomatonState) : Finset BareMessage :=
     (automaton.edges.filter fun edge => edge.source = state).biUnion fun edge =>
-      if edge.label.semantic = TypeLabel.tock then ∅
-      else
-        edge.current ∪
-          match edge.future with
-          | .explicit offers => offers
-          | .at _ _ => ∅
+      if edge.label.semantic = TypeLabel.tock then ∅ else edge.current
 
   def futureStep (automaton : PendingAutomaton)
       (reached : Finset TypeAutomatonState) : Finset TypeAutomatonState :=
-    reached ∪ reached.biUnion automaton.referencedStates
+    reached ∪ reached.biUnion automaton.menuStep
 
   def futureReachableAux (automaton : PendingAutomaton) :
       Nat → Finset TypeAutomatonState → Finset TypeAutomatonState
@@ -48,7 +50,11 @@ namespace PendingAutomaton
     ∀ state ∈ automaton.states,
       automaton.referencedStates state ⊆ automaton.states
 
-  /-- Saturate references for at most `|Q|` rounds. -/
+  /-- Every non-clock execution target is a declared state. -/
+  def MenuClosed (automaton : PendingAutomaton) : Prop :=
+    ∀ state ∈ automaton.states, automaton.menuStep state ⊆ automaton.states
+
+  /-- Saturate non-clock execution targets for at most `|Q|` rounds. -/
   def futureReachable (automaton : PendingAutomaton)
       (state : TypeAutomatonState) : Finset TypeAutomatonState :=
     futureReachableAux automaton automaton.states.card {state}

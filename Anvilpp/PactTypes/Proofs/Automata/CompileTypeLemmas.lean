@@ -323,18 +323,15 @@ private theorem compileTypeFuel_succ_stable :
               simp [typeCompilationFuel] at hFuel
               omega)]
       | seq alphabet left right =>
-          change buildSequenceAutomaton
-              (compileTypeFuel (fuel + 1) left)
-              (compileTypeFuel (fuel + 1) right) =
-            buildSequenceAutomaton
-              (compileTypeFuel fuel left)
-              (compileTypeFuel fuel right)
-          rw [ih left (by
-              simp [typeCompilationFuel] at hFuel
-              omega),
-            ih right (by
-              simp [typeCompilationFuel] at hFuel
-              omega)]
+          have hLeft : typeCompilationFuel left ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          have hRight : typeCompilationFuel right ≤ fuel := by
+            simp [typeCompilationFuel] at hFuel
+            omega
+          simp only [Nat.min_eq_right hLeft,
+            Nat.min_eq_right (Nat.le.step hLeft)]
+          rw [ih left hLeft, ih right hRight]
       | par alphabet left right interface =>
           change buildParallelAutomaton alphabet left.alphabet
               right.alphabet interface
@@ -502,7 +499,7 @@ theorem compileType_hasEdge_iff_hasResolvedEdge
   classical
   simp [TypeAutomaton.HasEdge, compileType,
     AutomatonFragment.HasResolvedEdge, resolvedAutomatonEdges,
-    resolveAutomatonEdgesWith]
+    resolveAutomatonEdgesWith, resolveFutureSpec]
   aesop
 
 /-- A public edge is equivalently the corresponding resolved fragment edge. -/
@@ -524,7 +521,7 @@ theorem compileType_hasEdge_iff_resolvedEdge_mem
             processType) := by
   rw [compileType_hasEdge_iff_hasResolvedEdge processType source
     target env label offers]
-  simp [AutomatonFragment.HasResolvedEdge, resolveAutomatonEdgesWith]
+  simp [AutomatonFragment.HasResolvedEdge, resolveAutomatonEdgesWith, resolveFutureSpec]
   aesop
 
 /-- Every sufficiently fuelled fragment contains its distinguished entry state. -/
@@ -620,6 +617,7 @@ theorem childFutureSpec_explicit (index : Nat) (spec : FutureSpec)
   cases spec with
   | explicit inner => simpa [childFutureSpec] using hSpec
   | «at» state removed => simp [childFutureSpec] at hSpec
+  | atUnion inner state removed => simp [childFutureSpec] at hSpec
 
 /-- A copied child fragment keeps the invariant. -/
 theorem childPendingEdges_storedMenusEmpty (index : Nat)
@@ -643,6 +641,8 @@ theorem sequenceRedirectFutureSpec_explicit
     simp [sequenceRedirectFutureSpec, hTock] at hSpec
   exact hSpec.symm
 
+/- Obsolete after the paper update: parallel stores the witnessing child
+futures on non-clock edges too. Retained for comparison, not an assumption.
 /-- The parallel constructor likewise stores a menu only on clock edges. -/
 theorem parallelFutureSpec_explicit
     (label : AutomatonConstructionLabel) (target : TypeAutomatonState)
@@ -652,6 +652,7 @@ theorem parallelFutureSpec_explicit
   by_cases hTock : label.semantic = TypeLabel.tock <;>
     simp [parallelFutureSpec, hTock] at hSpec
   exact hSpec.symm
+-/
 
 /-- The indexed family of branch copies keeps the invariant. -/
 theorem indexedFragmentEdges_storedMenusEmpty
@@ -671,6 +672,7 @@ theorem indexedFragmentEdges_storedMenusEmpty
     exact childPendingEdges_storedMenusEmpty (indexed.2 + 1) indexed.1.2
       (hAll indexed.1 hEntry) edge hChild offers hOffers
 
+/- Obsolete: composed sequence and parallel fields can store nonempty futures.
 theorem compileTypeFuel_storedMenusEmpty :
     ∀ (fuel : Nat) (processType : PactType),
       (compileTypeFuel fuel processType).StoredMenusEmpty := by
@@ -868,6 +870,8 @@ theorem compileTypeFuel_storedMenusEmpty :
             simp at hOffers
 
 
+-/
+
 /-- A symbolic continuation always names the edge's own target: the compiler
 never points a same-cycle reference at a state the edge does not enter. -/
 def AutomatonFragment.FutureTargetsAreEdgeTargets (fragment : AutomatonFragment) :
@@ -885,6 +889,7 @@ theorem childFutureSpec_at (index : Nat) (spec : FutureSpec)
   | «at» state rest =>
       simp only [childFutureSpec, FutureSpec.at.injEq] at hSpec
       exact ⟨state, by rw [hSpec.2], hSpec.1.symm⟩
+  | atUnion offers state rest => simp [childFutureSpec] at hSpec
 
 theorem childPendingEdges_futureTargets (index : Nat)
     (child : AutomatonFragment) (hChild : child.FutureTargetsAreEdgeTargets)
@@ -928,6 +933,8 @@ theorem sequenceRedirectFutureSpec_at
     simp [sequenceRedirectFutureSpec, hTock] at hSpec
   exact hSpec.1.symm
 
+/- Obsolete: parallel fields are resolved child fields, while choice and
+exclusive-offer fields refer to their source. Menu paths use execution targets.
 theorem parallelFutureSpec_at
     (label : AutomatonConstructionLabel) (specTarget : TypeAutomatonState)
     (removed : Finset BareMessage) (target : TypeAutomatonState)
@@ -1149,6 +1156,8 @@ theorem compileTypeFuel_futureTargetsAreEdgeTargets :
             obtain ⟨environment, -, rfl⟩ := hElseRoot
             simp at hFuture ⊢; exact hFuture.1.symm
 
+
+-/
 
 /-- An accepting state is inert: it publishes no offer, it never leaves the
 accepting set, and it carries no unresolved call.  The last conjunct is what
@@ -1769,6 +1778,7 @@ theorem indexedFragmentEdges_explicitOnlyAtAccepting
       childPendingEdges_explicitOnlyAtAccepting (indexed.2 + 1) indexed.1.2
         (hAll indexed.1 hEntry) edge hChild hTock offers hFuture⟩
 
+/- Obsolete: sequence and parallel store component fields at live states too.
 theorem compileTypeFuel_explicitOnlyAtAccepting :
     ∀ (fuel : Nat) (processType : PactType),
       (compileTypeFuel fuel processType).ExplicitOnlyAtAccepting := by
@@ -2006,6 +2016,8 @@ theorem compileTypeFuel_explicitOnlyAtAccepting :
             simp only [Finset.mem_image, Finset.mem_filter] at hElseRoot
             obtain ⟨environment, -, rfl⟩ := hElseRoot
             simp at hFuture
+
+-/
 
 end
 

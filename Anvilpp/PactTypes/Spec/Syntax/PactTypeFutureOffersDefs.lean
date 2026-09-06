@@ -4,6 +4,11 @@ namespace Pact
 
 noncomputable section
 
+/-- `F_2` of the sequence offer clause: the right operand's menu, admitted
+when the left operand passes the optimistic completion test at the source. -/
+def sequenceRightMenu (left right : PactType) : Finset BareMessage :=
+  if left.CanCompleteDeclared then typeFutureOffers right else ∅
+
 /-- Branch offers selected by the future part of this environment. -/
 def typeWaitingOffers (env : TypeEnvironment)
     (branches : List (BareMessage × PactType)) : Finset BareMessage :=
@@ -74,24 +79,26 @@ mutual
         (left right : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent left
-          ∅ (typeFutureOffers left)
+          ∅ (typeFutureOffers (.choice alphabet left right))
     | choice_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.choice alphabet left right) TypeLabel.silent right
-          ∅ (typeFutureOffers right)
+          ∅ (typeFutureOffers (.choice alphabet left right))
     | fair_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
-          (TypeLabel.fair bid true) left ∅ (typeFutureOffers left)
+          (TypeLabel.fair bid true) left ∅
+          (typeFutureOffers (.fairChoice alphabet bid left right))
     | fair_right (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (bid : BranchId)
         (left right : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
         TypeOffers env (.fairChoice alphabet bid left right)
-          (TypeLabel.fair bid false) right ∅ (typeFutureOffers right)
+          (TypeLabel.fair bid false) right ∅
+          (typeFutureOffers (.fairChoice alphabet bid left right))
     | cycle (env : TypeEnvironment) (alphabet : PactTypeAlphabet) :
         env.WellFormed alphabet ∧ env.clock = true →
         TypeOffers env (.tock alphabet) .tock (.skip alphabet) ∅ ∅
@@ -122,7 +129,7 @@ mutual
         label ≠ TypeLabel.tock →
         TypeOffers env (.seq alphabet left right) label
           (.seq alphabet left' right) current
-          (typeFutureOffers (.seq alphabet left' right) \ current)
+          ((childFuture ∪ sequenceRightMenu left right) \ current)
     | seq_tock (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left left' right : PactType)
         (current childFuture : Finset BareMessage) :
@@ -136,7 +143,7 @@ mutual
         TypeOffers env left label (.skip skipAlphabet) current childFuture →
         label ≠ TypeLabel.tock →
         TypeOffers env (.seq alphabet left right) label right current
-          (typeFutureOffers right \ current)
+          ((childFuture ∪ sequenceRightMenu left right) \ current)
     | seq_fuse_tock (env : TypeEnvironment) (alphabet skipAlphabet : PactTypeAlphabet)
         (left right : PactType)
         (current childFuture : Finset BareMessage) :
@@ -153,7 +160,9 @@ mutual
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches)
           (TypeLabel.message action.1 action.2) processType
-          {action} (typeFutureOffers processType \ {action})
+          {action}
+          (typeFutureOffers (.xoffer alphabet elseType branches) \
+            typeBranchActions branches)
     | xoffer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
@@ -161,7 +170,9 @@ mutual
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
-          elseType ∅ (typeFutureOffers elseType)
+          elseType ∅
+          (typeFutureOffers (.xoffer alphabet elseType branches) \
+            typeBranchActions branches)
     | xoffer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
@@ -221,8 +232,7 @@ mutual
           (hideTypeOffers interface (leftCurrent ∪ rightCurrent))
           (if TypeLabel.combine interface leftLabel rightLabel = TypeLabel.tock
             then ∅
-            else typeFutureOffers (.par alphabet left' right' interface) \
-              hideTypeOffers interface (leftCurrent ∪ rightCurrent))
+            else hideTypeOffers interface (leftFuture ∪ rightFuture))
     | par_fuse (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
         (alphabet : PactTypeAlphabet)
         (left right : PactType) (leftLabel rightLabel : TypeLabel)
@@ -286,8 +296,7 @@ mutual
           rightLabel
           (right'.reannotate alphabet)
           (hideTypeOffers interface rightCurrent)
-          (typeFutureOffers (right'.reannotate alphabet) \
-            hideTypeOffers interface rightCurrent)
+          (hideTypeOffers interface rightFuture)
     -- T-Par-Right: mirror of `left_complete`; the right side is already `skip`.
     | right_complete (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface) (alphabet : PactTypeAlphabet)
@@ -309,8 +318,7 @@ mutual
           leftLabel
           (left'.reannotate alphabet)
           (hideTypeOffers interface leftCurrent)
-          (typeFutureOffers (left'.reannotate alphabet) \
-            hideTypeOffers interface leftCurrent)
+          (hideTypeOffers interface leftFuture)
 
 end
 

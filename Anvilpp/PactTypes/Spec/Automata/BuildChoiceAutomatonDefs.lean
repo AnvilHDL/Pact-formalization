@@ -23,15 +23,18 @@ def buildChoiceAutomaton
         environment := environment
         label := .visible selectionLeft
         current := ∅
-        future := .at (childState 0 left.initial) ∅
+        future := .at TypeAutomatonState.root ∅
         target := childState 0 left.initial },
       { source := TypeAutomatonState.root
         environment := environment
         label := .visible selectionRight
         current := ∅
-        future := .at (childState 1 right.initial) ∅
+        future := .at TypeAutomatonState.root ∅
         target := childState 1 right.initial } }
-  finishAutomatonFragment states .root accepting
+  let completes := childCompletes 0 left ∪ childCompletes 1 right ∪
+    (if left.initial ∈ left.completes ∨ right.initial ∈ right.completes then
+      {TypeAutomatonState.root} else ∅)
+  finishAutomatonFragment states .root accepting completes
     (childPendingEdges 0 left ∪ childPendingEdges 1 right ∪ selections)
 
 end

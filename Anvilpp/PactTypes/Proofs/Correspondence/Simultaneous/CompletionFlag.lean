@@ -30,19 +30,13 @@ theorem menuReference_completion_backward
     by_cases hClock : edge.label.semantic = .tock
     · simp [hClock] at hRef
     have hTarget : target = edge.target := by
-      cases hFuture : edge.future with
-      | explicit offers => simp [hClock, hFuture] at hRef
-      | «at» q removed =>
-          have hEq : target = q := by simpa [hClock, hFuture] using hRef
-          rw [hEq, compileTypeFuel_futureTargetsAreEdgeTargets _ ty edge hEdge q removed hFuture]
+      simpa only [if_neg hClock, Finset.mem_singleton] using hRef
     subst target
     cases hLabel : edge.label with
     | «variable» name => exact (hNoMarker name edge hEdge hLabel).elim
     | visible label =>
         have hPublic : (compileType ty).HasEdge source edge.environment label
-            ⟨edge.current, match edge.future with
-              | .explicit offers => offers
-              | .at q removed => computeFutureOf ty q \ removed⟩ edge.target := by
+            ⟨edge.current, resolveFutureSpec (computeFutureOf ty) edge.future⟩ edge.target := by
           rw [compileType_hasEdge_iff_hasResolvedEdge]
           exact ⟨edge, hEdge, hSource, rfl, hLabel, rfl, rfl, rfl⟩
         obtain ⟨theta, _, hStep, hTheta⟩ := hCurrent.2 hRelated hPublic

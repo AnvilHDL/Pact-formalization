@@ -947,7 +947,7 @@ theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
     ExactSurvivorTransport (.offer a elseType branches) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFE, hWFB⟩ := typeWellFormedIn_offer hWF
-  obtain ⟨hAlphaWF, -, -, -, -, -, -, -, -, -, -, -, hIScopAll, -, hCOwn⟩ :=
+  obtain ⟨hAlphaWF, -, -, -, -, -, -, -, -, -, -, -, hIScopAll, -, hCOwn, -⟩ :=
     id hWF
   simp only [PactType.AlphabetWellFormed] at hAlphaWF
   simp only [PactType.InterfaceScoped] at hIScopAll
@@ -1470,7 +1470,7 @@ theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
   obtain ⟨hAlphaWF, -, -, -, -, hParentTailRecursive, -, -, -, -, -, -, -, -,
     -⟩ := id hWF
   obtain ⟨hBodyAlphabet, -, -, -, -, hBodyTailRecursive, -, -, -, hBodyMO,
-    hBodyPO, hBodyFO, hBodyScoped, hBodyAlphaScoped, hBodyCMO⟩ := hWFBody
+    hBodyPO, hBodyFO, hBodyScoped, hBodyAlphaScoped, hBodyCMO, -⟩ := hWFBody
   have hBodyDisjoint : body.OfferBranchesDisjoint :=
     offerBranchesDisjoint_of_ownership body hBodyMO hBodyPO hBodyFO hBodyCMO
   simp only [PactType.AlphabetWellFormed] at hAlphaWF
@@ -1518,7 +1518,7 @@ theorem survivorTransport_recur (a : PactTypeAlphabet) (name : String)
 theorem offerBranchesDisjoint_of_wellFormedIn {bound : List String}
     {processType : PactType} (h : TypeWellFormedIn bound processType) :
     processType.OfferBranchesDisjoint := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, hMO, hPO, hFO, -, -, hCMO⟩ := h
+  obtain ⟨-, -, -, -, -, -, -, -, -, hMO, hPO, hFO, -, -, hCMO, -⟩ := h
   exact offerBranchesDisjoint_of_ownership processType hMO hPO hFO hCMO
 
 /-- Re-signing leaves the deleted sequence states alone. -/
