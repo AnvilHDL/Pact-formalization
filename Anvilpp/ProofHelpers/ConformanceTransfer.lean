@@ -24,10 +24,11 @@ lemma helper_h1_erasure_preserves_offers
 /-- Helper Lemma H1: erasure preserves sibling-local environments. -/
 lemma helper_h1_erasure_preserves_local_environment
     {outer siblingEnv localEnv : Environment} {interface : Interface}
-    {localProc sibling : Proc} {label : Label}
+    {localProc : Proc}
     {current : Finset Offer} {future : Finset BareMessage}
     (hLocal :
-      LocalEnvironment outer interface siblingEnv sibling label localEnv) :
+      LocalOfferEnvironment outer interface localProc siblingEnv current
+        future localEnv) :
     LocalTypeOfferEnvironment (eraseEnvironment outer) interface
       (inferProcess localProc)
       (eraseEnvironment siblingEnv) (current.image Offer.bare) future
@@ -508,7 +509,8 @@ lemma helper_h6_abstraction_process_substitution
 
 /-- Helper Lemma H6: abstraction reflects literal `skip`. -/
 lemma helper_h6_abstraction_skip_iff (process : Proc) :
-    inferProcess process = .skip (processAlphabet process) ↔ process = .skip := by
+    inferProcess process = .skip process.alphabet ↔
+      process = .skip process.alphabet := by
   sorry -- TODO(section7): inspect the abstraction clauses.
 
 
@@ -516,13 +518,11 @@ lemma helper_h6_abstraction_skip_iff (process : Proc) :
 transformation from the process semantics.  This is the Lean counterpart of
 `abs(C^P_{B,a_j}) = C^{absB(B)}_{Msg(a_j)}` obligation. -/
 lemma helper_h6_abstraction_offer_transformation_preserved
+    (alphabet : PactTypeAlphabet)
     (selected : ChoiceBranch) (branches : List ChoiceBranch) :
-    inferProcess
-        (parallelProcessBranchesSelecting (inferBranch selected) branches) =
-      parallelTypeBranchesSelecting
-        (processAlphabet
-          (parallelProcessBranchesSelecting (inferBranch selected) branches))
-        (inferBranch selected) (branches.map inferBranch) := by
+    inferProcess (parallelProcessBranchesSelecting alphabet selected branches) =
+      parallelTypeBranchesSelecting alphabet (inferBranch selected)
+        (inferBranches branches) := by
   sorry
 
 -- Need to define the helper lemma h6 for offer transformation.
@@ -539,7 +539,7 @@ lemma helper_h7_one_step_abstraction
 
 /-- Helper Lemma H8: abstraction reflects readiness. -/
 lemma helper_h8_abstraction_reflects_readiness
-    {process : Proc} (hWF : WFProc process) {env : Environment} :
+    {process : Proc} (hWF : DataWFProc process) {env : Environment} :
     TypeReady (eraseEnvironment env) (inferProcess process) →
       ProcessReady env process := by
   sorry -- TODO(section7): split on clock/non-clock environments.

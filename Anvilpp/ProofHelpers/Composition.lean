@@ -18,12 +18,18 @@ def composeTypes : List PactType → List Interface → Option PactType
       | none => none
   | _, _ => none
 
+/-- Right-associated parallel composition, mirroring `parallelType`: the
+parent alphabet is the two child alphabets with the interface hidden. -/
+def parallelProc (left right : Proc) (interface : Interface) : Proc :=
+  .par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
+    left right interface
+
 def composeProcesses : List Proc → List Interface → Option Proc
   | [], _ => none
   | [process], [] => some process
   | process :: next :: rest, interface :: interfaces =>
       match composeProcesses (next :: rest) interfaces with
-      | some suffix => some (.par process suffix interface)
+      | some suffix => some (parallelProc process suffix interface)
       | none => none
   | _, _ => none
 

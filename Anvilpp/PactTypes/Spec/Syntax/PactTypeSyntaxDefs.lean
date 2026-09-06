@@ -5,56 +5,6 @@ namespace Pact
 
 noncomputable section
 
-/-- The fixed alphabet attached to one type node.
-
-`actions` stores the polarized message actions owned by this type.  The
-unpolarized message names are derived from `actions`.
--/
-structure PactTypeAlphabet : Type where
-  actions : Finset BareMessage
-  deriving DecidableEq
-
-instance : SizeOf PactTypeAlphabet := ⟨fun _ => 0⟩
-
-namespace PactTypeAlphabet
-
-  def OnePolarity (alphabet : PactTypeAlphabet) : Prop :=
-    ∀ msg, ¬ ((msg, MessageDir.send) ∈ alphabet.actions ∧
-      (msg, MessageDir.recv) ∈ alphabet.actions)
-
-  def WellFormed (alphabet : PactTypeAlphabet) : Prop :=
-    alphabet.OnePolarity
-
-  def empty : PactTypeAlphabet :=
-    { actions := ∅ }
-
-  def ofAction (action : BareMessage) : PactTypeAlphabet :=
-    { actions := {action} }
-
-  def union (left right : PactTypeAlphabet) : PactTypeAlphabet :=
-    { actions := left.actions ∪ right.actions }
-
-  def hideInterface (alphabet : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
-    { actions := alphabet.actions.filter fun action => action.1 ∉ interface }
-
-  def mergeHidden (left right : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
-    { actions :=
-        (left.actions ∪ right.actions).filter fun action =>
-          action.1 ∉ interface }
-
-
-  def ComplementaryOn
-      (left right : PactTypeAlphabet) (interface : Interface) : Prop :=
-    ∀ msg ∈ interface,
-      (((msg, MessageDir.send) ∈ left.actions ∧
-          (msg, MessageDir.recv) ∈ right.actions) ∨
-        ((msg, MessageDir.recv) ∈ left.actions ∧
-          (msg, MessageDir.send) ∈ right.actions))
-
-end PactTypeAlphabet
-
 /-- The type grammar, annotated with the fixed alphabet chosen for each
 subterm. -/
 inductive PactType : Type where
@@ -120,21 +70,6 @@ namespace PactType
 
 end PactType
 
-namespace PactTypeAlphabet
-
-  /-- Compatibility of the fixed alphabets at a parallel node.
-
-  The parent declares no interface action.  Each interface message occurs in
-  both child alphabets with opposite polarities.  Away from the interface both
-  child alphabets equal the parent. -/
-  structure ParallelCompatible
-      (parent left right : PactTypeAlphabet) (interface : Interface) : Prop where
-    parent_hides_interface : ∀ action ∈ parent.actions, action.1 ∉ interface
-    complementary : ComplementaryOn left right interface
-    parent_eq_left : hideInterface left interface = parent
-    parent_eq_right : hideInterface right interface = parent
-
-end PactTypeAlphabet
 
 namespace PactType
 

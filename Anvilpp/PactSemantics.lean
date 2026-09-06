@@ -8,25 +8,6 @@ namespace Pact
 
 noncomputable section
 
-/-- A finite synchronization interface. for P ||_I P -/
-abbrev Interface := Finset MessageId
-
-/-- A message identifier paired with its polarity. -/
-abbrev BareMessage := MessageId × MessageDir
-
-/--
-The message part of a process/type signature.
-
-This is fixed by the surrounding system before either syntax tree is compiled;
-in particular, it is deliberately not inferred by traversing a `Proc` or a
-`PactType`.  `boundary` is polarized, while an interface contains message
-identifiers because synchronization pairs the two polarities.
--/
-structure MessageAlphabet : Type where
-  boundary : Finset BareMessage
-  interface : Interface
-  deriving DecidableEq
-
 /-- Atomic observations that may occur together in a non-clock step. -/
 inductive Observation : Type where
   | message : MessageId → MessageDir → Bool → Observation
@@ -167,10 +148,14 @@ namespace Environment
   def bareImmediate (env : Environment) : Finset BareMessage :=
     env.immediate.image Offer.bare
 
-  /-- The well-formedness conditions on one-step environments. -/
-  def WellFormed (env : Environment) : Prop :=
+  /-- `E ∈ Env_P`: the well-formedness conditions on one-step environments,
+  including the blanket premise that the environment ranges over the
+  complement of the process's written alphabet. -/
+  def WellFormed (env : Environment) (alphabet : PactTypeAlphabet) : Prop :=
     (env.clock = true → env.immediate = ∅ ∧ env.future = ∅) ∧
-    (env.clock = false → env.bareImmediate ∩ env.future = ∅)
+    (env.clock = false → env.bareImmediate ∩ env.future = ∅) ∧
+    env.bareImmediate ⊆ alphabet.actions.image bareNeed ∧
+    env.future ⊆ alphabet.actions.image bareNeed
 
   def hasRecv (env : Environment) (msg : MessageId) : Prop :=
     Offer.recv msg ∈ env.immediate
@@ -184,45 +169,34 @@ namespace Environment
 
 end Environment
 
-namespace MessageAlphabet
 
-  /-- Concrete environment offers complementary to the fixed process boundary. -/
-  def processEnvironmentOffers (alphabet : MessageAlphabet) : Finset Offer :=
-    alphabet.boundary.biUnion fun action =>
-      match action.2 with
-      | .send => {Offer.recv action.1}
-      | .recv => {Offer.send action.1 false, Offer.send action.1 true}
-
-  /-- Bare future offers admitted by the fixed process boundary. -/
-  def processFutureOffers (alphabet : MessageAlphabet) : Finset BareMessage :=
-    alphabet.processEnvironmentOffers.image Offer.bare
-
-  /--
-  The finite process-environment space generated from a fixed alphabet.
-  Immediate and future offers are disjoint after value erasure; the clock
-  environment is the distinguished additional possibility.
-  -/
-  def processEnvironments (alphabet : MessageAlphabet) : Finset Environment :=
-    {Environment.tock} ∪
-      alphabet.processEnvironmentOffers.powerset.biUnion fun immediate =>
-        (alphabet.processFutureOffers \ immediate.image Offer.bare).powerset.image
-          fun future =>
-            { immediate := immediate, future := future, clock := false }
-
-end MessageAlphabet
+/-! ## Offer heads and branch predicates -/
 
 namespace ChoiceBranch
 
-  /-- The complementary action that enables this branch. -/
-  def need (branch : ChoiceBranch) : BareMessage :=
-    (branch.getMessageId, branch.getDir.invert)
+  /-- `Label(a)`: the concrete offer a branch head exposes.  A send retains
+  its evaluated payload; a receive exposes only its demand. -/
+  def offer (branch : ChoiceBranch) : Offer :=
+    match branch with
+    | ChoiceBranch.send msg expr _ =>
+        Offer.send msg ((Semantics.exprEvalOpt expr).getD false)
+    | ChoiceBranch.recv msg _ _ => Offer.recv msg
 
 end ChoiceBranch
 
+/-- `Need(B)`. -/
 def branchNeeds (branches : List ChoiceBranch) : Finset BareMessage :=
   (branches.map ChoiceBranch.need).toFinset
 
-/-- No branch need remains among the environment's future offers. -/
+/-- `Act_B` as bare actions. -/
+def branchActions (branches : List ChoiceBranch) : Finset BareMessage :=
+  (branches.map ChoiceBranch.action).toFinset
+
+/-- `Act_B` as concrete offers. -/
+def branchOfferSet (branches : List ChoiceBranch) : Finset Offer :=
+  (branches.map ChoiceBranch.offer).toFinset
+
+/-- `Resolved(E,B)`: no branch need remains among the future offers. -/
 def Resolved (env : Environment) (branches : List ChoiceBranch) : Prop :=
   branchNeeds branches ∩ env.future = ∅
 
@@ -234,34 +208,29 @@ def NoImmediateBranch (env : Environment) (branches : List ChoiceBranch) : Prop 
 def BranchEnabled (env : Environment) (branch : ChoiceBranch) : Prop :=
   ChoiceBranch.need branch ∈ env.bareImmediate
 
-/-- Rewrite a conjunctive offer to parallel singleton exclusive offers. -/
-def parallelBranches : List ChoiceBranch → Proc
-  | [] => Proc.skip
-  | [branch] => branch.toXOffer
-  | branch :: rest => Proc.par branch.toXOffer (parallelBranches rest) ∅
+/-- Every branch head is declared by the written alphabet. -/
+def BranchesDeclared (alphabet : PactTypeAlphabet)
+    (branches : List ChoiceBranch) : Prop :=
+  ∀ branch ∈ branches, ChoiceBranch.action branch ∈ alphabet.actions
 
-/-! ## Sibling offers and local environments -/
+/-- Boolean companion to `BranchesDeclared`, for the menu definitions. -/
+def branchesDeclared (alphabet : PactTypeAlphabet)
+    (branches : List ChoiceBranch) : Bool :=
+  branches.all fun branch => decide (ChoiceBranch.action branch ∈ alphabet.actions)
 
-namespace ChoiceBranch
+/-- `W(E,B)`: branch actions the future environment still promises. -/
+def waitingOffers (env : Environment) (branches : List ChoiceBranch) :
+    Finset BareMessage :=
+  env.future.image bareNeed ∩ branchActions branches
 
-  /-- The branch's own polarized action (as opposed to `need`, its
-  complement). -/
-  def action (branch : ChoiceBranch) : BareMessage :=
-    (branch.getMessageId, branch.getDir)
+/-- The concrete witness set behind `W(E,B)`. -/
+def waitingOfferSet (env : Environment) (branches : List ChoiceBranch) :
+    Finset Offer :=
+  ((branches.filter fun branch =>
+      decide (ChoiceBranch.action branch ∈ waitingOffers env branches)).map
+    ChoiceBranch.offer).toFinset
 
-  def continuation (branch : ChoiceBranch) : Proc :=
-    match branch with
-    | ChoiceBranch.send _ _ p => p
-    | ChoiceBranch.recv _ _ p => p
-
-  theorem continuation_sizeOf_lt (branch : ChoiceBranch) :
-      sizeOf (continuation branch) < sizeOf branch := by
-    cases branch <;> simp [continuation] <;> omega
-
-end ChoiceBranch
-
-def branchActions (branches : List ChoiceBranch) : Finset BareMessage :=
-  (branches.map ChoiceBranch.action).toFinset
+/-! ## Interface restriction and hiding -/
 
 def restrictCurrent (interface : Interface) (offers : Finset Offer) : Finset Offer :=
   offers.filter fun offer => offer.messageId ∈ interface
@@ -270,54 +239,82 @@ def restrictFuture (interface : Interface) (offers : Finset BareMessage) :
     Finset BareMessage :=
   offers.filter fun offer => offer.1 ∈ interface
 
-/-- Remove offers hidden by a parallel interface. -/
+/-- `hide_I` on bare offers. -/
 def hideProcOffers (interface : Interface) (offers : Finset BareMessage) :
     Finset BareMessage :=
   offers.filter fun offer => offer.1 ∉ interface
 
+/-- `hide_I` on concrete offers. -/
 def hideOfferSet (interface : Interface) (offers : Finset Offer) : Finset Offer :=
   offers.filter fun offer => offer.messageId ∉ interface
 
-/-- `Need` applied to a bare action: flip its polarity. -/
-def bareNeed (action : BareMessage) : BareMessage := (action.1, action.2.invert)
+/-! ## Conjunctive commitment
 
-/-- Branch actions the future environment still promises to enable, as bare
-messages: `W(E,B) = overline(Fut(E)) ∩ Act_B` from Appendix A.2.1/`pactcommons`. -/
-def waitingOffers (env : Environment) (branches : List ChoiceBranch) :
-    Finset BareMessage :=
-  env.future.image bareNeed ∩ branchActions branches
+`C^P_(B,a_j)`: the selected branch performs its head action; every other
+branch becomes a singleton exclusive offer with a `skip` default. -/
 
-/-- A concrete offer contributed by one branch: sends carry the branch's own
-(closed) expression's value, receives carry none. -/
-def branchOffer (branch : ChoiceBranch) : Offer :=
+def parallelProcessBranchesWithin (alphabet : PactTypeAlphabet) :
+    List ChoiceBranch → Proc
+  | [] => Proc.skip alphabet
+  | [branch] => ChoiceBranch.toXOffer alphabet branch
+  | branch :: rest =>
+      Proc.par alphabet (ChoiceBranch.toXOffer alphabet branch)
+        (parallelProcessBranchesWithin alphabet rest) ∅
+
+/-- The committed form of the selected branch: it drops the synthetic
+singleton offer and performs its head. -/
+def selectedProcessBranchAt (alphabet : PactTypeAlphabet)
+    (branch : ChoiceBranch) : Proc :=
   match branch with
-  | ChoiceBranch.send msg expr _ =>
-      Offer.send msg ((Semantics.exprEvalOpt expr).getD false)
-  | ChoiceBranch.recv msg _ _ => Offer.recv msg
+  | ChoiceBranch.send msg expr process => Proc.send alphabet msg expr process
+  | ChoiceBranch.recv msg varName process => Proc.recv alphabet msg varName process
 
-/-- The concrete waiting-offer witness set exposed by an unresolved offer:
-every branch whose bare action is still promised by the future environment,
-each realized with its own (deterministic) value. -/
-def waitingOfferSet (env : Environment) (branches : List ChoiceBranch) :
-    Finset Offer :=
-  ((branches.filter fun branch => ChoiceBranch.action branch ∈ waitingOffers env branches).map
-    branchOffer).toFinset
+def parallelProcessBranchesSelectingWithin (alphabet : PactTypeAlphabet)
+    (selected : ChoiceBranch) : List ChoiceBranch → Proc
+  | [] => Proc.skip alphabet
+  | [branch] =>
+      if branch = selected then selectedProcessBranchAt alphabet branch
+      else ChoiceBranch.toXOffer alphabet branch
+  | branch :: rest =>
+      if branch = selected then
+        Proc.par alphabet (selectedProcessBranchAt alphabet branch)
+          (parallelProcessBranchesWithin alphabet rest) ∅
+      else
+        Proc.par alphabet (ChoiceBranch.toXOffer alphabet branch)
+          (parallelProcessBranchesSelectingWithin alphabet selected rest) ∅
 
-/-! Whether a process may reach `skip` before its next mandatory clock,
-mirroring `PactType.CanCompleteBeforeTock`. -/
+def parallelProcessBranchesSelecting (alphabet : PactTypeAlphabet)
+    (selected : ChoiceBranch) : List ChoiceBranch → Proc
+  | [] => Proc.skip PactTypeAlphabet.empty
+  | branch :: rest =>
+      parallelProcessBranchesSelectingWithin alphabet selected (branch :: rest)
+
+/-! ## Optimistic completion
+
+`canCompleteThisCycle(P)`.  The test reads the written alphabet at each signed
+subterm. -/
+
 mutual
   def Proc.CanCompleteBeforeTock : Proc → Bool
-    | .send _ _ _ | .recv _ _ _ | .skip | .endp _ => true
-    | .cycle | .var _ => false
-    | .recur _ body => Proc.CanCompleteBeforeTock body
-    | .par left right _ | .seq left right =>
+    | .send alphabet msg _ p =>
+        decide ((msg, MessageDir.send) ∈ alphabet.actions) &&
+          Proc.CanCompleteBeforeTock p
+    | .recv alphabet msg _ p =>
+        decide ((msg, MessageDir.recv) ∈ alphabet.actions) &&
+          Proc.CanCompleteBeforeTock p
+    | .skip _ | .endp _ _ => true
+    | .cycle _ | .var _ _ => false
+    | .recur _ _ body => Proc.CanCompleteBeforeTock body
+    | .par _ left right _ | .seq _ left right =>
         Proc.CanCompleteBeforeTock left && Proc.CanCompleteBeforeTock right
-    | .letp _ _ p => Proc.CanCompleteBeforeTock p
-    | .ifunfair _ left right | .iffair _ _ left right =>
+    | .letp _ _ _ p => Proc.CanCompleteBeforeTock p
+    | .ifunfair _ _ left right | .iffair _ _ _ left right =>
         Proc.CanCompleteBeforeTock left || Proc.CanCompleteBeforeTock right
-    | .xoffer elseProcess branches | .offer elseProcess branches =>
-        Proc.CanCompleteBeforeTock elseProcess ||
-          Proc.BranchCanCompleteBeforeTock branches
+    | .xoffer alphabet elseProcess branches
+    | .offer alphabet elseProcess branches =>
+        branchesDeclared alphabet branches &&
+          (Proc.CanCompleteBeforeTock elseProcess ||
+            Proc.BranchCanCompleteBeforeTock branches)
   termination_by process => sizeOf process
 
   def Proc.BranchCanCompleteBeforeTock : List ChoiceBranch → Bool
@@ -330,435 +327,394 @@ decreasing_by
   all_goals
     first
     | (simp_wf; omega)
-    | (have hBranch : sizeOf (ChoiceBranch.continuation branch) < sizeOf branch := by
-         cases branch <;> simp [ChoiceBranch.continuation] <;> omega
+    | (have hBranch := ChoiceBranch.continuation_sizeOf_lt branch
        simp_wf
        omega)
 end
 
-/-- Syntactic future-offer menu, bounded by the depth of the finite process
-term.  Fuel-bounded (rather than plain structural recursion) because it must
-also be applied to `recur`'s capture-avoiding unfolding, which need not be
-structurally smaller than the original body. -/
+/-! ## Future-offer menu
+
+`FutOff(P)`, gated by the written alphabet at each signed subterm. -/
+
 def procFutureOffersFuel : Nat → Proc → Finset BareMessage
   | 0, _ => ∅
   | fuel + 1, process =>
       match process with
-      | Proc.send msg _ _ => {(msg, .send)}
-      | Proc.recv msg _ _ => {(msg, .recv)}
-      | Proc.var _ => ∅
-      | Proc.skip => ∅
-      | Proc.endp _ => ∅
-      | Proc.cycle => ∅
-      | Proc.recur _ body => procFutureOffersFuel fuel body
-      | Proc.par left right interface =>
+      | Proc.send alphabet msg _ p =>
+          if (msg, MessageDir.send) ∈ alphabet.actions then
+            {(msg, MessageDir.send)} ∪ procFutureOffersFuel fuel p
+          else ∅
+      | Proc.recv alphabet msg _ p =>
+          if (msg, MessageDir.recv) ∈ alphabet.actions then
+            {(msg, MessageDir.recv)} ∪ procFutureOffersFuel fuel p
+          else ∅
+      | Proc.var _ _ => ∅
+      | Proc.skip _ => ∅
+      | Proc.endp _ _ => ∅
+      | Proc.cycle _ => ∅
+      | Proc.recur _ _ body => procFutureOffersFuel fuel body
+      | Proc.par _ left right interface =>
           hideProcOffers interface
             (procFutureOffersFuel fuel left ∪ procFutureOffersFuel fuel right)
-      | Proc.seq left right =>
+      | Proc.seq _ left right =>
           if Proc.CanCompleteBeforeTock left then
             procFutureOffersFuel fuel left ∪ procFutureOffersFuel fuel right
           else procFutureOffersFuel fuel left
-      | Proc.letp _ _ p' => procFutureOffersFuel fuel p'
-      | Proc.ifunfair _ left right | Proc.iffair _ _ left right =>
+      | Proc.letp _ _ _ p' => procFutureOffersFuel fuel p'
+      | Proc.ifunfair _ _ left right | Proc.iffair _ _ _ left right =>
           procFutureOffersFuel fuel left ∪ procFutureOffersFuel fuel right
-      | Proc.xoffer elseProcess branches | Proc.offer elseProcess branches =>
-          branches.foldl (fun offers branch =>
-            offers ∪ {ChoiceBranch.action branch} ∪
-              procFutureOffersFuel fuel (ChoiceBranch.continuation branch))
-            (procFutureOffersFuel fuel elseProcess)
+      | Proc.xoffer alphabet elseProcess branches
+      | Proc.offer alphabet elseProcess branches =>
+          if branchesDeclared alphabet branches then
+            branches.foldl (fun offers branch =>
+              offers ∪ {ChoiceBranch.action branch} ∪
+                procFutureOffersFuel fuel (ChoiceBranch.continuation branch))
+              (procFutureOffersFuel fuel elseProcess)
+          else ∅
 
 /-- All message actions that may still be offered before the next clock. -/
 def procFutureOffers (process : Proc) : Finset BareMessage :=
   procFutureOffersFuel (sizeOf process + 1) process
 
 /-!
-Environment-indexed current/future offers and the sibling-local environment
-relation are mutually defined: parallel offers depend on the two local steps,
-while each local environment depends on the sibling step's offers.  This is
-`Off(E,P,α,P')` (Appendix A.2.1/`procSem.typ`), mirroring `TypeOffers` one
-constructor at a time.
+## Offer menu and local parallel environments
+
+`Off(E,P,α,P')` and `LocalEnv(E,I,P_i,O_C,O_F)`, the concrete counterparts of
+`TypeOffers` and `LocalTypeOfferEnvironment`, mirrored constructor for
+constructor.  The local environment is indexed by the sibling's own offer
+pair, which rules out justifying it by a different witness than the step uses.
 -/
-mutual
-  inductive Offers :
-      Environment → Proc → Label → Proc →
-        Finset Offer → Finset BareMessage → Prop where
-    | send (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc)
-        (value : Bool) :
-        env.WellFormed ∧ env.hasRecv msg ∧ Semantics.ExprEval expr value →
-        Offers env (Proc.send msg expr process) (Label.message msg .send value)
-          process {Offer.send msg value} (procFutureOffers process)
-    | send_wait (env : Environment) (msg : MessageId) (expr : Expr)
-        (process : Proc) (value : Bool) :
-        env.WellFormed ∧ ¬ env.hasRecv msg ∧ env.clock = false ∧
-          Semantics.ExprEval expr value →
-        Offers env (Proc.send msg expr process) Label.silent
-          (Proc.send msg expr process) {Offer.send msg value}
-          (procFutureOffers (Proc.send msg expr process) \ {(msg, .send)})
-    | recv (env : Environment) (msg : MessageId) (var : String) (process : Proc)
-        (value : Bool) :
-        env.WellFormed ∧ env.hasSend msg value →
-        Offers env (Proc.recv msg var process) (Label.message msg .recv value)
-          (Semantics.procExprReplace process var value) {Offer.recv msg}
-          (procFutureOffers (Semantics.procExprReplace process var value))
-    | recv_wait (env : Environment) (msg : MessageId) (var : String)
-        (process : Proc) :
-        env.WellFormed ∧ (∀ value, ¬ env.hasSend msg value) ∧ env.clock = false →
-        Offers env (Proc.recv msg var process) Label.silent
-          (Proc.recv msg var process) {Offer.recv msg}
-          (procFutureOffers (Proc.recv msg var process) \ {(msg, .recv)})
-    | cycle (env : Environment) :
-        env.WellFormed ∧ env.clock = true →
-        Offers env Proc.cycle Label.tock Proc.skip ∅ ∅
-    | cycle_wait (env : Environment) :
-        env.WellFormed ∧ env.clock = false →
-        Offers env Proc.cycle Label.silent Proc.cycle ∅ ∅
-    | skip (env : Environment) :
-        env.WellFormed ∧ env.clock = false →
-        Offers env Proc.skip Label.silent Proc.skip ∅ ∅
-    | progress (env : Environment) (pid : ProcId) :
-        env.WellFormed →
-        Offers env (Proc.endp pid) (Label.progress pid) Proc.skip ∅ ∅
-    | letp (env : Environment) (var : String) (expr : Expr) (process : Proc)
-        (value : Bool) :
-        env.WellFormed ∧ Semantics.ExprEval expr value →
-        Offers env (Proc.letp var expr process) Label.silent
-          (Semantics.procExprReplace process var value) ∅
-          (procFutureOffers (Semantics.procExprReplace process var value))
-    | if_true (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-        env.WellFormed ∧ Semantics.ExprEval expr true →
-        Offers env (Proc.ifunfair expr ifTrue ifFalse) Label.silent ifTrue ∅
-          (procFutureOffers ifTrue)
-    | if_false (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-        env.WellFormed ∧ Semantics.ExprEval expr false →
-        Offers env (Proc.ifunfair expr ifTrue ifFalse) Label.silent ifFalse ∅
-          (procFutureOffers ifFalse)
-    | fair_true (env : Environment) (bid : BranchId) (expr : Expr)
-        (ifTrue ifFalse : Proc) :
-        env.WellFormed ∧ Semantics.ExprEval expr true →
-        Offers env (Proc.iffair bid expr ifTrue ifFalse) (Label.fair bid true)
-          ifTrue ∅ (procFutureOffers ifTrue)
-    | fair_false (env : Environment) (bid : BranchId) (expr : Expr)
-        (ifTrue ifFalse : Proc) :
-        env.WellFormed ∧ Semantics.ExprEval expr false →
-        Offers env (Proc.iffair bid expr ifTrue ifFalse) (Label.fair bid false)
-          ifFalse ∅ (procFutureOffers ifFalse)
-    | recur (env : Environment) (var : String) (body : Proc) :
-        env.WellFormed →
-        Offers env (Proc.recur var body) Label.silent
-          (Semantics.procReplace body var (Proc.recur var body)) ∅
-          (procFutureOffers (Semantics.procReplace body var (Proc.recur var body)))
-    | seq (env : Environment) (left left' right : Proc) (label : Label)
-        (current : Finset Offer) (childFuture : Finset BareMessage) :
-        Offers env left label left' current childFuture →
-        left' ≠ Proc.skip →
-        Offers env (Proc.seq left right) label (Proc.seq left' right) current
-          (procFutureOffers (Proc.seq left' right) \ current.image Offer.bare)
-    | seq_fuse (env : Environment) (left right : Proc) (label : Label)
-        (current : Finset Offer) (childFuture : Finset BareMessage) :
-        Offers env left label Proc.skip current childFuture →
-        Offers env (Proc.seq left right) label right current
-          (procFutureOffers right \ current.image Offer.bare)
-    | xoffer_send (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) (msg : MessageId) (expr : Expr)
-        (process : Proc) (value : Bool) :
-        env.WellFormed ∧ ChoiceBranch.send msg expr process ∈ branches ∧
-          env.hasRecv msg ∧ Semantics.ExprEval expr value ∧
-          Resolved env branches →
-        Offers env (Proc.xoffer elseProcess branches)
-          (Label.message msg .send value) process {Offer.send msg value}
-          (procFutureOffers process)
-    | xoffer_recv (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) (msg : MessageId) (var : String)
-        (process : Proc) (value : Bool) :
-        env.WellFormed ∧ ChoiceBranch.recv msg var process ∈ branches ∧
-          env.hasSend msg value ∧ Resolved env branches →
-        Offers env (Proc.xoffer elseProcess branches)
-          (Label.message msg .recv value)
-          (Semantics.procExprReplace process var value) {Offer.recv msg}
-          (procFutureOffers (Semantics.procExprReplace process var value))
-    | xoffer_else (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) :
-        env.WellFormed ∧ NoImmediateBranch env branches ∧ Resolved env branches →
-        Offers env (Proc.xoffer elseProcess branches) Label.silent elseProcess ∅
-          (procFutureOffers elseProcess)
-    | xoffer_wait (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) :
-        env.WellFormed ∧ ¬ Resolved env branches ∧ env.clock = false →
-        Offers env (Proc.xoffer elseProcess branches) Label.silent
-          (Proc.xoffer elseProcess branches) (waitingOfferSet env branches)
-          (procFutureOffers (Proc.xoffer elseProcess branches) \
-            (waitingOfferSet env branches).image Offer.bare)
-    | offer_some (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) (enabled : ChoiceBranch) :
-        env.WellFormed ∧ enabled ∈ branches ∧ BranchEnabled env enabled →
-        Offers env (Proc.offer elseProcess branches) Label.silent
-          (parallelBranches branches) ∅
-          (procFutureOffers (parallelBranches branches))
-    | offer_else (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) :
-        env.WellFormed ∧ NoImmediateBranch env branches ∧ Resolved env branches →
-        Offers env (Proc.offer elseProcess branches) Label.silent elseProcess
-          (branches.map branchOffer).toFinset (procFutureOffers elseProcess)
-    | offer_wait (env : Environment) (elseProcess : Proc)
-        (branches : List ChoiceBranch) :
-        env.WellFormed ∧ NoImmediateBranch env branches ∧
-          ¬ Resolved env branches ∧ env.clock = false →
-        Offers env (Proc.offer elseProcess branches) Label.silent
-          (Proc.offer elseProcess branches) (waitingOfferSet env branches)
-          (procFutureOffers (Proc.offer elseProcess branches) \
-            (waitingOfferSet env branches).image Offer.bare)
-    | par (outer leftEnv rightEnv : Environment) (interface : Interface)
-        (left left' right right' : Proc) (leftLabel rightLabel : Label)
-        (leftCurrent : Finset Offer) (leftFuture : Finset BareMessage)
-        (rightCurrent : Finset Offer) (rightFuture : Finset BareMessage) :
-        Offers leftEnv left leftLabel left' leftCurrent leftFuture →
-        Offers rightEnv right rightLabel right' rightCurrent rightFuture →
-        ¬ (left' = Proc.skip ∧ right' = Proc.skip) →
-        LocalEnvironment outer interface rightEnv right rightLabel leftEnv →
-        LocalEnvironment outer interface leftEnv left leftLabel rightEnv →
-        outer.WellFormed ∧ Label.Sync interface leftLabel rightLabel →
-        Offers outer (Proc.par left right interface)
-          (Label.combine interface leftLabel rightLabel)
-          (Proc.par left' right' interface)
-          (hideOfferSet interface (leftCurrent ∪ rightCurrent))
-          (hideProcOffers interface (leftFuture ∪ rightFuture))
-    | par_fuse (outer leftEnv rightEnv : Environment) (interface : Interface)
-        (left right : Proc) (leftLabel rightLabel : Label)
-        (leftCurrent : Finset Offer) (leftFuture : Finset BareMessage)
-        (rightCurrent : Finset Offer) (rightFuture : Finset BareMessage) :
-        Offers leftEnv left leftLabel Proc.skip leftCurrent leftFuture →
-        Offers rightEnv right rightLabel Proc.skip rightCurrent rightFuture →
-        LocalEnvironment outer interface rightEnv right rightLabel leftEnv →
-        LocalEnvironment outer interface leftEnv left leftLabel rightEnv →
-        outer.WellFormed ∧ Label.Sync interface leftLabel rightLabel →
-        Offers outer (Proc.par left right interface)
-          (Label.combine interface leftLabel rightLabel) Proc.skip
-          (hideOfferSet interface (leftCurrent ∪ rightCurrent))
-          (hideProcOffers interface (leftFuture ∪ rightFuture))
 
-  /-- `LocalEnv(E,I,siblingEnv,sibling,α)` from Appendix A.2.1: the local
-  environment a component receives, built from the outer environment plus the
-  sibling's own offers under its own (mutually determined) environment. -/
-  inductive LocalEnvironment :
-      Environment → Interface → Environment → Proc → Label → Environment → Prop where
-    | clock (outer : Environment) (interface : Interface) (siblingEnv : Environment)
-        (sibling : Proc) (label : Label) :
-        outer.clock = true →
-        LocalEnvironment outer interface Environment.tock sibling label
-          Environment.tock
-    | ordinary (outer siblingEnv localEnv : Environment) (interface : Interface)
-        (sibling siblingTarget : Proc) (label : Label)
-        (current : Finset Offer) (future : Finset BareMessage) :
-        outer.clock = false →
-        siblingEnv.clock = false →
-        Offers siblingEnv sibling label siblingTarget current future →
-        localEnv.clock = false →
-        localEnv.immediate = outer.immediate ∪ restrictCurrent interface current →
-        localEnv.future =
-          (outer.future ∪ restrictFuture interface future) \ localEnv.bareImmediate →
-        LocalEnvironment outer interface siblingEnv sibling label localEnv
-end
+inductive LocalOfferEnvironment :
+    Environment → Interface → Proc → Environment →
+      Finset Offer → Finset BareMessage → Environment → Prop where
+  | clock (outer : Environment) (interface : Interface)
+      (localProc : Proc) (current : Finset Offer) (future : Finset BareMessage) :
+      outer.clock = true →
+      LocalOfferEnvironment outer interface localProc Environment.tock
+        current future Environment.tock
+  | ordinary (outer siblingEnv localEnv : Environment)
+      (interface : Interface) (localProc : Proc)
+      (current : Finset Offer) (future : Finset BareMessage) :
+      outer.clock = false →
+      siblingEnv.clock = false →
+      localEnv.clock = false →
+      localEnv.immediate =
+        outer.immediate ∪ restrictCurrent interface current →
+      localEnv.future =
+        (outer.future ∪ restrictFuture interface future) \
+          localEnv.bareImmediate →
+      LocalOfferEnvironment outer interface localProc siblingEnv current
+        future localEnv
 
-/-! ## Process transition system -/
-
-/-- The updated local small-step judgment `E ⊢ P -α→ P'`. -/
 @[aesop unsafe]
-inductive ProcessTransition : Environment → Proc → Label → Proc → Prop where
-  | send (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
-      env.WellFormed ∧
-      env.hasRecv msg ∧
-      Semantics.ExprEval expr value →
-      --
-      ProcessTransition env (Proc.send msg expr process) (Label.message msg .send value) process
-  | send_wait (env : Environment) (msg : MessageId) (expr : Expr) (process : Proc) :
-      env.WellFormed ∧
-      ¬ env.hasRecv msg ∧
-      env.clock = false →
-      --
-      ProcessTransition env (Proc.send msg expr process)
-      Label.silent
-      (Proc.send msg expr process)
-  | recv (env : Environment) (msg : MessageId) (var : String) (process : Proc)
-      (value : Bool) :
-      env.WellFormed ∧
-      env.hasSend msg value →
-      --
-      ProcessTransition env (Proc.recv msg var process)
-      (Label.message msg .recv value)
-      (Semantics.procExprReplace process var value)
-  | recv_wait (env : Environment) (msg : MessageId) (var : String) (process : Proc) :
-      env.WellFormed ∧
-      (∀ value, ¬ env.hasSend msg value) ∧
-      env.clock = false →
-      --
-      ProcessTransition env (Proc.recv msg var process)
-      Label.silent
-      (Proc.recv msg var process)
-  | cycle (env : Environment) :
-      env.WellFormed ∧ env.clock = true →
-      --
-      ProcessTransition env Proc.cycle
-      Label.tock
-      Proc.skip
-  | cycle_wait (env : Environment) :
-      env.WellFormed ∧ env.clock = false →
-      --
-      ProcessTransition env Proc.cycle
-      Label.silent
-      Proc.cycle
-  | skip (env : Environment) :
-      env.WellFormed ∧
-      env.clock = false →
-      --
-      ProcessTransition env Proc.skip
-      Label.silent
-      Proc.skip
-  | seq (env : Environment) (left left' right : Proc) (label : Label) :
-      ProcessTransition env left
-      label
-      left' →
-      left' ≠ Proc.skip →
-      --
-      ProcessTransition env (Proc.seq left right)
-      label
-      (Proc.seq left' right)
-  | seq_fuse (env : Environment) (left right : Proc) (label : Label) :
-      ProcessTransition env left label Proc.skip →
-      --
-      ProcessTransition env (Proc.seq left right)
-      label
-      right
-  | letp (env : Environment) (var : String) (expr : Expr) (process : Proc) (value : Bool) :
-      env.WellFormed ∧
-      Semantics.ExprEval expr value →
-      --
-      ProcessTransition env (Proc.letp var expr process)
-      Label.silent
-      (Semantics.procExprReplace process var value)
-  | if_true (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed ∧
-      Semantics.ExprEval expr true →
-      --
-      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse)
-      Label.silent
-      ifTrue
-  | if_false (env : Environment) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed ∧
-      Semantics.ExprEval expr false →
-      --
-      ProcessTransition env (Proc.ifunfair expr ifTrue ifFalse)
-      Label.silent
-      ifFalse
-  | fair_true (env : Environment) (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed ∧
-      Semantics.ExprEval expr true →
-      --
-      ProcessTransition env (Proc.iffair bid expr ifTrue ifFalse)
-      (Label.fair bid true)
-      ifTrue
-  | fair_false (env : Environment) (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
-      env.WellFormed ∧
-      Semantics.ExprEval expr false →
-      --
-      ProcessTransition env (Proc.iffair bid expr ifTrue ifFalse)
-      (Label.fair bid false)
-      ifFalse
-  | progress (env : Environment) (pid : ProcId) :
-      env.WellFormed →
-      --
-      ProcessTransition env (Proc.endp pid)
-      (Label.progress pid)
-      Proc.skip
-  | recur (env : Environment) (var : String) (body : Proc) :
-      env.WellFormed →
-      --
-      ProcessTransition env (Proc.recur var body)
-      Label.silent
-      (Semantics.procReplace body var (Proc.recur var body))
-  | xoffer_send (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
-      env.WellFormed ∧
-      ChoiceBranch.send msg expr process ∈ branches ∧
-      env.hasRecv msg ∧
-      Semantics.ExprEval expr value ∧
-      Resolved env branches →
-      --
-      ProcessTransition env (Proc.xoffer elseProcess branches)
-      (Label.message msg .send value)
-      process
-  | xoffer_recv (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId) (var : String) (process : Proc) (value : Bool) :
-      env.WellFormed ∧
-      ChoiceBranch.recv msg var process ∈ branches ∧
-      env.hasSend msg value ∧
-      Resolved env branches →
-      --
-      ProcessTransition env (Proc.xoffer elseProcess branches)
-      (Label.message msg .recv value)
-      (Semantics.procExprReplace process var value)
-  | xoffer_else (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
-      env.WellFormed ∧
-      NoImmediateBranch env branches ∧
-      Resolved env branches →
-      --
-      ProcessTransition env (Proc.xoffer elseProcess branches)
-      Label.silent
-      elseProcess
-  | xoffer_wait (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
-      env.WellFormed ∧
-      ¬ Resolved env branches ∧
-      env.clock = false →
-      --
-      ProcessTransition env (Proc.xoffer elseProcess branches)
-      Label.silent
-      (Proc.xoffer elseProcess branches)
-    -- To Do double check the offer case
-  | offer_some (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) (enabled : ChoiceBranch) :
-      env.WellFormed ∧
-      enabled ∈ branches ∧
-      BranchEnabled env enabled →
-      --
-      ProcessTransition env (Proc.offer elseProcess branches)
-      Label.silent
-      (parallelBranches branches)
-  | offer_else (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
-      env.WellFormed ∧
-      NoImmediateBranch env branches ∧
-      Resolved env branches →
-      --
-      ProcessTransition env (Proc.offer elseProcess branches)
-      Label.silent
-      elseProcess
-  | offer_wait (env : Environment) (elseProcess : Proc) (branches : List ChoiceBranch) :
-      env.WellFormed ∧
-      NoImmediateBranch env branches ∧
-      ¬ Resolved env branches ∧
-      env.clock = false →
-      --
-      ProcessTransition env (Proc.offer elseProcess branches)
-      Label.silent
-      (Proc.offer elseProcess branches)
-  | par (outer leftEnv rightEnv : Environment) (interface : MsgIdSet) (left left' right right' : Proc) (leftLabel rightLabel : Label) :
-      ProcessTransition leftEnv left leftLabel left' →
-      ProcessTransition rightEnv right rightLabel right' →
-      ¬ (left' = Proc.skip ∧ right' = Proc.skip) →
-      (outer.WellFormed ∧
-        LocalEnvironment outer interface rightEnv right rightLabel leftEnv ∧
-        LocalEnvironment outer interface leftEnv left leftLabel rightEnv ∧
-        Label.Sync interface leftLabel rightLabel) →
-      --
-      ProcessTransition outer (Proc.par left right interface)
-      (Label.combine interface leftLabel rightLabel)
-      (Proc.par left' right' interface)
-  | par_fuse (outer leftEnv rightEnv : Environment) (interface : MsgIdSet) (left right : Proc) (leftLabel rightLabel : Label) :
-      ProcessTransition leftEnv left leftLabel Proc.skip →
-      ProcessTransition rightEnv right rightLabel Proc.skip →
-      (outer.WellFormed ∧
-        LocalEnvironment outer interface rightEnv right rightLabel leftEnv ∧
-        LocalEnvironment outer interface leftEnv left leftLabel rightEnv ∧
-        Label.Sync interface leftLabel rightLabel) →
-      --
-      ProcessTransition outer (Proc.par left right interface)
-      (Label.combine interface leftLabel rightLabel)
-      Proc.skip
+inductive Offers :
+    Environment → Proc → Label → Proc →
+      Finset Offer → Finset BareMessage → Prop where
+  | send (env : Environment) (alphabet : PactTypeAlphabet) (msg : MessageId)
+      (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧ env.hasRecv msg ∧
+        Semantics.ExprEval expr value →
+      (msg, MessageDir.send) ∈ alphabet.actions →
+      Offers env (Proc.send alphabet msg expr process)
+        (Label.message msg .send value) process {Offer.send msg value}
+        (procFutureOffers process \ {(msg, MessageDir.send)})
+  | send_wait (env : Environment) (alphabet : PactTypeAlphabet)
+      (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧ ¬ env.hasRecv msg ∧ env.clock = false ∧
+        Semantics.ExprEval expr value →
+      (msg, MessageDir.send) ∈ alphabet.actions →
+      Offers env (Proc.send alphabet msg expr process) Label.silent
+        (Proc.send alphabet msg expr process) {Offer.send msg value}
+        (procFutureOffers (Proc.send alphabet msg expr process) \
+          {(msg, MessageDir.send)})
+  | recv (env : Environment) (alphabet : PactTypeAlphabet) (msg : MessageId)
+      (varName : String) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧ env.hasSend msg value →
+      (msg, MessageDir.recv) ∈ alphabet.actions →
+      Offers env (Proc.recv alphabet msg varName process)
+        (Label.message msg .recv value)
+        (Semantics.procExprReplace process varName value) {Offer.recv msg}
+        (procFutureOffers (Semantics.procExprReplace process varName value) \
+          {(msg, MessageDir.recv)})
+  | recv_wait (env : Environment) (alphabet : PactTypeAlphabet)
+      (msg : MessageId) (varName : String) (process : Proc) :
+      env.WellFormed alphabet ∧ (∀ value, ¬ env.hasSend msg value) ∧
+        env.clock = false →
+      (msg, MessageDir.recv) ∈ alphabet.actions →
+      Offers env (Proc.recv alphabet msg varName process) Label.silent
+        (Proc.recv alphabet msg varName process) {Offer.recv msg}
+        (procFutureOffers (Proc.recv alphabet msg varName process) \
+          {(msg, MessageDir.recv)})
+  | cycle (env : Environment) (alphabet : PactTypeAlphabet) :
+      env.WellFormed alphabet ∧ env.clock = true →
+      Offers env (Proc.cycle alphabet) Label.tock (Proc.skip alphabet) ∅ ∅
+  | cycle_wait (env : Environment) (alphabet : PactTypeAlphabet) :
+      env.WellFormed alphabet ∧ env.clock = false →
+      Offers env (Proc.cycle alphabet) Label.silent (Proc.cycle alphabet) ∅
+        (procFutureOffers (Proc.cycle alphabet))
+  | skip (env : Environment) (alphabet : PactTypeAlphabet) :
+      env.WellFormed alphabet ∧ env.clock = false →
+      Offers env (Proc.skip alphabet) Label.silent (Proc.skip alphabet) ∅
+        (procFutureOffers (Proc.skip alphabet))
+  | progress (env : Environment) (alphabet : PactTypeAlphabet) (pid : ProcId) :
+      env.WellFormed alphabet ∧ env.clock = false →
+      Offers env (Proc.endp alphabet pid) (Label.progress pid)
+        (Proc.skip alphabet) ∅ (procFutureOffers (Proc.skip alphabet))
+  | letp (env : Environment) (alphabet : PactTypeAlphabet) (varName : String)
+      (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        Semantics.ExprEval expr value →
+      Offers env (Proc.letp alphabet varName expr process) Label.silent
+        (Semantics.procExprReplace process varName value) ∅
+        (procFutureOffers (Semantics.procExprReplace process varName value))
+  | if_true (env : Environment) (alphabet : PactTypeAlphabet) (expr : Expr)
+      (ifTrue ifFalse : Proc) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        Semantics.ExprEval expr true →
+      Offers env (Proc.ifunfair alphabet expr ifTrue ifFalse) Label.silent
+        ifTrue ∅ (procFutureOffers ifTrue)
+  | if_false (env : Environment) (alphabet : PactTypeAlphabet) (expr : Expr)
+      (ifTrue ifFalse : Proc) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        Semantics.ExprEval expr false →
+      Offers env (Proc.ifunfair alphabet expr ifTrue ifFalse) Label.silent
+        ifFalse ∅ (procFutureOffers ifFalse)
+  | fair_true (env : Environment) (alphabet : PactTypeAlphabet)
+      (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        Semantics.ExprEval expr true →
+      Offers env (Proc.iffair alphabet bid expr ifTrue ifFalse)
+        (Label.fair bid true) ifTrue ∅ (procFutureOffers ifTrue)
+  | fair_false (env : Environment) (alphabet : PactTypeAlphabet)
+      (bid : BranchId) (expr : Expr) (ifTrue ifFalse : Proc) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        Semantics.ExprEval expr false →
+      Offers env (Proc.iffair alphabet bid expr ifTrue ifFalse)
+        (Label.fair bid false) ifFalse ∅ (procFutureOffers ifFalse)
+  | recur (env : Environment) (alphabet : PactTypeAlphabet) (varName : String)
+      (body : Proc) :
+      env.WellFormed alphabet ∧ env.clock = false →
+      Offers env (Proc.recur alphabet varName body) Label.silent
+        (Semantics.procReplace body varName (Proc.recur alphabet varName body)) ∅
+        (procFutureOffers
+          (Semantics.procReplace body varName (Proc.recur alphabet varName body)))
+  | seq (env : Environment) (alphabet : PactTypeAlphabet)
+      (left left' right : Proc) (label : Label)
+      (current : Finset Offer) (childFuture : Finset BareMessage) :
+      Offers env left label left' current childFuture →
+      left' ≠ Proc.skip left'.alphabet →
+      label ≠ Label.tock →
+      Offers env (Proc.seq alphabet left right) label
+        (Proc.seq alphabet left' right) current
+        (procFutureOffers (Proc.seq alphabet left' right) \
+          current.image Offer.bare)
+  | seq_tock (env : Environment) (alphabet : PactTypeAlphabet)
+      (left left' right : Proc)
+      (current : Finset Offer) (childFuture : Finset BareMessage) :
+      Offers env left Label.tock left' current childFuture →
+      left' ≠ Proc.skip left'.alphabet →
+      Offers env (Proc.seq alphabet left right) Label.tock
+        (Proc.seq alphabet left' right) ∅ ∅
+  | seq_fuse (env : Environment) (alphabet skipAlphabet : PactTypeAlphabet)
+      (left right : Proc) (label : Label)
+      (current : Finset Offer) (childFuture : Finset BareMessage) :
+      Offers env left label (Proc.skip skipAlphabet) current childFuture →
+      label ≠ Label.tock →
+      Offers env (Proc.seq alphabet left right) label right current
+        (procFutureOffers right \ current.image Offer.bare)
+  | seq_fuse_tock (env : Environment)
+      (alphabet skipAlphabet : PactTypeAlphabet) (left right : Proc)
+      (current : Finset Offer) (childFuture : Finset BareMessage) :
+      Offers env left Label.tock (Proc.skip skipAlphabet) current childFuture →
+      Offers env (Proc.seq alphabet left right) Label.tock right ∅ ∅
+  | xoffer_send (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId)
+      (expr : Expr) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧ ChoiceBranch.send msg expr process ∈ branches ∧
+        env.hasRecv msg ∧ Semantics.ExprEval expr value ∧
+        Resolved env branches →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.xoffer alphabet elseProcess branches)
+        (Label.message msg .send value) process {Offer.send msg value}
+        (procFutureOffers process \ {(msg, MessageDir.send)})
+  | xoffer_recv (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) (msg : MessageId)
+      (varName : String) (process : Proc) (value : Bool) :
+      env.WellFormed alphabet ∧
+        ChoiceBranch.recv msg varName process ∈ branches ∧
+        env.hasSend msg value ∧ Resolved env branches →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.xoffer alphabet elseProcess branches)
+        (Label.message msg .recv value)
+        (Semantics.procExprReplace process varName value) {Offer.recv msg}
+        (procFutureOffers (Semantics.procExprReplace process varName value) \
+          {(msg, MessageDir.recv)})
+  | xoffer_else (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        NoImmediateBranch env branches ∧ Resolved env branches →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
+        elseProcess ∅ (procFutureOffers elseProcess)
+  | xoffer_wait (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed alphabet ∧ ¬ Resolved env branches ∧ env.clock = false →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
+        (Proc.xoffer alphabet elseProcess branches)
+        (waitingOfferSet env branches)
+        (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
+          waitingOffers env branches)
+  | offer_some (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch)
+      (enabled : ChoiceBranch) :
+      env.WellFormed alphabet ∧ enabled ∈ branches ∧ BranchEnabled env enabled →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.offer alphabet elseProcess branches) Label.silent
+        (parallelProcessBranchesSelecting alphabet enabled branches) ∅
+        (procFutureOffers
+          (parallelProcessBranchesSelecting alphabet enabled branches))
+  | offer_else (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        NoImmediateBranch env branches ∧ Resolved env branches →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.offer alphabet elseProcess branches) Label.silent
+        elseProcess (branchOfferSet branches)
+        (procFutureOffers elseProcess \ branchActions branches)
+  | offer_wait (env : Environment) (alphabet : PactTypeAlphabet)
+      (elseProcess : Proc) (branches : List ChoiceBranch) :
+      env.WellFormed alphabet ∧ env.clock = false ∧
+        NoImmediateBranch env branches ∧ ¬ Resolved env branches →
+      BranchesDeclared alphabet branches →
+      Offers env (Proc.offer alphabet elseProcess branches) Label.silent
+        (Proc.offer alphabet elseProcess branches) (branchOfferSet branches)
+        (procFutureOffers (Proc.offer alphabet elseProcess branches) \
+          branchActions branches)
+  | par (outer leftEnv rightEnv : Environment) (interface : Interface)
+      (alphabet : PactTypeAlphabet)
+      (left left' right right' : Proc) (leftLabel rightLabel : Label)
+      (leftCurrent rightCurrent : Finset Offer)
+      (leftFuture rightFuture : Finset BareMessage) :
+      left ≠ Proc.skip left.alphabet →
+      right ≠ Proc.skip right.alphabet →
+      Offers leftEnv left leftLabel left' leftCurrent leftFuture →
+      Offers rightEnv right rightLabel right' rightCurrent rightFuture →
+      ¬ (left' = Proc.skip left'.alphabet ∧ right' = Proc.skip right'.alphabet) →
+      LocalOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
+      outer.WellFormed alphabet ∧ Label.Sync interface leftLabel rightLabel →
+      Offers outer (Proc.par alphabet left right interface)
+        (Label.combine interface leftLabel rightLabel)
+        (Proc.par alphabet left' right' interface)
+        (hideOfferSet interface (leftCurrent ∪ rightCurrent))
+        (if Label.combine interface leftLabel rightLabel = Label.tock
+          then ∅
+          else procFutureOffers (Proc.par alphabet left' right' interface) \
+            (hideOfferSet interface (leftCurrent ∪ rightCurrent)).image
+              Offer.bare)
+  | par_fuse (outer leftEnv rightEnv : Environment) (interface : Interface)
+      (alphabet : PactTypeAlphabet) (left right : Proc)
+      (leftLabel rightLabel : Label)
+      (leftCurrent rightCurrent : Finset Offer)
+      (leftFuture rightFuture : Finset BareMessage) :
+      Offers leftEnv left leftLabel (Proc.skip left.alphabet)
+        leftCurrent leftFuture →
+      Offers rightEnv right rightLabel (Proc.skip right.alphabet)
+        rightCurrent rightFuture →
+      LocalOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
+      outer.WellFormed alphabet ∧ Label.Sync interface leftLabel rightLabel →
+      Label.combine interface leftLabel rightLabel ≠ Label.tock →
+      Offers outer (Proc.par alphabet left right interface)
+        (Label.combine interface leftLabel rightLabel) (Proc.skip alphabet)
+        (hideOfferSet interface (leftCurrent ∪ rightCurrent))
+        (hideProcOffers interface (leftFuture ∪ rightFuture))
+  | par_fuse_tock (outer leftEnv rightEnv : Environment)
+      (interface : Interface) (alphabet : PactTypeAlphabet)
+      (left right : Proc) (leftLabel rightLabel : Label)
+      (leftCurrent rightCurrent : Finset Offer)
+      (leftFuture rightFuture : Finset BareMessage) :
+      Offers leftEnv left leftLabel (Proc.skip left.alphabet)
+        leftCurrent leftFuture →
+      Offers rightEnv right rightLabel (Proc.skip right.alphabet)
+        rightCurrent rightFuture →
+      LocalOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
+      outer.WellFormed alphabet ∧ Label.Sync interface leftLabel rightLabel →
+      Label.combine interface leftLabel rightLabel = Label.tock →
+      Offers outer (Proc.par alphabet left right interface)
+        (Label.combine interface leftLabel rightLabel) (Proc.skip alphabet) ∅ ∅
+  -- P-Par-Left: the left side is already `skip`, so only the right survives.
+  -- The finished side still takes its silent `skip` step, both local
+  -- environments are checked against the sibling's offers, and the labels
+  -- synchronize.  `skip` cannot step under a clock environment, so survivor
+  -- entry is non-clock and there is no separate tock clause.
+  | left_complete (outer leftEnv rightEnv : Environment)
+      (interface : Interface) (alphabet : PactTypeAlphabet)
+      (left right right' : Proc) (rightLabel : Label)
+      (leftCurrent rightCurrent : Finset Offer)
+      (leftFuture rightFuture : Finset BareMessage) :
+      left = Proc.skip left.alphabet →
+      right ≠ Proc.skip right.alphabet →
+      Offers leftEnv left Label.silent left leftCurrent leftFuture →
+      Offers rightEnv right rightLabel right' rightCurrent rightFuture →
+      right' ≠ Proc.skip right'.alphabet →
+      LocalOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
+      outer.WellFormed alphabet →
+      Label.Sync interface Label.silent rightLabel →
+      Offers outer (Proc.par alphabet left right interface)
+        rightLabel
+        (Proc.reannotate alphabet right')
+        (hideOfferSet interface rightCurrent)
+        (procFutureOffers (Proc.reannotate alphabet right') \
+          (hideOfferSet interface rightCurrent).image Offer.bare)
+  -- P-Par-Right: mirror of `left_complete`.
+  | right_complete (outer leftEnv rightEnv : Environment)
+      (interface : Interface) (alphabet : PactTypeAlphabet)
+      (left left' right : Proc) (leftLabel : Label)
+      (leftCurrent rightCurrent : Finset Offer)
+      (leftFuture rightFuture : Finset BareMessage) :
+      right = Proc.skip right.alphabet →
+      left ≠ Proc.skip left.alphabet →
+      Offers rightEnv right Label.silent right rightCurrent rightFuture →
+      Offers leftEnv left leftLabel left' leftCurrent leftFuture →
+      left' ≠ Proc.skip left'.alphabet →
+      LocalOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
+      outer.WellFormed alphabet →
+      Label.Sync interface leftLabel Label.silent →
+      Offers outer (Proc.par alphabet left right interface)
+        leftLabel
+        (Proc.reannotate alphabet left')
+        (hideOfferSet interface leftCurrent)
+        (procFutureOffers (Proc.reannotate alphabet left') \
+          (hideOfferSet interface leftCurrent).image Offer.bare)
+
+/-! ## Process transition system
+
+`E ⊢ P →^α P'`: the offer judgement with its two offer sets forgotten. -/
+
+def ProcessTransition (env : Environment) (source : Proc) (label : Label)
+    (target : Proc) : Prop :=
+  ∃ current future, Offers env source label target current future
+
+/-- `Ready(E,P)`: some transition is available under `E`. -/
+def ProcessReady (env : Environment) (process : Proc) : Prop :=
+  ∃ label target, ProcessTransition env process label target
+
 end
 
 end Pact

@@ -296,10 +296,6 @@ def DecoratedTypeTransition
 def TypeReady (env : TypeEnvironment) (processType : PactType) : Prop :=
   ∃ label target, TypeTransition env processType label target
 
-/-- `Ready(E,P)` at the process level. -/
-def ProcessReady (env : Environment) (process : Proc) : Prop :=
-  ∃ label target, ProcessTransition env process label target
-
 /-- An erased alternating simulation witnessing `P ⊧ τ`: it matches every
 process resolution with a single erased type step, and reflects availability
 from the type back to the process. -/

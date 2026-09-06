@@ -13,6 +13,16 @@ namespace Pact
 
 noncomputable section
 
+/-- `WFProc(P) iff DataWF(P) and TypeWF(abs(P))`.  The process alphabet checks
+and regularity conditions are exactly those of its abstraction, so the process
+side reuses `TypeWellFormedIn` rather than restating them. -/
+def WFProc (process : Proc) : Prop :=
+  DataWFProc process ∧ TypeWellFormedIn [] (inferProcess process)
+
+end
+
+noncomputable section
+
 open Classical
 
 /-! ## Type inference, refinement, and checking -/

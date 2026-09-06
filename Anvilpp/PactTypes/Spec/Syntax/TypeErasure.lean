@@ -8,122 +8,60 @@ namespace Pact
 
 noncomputable section
 
-mutual
-  /-- The syntactic type alphabet used by the process abstraction. -/
-  def processAlphabet (process : Proc) : PactTypeAlphabet :=
-    match process with
-    | Proc.send msg _ process =>
-        PactTypeAlphabet.union
-          (PactTypeAlphabet.ofAction (msg, .send))
-          (processAlphabet process)
-    | Proc.recv msg _ process =>
-        PactTypeAlphabet.union
-          (PactTypeAlphabet.ofAction (msg, .recv))
-          (processAlphabet process)
-    | Proc.var _ | Proc.skip | Proc.cycle => PactTypeAlphabet.empty
-    | Proc.endp _ => PactTypeAlphabet.empty
-    | Proc.par left right interface =>
-        PactTypeAlphabet.mergeHidden (processAlphabet left)
-          (processAlphabet right) interface
-    | Proc.seq left right | Proc.ifunfair _ left right =>
-        PactTypeAlphabet.union (processAlphabet left) (processAlphabet right)
-    | Proc.letp _ _ process => processAlphabet process
-    | Proc.iffair _ _ left right =>
-        PactTypeAlphabet.union (processAlphabet left) (processAlphabet right)
-    | Proc.xoffer elseProcess branches | Proc.offer elseProcess branches =>
-        PactTypeAlphabet.union (processAlphabet elseProcess)
-          (branchesAlphabet branches)
-    | Proc.recur _ body => processAlphabet body
-  termination_by sizeOf process
+/-! ## Data-oblivious abstraction `abs(P)`
 
-  def branchAlphabet (branch : ChoiceBranch) : PactTypeAlphabet :=
-    match branch with
-    | .send msg _ process =>
-        PactTypeAlphabet.union
-          (PactTypeAlphabet.ofAction (msg, .send))
-          (processAlphabet process)
-    | .recv msg _ process =>
-        PactTypeAlphabet.union
-          (PactTypeAlphabet.ofAction (msg, .recv))
-          (processAlphabet process)
-  termination_by sizeOf branch
-
-  def branchesAlphabet (branches : List ChoiceBranch) : PactTypeAlphabet :=
-    match branches with
-    | [] => PactTypeAlphabet.empty
-    | branch :: rest =>
-        PactTypeAlphabet.union (branchAlphabet branch) (branchesAlphabet rest)
-  termination_by sizeOf branches
-decreasing_by
-  all_goals
-    simp_wf
-    omega
-end
+`abs((Ω,R)) = (Ω, abs_Ω(R))`: the written alphabet is read, never inferred.
+A prefix and a local binding each become a sequence whose left operand is an
+atomic type carrying the source alphabet. -/
 
 mutual
-  /-- Structural, data-oblivious abstraction `abs(P)`, annotated with a fixed
-  syntactic alphabet. -/
-  def inferProcessWithAlphabet
-      (alphabet : PactTypeAlphabet) (process : Proc) : PactType :=
-    match process with
-    | Proc.send msg _ process =>
-        .seq alphabet (.message alphabet msg .send)
-          (inferProcessWithAlphabet alphabet process)
-    | Proc.recv msg _ process =>
-        .seq alphabet (.message alphabet msg .recv)
-          (inferProcessWithAlphabet alphabet process)
-    | Proc.var name => .var alphabet name
-    | Proc.skip => .skip alphabet
-    | Proc.endp pid => .progress alphabet pid
-    | Proc.cycle => .tock alphabet
-    | Proc.par left right interface =>
-        .par alphabet
-          (inferProcessWithAlphabet (processAlphabet left) left)
-          (inferProcessWithAlphabet (processAlphabet right) right)
-          interface
-    | Proc.seq left right =>
-        .seq alphabet (inferProcessWithAlphabet alphabet left)
-          (inferProcessWithAlphabet alphabet right)
-    | Proc.letp _ _ process => inferProcessWithAlphabet alphabet process
-    | Proc.ifunfair _ left right =>
-        .choice alphabet (inferProcessWithAlphabet alphabet left)
-          (inferProcessWithAlphabet alphabet right)
-    | Proc.iffair bid _ left right =>
-        .fairChoice alphabet bid (inferProcessWithAlphabet alphabet left)
-          (inferProcessWithAlphabet alphabet right)
-    | Proc.xoffer elseProcess branches =>
-        .xoffer alphabet (inferProcessWithAlphabet alphabet elseProcess)
-          (branches.map (inferBranchWithAlphabet alphabet))
-    | Proc.offer elseProcess branches =>
-        .offer alphabet (inferProcessWithAlphabet alphabet elseProcess)
-          (branches.map (inferBranchWithAlphabet alphabet))
-    | Proc.recur name body =>
-        .recur alphabet name (inferProcessWithAlphabet alphabet body)
-  termination_by sizeOf process
+  def inferProcess : Proc → PactType
+    | Proc.send alphabet msg _ process =>
+        .seq alphabet (.message alphabet msg .send) (inferProcess process)
+    | Proc.recv alphabet msg _ process =>
+        .seq alphabet (.message alphabet msg .recv) (inferProcess process)
+    | Proc.var alphabet name => .var alphabet name
+    | Proc.skip alphabet => .skip alphabet
+    | Proc.endp alphabet pid => .progress alphabet pid
+    | Proc.cycle alphabet => .tock alphabet
+    | Proc.par alphabet left right interface =>
+        .par alphabet (inferProcess left) (inferProcess right) interface
+    | Proc.seq alphabet left right =>
+        .seq alphabet (inferProcess left) (inferProcess right)
+    | Proc.letp alphabet _ _ process =>
+        .seq alphabet (.skip alphabet) (inferProcess process)
+    | Proc.ifunfair alphabet _ left right =>
+        .choice alphabet (inferProcess left) (inferProcess right)
+    | Proc.iffair alphabet bid _ left right =>
+        .fairChoice alphabet bid (inferProcess left) (inferProcess right)
+    | Proc.xoffer alphabet elseProcess branches =>
+        .xoffer alphabet (inferProcess elseProcess) (inferBranches branches)
+    | Proc.offer alphabet elseProcess branches =>
+        .offer alphabet (inferProcess elseProcess) (inferBranches branches)
+    | Proc.recur alphabet name body =>
+        .recur alphabet name (inferProcess body)
+  termination_by process => sizeOf process
 
-  /-- Erase a branch head and recursively abstract its continuation. -/
-  def inferBranchWithAlphabet
-      (alphabet : PactTypeAlphabet) (branch : ChoiceBranch) :
-      BareMessage × PactType :=
-    match branch with
-    | .send msg _ process =>
-        ((msg, .send), inferProcessWithAlphabet alphabet process)
-    | .recv msg _ process =>
-        ((msg, .recv), inferProcessWithAlphabet alphabet process)
-  termination_by sizeOf branch
+  /-- `abs_B(B)`: erase each branch head and abstract its continuation. -/
+  def inferBranches : List ChoiceBranch → List (BareMessage × PactType)
+    | [] => []
+    | ChoiceBranch.send msg _ process :: rest =>
+        ((msg, MessageDir.send), inferProcess process) :: inferBranches rest
+    | ChoiceBranch.recv msg _ process :: rest =>
+        ((msg, MessageDir.recv), inferProcess process) :: inferBranches rest
+  termination_by branches => sizeOf branches
 decreasing_by
-  all_goals
-    simp_wf
-    omega
+  all_goals (simp_wf; omega)
 end
 
-/-- Structural, data-oblivious abstraction `abs(P)`. -/
-def inferProcess (process : Proc) : PactType :=
-  inferProcessWithAlphabet (processAlphabet process) process
-
-/-- Erase a branch head and recursively abstract its continuation. -/
+/-- `abs` of a single branch. -/
 def inferBranch (branch : ChoiceBranch) : BareMessage × PactType :=
-  inferBranchWithAlphabet (branchAlphabet branch) branch
+  (ChoiceBranch.action branch, inferProcess (ChoiceBranch.continuation branch))
+
+/-- `Ω(abs(P)) = Ω(P)`: abstraction copies the written alphabet. -/
+@[simp] theorem alphabet_inferProcess (process : Proc) :
+    (inferProcess process).alphabet = process.alphabet := by
+  cases process <;> simp [inferProcess, PactType.alphabet, Proc.alphabet]
 
 inductive TypeObservation : Type where
   | message : MessageId → MessageDir → TypeObservation

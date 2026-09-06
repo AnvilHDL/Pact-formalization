@@ -22,17 +22,6 @@ def TypeBranchEnabled (env : TypeEnvironment)
     (branch : BareMessage × PactType) : Prop :=
   typeNeed branch.1 ∈ env.immediate
 
-namespace PactTypeAlphabet
-
-  /-- Project a new parallel alphabet onto a child: the child keeps its own
-  interface actions and receives the whole new parent alphabet. -/
-  def projectParallel (parent child : PactTypeAlphabet)
-      (interface : Interface) : PactTypeAlphabet :=
-    { actions :=
-        (child.actions.filter fun action => action.1 ∈ interface) ∪
-          parent.actions }
-
-end PactTypeAlphabet
 
 namespace PactType
 
