@@ -2,6 +2,8 @@ import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.Recursion
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.FutureFieldShape
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MarkerMenus
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MenuReferenceShape
+import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.RecursionTargetFields
+import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.RecursionStoredFields
 
 namespace Pact
 
@@ -571,6 +573,361 @@ theorem offer_recur_at_source_forward
     (by simpa only [hLabel, AutomatonConstructionLabel.semantic] using hOffers)
   rw [hFuture]
   exact compileType_recur_child_pending_lift alphabet name body edge hEdge hLabel
+
+/-- Paper: the copied target represents the substituted body target. -/
+theorem offer_recur_at_target_backward
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hBody : TypeAutomatonStepCorrespondence body)
+    (hMenus : FutureOffersAgree (.recur alphabet name body))
+    {source : PactType} (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel (typeCompilationFuel body) body).edges)
+    {label : TypeLabel} (hLabel : edge.label = .visible label)
+    (removed : Finset BareMessage) (hField : edge.future = .at edge.target removed)
+    (hRelated : relationMembership (buildRelationSet body (compileType body)) source edge.source) :
+    ∃ target,
+      DecoratedTypeTransition edge.environment (source.replaceVar name (.recur alphabet name body))
+        label ⟨edge.current, resolveFutureSpec
+          (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q)) edge.future⟩ target ∧
+      relationMembership (buildRelationSet (.recur alphabet name body)
+        (compileType (.recur alphabet name body))) target (.child 0 edge.target) := by
+  have hChildEdge : (compileType body).HasEdge edge.source edge.environment label
+      ⟨edge.current, resolveFutureSpec (computeFutureOf body) edge.future⟩ edge.target := by
+    rw [compileType_hasEdge_iff_hasResolvedEdge]
+    exact ⟨edge, hEdge, rfl, rfl, hLabel, rfl, rfl, rfl⟩
+  obtain ⟨target, hStep, hTarget⟩ := hBody.2 hRelated hChildEdge
+  obtain ⟨future, hSubstituted⟩ :=
+    recursionSubstitutionStepBackward_of_typeWF alphabet name body hWF hRelated hStep
+  have hFuture := TypeOffers.replaceVar_compiled_at_target_future body
+    (typeWellFormedIn_recur hWF) name (.recur alphabet name body)
+    (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q))
+    (fun rho q hRho => hMenus (relationMembership_recur_child alphabet name body rho hRho))
+    edge hEdge hLabel removed hField hRelated hTarget hSubstituted.2
+  exact ⟨target.replaceVar name (.recur alphabet name body), hFuture ▸ hSubstituted,
+    relationMembership_recur_child alphabet name body target hTarget⟩
+
+/-- The same target-menu equation identifies the given pair in the forward direction. -/
+theorem offer_recur_at_target_forward
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hMenus : FutureOffersAgree (.recur alphabet name body))
+    {source target : PactType} (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel (typeCompilationFuel body) body).edges)
+    {label : TypeLabel} (hLabel : edge.label = .visible label)
+    (removed : Finset BareMessage) (hField : edge.future = .at edge.target removed)
+    (hRelated : relationMembership (buildRelationSet body (compileType body)) source edge.source)
+    (hTarget : relationMembership (buildRelationSet body (compileType body)) target edge.target)
+    {future : Finset BareMessage}
+    (hOffers : TypeOffers edge.environment (source.replaceVar name (.recur alphabet name body))
+      label (target.replaceVar name (.recur alphabet name body)) edge.current future) :
+    (compileType (.recur alphabet name body)).HasEdge (.child 0 edge.source)
+      edge.environment label ⟨edge.current, future⟩ (.child 0 edge.target) := by
+  have hFuture := TypeOffers.replaceVar_compiled_at_target_future body
+    (typeWellFormedIn_recur hWF) name (.recur alphabet name body)
+    (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q))
+    (fun rho q hRho => hMenus (relationMembership_recur_child alphabet name body rho hRho))
+    edge hEdge hLabel removed hField hRelated hTarget hOffers
+  rw [hFuture]
+  exact compileType_recur_child_pending_lift alphabet name body edge hEdge hLabel
+
+/-- Stored fields retain the body pair; tail position excludes substitution from their operands. -/
+theorem offer_recur_explicit_backward
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hBody : TypeAutomatonStepCorrespondence body)
+    {source : PactType} (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel (typeCompilationFuel body) body).edges)
+    {label : TypeLabel} (hLabel : edge.label = .visible label)
+    (stored : Finset BareMessage) (hField : edge.future = .explicit stored)
+    (hRelated : relationMembership (buildRelationSet body (compileType body)) source edge.source) :
+    ∃ target,
+      DecoratedTypeTransition edge.environment (source.replaceVar name (.recur alphabet name body))
+        label ⟨edge.current, resolveFutureSpec
+          (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q)) edge.future⟩ target ∧
+      relationMembership (buildRelationSet (.recur alphabet name body)
+        (compileType (.recur alphabet name body))) target (.child 0 edge.target) := by
+  have hChildEdge : (compileType body).HasEdge edge.source edge.environment label
+      ⟨edge.current, stored⟩ edge.target := by
+    rw [compileType_hasEdge_iff_hasResolvedEdge]
+    exact ⟨edge, hEdge, rfl, rfl, hLabel, rfl, by simp [hField], rfl⟩
+  obtain ⟨target, hStep, hTarget⟩ := hBody.2 hRelated hChildEdge
+  have hBodyWF := typeWellFormedIn_recur hWF
+  have hTailRec := (relationMembership_tailRecursive body source edge.source
+    hBodyWF.2.2.2.2.2.1 hBodyWF.2.2.2.1 hRelated).1
+  have hTail := relationMembership_tailOccurrences body source edge.source name True
+    hBodyWF.2.2.2.2.2.1 (hBodyWF.2.2.2.1 name) hRelated
+  have hOffers : TypeOffers edge.environment (source.replaceVar name (.recur alphabet name body))
+      label (target.replaceVar name (.recur alphabet name body)) edge.current stored := by
+    by_cases hClock : label = .tock
+    · obtain ⟨future, hSubstituted⟩ :=
+        recursionSubstitutionStepBackward_of_typeWF alphabet name body hWF hRelated hStep
+      have hOld := hStep.2.future_eq_empty_of_label_tock hClock
+      have hNew := hSubstituted.2.future_eq_empty_of_label_tock hClock
+      have hEq : future = stored := hNew.trans hOld.symm
+      exact hEq ▸ hSubstituted.2
+    · rcases compileTypeFuel_explicit_source (typeCompilationFuel body) body le_rfl hBodyWF
+          edge hRelated hEdge (by simpa [hLabel] using hClock) stored hField with
+        hClosed | ⟨a, left, right, hSource, hIncomplete⟩
+      · exact hStep.2.replaceVar_of_tailOccurrences_false name (.recur alphabet name body)
+          hTailRec (hClosed name)
+      · subst source
+        simp only [PactType.TailRecursive] at hTailRec
+        simp only [PactType.TailOccurrences] at hTail
+        exact hStep.2.replaceVar_seq_incomplete name (.recur alphabet name body)
+          hTailRec.1 hTail.1 hIncomplete
+  refine ⟨target.replaceVar name (.recur alphabet name body), ?_,
+    relationMembership_recur_child alphabet name body target hTarget⟩
+  simpa only [hField, resolveFutureSpec] using
+    (⟨hOffers.toTypeTransition, hOffers⟩ : DecoratedTypeTransition _ _ _ _ _)
+
+/-- Inversion keeps the field equations needed when the body IH selects its matching edge. -/
+theorem TypeOffers.replaceVar_inverse_with_future_fields
+    (name : String) (replacement : PactType)
+    {source target : PactType} {env : TypeEnvironment}
+    {label : TypeLabel} {current future : Finset BareMessage}
+    (hOffers : TypeOffers env (source.replaceVar name replacement) label target current future)
+    (hTailRec : source.TailRecursive) (hTail : source.TailOccurrences name True)
+    (hFallback : ∃ original originalFuture,
+      TypeOffers env source label original current originalFuture ∧
+      target = original.replaceVar name replacement) :
+    ∃ original originalFuture,
+      TypeOffers env source label original current originalFuture ∧
+      target = original.replaceVar name replacement ∧
+      (source.TailOccurrences name False → future = originalFuture) ∧
+      (∀ alphabet left right, source = .seq alphabet left right →
+        left.CanCompleteDeclared = false → future = originalFuture) ∧
+      (∀ alphabet left right stored, source = .seq alphabet left right →
+        left.CanCompleteDeclared = true → label ≠ .tock →
+        originalFuture = (stored ∪ typeFutureOffers right) \ current →
+        future = (stored ∪ typeFutureOffers (right.replaceVar name replacement)) \ current) := by
+  by_cases hAbsent : source.TailOccurrences name False
+  · have hSource := PactType.replaceVar_eq_self_of_tailOccurrences_false name replacement source hAbsent
+    rw [hSource] at hOffers
+    have hTarget := PactType.replaceVar_eq_self_of_tailOccurrences_false name replacement target
+      (hOffers.preserves_tailOccurrences name False hTailRec hAbsent)
+    refine ⟨target, future, hOffers, hTarget.symm, fun _ => rfl, fun _ _ _ _ _ => rfl, ?_⟩
+    intro a left right stored hSeq _ _ hField
+    subst source
+    simp only [PactType.TailOccurrences] at hAbsent
+    rw [PactType.replaceVar_eq_self_of_tailOccurrences_false name replacement right hAbsent.2]
+    exact hField
+  · by_cases hSeq : ∃ a left right, source = .seq a left right
+    · obtain ⟨a, left, right, rfl⟩ := hSeq
+      simp only [PactType.TailRecursive] at hTailRec
+      simp only [PactType.TailOccurrences] at hTail
+      by_cases hClock : label = .tock
+      · obtain ⟨original, originalFuture, hOriginal, hTarget⟩ := hFallback
+        have hFuture : future = originalFuture :=
+          (hOffers.future_eq_empty_of_label_tock hClock).trans
+            (hOriginal.future_eq_empty_of_label_tock hClock).symm
+        exact ⟨original, originalFuture, hOriginal, hTarget,
+          fun _ => hFuture, fun _ _ _ _ _ => hFuture,
+          fun _ _ _ _ _ _ hNonClock _ => (hNonClock hClock).elim⟩
+      · cases hComplete : left.CanCompleteDeclared with
+        | false =>
+          obtain ⟨original, hOriginal, hTarget⟩ :=
+            hOffers.replaceVar_seq_incomplete_inverse name replacement hTailRec.1 hTail.1 hComplete
+          refine ⟨original, future, hOriginal, hTarget, fun _ => rfl, fun _ _ _ _ _ => rfl, ?_⟩
+          intro a' left' right' stored hSource hFlag _ _
+          cases hSource
+          simp [hComplete] at hFlag
+        | true =>
+          obtain ⟨original, originalFuture, hOriginal, hTarget, hField⟩ :=
+            hOffers.replaceVar_seq_atUnion_inverse name replacement
+              hTailRec.1 hTail.1 hTail.2 hComplete hClock
+          refine ⟨original, originalFuture, hOriginal, hTarget,
+            fun h => (hAbsent h).elim, ?_, ?_⟩
+          · intro a' left' right' hSource hFlag
+            cases hSource
+            simp [hComplete] at hFlag
+          · intro a' left' right' stored hSource _ _ hStored
+            cases hSource
+            exact hField stored hStored
+    · obtain ⟨original, originalFuture, hOriginal, hTarget⟩ := hFallback
+      exact ⟨original, originalFuture, hOriginal, hTarget, fun h => (hAbsent h).elim,
+        fun a left right h _ => (hSeq ⟨a, left, right, h⟩).elim,
+        fun a left right _ h _ _ _ => (hSeq ⟨a, left, right, h⟩).elim⟩
+
+/-- Paper: choose the inverse body witness, apply the child IH, then identify each copied field. -/
+theorem offer_recur_copied_forward
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hBody : TypeAutomatonStepCorrespondence body) (hBodyMenus : FutureOffersAgree body)
+    (hMenus : FutureOffersAgree (.recur alphabet name body))
+    {source target : PactType} {q : TypeAutomatonState}
+    {env : TypeEnvironment} {label : TypeLabel} {current future : Finset BareMessage}
+    (hRelated : relationMembership (buildRelationSet body (compileType body)) source q)
+    (hStep : DecoratedTypeTransition env (source.replaceVar name (.recur alphabet name body))
+      label ⟨current, future⟩ target)
+    (hFallback : ∃ original originalFuture,
+      DecoratedTypeTransition env source label ⟨current, originalFuture⟩ original ∧
+      target = original.replaceVar name (.recur alphabet name body)) :
+    ∃ q', (compileType (.recur alphabet name body)).HasEdge (.child 0 q)
+        env label ⟨current, future⟩ q' ∧
+      relationMembership (buildRelationSet (.recur alphabet name body)
+        (compileType (.recur alphabet name body))) target q' := by
+  have hBodyWF := typeWellFormedIn_recur hWF
+  have hTailRec := (relationMembership_tailRecursive body source q
+    hBodyWF.2.2.2.2.2.1 hBodyWF.2.2.2.1 hRelated).1
+  have hTail := relationMembership_tailOccurrences body source q name True
+    hBodyWF.2.2.2.2.2.1 (hBodyWF.2.2.2.1 name) hRelated
+  obtain ⟨original, originalFuture, hOriginal, hTargetEq, hAbsent, hIncomplete, hUnion⟩ :=
+    hStep.2.replaceVar_inverse_with_future_fields name (.recur alphabet name body)
+      hTailRec hTail (by
+        obtain ⟨rho, offers, hRho, hEq⟩ := hFallback
+        exact ⟨rho, offers, hRho.2, hEq⟩)
+  have hOriginalStep : DecoratedTypeTransition env source label ⟨current, originalFuture⟩ original :=
+    ⟨hOriginal.toTypeTransition, hOriginal⟩
+  obtain ⟨q', hBodyEdge, hTarget⟩ := hBody.1 hRelated hOriginalStep
+  obtain ⟨edge, hEdge, hSource, hEnv, hLabel, hCurrent, hOldFuture, hState⟩ :=
+    (compileType_hasEdge_iff_hasResolvedEdge body q q' env label ⟨current, originalFuture⟩).mp hBodyEdge
+  change edge.current = current at hCurrent
+  change resolveFutureSpec (computeFutureOf body) edge.future = originalFuture at hOldFuture
+  subst q
+  subst env
+  subst current
+  subst q'
+  have hFuture : future = resolveFutureSpec
+      (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q)) edge.future := by
+    cases hSpec : edge.future with
+    | explicit stored =>
+      have hStored : stored = originalFuture := by simpa only [hSpec, resolveFutureSpec] using hOldFuture
+      simp only [hSpec, resolveFutureSpec]
+      by_cases hClock : label = .tock
+      · have hEq : future = originalFuture :=
+          (hStep.2.future_eq_empty_of_label_tock hClock).trans
+            (hOriginal.future_eq_empty_of_label_tock hClock).symm
+        exact hEq.trans hStored.symm
+      · rcases compileTypeFuel_explicit_source (typeCompilationFuel body) body le_rfl hBodyWF
+            edge hRelated hEdge (by simpa [hLabel] using hClock) stored hSpec with
+          hClosed | ⟨a, left, right, hSeq, hFlag⟩
+        · exact (hAbsent (hClosed name)).trans hStored.symm
+        · exact (hIncomplete a left right hSeq hFlag).trans hStored.symm
+    | «at» reference removed =>
+      by_cases hRef : reference = edge.target
+      · subst reference
+        simpa only [hSpec] using TypeOffers.replaceVar_compiled_at_target_future body hBodyWF
+          name (.recur alphabet name body)
+          (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q))
+          (fun rho q hRho => hMenus (relationMembership_recur_child alphabet name body rho hRho))
+          edge hEdge hLabel removed hSpec hRelated hTarget (hTargetEq ▸ hStep.2)
+      · simpa only [hSpec] using TypeOffers.replaceVar_compiled_at_source_future body name (.recur alphabet name body)
+          (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q))
+          (fun rho q hRho => hMenus (relationMembership_recur_child alphabet name body rho hRho))
+          edge hEdge reference removed hSpec hRef hRelated
+          (by simpa only [hLabel, AutomatonConstructionLabel.semantic] using hStep.2)
+    | atUnion stored reference removed =>
+      obtain ⟨hNC, hRemoved, a, left, right, hSeqRelated, hRightRelated, hComplete⟩ :=
+        compileTypeFuel_atUnion_represented (typeCompilationFuel body) body le_rfl edge hEdge
+          stored removed reference hSpec
+      have hSeq := buildRelationSetCoreFuel_functional (typeCompilationFuel body) body
+        hRelated hSeqRelated
+      have hOldMenu := hBodyMenus hRightRelated
+      have hNewMenu := hMenus (relationMembership_recur_child alphabet name body right hRightRelated)
+      have hEq := hUnion a left right stored hSeq hComplete
+        (by simpa only [hLabel, AutomatonConstructionLabel.semantic] using hNC)
+        (by simpa only [hSpec, resolveFutureSpec, hOldMenu, hRemoved] using hOldFuture.symm)
+      simpa only [hSpec, resolveFutureSpec, hNewMenu, hRemoved] using hEq
+  refine ⟨.child 0 edge.target, ?_,
+    hTargetEq ▸ relationMembership_recur_child alphabet name body original hTarget⟩
+  rw [hFuture]
+  exact compileType_recur_child_pending_lift alphabet name body edge hEdge hLabel
+
+/-- Every ordinary copied field is explicit, a source/target read, or a sequence union. -/
+theorem offer_recur_copied_backward
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hBody : TypeAutomatonStepCorrespondence body) (hBodyMenus : FutureOffersAgree body)
+    (hMenus : FutureOffersAgree (.recur alphabet name body))
+    {source : PactType} (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (compileTypeFuel (typeCompilationFuel body) body).edges)
+    {label : TypeLabel} (hLabel : edge.label = .visible label)
+    (hRelated : relationMembership (buildRelationSet body (compileType body)) source edge.source) :
+    ∃ target,
+      DecoratedTypeTransition edge.environment (source.replaceVar name (.recur alphabet name body))
+        label ⟨edge.current, resolveFutureSpec
+          (fun q => computeFutureOf (.recur alphabet name body) (.child 0 q)) edge.future⟩ target ∧
+      relationMembership (buildRelationSet (.recur alphabet name body)
+        (compileType (.recur alphabet name body))) target (.child 0 edge.target) := by
+  cases hSpec : edge.future with
+  | explicit stored =>
+    simpa only [hSpec] using
+      offer_recur_explicit_backward alphabet name body hWF hBody edge hEdge hLabel stored hSpec hRelated
+  | «at» reference removed =>
+    by_cases hRef : reference = edge.target
+    · subst reference
+      simpa only [hSpec] using offer_recur_at_target_backward alphabet name body hWF hBody hMenus
+        edge hEdge hLabel removed hSpec hRelated
+    · simpa only [hSpec] using offer_recur_at_source_backward alphabet name body hWF hBody hMenus
+        edge hEdge hLabel reference removed hSpec hRef hRelated
+  | atUnion stored reference removed =>
+    simpa only [hSpec] using offer_recur_atUnion_backward alphabet name body hWF hBody hBodyMenus hMenus
+      edge hEdge hLabel stored removed reference hSpec hRelated
+
+/-- Paper: current matching and this rank's menus determine the full recursion pair. -/
+theorem offerCorrespondence_recur
+    (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
+    {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
+    (hBody : TypeAutomatonStepCorrespondence body) (hBodyMenus : FutureOffersAgree body)
+    (hMenus : FutureOffersAgree (.recur alphabet name body)) :
+    TypeAutomatonStepCorrespondence (.recur alphabet name body) := by
+  have hCurrent := currentOfferCorrespondence_recur_of_typeWF alphabet name body hWF hBody.toCurrent
+  have hBodyWF := typeWellFormedIn_recur hWF
+  have hBodyTail : body.TailOccurrences name True := by
+    have h := hWF.2.2.2.2.2.1
+    simp only [PactType.TailRecursive] at h
+    exact h.1
+  have hBodyAlphabet : body.alphabet = alphabet := by
+    have h := hWF.1
+    simp only [PactType.AlphabetWellFormed] at h
+    exact h.2.1
+  have hBodyLocal : EdgeLocalAt (typeCompilationFuel body) body :=
+    edgeLocalAt_holds (typeCompilationFuel body) body le_rfl hBodyWF.1
+      hBodyWF.2.2.2.2.2.2.2.2.2.2.2.2.1 hBodyWF.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+  have hBodyClock := compileTypeFuel_clockEdgesAreTock (typeCompilationFuel body) body le_rfl
+  constructor
+  · intro residual residual' state env label offers hRelated hStep
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_recur_cases alphabet name body hRelated with
+      hRoot | ⟨q, bodyResidual, hEntry, hBodyRelated⟩
+    · cases hRoot
+      exact offer_recur_root_forward alphabet name body hMenus hStep
+    · cases hEntry
+      rcases recursionSubstitutionStepForward_of_typeWF alphabet name body hWF hBodyRelated hStep with
+        ⟨bodyTarget, bodyFuture, hBodyStep, hTargetEq⟩ |
+        ⟨varAlphabet, markerEdge, hVar, hMarkerEdge, hMarkerSource,
+          hMarkerEnv, hMarkerLabel, _, _, _, _, _⟩
+      · exact offer_recur_copied_forward alphabet name body hWF hBody hBodyMenus hMenus
+          hBodyRelated hStep ⟨bodyTarget, bodyFuture, hBodyStep, hTargetEq⟩
+      · subst bodyResidual
+        have hUnfold : DecoratedTypeTransition markerEdge.environment (.recur alphabet name body)
+            label ⟨current, future⟩ residual' := by
+          simpa only [PactType.replaceVar, if_pos rfl, hMarkerEnv] using hStep
+        obtain ⟨q', hParent, hTarget⟩ := offer_recur_backedge_forward alphabet name body hMenus
+          markerEdge hMarkerEdge hMarkerLabel hUnfold
+        exact ⟨q', by simpa only [hMarkerSource, hMarkerEnv] using hParent, hTarget⟩
+  · intro residual state state' env label offers hRelated hEdge
+    rcases offers with ⟨current, future⟩
+    rcases relationMembership_recur_cases alphabet name body hRelated with
+      hRoot | ⟨q, bodyResidual, hEntry, hBodyRelated⟩
+    · cases hRoot
+      exact offer_recur_root_backward alphabet name body hCurrent hMenus hEdge
+    · cases hEntry
+      rcases compileType_recur_child_edge_cases alphabet name body
+          hBodyTail hBodyAlphabet hBodyLocal hBodyClock hBodyRelated hEdge with
+        ⟨bodyEdge, hBodyMem, hSource, hEnv, hLabel, hCurrentOffer, hStateEq, hFuture⟩ |
+        ⟨varAlphabet, hVar, _, _, _, _, _, _⟩
+      · subst q
+        subst env
+        subst current
+        subst state'
+        subst future
+        exact offer_recur_copied_backward alphabet name body hWF hBody hBodyMenus hMenus
+          bodyEdge hBodyMem hLabel hBodyRelated
+      · subst bodyResidual
+        simpa only [PactType.replaceVar, if_pos rfl] using
+          offer_recur_backedge_backward alphabet name body hBody.toCurrent hCurrent hMenus
+            hBodyRelated hEdge
 
 end
 

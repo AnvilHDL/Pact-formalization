@@ -7,6 +7,7 @@ open Pact.NewCorrespondence
 
 noncomputable section
 
+/- Obsolete target-only upgrade; the simultaneous induction now supplies full pairs.
 /-- The paper's forward and backward directions use H-current, H-menus,
 and the uniform offer law, for every pair in the compiler relation. -/
 theorem correspondence_steps_of_helpers (processType : PactType)
@@ -22,6 +23,7 @@ theorem correspondence_steps_of_helpers (processType : PactType)
     rcases offers with ⟨current, future⟩
     -- Backward: use the same two equations to recover the complete semantic offer.
     exact hCurrent.backward_with_future hMenus hRelated hEdge
+-/
 
 /-- Step correspondence for every pair in the compiler relation. -/
 theorem correspondence_steps
@@ -29,10 +31,8 @@ theorem correspondence_steps
     (hAdmissible : AdmissibleType processType) :
     TypeAutomatonStepCorrespondence processType := by
   -- Paper: instantiate the simultaneous helpers at the empty binder context.
-  obtain ⟨hCurrent, hMenus⟩ :=
-    correspondence_simultaneous [] processType
-      (typeWellFormedIn_nil_of_admissible hAdmissible)
-  exact correspondence_steps_of_helpers processType hCurrent hMenus
+  exact (correspondence_simultaneous [] processType
+    (typeWellFormedIn_nil_of_admissible hAdmissible)).1
 
 /- Obsolete assembly using the former target-only future law.
 Retained for comparison during the paper migration.
