@@ -79,13 +79,7 @@ theorem TypeOffers.preserves_alphabet
   | left_complete =>
       rw [PactType.reannotate_alphabet]
       simp [PactType.alphabet]
-  | left_complete_tock =>
-      rw [PactType.reannotate_alphabet]
-      simp [PactType.alphabet]
   | right_complete =>
-      rw [PactType.reannotate_alphabet]
-      simp [PactType.alphabet]
-  | right_complete_tock =>
       rw [PactType.reannotate_alphabet]
       simp [PactType.alphabet]
 

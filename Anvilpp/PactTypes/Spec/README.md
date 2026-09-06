@@ -5,8 +5,8 @@ semantics, and the constructor-automaton compiler.
 
 | | Files | Lines | Defs |
 |---|---:|---:|---:|
-| [`Syntax/`](Syntax/README.md) | 13 | 2,604 | 153 |
-| [`Automata/`](Automata/README.md) | 13 | 1,972 | 96 |
+| [`Syntax/`](Syntax/README.md) | 13 | 2,586 | 153 |
+| [`Automata/`](Automata/README.md) | 13 | 1,977 | 96 |
 
 `Syntax/` defines the object being compiled and what it means to run it:
 `PactType`, the step relation `TypeTransition`, its decorated form

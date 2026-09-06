@@ -28,10 +28,10 @@ helper 17 is the menu equation `OF(q) = FutOff(ρ)`.
 
 | Module | Lines | Contents |
 |---|---:|---|
-| `Base` | 2,078 | the two obligations, base-fragment guards, `EdgeLocalAt`, `relationMembership_state_mem` |
-| `Recursion` | 2,671 | helper 12 both directions (`TypeOffers.replaceVar_tail`, `..._tail_inv`), the environment-indexed `markerSourceFor_of_var_residual`, `currentOfferCorrespondence_recur_of_typeWF` |
+| `Base` | 2,068 | the two obligations, base-fragment guards, `EdgeLocalAt`, `relationMembership_state_mem` |
+| `Recursion` | 2,609 | helper 12 both directions (`TypeOffers.replaceVar_tail`, `..._tail_inv`), the environment-indexed `markerSourceFor_of_var_residual`, `currentOfferCorrespondence_recur_of_typeWF` |
 | `Offers` | 2,518 | exclusive and conjunctive offer graphs; `edgeLocal_xoffer`, `edgeLocal_offer` |
-| `Parallel` | 1,271 | product step inversion, `localEnvironment_iff`, `sync_of_local`, `offers_disjoint` |
+| `Parallel` | 1,293 | product step inversion, `localEnvironment_iff`, `sync_of_local`, `skip_step_offers` |
 | `ChoiceAndSequence` | 1,053 | `currentOfferCorrespondence_choice`, `_seq`, `futureOffersAgree_choice` |
 | `BasicMarkerPaths`, `SequenceMarkerPaths`, `RecursionMarkerPaths` | 1,292 | when a compiled state reaches an `X`-marker through non-clock edges and menu dependencies |
 | `MarkerCorrespondence` | 143 | `markerReachable_iff_menuReachesVar_recur`, tying those paths to the syntactic test |

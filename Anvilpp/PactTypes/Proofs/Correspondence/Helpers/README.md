@@ -21,12 +21,12 @@ of `ρ`.
 
 | Module | Lines | Main results |
 |---|---:|---|
-| `Parallel` | 3,816 | `decoratedTypeTransition_par_cases` (inverting a product step), survivor edge families, `relationMembership_par_final` |
+| `Parallel` | 3,639 | `decoratedTypeTransition_par_cases` (inverting a product step), survivor edge families, `relationMembership_par_final` |
 | `AlphabetPreservation` | 3,359 | `relationMembership_alphabet_eq` (helper 6); transports of `AllVariablesBound`, `TailOccurrences`, `TailRecursive` through the relation |
 | `TypeWellFormedIn` | 2,428 | `TypeWellFormedIn` and the descent lemmas `typeWellFormedIn_choice`/`_seq`/`_par`/`_recur`/`_xoffer`/`_offer` |
-| `FutureClosure` | 2,309 | `edgeTargetsInStates` per builder; closure results for `computeFutureOf` |
+| `FutureClosure` | 2,310 | `edgeTargetsInStates` per builder; closure results for `computeFutureOf` |
 | `SurvivorTransport` | 2,088 | `survivorTransport_all` (helper 7), `ExactSurvivorTransport` |
-| `NewMainHelpers` | 1,040 | `final_states_completion` (helper 10), `TypeOffers.future_eq_sdiff_of_label_ne_tock` (helper 11), `markerSource_iff_var_residual` (helper 15) |
+| `NewMainHelpers` | 1,038 | `final_states_completion` (helper 10), `TypeOffers.future_eq_sdiff_of_label_ne_tock` (helper 11), `markerSource_iff_var_residual` (helper 15) |
 | `CompiledShape` | 918 | `ShapeEq` and the re-signing shape equalities |
 | `MenuMetadata` | 779 | `compileTypeMenuLinksFuel_*`, the menu-dependency graph `L_σ` |
 

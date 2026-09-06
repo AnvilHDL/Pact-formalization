@@ -85,9 +85,7 @@ theorem TypeOffers.future_eq_sdiff_of_label_ne_tock
       simp [hideTypeOffers, typeFutureOffers, typeFutureOffersFuel]
   | par_fuse_tock => simp_all
   | left_complete => rfl
-  | left_complete_tock => exact absurd (by assumption) hLabel
   | right_complete => rfl
-  | right_complete_tock => exact absurd (by assumption) hLabel
 
 /-- A residual whose body is `skip` sits at an accepting state.  Converse half
 of `final_state_represents_skip`. -/

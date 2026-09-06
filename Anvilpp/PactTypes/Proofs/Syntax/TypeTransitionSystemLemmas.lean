@@ -123,38 +123,28 @@ theorem TypeTransition.exists_typeOffers
             leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
             hLeftOffers hRightOffers conditions.2.1 conditions.2.2.1
             ⟨conditions.1, conditions.2.2.2⟩ hTock⟩
-  | left_complete outer rightEnv interface alphabet left right right' rightLabel
-      rightCurrent rightFuture hLeftSkip hRightNotSkip _ hRightOffers hNotSkip
-      hRightCurrentHidden hRightFutureHidden hLocal hWF ihRight =>
-      by_cases hTock : rightLabel = TypeLabel.tock
-      · exact ⟨∅, ∅,
-          TypeOffers.left_complete_tock outer rightEnv interface alphabet left right
-            right' rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-            hRightOffers hNotSkip
-            hRightCurrentHidden hRightFutureHidden hLocal hWF hTock⟩
-      · exact ⟨hideTypeOffers interface rightCurrent,
-          typeFutureOffers (right'.reannotate alphabet) \
-            hideTypeOffers interface rightCurrent,
-          TypeOffers.left_complete outer rightEnv interface alphabet left right right'
-            rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-            hRightOffers hNotSkip
-            hRightCurrentHidden hRightFutureHidden hLocal hWF hTock⟩
-  | right_complete outer leftEnv interface alphabet left left' right leftLabel
-      leftCurrent leftFuture hRightSkip hLeftNotSkip _ hLeftOffers hNotSkip
-      hLeftCurrentHidden hLeftFutureHidden hLocal hWF ihLeft =>
-      by_cases hTock : leftLabel = TypeLabel.tock
-      · exact ⟨∅, ∅,
-          TypeOffers.right_complete_tock outer leftEnv interface alphabet left left'
-            right leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip
-            hLeftOffers hNotSkip
-            hLeftCurrentHidden hLeftFutureHidden hLocal hWF hTock⟩
-      · exact ⟨hideTypeOffers interface leftCurrent,
-          typeFutureOffers (left'.reannotate alphabet) \
-            hideTypeOffers interface leftCurrent,
-          TypeOffers.right_complete outer leftEnv interface alphabet left left' right
-            leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip
-            hLeftOffers hNotSkip
-            hLeftCurrentHidden hLeftFutureHidden hLocal hWF hTock⟩
+  | left_complete outer leftEnv rightEnv interface alphabet left right right'
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftSkip
+      hRightNotSkip _ hLeftOffers _ hRightOffers hNotSkip hLocalLeft hLocalRight
+      hWF hSync ihLeft ihRight =>
+      exact ⟨hideTypeOffers interface rightCurrent,
+        typeFutureOffers (right'.reannotate alphabet) \
+          hideTypeOffers interface rightCurrent,
+        TypeOffers.left_complete outer leftEnv rightEnv interface alphabet left
+          right right' rightLabel leftCurrent leftFuture rightCurrent rightFuture
+          hLeftSkip hRightNotSkip hLeftOffers hRightOffers hNotSkip hLocalLeft
+          hLocalRight hWF hSync⟩
+  | right_complete outer leftEnv rightEnv interface alphabet left left' right
+      leftLabel leftCurrent leftFuture rightCurrent rightFuture hRightSkip
+      hLeftNotSkip _ hRightOffers _ hLeftOffers hNotSkip hLocalLeft hLocalRight
+      hWF hSync ihRight ihLeft =>
+      exact ⟨hideTypeOffers interface leftCurrent,
+        typeFutureOffers (left'.reannotate alphabet) \
+          hideTypeOffers interface leftCurrent,
+        TypeOffers.right_complete outer leftEnv rightEnv interface alphabet left
+          left' right leftLabel leftCurrent leftFuture rightCurrent rightFuture
+          hRightSkip hLeftNotSkip hRightOffers hLeftOffers hNotSkip hLocalLeft
+          hLocalRight hWF hSync⟩
 
 /-- Package a semantic step together with one of its offer pairs. -/
 theorem TypeTransition.exists_decorated

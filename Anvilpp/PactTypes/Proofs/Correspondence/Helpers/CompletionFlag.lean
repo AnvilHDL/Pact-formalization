@@ -134,8 +134,9 @@ theorem TypeTransition.canCompleteDeclared_backward
           (PactType.canCompleteDeclared_eq (.skip _)),
          ihRight (PactType.reannotate_eq_self_data hNormal.2).2 hTail.2 hClocks.2
           (PactType.canCompleteDeclared_eq (.skip _))⟩
-  | left_complete outer rightEnv interface alphabet left right right' rightLabel
-      rightCurrent rightFuture hSkip _ hStep _ _ _ _ _ _ ih =>
+  | left_complete outer leftEnv rightEnv interface alphabet left right right'
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hSkip _ _ _
+      hStep _ _ _ _ _ _ ihLeft ih =>
       simp only [PactType.alphabet, PactType.reannotate, PactType.par.injEq, true_and, and_true] at hNormal
       simp only [PactType.TailRecursive] at hTail
       obtain ⟨hA, hN⟩ := PactType.reannotate_eq_self_data hNormal.2
@@ -147,8 +148,9 @@ theorem TypeTransition.canCompleteDeclared_backward
       rw [PactType.canCompleteDeclared_eq]
       exact Bool.and_eq_true_iff.mpr ⟨by rw [hSkip]; exact PactType.canCompleteDeclared_eq (.skip _),
         ih hN hTail.2 hNonClock hRaw⟩
-  | right_complete outer leftEnv interface alphabet left left' right leftLabel
-      leftCurrent leftFuture hSkip _ hStep _ _ _ _ _ _ ih =>
+  | right_complete outer leftEnv rightEnv interface alphabet left left' right
+      leftLabel leftCurrent leftFuture rightCurrent rightFuture hSkip _ _ _
+      hStep _ _ _ _ _ _ ihRight ih =>
       simp only [PactType.alphabet, PactType.reannotate, PactType.par.injEq, true_and, and_true] at hNormal
       simp only [PactType.TailRecursive] at hTail
       obtain ⟨hA, hN⟩ := PactType.reannotate_eq_self_data hNormal.1

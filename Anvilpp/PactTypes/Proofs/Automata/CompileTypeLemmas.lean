@@ -1903,18 +1903,18 @@ theorem compileTypeFuel_explicitOnlyAtAccepting :
           · exfalso
             simp only [parallelLeftCompleteEdges, Finset.mem_biUnion,
               Finset.mem_filter, Finset.mem_image] at hLeftComplete
-            obtain ⟨leftState, -, rightEdge, -, survivorEnv, -, rfl⟩ :=
-              hLeftComplete
+            obtain ⟨leftEdge, -, rightEdge, -, rfl⟩ := hLeftComplete
             simp only at hTock hFuture
-            by_cases hT : rightEdge.label.semantic = TypeLabel.tock <;>
+            by_cases hT : (AutomatonConstructionLabel.combine interface
+              leftEdge.label rightEdge.label).semantic = TypeLabel.tock <;>
               simp [parallelFutureSpec, hT] at hTock hFuture
           · exfalso
             simp only [parallelRightCompleteEdges, Finset.mem_biUnion,
               Finset.mem_filter, Finset.mem_image] at hRightComplete
-            obtain ⟨rightState, -, leftEdge, -, survivorEnv, -, rfl⟩ :=
-              hRightComplete
+            obtain ⟨leftEdge, -, rightEdge, -, rfl⟩ := hRightComplete
             simp only at hTock hFuture
-            by_cases hT : leftEdge.label.semantic = TypeLabel.tock <;>
+            by_cases hT : (AutomatonConstructionLabel.combine interface
+              leftEdge.label rightEdge.label).semantic = TypeLabel.tock <;>
               simp [parallelFutureSpec, hT] at hTock hFuture
           · exfalso
             simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,

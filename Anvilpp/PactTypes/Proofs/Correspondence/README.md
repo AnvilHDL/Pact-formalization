@@ -11,8 +11,8 @@ Lemma 4.5.
 
 | Subdirectory | Files | Lines | Role |
 |---|---:|---:|---|
-| [`Helpers/`](Helpers/README.md) | 23 | 21,752 | helpers 1–15 |
-| [`Simultaneous/`](Simultaneous/README.md) | 14 | 11,977 | constructor cases of helpers 16–17 |
+| [`Helpers/`](Helpers/README.md) | 23 | 21,576 | helpers 1–15 |
+| [`Simultaneous/`](Simultaneous/README.md) | 14 | 11,927 | constructor cases of helpers 16–17 |
 | [`Cases/`](Cases/README.md) | 1 | 591 | atomic step equivalences |
 
 ## Assembly

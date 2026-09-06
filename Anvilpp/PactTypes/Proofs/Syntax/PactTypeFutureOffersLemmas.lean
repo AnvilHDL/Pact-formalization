@@ -252,22 +252,20 @@ theorem TypeOffers.future_eq_empty_of_target_skip
       simp [hideTypeOffers]
   | par_fuse_tock =>
       simp
-  | left_complete outer rightEnv interface alphabet left right right' rightLabel
-      rightCurrent rightFuture hLeftSkip hRightNotSkip hRight hNotSkip _ _
-      hLocal hWF hNotTock ihRight =>
+  | left_complete outer leftEnv rightEnv interface alphabet left right right'
+      rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftSkip
+      hRightNotSkip hLeftStep hRight hNotSkip hLocalLeft hLocalRight hWF hSync
+      ihLeft ihRight =>
       refine absurd ?_ hNotSkip
       cases hForm : right' <;> rw [hForm] at hTarget <;>
         simp [PactType.reannotate, PactType.alphabet] at hTarget ⊢
-  | left_complete_tock =>
-      simp
-  | right_complete outer leftEnv interface alphabet left left' right leftLabel
-      leftCurrent leftFuture hRightSkip hLeftNotSkip hLeft hNotSkip _ _
-      hLocal hWF hNotTock ihLeft =>
+  | right_complete outer leftEnv rightEnv interface alphabet left left' right
+      leftLabel leftCurrent leftFuture rightCurrent rightFuture hRightSkip
+      hLeftNotSkip hRightStep hLeft hNotSkip hLocalLeft hLocalRight hWF hSync
+      ihRight ihLeft =>
       refine absurd ?_ hNotSkip
       cases hForm : left' <;> rw [hForm] at hTarget <;>
         simp [PactType.reannotate, PactType.alphabet] at hTarget ⊢
-  | right_complete_tock =>
-      simp
 
 /-- Combining to a clock forces both component labels to be clocks. -/
 theorem TypeLabel.combine_eq_tock_iff (interface : Interface)
@@ -276,6 +274,64 @@ theorem TypeLabel.combine_eq_tock_iff (interface : Interface)
       left = TypeLabel.tock ∧ right = TypeLabel.tock := by
   cases left <;> cases right <;>
     simp [TypeLabel.combine, TypeLabel.silent]
+
+/-- A label synchronized with `ε` on `I` meets no interface id, so no message
+is resolved and the combination is that label itself: `ε ∪_I α = α`. -/
+theorem TypeLabel.combine_silent_left (interface : Interface) (label : TypeLabel)
+    (hSync : TypeLabel.Sync interface TypeLabel.silent label) :
+    TypeLabel.combine interface TypeLabel.silent label = label := by
+  classical
+  obtain ⟨hSends, hRecvs, hTock⟩ := hSync
+  cases label with
+  | tock => exact absurd (hTock.mpr trivial) (by simp [TypeLabel.silent, TypeLabel.isTock])
+  | actions observations =>
+    have hNoSends : interface ∩ (TypeLabel.actions observations).sends = ∅ := by
+      rw [← hRecvs]
+      simp [TypeLabel.silent, TypeLabel.recvs, TypeLabel.messageIdsWith]
+    have hEmptySends : (TypeLabel.actions ∅).sends = (∅ : Finset MessageId) := by
+      simp [TypeLabel.sends, TypeLabel.messageIdsWith]
+    have hSynced :
+        TypeLabel.synced interface (.actions ∅) (.actions observations) = ∅ := by
+      show (interface ∩ (TypeLabel.actions ∅).sends) ∪
+        (interface ∩ (TypeLabel.actions observations).sends) = ∅
+      rw [hEmptySends, Finset.inter_empty, Finset.empty_union, hNoSends]
+    have hFilter : (∅ ∪ observations).filter
+        (fun observation => !(TypeLabel.isRawSyncedMessage ∅ observation)) =
+        observations := by
+      rw [Finset.empty_union]
+      refine Finset.filter_true_of_mem ?_
+      intro observation _
+      cases observation <;> simp [TypeLabel.isRawSyncedMessage]
+    simp only [TypeLabel.silent, TypeLabel.combine, hSynced, hFilter,
+      Finset.image_empty, Finset.union_empty]
+
+/-- Mirror of `TypeLabel.combine_silent_left`: `α ∪_I ε = α`. -/
+theorem TypeLabel.combine_silent_right (interface : Interface) (label : TypeLabel)
+    (hSync : TypeLabel.Sync interface label TypeLabel.silent) :
+    TypeLabel.combine interface label TypeLabel.silent = label := by
+  classical
+  obtain ⟨hSends, hRecvs, hTock⟩ := hSync
+  cases label with
+  | tock => exact absurd (hTock.mp trivial) (by simp [TypeLabel.silent, TypeLabel.isTock])
+  | actions observations =>
+    have hNoSends : interface ∩ (TypeLabel.actions observations).sends = ∅ := by
+      rw [hSends]
+      simp [TypeLabel.silent, TypeLabel.recvs, TypeLabel.messageIdsWith]
+    have hEmptySends : (TypeLabel.actions ∅).sends = (∅ : Finset MessageId) := by
+      simp [TypeLabel.sends, TypeLabel.messageIdsWith]
+    have hSynced :
+        TypeLabel.synced interface (.actions observations) (.actions ∅) = ∅ := by
+      show (interface ∩ (TypeLabel.actions observations).sends) ∪
+        (interface ∩ (TypeLabel.actions ∅).sends) = ∅
+      rw [hEmptySends, Finset.inter_empty, Finset.union_empty, hNoSends]
+    have hFilter : observations.filter
+        (fun observation => !(TypeLabel.isRawSyncedMessage ∅ observation)) =
+        observations := by
+      refine Finset.filter_true_of_mem ?_
+      intro observation _
+      cases observation <;> simp [TypeLabel.isRawSyncedMessage]
+    simp only [TypeLabel.silent, TypeLabel.combine, hSynced, hFilter,
+      Finset.image_empty, Finset.union_empty]
 
 /-- Clock half of the uniform offer law: a clock step advertises nothing now. -/
 theorem TypeOffers.current_eq_empty_of_label_tock
@@ -316,12 +372,12 @@ theorem TypeOffers.current_eq_empty_of_label_tock
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => rfl
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | left_complete_tock => rfl
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | right_complete_tock => rfl
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hSync _ _ =>
+      exact absurd (hSync.2.2.mpr (by rw [hLabel]; trivial))
+        (by simp [TypeLabel.silent, TypeLabel.isTock])
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hSync _ _ =>
+      exact absurd (hSync.2.2.mp (by rw [hLabel]; trivial))
+        (by simp [TypeLabel.silent, TypeLabel.isTock])
 
 /-- A clock offer step exposes no future menu.
 
@@ -364,12 +420,12 @@ theorem TypeOffers.future_eq_empty_of_label_tock
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ _ =>
       exact absurd hLabel hNotTock
   | par_fuse_tock => simp
-  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | left_complete_tock => simp
-  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hNotTock _ =>
-      exact absurd hLabel hNotTock
-  | right_complete_tock => simp
+  | left_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hSync _ _ =>
+      exact absurd (hSync.2.2.mpr (by rw [hLabel]; trivial))
+        (by simp [TypeLabel.silent, TypeLabel.isTock])
+  | right_complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hSync _ _ =>
+      exact absurd (hSync.2.2.mp (by rw [hLabel]; trivial))
+        (by simp [TypeLabel.silent, TypeLabel.isTock])
 
 /-- Membership in an offer's folded menu: the default's menu, or some branch's
 head or menu. -/

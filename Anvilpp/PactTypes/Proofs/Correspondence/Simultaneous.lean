@@ -308,47 +308,43 @@ theorem computeFutureOf_par_pair (alphabet : PactTypeAlphabet)
             by_cases hEdgeTock : edge.label.semantic = TypeLabel.tock
             · rw [if_pos hEdgeTock] at hActionMem; simp at hActionMem
             rw [if_neg hEdgeTock] at hActionMem
-            rcases hShapes with
-              ⟨le, hle, re, hre, hlSrc, hrSrc, hCur, hLbl, hSync, -⟩ |
-              ⟨re, hre, hrSrc, hCur, hLbl, -⟩ | ⟨le, hle, hlSrc, hCur, hLbl, -⟩
-            · -- a synchronized product edge hides a union of component offers
-              obtain ⟨hlTock, hrTock⟩ := sync_components_not_tock
-                left.alphabet right.alphabet interface hSync
-                (by rw [← hLbl]; exact hEdgeTock)
-              have hRaw : action ∈ le.current ∪ re.current := by
-                rcases Finset.mem_union.mp hActionMem with hCur' | hFut
-                · rw [hCur] at hCur'
-                  exact (Finset.mem_filter.mp hCur').1
-                · cases hFut' : edge.future with
-                  | explicit offers =>
-                      exact absurd hFut' (hFutureShape edge (by
-                        rw [hParEq]; exact hEdge) hSrc hEdgeTock offers)
-                  | «at» s r => rw [hFut'] at hFut; simp at hFut
-              rcases Finset.mem_union.mp hRaw with hL | hR
-              · exact Finset.mem_union_left _
-                  (hLeftMono (hLeftIn le hle hlSrc hlTock hL))
-              · exact Finset.mem_union_right _
-                  (hRightMono (hRightIn re hre hrSrc hrTock hR))
-            · -- the left component completed: only right offers appear
-              refine Finset.mem_union_right _ (hRightMono
-                (hRightIn re hre hrSrc (by rw [← hLbl]; exact hEdgeTock) ?_))
+            -- every product family publishes the hidden union of the two
+            -- component currents, drawn from a `SyncEdges_I` witness
+            obtain ⟨le, hle, re, hre, hlSrc, hrSrc, hCur, hLbl, hSync⟩ :
+                ∃ le ∈ resolveAutomatonEdgesWith (compileTypeFuel N left)
+                    (computeFutureOfFuel (min N (typeCompilationFuel left)) left),
+                  ∃ re ∈ resolveAutomatonEdgesWith (compileTypeFuel N right)
+                    (computeFutureOfFuel (min N (typeCompilationFuel right))
+                      right),
+                    le.source = pair.1 ∧ re.source = pair.2 ∧
+                      edge.current =
+                        hideOffers interface (le.current ∪ re.current) ∧
+                      edge.label = AutomatonConstructionLabel.combine interface
+                        le.label re.label ∧
+                      syncAutomatonEdges left.alphabet right.alphabet interface
+                        le re := by
+              rcases hShapes with
+                ⟨le, hle, re, hre, h1, h2, h3, h4, h5, -⟩ |
+                ⟨le, hle, re, hre, h1, h2, h3, h4, h5, -⟩ |
+                ⟨le, hle, re, hre, h1, h2, h3, h4, h5, -⟩ <;>
+                exact ⟨le, hle, re, hre, h1, h2, h3, h4, h5⟩
+            obtain ⟨hlTock, hrTock⟩ := sync_components_not_tock
+              left.alphabet right.alphabet interface hSync
+              (by rw [← hLbl]; exact hEdgeTock)
+            have hRaw : action ∈ le.current ∪ re.current := by
               rcases Finset.mem_union.mp hActionMem with hCur' | hFut
-              · rw [hCur] at hCur'; exact hCur'
+              · rw [hCur] at hCur'
+                exact (Finset.mem_filter.mp hCur').1
               · cases hFut' : edge.future with
                 | explicit offers =>
                     exact absurd hFut' (hFutureShape edge (by
                       rw [hParEq]; exact hEdge) hSrc hEdgeTock offers)
                 | «at» s r => rw [hFut'] at hFut; simp at hFut
-            · -- the right component completed: only left offers appear
-              refine Finset.mem_union_left _ (hLeftMono
-                (hLeftIn le hle hlSrc (by rw [← hLbl]; exact hEdgeTock) ?_))
-              rcases Finset.mem_union.mp hActionMem with hCur' | hFut
-              · rw [hCur] at hCur'; exact hCur'
-              · cases hFut' : edge.future with
-                | explicit offers =>
-                    exact absurd hFut' (hFutureShape edge (by
-                      rw [hParEq]; exact hEdge) hSrc hEdgeTock offers)
-                | «at» s r => rw [hFut'] at hFut; simp at hFut
+            rcases Finset.mem_union.mp hRaw with hL | hR
+            · exact Finset.mem_union_left _
+                (hLeftMono (hLeftIn le hle hlSrc hlTock hL))
+            · exact Finset.mem_union_right _
+                (hRightMono (hRightIn re hre hrSrc hrTock hR))
           · -- the product term at a reachable pair
             simp only at hProduct
             rw [computeFutureOfFuel_eq_of_sufficient left pair.1 hLeftLe le_rfl,

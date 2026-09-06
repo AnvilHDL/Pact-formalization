@@ -1500,9 +1500,10 @@ theorem TypeOffers.preserves_tailOccurrences :
               hTailRec.2 hTail.2⟩
       | par_fuse | par_fuse_tock =>
           simp [PactType.TailOccurrences]
-      | left_complete outer rightEnv interface alphabet left right right'
-          rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-          hRightOffers hRightTargetNotSkip hCur hFut hLocal hWF hTock =>
+      | left_complete outer leftEnv rightEnv interface alphabet left right right'
+          rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftSkip
+          hRightNotSkip hLeftOffers hRightOffers hRightTargetNotSkip hLocalLeft
+          hLocalRight hWF hSync =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.TailOccurrences] at hTail
           have hRightSize : sizeOf right < n := by
@@ -1512,33 +1513,10 @@ theorem TypeOffers.preserves_tailOccurrences :
               (ih (sizeOf right) hRightSize tracked False
                 (env := rightEnv) (source := right) rfl hRightOffers
                 hTailRec.2 hTail.2))
-      | left_complete_tock outer rightEnv interface alphabet left right right'
-          rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-          hRightOffers hRightTargetNotSkip hCur hFut hLocal hWF hTock =>
-          simp only [PactType.TailRecursive] at hTailRec
-          simp only [PactType.TailOccurrences] at hTail
-          have hRightSize : sizeOf right < n := by
-            rw [← hSize]; simp_wf; omega
-          exact PactType.tailOccurrences_mono tracked False.elim _
-            (PactType.reannotate_tailOccurrences tracked right' alphabet False
-              (ih (sizeOf right) hRightSize tracked False
-                (env := rightEnv) (source := right) rfl hRightOffers
-                hTailRec.2 hTail.2))
-      | right_complete outer leftEnv interface alphabet left left' right
-          leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip hLeftOffers
-          hLeftTargetNotSkip hCur hFut hLocal hWF hTock =>
-          simp only [PactType.TailRecursive] at hTailRec
-          simp only [PactType.TailOccurrences] at hTail
-          have hLeftSize : sizeOf left < n := by
-            rw [← hSize]; simp_wf; omega
-          exact PactType.tailOccurrences_mono tracked False.elim _
-            (PactType.reannotate_tailOccurrences tracked left' alphabet False
-              (ih (sizeOf left) hLeftSize tracked False
-                (env := leftEnv) (source := left) rfl hLeftOffers
-                hTailRec.1 hTail.1))
-      | right_complete_tock outer leftEnv interface alphabet left left' right
-          leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip hLeftOffers
-          hLeftTargetNotSkip hCur hFut hLocal hWF hTock =>
+      | right_complete outer leftEnv rightEnv interface alphabet left left' right
+          leftLabel leftCurrent leftFuture rightCurrent rightFuture hRightSkip
+          hLeftNotSkip hRightOffers hLeftOffers hLeftTargetNotSkip hLocalLeft
+          hLocalRight hWF hSync =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.TailOccurrences] at hTail
           have hLeftSize : sizeOf left < n := by
@@ -1848,9 +1826,10 @@ theorem TypeOffers.replaceVar_tail (name : String)
               left right leftLabel rightLabel leftCurrent leftFuture
               rightCurrent rightFuture hLeftOffers hRightOffers hLocalLeft
               hLocalRight hSync hTock
-      | left_complete outer rightEnv interface alphabet left right right'
-          rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-          hRightOffers hRightTargetNotSkip hCur hFut hLocal hWF hNotTock =>
+      | left_complete outer leftEnv rightEnv interface alphabet left right right'
+          rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftSkip
+          hRightNotSkip hLeftOffers hRightOffers hRightTargetNotSkip hLocalLeft
+          hLocalRight hWF hSync =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.TailOccurrences] at hTail
           have hLeftInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
@@ -1866,34 +1845,14 @@ theorem TypeOffers.replaceVar_tail (name : String)
           refine ⟨typeFutureOffers (right'.reannotate alphabet) \
               hideTypeOffers interface rightCurrent, ?_⟩
           simpa [PactType.replaceVar, hLeftInert, hRightInert, hTargetInert]
-            using TypeOffers.left_complete env rightEnv interface alphabet left
-              right right' label rightCurrent rightFuture hLeftSkip
-              hRightNotSkip hRightOffers hRightTargetNotSkip hCur hFut hLocal
-              hWF hNotTock
-      | left_complete_tock outer rightEnv interface alphabet left right right'
-          rightLabel rightCurrent rightFuture hLeftSkip hRightNotSkip
-          hRightOffers hRightTargetNotSkip hCur hFut hLocal hWF hTock =>
-          simp only [PactType.TailRecursive] at hTailRec
-          simp only [PactType.TailOccurrences] at hTail
-          have hLeftInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement left hTail.1
-          have hRightInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement right hTail.2
-          have hRight'Tail := TypeOffers.preserves_tailOccurrences name False
-            hRightOffers hTailRec.2 hTail.2
-          have hTargetTail := PactType.reannotate_tailOccurrences name right'
-            alphabet False hRight'Tail
-          have hTargetInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement (right'.reannotate alphabet) hTargetTail
-          refine ⟨∅, ?_⟩
-          simpa [PactType.replaceVar, hLeftInert, hRightInert, hTargetInert]
-            using TypeOffers.left_complete_tock env rightEnv interface alphabet
-              left right right' label rightCurrent rightFuture hLeftSkip
-              hRightNotSkip hRightOffers hRightTargetNotSkip hCur hFut hLocal
-              hWF hTock
-      | right_complete outer leftEnv interface alphabet left left' right
-          leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip hLeftOffers
-          hLeftTargetNotSkip hCur hFut hLocal hWF hNotTock =>
+            using TypeOffers.left_complete env leftEnv rightEnv interface alphabet
+              left right right' label leftCurrent leftFuture rightCurrent
+              rightFuture hLeftSkip hRightNotSkip hLeftOffers hRightOffers
+              hRightTargetNotSkip hLocalLeft hLocalRight hWF hSync
+      | right_complete outer leftEnv rightEnv interface alphabet left left' right
+          leftLabel leftCurrent leftFuture rightCurrent rightFuture hRightSkip
+          hLeftNotSkip hRightOffers hLeftOffers hLeftTargetNotSkip hLocalLeft
+          hLocalRight hWF hSync =>
           simp only [PactType.TailRecursive] at hTailRec
           simp only [PactType.TailOccurrences] at hTail
           have hLeftInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
@@ -1909,31 +1868,10 @@ theorem TypeOffers.replaceVar_tail (name : String)
           refine ⟨typeFutureOffers (left'.reannotate alphabet) \
               hideTypeOffers interface leftCurrent, ?_⟩
           simpa [PactType.replaceVar, hLeftInert, hRightInert, hTargetInert]
-            using TypeOffers.right_complete env leftEnv interface alphabet left
-              left' right label leftCurrent leftFuture hRightSkip
-              hLeftNotSkip hLeftOffers hLeftTargetNotSkip hCur hFut hLocal hWF
-              hNotTock
-      | right_complete_tock outer leftEnv interface alphabet left left' right
-          leftLabel leftCurrent leftFuture hRightSkip hLeftNotSkip hLeftOffers
-          hLeftTargetNotSkip hCur hFut hLocal hWF hTock =>
-          simp only [PactType.TailRecursive] at hTailRec
-          simp only [PactType.TailOccurrences] at hTail
-          have hLeftInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement left hTail.1
-          have hRightInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement right hTail.2
-          have hLeft'Tail := TypeOffers.preserves_tailOccurrences name False
-            hLeftOffers hTailRec.1 hTail.1
-          have hTargetTail := PactType.reannotate_tailOccurrences name left'
-            alphabet False hLeft'Tail
-          have hTargetInert := PactType.replaceVar_eq_self_of_tailOccurrences_false
-            name replacement (left'.reannotate alphabet) hTargetTail
-          refine ⟨∅, ?_⟩
-          simpa [PactType.replaceVar, hLeftInert, hRightInert, hTargetInert]
-            using TypeOffers.right_complete_tock env leftEnv interface alphabet
-              left left' right label leftCurrent leftFuture hRightSkip
-              hLeftNotSkip hLeftOffers hLeftTargetNotSkip hCur hFut hLocal hWF
-              hTock
+            using TypeOffers.right_complete env leftEnv rightEnv interface alphabet
+              left left' right label leftCurrent leftFuture rightCurrent
+              rightFuture hRightSkip hLeftNotSkip hRightOffers hLeftOffers
+              hLeftTargetNotSkip hLocalLeft hLocalRight hWF hSync
 
 /-- A branch of a substituted branch list comes from a branch of the original. -/
 theorem PactType.mem_replaceBranches_inv

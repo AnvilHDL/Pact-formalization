@@ -59,67 +59,72 @@ def parallelRawTransitionEdges
           future := parallelFutureSpec label target current
           target := target }
 
-/-- The unpartnered edges of a product state whose left component has already
-reached an accepting state.  The step is taken in the written right component
-under its projected local environment, and only the interface has to be empty
-on both its offer fields. -/
-def parallelLeftCompleteEdges
-    (parentAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
-    (left right : AutomatonFragment)
-    (rightFuture : TypeAutomatonState → Finset BareMessage) :
-    Finset PendingAutomatonEdge := by
-  classical
-  exact
-    ((left.accepting ∩ left.states).biUnion fun leftState =>
-      ((resolveAutomatonEdgesWith right rightFuture).filter
-          fun rightEdge =>
-          rightEdge.source ∉ right.accepting ∧
-          rightEdge.target ∉ right.accepting ∧
-          restrictTypeOffers interface rightEdge.current = ∅ ∧
-          restrictTypeOffers interface rightEdge.future = ∅).biUnion
-        fun rightEdge =>
-          ((parentAlphabet.localEnvironments).filter
-            fun environment =>
-              projectAutomatonEnvironment rightAlphabet environment =
-                rightEdge.environment).image
-            fun environment =>
-              let target : TypeAutomatonState := .survivor 1 rightEdge.target
-              { source := .pair leftState rightEdge.source
-                environment := environment
-                label := rightEdge.label
-                current := rightEdge.current
-                future := parallelFutureSpec rightEdge.label target rightEdge.current
-                target := target })
+/-- Survivor entry for a completed left component: `δ_par^left`.
 
-/-- The mirror of `parallelLeftCompleteEdges` for a completed right
-component. -/
-def parallelRightCompleteEdges
-    (parentAlphabet leftAlphabet : PactTypeAlphabet) (interface : Interface)
+The edge is a synchronized product edge of `SyncEdges_I`, so it carries both
+component edges, both local environments and their `Sync_I` premise.  The
+finished left component stays accepting across its own edge — in practice its
+silent idle loop — while the surviving right component is live at both ends.
+Only the target is replaced by the survivor state; the component may still
+advertise an interface action, which `hideOffers` removes from the published
+current offer. -/
+def parallelLeftCompleteEdges
+    (leftAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
     (left right : AutomatonFragment)
-    (leftFuture : TypeAutomatonState → Finset BareMessage) :
+    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
   classical
+  let allLeftEdges := resolveAutomatonEdgesWith left leftFuture
+  let allRightEdges := resolveAutomatonEdgesWith right rightFuture
   exact
-    ((right.accepting ∩ right.states).biUnion fun rightState =>
-      ((resolveAutomatonEdgesWith left leftFuture).filter
-          fun leftEdge =>
-          leftEdge.source ∉ left.accepting ∧
-          leftEdge.target ∉ left.accepting ∧
-          restrictTypeOffers interface leftEdge.current = ∅ ∧
-          restrictTypeOffers interface leftEdge.future = ∅).biUnion
-        fun leftEdge =>
-          ((parentAlphabet.localEnvironments).filter
-            fun environment =>
-              projectAutomatonEnvironment leftAlphabet environment =
-                leftEdge.environment).image
-            fun environment =>
-              let target : TypeAutomatonState := .survivor 0 leftEdge.target
-              { source := .pair leftEdge.source rightState
-                environment := environment
-                label := leftEdge.label
-                current := leftEdge.current
-                future := parallelFutureSpec leftEdge.label target leftEdge.current
-                target := target })
+    allLeftEdges.biUnion fun leftEdge =>
+    (allRightEdges.filter fun rightEdge =>
+      syncAutomatonEdges leftAlphabet rightAlphabet interface
+        leftEdge rightEdge ∧
+        leftEdge.source ∈ left.accepting ∧ leftEdge.target ∈ left.accepting ∧
+        rightEdge.source ∉ right.accepting ∧
+        rightEdge.target ∉ right.accepting).image fun rightEdge =>
+        let target : TypeAutomatonState := .survivor 1 rightEdge.target
+        let current := hideOffers interface (leftEdge.current ∪ rightEdge.current)
+        let label := AutomatonConstructionLabel.combine interface
+          leftEdge.label rightEdge.label
+        { source := .pair leftEdge.source rightEdge.source
+          environment := combineAutomatonEnvironment interface
+            leftEdge.environment rightEdge.environment
+          label := label
+          current := current
+          future := parallelFutureSpec label target current
+          target := target }
+
+/-- Survivor entry for a completed right component: `δ_par^right`.  Mirror of
+`parallelLeftCompleteEdges`. -/
+def parallelRightCompleteEdges
+    (leftAlphabet rightAlphabet : PactTypeAlphabet) (interface : Interface)
+    (left right : AutomatonFragment)
+    (leftFuture rightFuture : TypeAutomatonState → Finset BareMessage) :
+    Finset PendingAutomatonEdge := by
+  classical
+  let allLeftEdges := resolveAutomatonEdgesWith left leftFuture
+  let allRightEdges := resolveAutomatonEdgesWith right rightFuture
+  exact
+    allLeftEdges.biUnion fun leftEdge =>
+    (allRightEdges.filter fun rightEdge =>
+      syncAutomatonEdges leftAlphabet rightAlphabet interface
+        leftEdge rightEdge ∧
+        rightEdge.source ∈ right.accepting ∧ rightEdge.target ∈ right.accepting ∧
+        leftEdge.source ∉ left.accepting ∧
+        leftEdge.target ∉ left.accepting).image fun rightEdge =>
+        let target : TypeAutomatonState := .survivor 0 leftEdge.target
+        let current := hideOffers interface (leftEdge.current ∪ rightEdge.current)
+        let label := AutomatonConstructionLabel.combine interface
+          leftEdge.label rightEdge.label
+        { source := .pair leftEdge.source rightEdge.source
+          environment := combineAutomatonEnvironment interface
+            leftEdge.environment rightEdge.environment
+          label := label
+          current := current
+          future := parallelFutureSpec label target current
+          target := target }
 
 /-- The continuation of `parallelLeftCompleteEdges` inside the survivor
 region: the surviving right component keeps stepping from `survivor 1`. -/
@@ -248,10 +253,10 @@ def buildParallelAutomaton
     (parallelRawTransitionEdges leftAlphabet rightAlphabet interface
       left right
       leftFuture rightFuture ∪
-      parallelLeftCompleteEdges parentAlphabet rightAlphabet
-        interface left right rightFuture ∪
-      parallelRightCompleteEdges parentAlphabet leftAlphabet
-        interface left right leftFuture ∪
+      parallelLeftCompleteEdges leftAlphabet rightAlphabet
+        interface left right leftFuture rightFuture ∪
+      parallelRightCompleteEdges leftAlphabet rightAlphabet
+        interface left right leftFuture rightFuture ∪
       parallelLeftCompleteSurvivorEdges interface restampedRight
         restampedRightFuture ∪
       parallelRightCompleteSurvivorEdges interface restampedLeft

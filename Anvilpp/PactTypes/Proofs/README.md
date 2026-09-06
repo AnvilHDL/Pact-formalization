@@ -8,9 +8,9 @@ names introduced only to state a proof obligation —
 
 | | Files | Lines | Theorems |
 |---|---:|---:|---:|
-| [`Syntax/`](Syntax/README.md) | 14 | 5,857 | 115 |
-| [`Automata/`](Automata/README.md) | 14 | 6,492 | 171 |
-| [`Correspondence/`](Correspondence/README.md) | 42 | 37,314 | 656 |
+| [`Syntax/`](Syntax/README.md) | 14 | 5,897 | 117 |
+| [`Automata/`](Automata/README.md) | 14 | 6,479 | 171 |
+| [`Correspondence/`](Correspondence/README.md) | 42 | 37,084 | 651 |
 
 The layers are used in that order. `Syntax/` proves facts about types alone —
 substitution, regularity, menus. `Automata/` proves facts about compiled
@@ -19,6 +19,6 @@ fragments alone — fuel irrelevance, edge shape, marker absence.
 `correspondence_simultaneous`.
 
 Most of the weight is in the parallel and recursion constructors:
-`Correspondence/Helpers/Parallel.lean` (3,816 lines),
+`Correspondence/Helpers/Parallel.lean` (3,639 lines),
 `Helpers/AlphabetPreservation.lean` (3,359),
-`Simultaneous/Recursion.lean` (2,671).
+`Simultaneous/Recursion.lean` (2,609).

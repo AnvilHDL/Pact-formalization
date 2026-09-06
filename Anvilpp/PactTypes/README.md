@@ -75,11 +75,11 @@ Helpers 13 and 18 are deferred in the paper and are not mechanised.
 
 | | Files | Lines | Defs | Theorems |
 |---|---:|---:|---:|---:|
-| `Spec/Syntax` | 13 | 2,604 | 153 | 8 |
-| `Spec/Automata` | 13 | 1,972 | 96 | 1 |
-| `Proofs/Syntax` | 14 | 5,857 | 0 | 115 |
-| `Proofs/Automata` | 14 | 6,492 | 11 | 171 |
-| `Proofs/Correspondence` | 42 | 37,314 | 44 | 656 |
+| `Spec/Syntax` | 13 | 2,586 | 153 | 8 |
+| `Spec/Automata` | 13 | 1,977 | 96 | 1 |
+| `Proofs/Syntax` | 14 | 5,897 | 0 | 117 |
+| `Proofs/Automata` | 14 | 6,479 | 11 | 171 |
+| `Proofs/Correspondence` | 42 | 37,084 | 44 | 651 |
 
 ## Verification
 

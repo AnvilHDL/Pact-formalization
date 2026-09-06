@@ -205,8 +205,8 @@ theorem buildParallelAutomaton_noMarkerFor
     Finset.mem_inter] at hEdge
   rcases hEdge with
       ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩ |
-        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, -, -, rfl⟩) |
-        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, -, -, rfl⟩) |
+        ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
+        ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
         ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
         ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩) |
         ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
@@ -219,10 +219,20 @@ theorem buildParallelAutomaton_noMarkerFor
         leftEdge hLeftEdge hL
     · exact resolveAutomatonEdgesWith_noMarkerFor right rightFuture name hRight
         rightEdge hRightEdge hR
-  · exact resolveAutomatonEdgesWith_noMarkerFor right rightFuture name hRight
-      rightEdge hRightEdge
-  · exact resolveAutomatonEdgesWith_noMarkerFor left leftFuture name hLeft
-      leftEdge hLeftEdge
+  · intro hEq
+    simp only at hEq
+    rcases AutomatonConstructionLabel.combine_eq_variable hEq with hL | hR
+    · exact resolveAutomatonEdgesWith_noMarkerFor left leftFuture name hLeft
+        leftEdge hLeftEdge hL
+    · exact resolveAutomatonEdgesWith_noMarkerFor right rightFuture name hRight
+        rightEdge hRightEdge hR
+  · intro hEq
+    simp only at hEq
+    rcases AutomatonConstructionLabel.combine_eq_variable hEq with hL | hR
+    · exact resolveAutomatonEdgesWith_noMarkerFor left leftFuture name hLeft
+        leftEdge hLeftEdge hL
+    · exact resolveAutomatonEdgesWith_noMarkerFor right rightFuture name hRight
+        rightEdge hRightEdge hR
   · exact resolveAutomatonEdgesWith_noMarkerFor restampedRight
       restampedRightFuture name hRestampedRight rightEdge hRightEdge
   · exact resolveAutomatonEdgesWith_noMarkerFor restampedLeft

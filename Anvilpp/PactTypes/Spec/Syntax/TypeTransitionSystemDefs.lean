@@ -231,41 +231,51 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       TypeTransition outer (.par alphabet left right interface)
       (TypeLabel.combine interface leftLabel rightLabel)
       (.skip alphabet)
-  -- The left side is already `skip` at the source, so only the right survives
-  -- and the product carries the survivor's own label.
-  | left_complete (outer rightEnv : TypeEnvironment)
+  -- T-Par-Left: the left side is already `skip`, so only the right survives.
+  -- The finished side still takes its silent `skip` step, both local
+  -- environments are checked against the sibling's offers, and the labels
+  -- synchronize.  `skip` cannot step under a clock environment, so survivor
+  -- entry is non-clock.
+  | left_complete (outer leftEnv rightEnv : TypeEnvironment)
       (interface : Interface) (alphabet : PactTypeAlphabet)
       (left right right' : PactType) (rightLabel : TypeLabel)
-      (rightCurrent rightFuture : Finset BareMessage) :
+      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
       left = .skip left.alphabet →
       right ≠ .skip right.alphabet →
+      TypeTransition leftEnv left TypeLabel.silent left →
+      TypeOffers leftEnv left TypeLabel.silent left leftCurrent leftFuture →
       TypeTransition rightEnv right rightLabel right' →
       TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
       right' ≠ .skip right'.alphabet →
-      restrictTypeOffers interface rightCurrent = ∅ →
-      restrictTypeOffers interface rightFuture = ∅ →
-      -- The finished side has no menu, so the survivor's own environment
-      -- stands in the sibling slot and the premise projects `outer` alone.
-      LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
+      LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
       outer.WellFormed alphabet →
+      TypeLabel.Sync interface TypeLabel.silent rightLabel →
       --
       TypeTransition outer (.par alphabet left right interface)
       rightLabel
       (right'.reannotate alphabet)
-  -- Mirror of `left_complete`: the right side is already `skip` at the source.
-  | right_complete (outer leftEnv : TypeEnvironment)
+  -- T-Par-Right: mirror of `left_complete`; the right side is already `skip`.
+  | right_complete (outer leftEnv rightEnv : TypeEnvironment)
       (interface : Interface) (alphabet : PactTypeAlphabet)
       (left left' right : PactType) (leftLabel : TypeLabel)
-      (leftCurrent leftFuture : Finset BareMessage) :
+      (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
       right = .skip right.alphabet →
       left ≠ .skip left.alphabet →
+      TypeTransition rightEnv right TypeLabel.silent right →
+      TypeOffers rightEnv right TypeLabel.silent right rightCurrent
+        rightFuture →
       TypeTransition leftEnv left leftLabel left' →
       TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
       left' ≠ .skip left'.alphabet →
-      restrictTypeOffers interface leftCurrent = ∅ →
-      restrictTypeOffers interface leftFuture = ∅ →
-      LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
+      LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+        rightFuture leftEnv →
+      LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+        leftFuture rightEnv →
       outer.WellFormed alphabet →
+      TypeLabel.Sync interface leftLabel TypeLabel.silent →
       --
       TypeTransition outer (.par alphabet left right interface)
       leftLabel

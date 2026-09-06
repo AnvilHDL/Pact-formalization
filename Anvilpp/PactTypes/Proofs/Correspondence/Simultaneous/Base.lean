@@ -1607,10 +1607,9 @@ theorem combineAutomatonEnvironment_mem_localEnvironments
               Finset.sdiff_disjoint⟩
           · rw [← hFutEq, ← hImmEq, ← hClockEq]
 
-/-- Edge locality across the parallel product.  The raw synchronized family
-publishes a combined environment, handled by
-`combineAutomatonEnvironment_mem_localEnvironments`; the two completion families
-draw their environments straight from the parent; the four survivor and done
+/-- Edge locality across the parallel product.  The raw family and the two
+survivor-entry families publish a combined environment, handled by
+`combineAutomatonEnvironment_mem_localEnvironments`; the four survivor and done
 families copy a re-stamped child edge, whose alphabet is already the parent's. -/
 lemma buildParallelAutomaton_edge_families
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
@@ -1636,13 +1635,14 @@ lemma buildParallelAutomaton_edge_families
   classical
   simp only [buildParallelAutomaton, finishAutomatonFragment,
     Finset.mem_union] at hEdge
-  rcases hEdge with
-    ((((((hRaw | hLeftComplete) | hRightComplete) | hLeftSurvivor) |
-      hRightSurvivor) | hLeftDone) | hRightDone) | hDone
-  · -- synchronized: the combined environment collapses to the outer one
-    simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
-      Finset.mem_filter, Finset.mem_image] at hRaw
-    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨hRightMem, hSync, -⟩, rfl⟩ := hRaw
+  -- The three synchronized families publish the same combined environment, so
+  -- the argument for it is shared.
+  have combined : ∀ leftEdge rightEdge : AutomatonFragmentEdge,
+      leftEdge ∈ resolveAutomatonEdgesWith left leftFuture →
+      syncAutomatonEdges leftAlphabet rightAlphabet interface leftEdge rightEdge →
+      combineAutomatonEnvironment interface leftEdge.environment
+        rightEdge.environment ∈ parentAlphabet.localEnvironments := by
+    intro leftEdge rightEdge hLeftMem hSync
     obtain ⟨hLeftLocal, hRightLocal, -⟩ := hSync
     -- The outer environment sits inside the left component's own environment,
     -- which the left fragment already draws from its alphabet.
@@ -1677,16 +1677,24 @@ lemma buildParallelAutomaton_edge_families
           · refine hLeftFutField ?_
             rw [hLeftFut]
             exact Finset.mem_sdiff.mpr ⟨Finset.mem_union_left _ hAction, hImm⟩
-  · -- left complete: the environment is drawn from the parent by the filter
+  rcases hEdge with
+    ((((((hRaw | hLeftComplete) | hRightComplete) | hLeftSurvivor) |
+      hRightSurvivor) | hLeftDone) | hRightDone) | hDone
+  · -- synchronized: the combined environment collapses to the outer one
+    simp only [parallelRawTransitionEdges, Finset.mem_biUnion,
+      Finset.mem_filter, Finset.mem_image] at hRaw
+    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨-, hSync, -⟩, rfl⟩ := hRaw
+    exact combined leftEdge rightEdge hLeftMem hSync
+  · -- left complete: the survivor entry publishes the same combined environment
     simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image] at hLeftComplete
-    obtain ⟨-, -, -, -, environment, ⟨hLocal, -⟩, rfl⟩ := hLeftComplete
-    exact hLocal
+    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨-, hSync, -⟩, rfl⟩ := hLeftComplete
+    exact combined leftEdge rightEdge hLeftMem hSync
   · -- right complete: the mirror
     simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image] at hRightComplete
-    obtain ⟨-, -, -, -, environment, ⟨hLocal, -⟩, rfl⟩ := hRightComplete
-    exact hLocal
+    obtain ⟨leftEdge, hLeftMem, rightEdge, ⟨-, hSync, -⟩, rfl⟩ := hRightComplete
+    exact combined leftEdge rightEdge hLeftMem hSync
   · -- left-complete survivor: copies a re-stamped right edge
     simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftSurvivor
@@ -1734,30 +1742,10 @@ theorem hideOffers_union_subset_actions {parent left right : PactTypeAlphabet}
     simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
     exact ⟨hRightOffers hRight, hNotInterface⟩
 
-/-- Offers that meet no interface id are already the hidden ones, so a child
-current the product copies unchanged is declared by the parent. -/
-theorem offers_subset_hidden_of_restrict_empty {parent child : PactTypeAlphabet}
-    {interface : Interface}
-    (hHide : PactTypeAlphabet.hideInterface child interface = parent)
-    {offers : Finset BareMessage} (hOffers : offers ⊆ child.actions)
-    (hRestrict : restrictTypeOffers interface offers = ∅) :
-    offers ⊆ parent.actions := by
-  classical
-  intro action hAction
-  rw [← hHide]
-  simp only [PactTypeAlphabet.hideInterface, Finset.mem_filter]
-  refine ⟨hOffers hAction, ?_⟩
-  intro hInterface
-  have : action ∈ restrictTypeOffers interface offers := by
-    simp only [restrictTypeOffers, Finset.mem_filter]
-    exact ⟨hAction, hInterface⟩
-  rw [hRestrict] at this
-  exact absurd this (Finset.notMem_empty _)
-
-/-- The offer half of parallel edge locality.  The raw family hides the union of
-the two component currents; the completion and survivor families copy a child's
-current unchanged.  Every family's future field is `.explicit` only at `∅`, by
-`parallelFutureSpec`. -/
+/-- The offer half of parallel edge locality.  The three synchronized families
+hide the union of the two component currents; the survivor and done families
+copy a re-stamped child's current unchanged.  Every family's future field is
+`.explicit` only at `∅`, by `parallelFutureSpec`. -/
 lemma buildParallelAutomaton_edge_offers
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)
     (interface : Interface)
@@ -1805,16 +1793,18 @@ lemma buildParallelAutomaton_edge_offers
       (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
   · simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftComplete
-    obtain ⟨-, -, resolved, ⟨⟨pending, hPending, rfl⟩, -, -, hRestrict, -⟩,
-      environment, -, rfl⟩ := hLeftComplete
-    exact ⟨offers_subset_hidden_of_restrict_empty hRightHide
-      (hRightCurrent pending hPending) hRestrict, hSpec _ _ _⟩
+    obtain ⟨leftEdge, ⟨leftPending, hLeftPending, rfl⟩, rightEdge,
+      ⟨⟨rightPending, hRightPending, rfl⟩, -⟩, rfl⟩ := hLeftComplete
+    exact ⟨hideOffers_union_subset_actions hLeftHide hRightHide
+      (hLeftCurrent leftPending hLeftPending)
+      (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
   · simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hRightComplete
-    obtain ⟨-, -, resolved, ⟨⟨pending, hPending, rfl⟩, -, -, hRestrict, -⟩,
-      environment, -, rfl⟩ := hRightComplete
-    exact ⟨offers_subset_hidden_of_restrict_empty hLeftHide
-      (hLeftCurrent pending hPending) hRestrict, hSpec _ _ _⟩
+    obtain ⟨leftEdge, ⟨leftPending, hLeftPending, rfl⟩, rightEdge,
+      ⟨⟨rightPending, hRightPending, rfl⟩, -⟩, rfl⟩ := hRightComplete
+    exact ⟨hideOffers_union_subset_actions hLeftHide hRightHide
+      (hLeftCurrent leftPending hLeftPending)
+      (hRightCurrent rightPending hRightPending), hSpec _ _ _⟩
   · simp only [parallelLeftCompleteSurvivorEdges, Finset.mem_filter,
       Finset.mem_image, resolveAutomatonEdgesWith] at hLeftSurvivor
     obtain ⟨resolved, ⟨⟨pending, hPending, rfl⟩, -⟩, rfl⟩ := hLeftSurvivor

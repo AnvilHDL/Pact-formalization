@@ -154,8 +154,8 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
     Finset.mem_filter, Finset.mem_inter] at hEdge
   rcases hEdge with
       ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
-        ⟨leftState, -, rightEdge, ⟨hRightEdge, -⟩, _survivorEnv, -, rfl⟩) |
-        ⟨rightState, -, leftEdge, ⟨hLeftEdge, -⟩, _survivorEnv, -, rfl⟩) |
+        ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
+        ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
         ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
         ⟨leftEdge, ⟨hLeftEdge, -⟩, rfl⟩) |
         ⟨rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
@@ -196,6 +196,7 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
       parallelRawTransitionEdges, parallelLeftCompleteEdges,
       parallelRightCompleteEdges, parallelDoneEdges,
       hLeftTargets leftRaw hLeftRaw]
+
   · simp only [resolveAutomatonEdgesWith, Finset.mem_image] at hRightEdge
     obtain ⟨rightRaw, hRightRaw, hRightEq⟩ := hRightEdge
     rw [← hRightEq]

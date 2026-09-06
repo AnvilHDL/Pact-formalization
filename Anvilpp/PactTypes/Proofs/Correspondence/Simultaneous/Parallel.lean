@@ -432,172 +432,88 @@ theorem currentOffer_par_sync_backward
     exact ⟨.par alphabet targetL targetR interface, _, ⟨hOffers.toTypeTransition, hOffers⟩,
       relationMembership_par_product alphabet left right interface hTargetL hTargetR⟩
 
-private theorem projectEnvironment_eq {parent child : PactTypeAlphabet}
-    {env : TypeEnvironment} (hWF : env.WellFormed parent)
-    (hSubset : parent.actions ⊆ child.actions) :
-    projectAutomatonEnvironment child env = env := by
-  have hI : projectTypeEnvironmentOffers child env.immediate = env.immediate := by
-    apply Finset.filter_eq_self.mpr
-    intro action hAction
-    obtain ⟨base, hBase, rfl⟩ := Finset.mem_image.mp (hWF.2.2.1 hAction)
-    exact Finset.mem_image_of_mem _ (hSubset hBase)
-  have hF : projectTypeEnvironmentOffers child env.future = env.future := by
-    apply Finset.filter_eq_self.mpr
-    intro action hAction
-    obtain ⟨base, hBase, rfl⟩ := Finset.mem_image.mp (hWF.2.2.2 hAction)
-    exact Finset.mem_image_of_mem _ (hSubset hBase)
-  cases hClock : env.clock with
-  | true =>
-    obtain ⟨hImm, hFut⟩ := hWF.1 hClock
-    cases env
-    simp_all [projectAutomatonEnvironment, TypeEnvironment.tock]
-  | false =>
-    cases env
-    simp_all [projectAutomatonEnvironment]
+/-- A `skip` source has only its silent self-loop, with empty current and
+future offers. -/
+private theorem skip_step_offers {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
+    {source target : PactType} {label : TypeLabel}
+    {current future : Finset BareMessage} (hSource : source = .skip alphabet)
+    (hOffers : TypeOffers env source label target current future) :
+    label = TypeLabel.silent ∧ target = source ∧ current = ∅ ∧ future = ∅ := by
+  subst hSource
+  cases hOffers with
+  | skip _ _ _ =>
+    exact ⟨rfl, rfl, rfl, by simp [typeFutureOffers, typeFutureOffersFuel]⟩
 
-private theorem completionEnvironment_eq {alphabet : PactTypeAlphabet}
-    {outer localEnv : TypeEnvironment} {interface : Interface} {ty : PactType}
-    (hWF : outer.WellFormed alphabet)
-    (hLocal : LocalTypeOfferEnvironment outer interface ty localEnv ∅ ∅ localEnv) :
-    localEnv = outer := by
-  cases hLocal with
-  | clock _ _ _ _ hClock =>
-    obtain ⟨hI, hF⟩ := hWF.1 hClock
-    cases outer
-    simp_all [TypeEnvironment.tock]
-  | ordinary _ _ _ _ _ _ hClock _ hLC hI hF =>
-    simp only [restrictTypeOffers, Finset.filter_empty, Finset.union_empty] at hI hF
-    rw [hI, Finset.sdiff_eq_self_of_disjoint
-      (Finset.disjoint_iff_inter_eq_empty.mpr (hWF.2.1 hClock)).symm] at hF
-    cases outer
-    cases localEnv
-    simp_all
-
-private theorem hide_eq_of_restrict_empty {interface : Interface}
-    {offers : Finset BareMessage} (h : restrictTypeOffers interface offers = ∅) :
-    hideTypeOffers interface offers = offers := by
-  apply Finset.filter_eq_self.mpr
-  intro action hAction hInterface
-  have hIn : action ∈ restrictTypeOffers interface offers :=
-    Finset.mem_filter.mpr ⟨hAction, hInterface⟩
-  rw [h] at hIn
-  exact Finset.notMem_empty action hIn
-
-private theorem completionEnvironment_self {alphabet : PactTypeAlphabet}
-    {outer : TypeEnvironment} (hWF : outer.WellFormed alphabet)
-    (interface : Interface) (ty : PactType) :
-    LocalTypeOfferEnvironment outer interface ty outer ∅ ∅ outer := by
-  cases hClock : outer.clock with
-  | true =>
-    have hEq := PactTypeAlphabet.eq_tock_of_mem_localEnvironments_of_clock
-      (PactTypeAlphabet.mem_localEnvironments_of_wellFormed hWF) hClock
-    rw [hEq]
-    exact .clock _ _ _ _ _ rfl
-  | false =>
-    refine .ordinary _ _ _ _ _ _ _ hClock hClock hClock ?_ ?_
-    · simp [restrictTypeOffers]
-    · simp only [restrictTypeOffers, Finset.filter_empty, Finset.union_empty]
-      exact (Finset.sdiff_eq_self_of_disjoint
-        (Finset.disjoint_iff_inter_eq_empty.mpr (hWF.2.1 hClock)).symm).symm
-
-theorem currentOffer_par_leftComplete_backward
-    {alphabet : PactTypeAlphabet} {left right rhoL rhoR : PactType}
-    {interface : Interface} {bound : List String}
-    (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
-    (hRight : CurrentOfferCorrespondence right) (hRightMenu : FutureOffersAgree right)
-    {qL : TypeAutomatonState} {edge : AutomatonFragmentEdge}
-    {outer : TypeEnvironment} {label : TypeLabel}
-    (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL qL)
-    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR edge.source)
-    (hLeftFinal : qL ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
-    (hMem : edge ∈ resolveAutomatonEdgesWith
-      (compileTypeFuel (typeCompilationFuel right) right) (computeFutureOf right))
-    (hLabel : edge.label = .visible label)
-    (hRightLive : edge.source ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting)
-    (hTargetLive : edge.target ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting)
-    (hCurrentHidden : restrictTypeOffers interface edge.current = ∅)
-    (hFutureHidden : restrictTypeOffers interface edge.future = ∅)
-    (hOuter : outer.WellFormed alphabet)
-    (hProjection : projectAutomatonEnvironment right.alphabet outer = edge.environment) :
-    ∃ target future,
-      DecoratedTypeTransition outer (.par alphabet rhoL rhoR interface) label
-        ⟨edge.current, future⟩ target ∧
-      relationMembership (buildRelationSet (.par alphabet left right interface)
-        (compileType (.par alphabet left right interface))) target (.survivor 1 edge.target) := by
-  obtain ⟨hLWF, hRWF⟩ := typeWellFormedIn_par hWF
-  have hCompat := hWF.1
-  simp only [PactType.AlphabetWellFormed] at hCompat
-  obtain ⟨target, hStep, hTarget⟩ := hRight.backward_with_future hRightMenu hRelR
-    (resolved_hasEdge hMem hLabel)
-  have hLocal : LocalTypeOfferEnvironment outer interface rhoR edge.environment ∅ ∅
-      edge.environment := by
-    rw [← hProjection, projectEnvironment_eq hOuter
-      (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1)]
-    exact completionEnvironment_self hOuter interface rhoR
-  have hLeftSkip := (related_accepting_iff hRelL).mp hLeftFinal
-  have hRightNotSkip := mt (related_accepting_iff hRelR).mpr hRightLive
-  have hTargetNotSkip := mt (related_accepting_iff hTarget).mpr hTargetLive
-  have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hRWF
-  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, hIAS, _⟩ := id hRWF
-  have hTargetRel := survivorRight_relationMembership alphabet left right interface hDisjoint
-    (relationMembership_reannotate hRWF hCompat.1
-      (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS action
-        (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1 hAction)) hTarget) hTargetLive
-  by_cases hClock : label = TypeLabel.tock
-  · have hOffers := TypeOffers.left_complete_tock outer edge.environment interface alphabet
-      rhoL rhoR target label edge.current edge.future hLeftSkip hRightNotSkip hStep.2
-      hTargetNotSkip hCurrentHidden hFutureHidden hLocal hOuter hClock
-    have hEmpty : edge.current = ∅ := hStep.2.current_eq_empty_of_label_tock hClock
-    rw [hEmpty]
-    exact ⟨target.reannotate alphabet, ∅, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
-  · have hOffers := TypeOffers.left_complete outer edge.environment interface alphabet
-      rhoL rhoR target label edge.current edge.future hLeftSkip hRightNotSkip hStep.2
-      hTargetNotSkip hCurrentHidden hFutureHidden hLocal hOuter hClock
-    rw [hide_eq_of_restrict_empty hCurrentHidden] at hOffers
-    exact ⟨target.reannotate alphabet, _, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
-
-/-- Entry into the right survivor uses an edge of the written right child.
-Only its residual is re-signed; exact survivor transport supplies membership. -/
+/-- Survivor entry on the left.  The finished component contributes its silent
+`skip` edge, whose source and target are both accepting and whose offers are
+empty, so the `SyncEdges_I` witness carries `Sync_I(ε, α₂)`.  Hence
+`ε ∪_I α₂ = α₂` and the published current offer is `hide_I(O_C₂)`. -/
 theorem currentOffer_par_leftComplete_forward
-    {alphabet : PactTypeAlphabet} {left right rhoL rhoR target : PactType}
+    {alphabet : PactTypeAlphabet} {left right rhoL rhoR targetR : PactType}
     {interface : Interface} {bound : List String}
     (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
-    (hRight : CurrentOfferCorrespondence right) (hRightMenu : FutureOffersAgree right)
-    {qL qR : TypeAutomatonState} {outer envR : TypeEnvironment}
-    {label : TypeLabel} {current future : Finset BareMessage}
+    (hLeft : CurrentOfferCorrespondence left) (hRight : CurrentOfferCorrespondence right)
+    (hLeftMenu : FutureOffersAgree left) (hRightMenu : FutureOffersAgree right)
+    {qL qR : TypeAutomatonState} {outer envL envR : TypeEnvironment}
+    {label : TypeLabel} {cL fL cR fR : Finset BareMessage}
     (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL qL)
     (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR qR)
     (hLeftSkip : rhoL = .skip rhoL.alphabet)
     (hRightLive : rhoR ≠ .skip rhoR.alphabet)
-    (hTargetLive : target ≠ .skip target.alphabet)
-    (hStep : DecoratedTypeTransition envR rhoR label ⟨current, future⟩ target)
-    (hCurrentHidden : restrictTypeOffers interface current = ∅)
-    (hFutureHidden : restrictTypeOffers interface future = ∅)
-    (hLocal : LocalTypeOfferEnvironment outer interface rhoR envR ∅ ∅ envR)
-    (hOuter : outer.WellFormed alphabet) :
+    (hTargetLive : targetR ≠ .skip targetR.alphabet)
+    (hStepL : DecoratedTypeTransition envL rhoL TypeLabel.silent ⟨cL, fL⟩ rhoL)
+    (hStepR : DecoratedTypeTransition envR rhoR label ⟨cR, fR⟩ targetR)
+    (hLocalL : LocalTypeOfferEnvironment outer interface rhoL envR cR fR envL)
+    (hLocalR : LocalTypeOfferEnvironment outer interface rhoR envL cL fL envR)
+    (hOuter : outer.WellFormed alphabet)
+    (hSync : TypeLabel.Sync interface TypeLabel.silent label) :
     ∃ q' future',
       (compileType (.par alphabet left right interface)).HasEdge (.pair qL qR) outer label
-        ⟨hideTypeOffers interface current, future'⟩ (.survivor 1 q') ∧
+        ⟨hideTypeOffers interface cR, future'⟩ (.survivor 1 q') ∧
       relationMembership (buildRelationSet (.par alphabet left right interface)
         (compileType (.par alphabet left right interface)))
-        (target.reannotate alphabet) (.survivor 1 q') := by
+        (targetR.reannotate alphabet) (.survivor 1 q') := by
   obtain ⟨hLWF, hRWF⟩ := typeWellFormedIn_par hWF
   have hCompat := hWF.1
   simp only [PactType.AlphabetWellFormed] at hCompat
-  have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hRWF
-  have hFinal := (related_accepting_iff hRelL).mpr hLeftSkip
-  have hState := relationMembership_state_mem left rhoL qL
-    (offerBranchesDisjoint_of_wellFormedIn hLWF) hRelL
-  obtain ⟨q', hEdge, hTarget⟩ := hRight.forward_with_future hRightMenu hRelR hStep
-  have hRLive := mt (related_accepting_iff hRelR).mp hRightLive
-  have hLive := mt (related_accepting_iff hTarget).mp hTargetLive
-  have hProjection : projectAutomatonEnvironment right.alphabet outer = envR := by
-    rw [projectEnvironment_eq hOuter (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1),
-      completionEnvironment_eq hOuter hLocal]
-  let edge : AutomatonFragmentEdge := ⟨qR, envR, .visible label, current, future, q'⟩
+  have hHidden : ∀ action ∈ alphabet.actions, action.1 ∉ interface :=
+    fun _ hAction => parent_no_interface hCompat.2.1 hAction
+  have hAlphaL := relationMembership_alphabet_eq_of_wellFormed left rhoL qL hLWF.1 hRelL
+  have hAlphaR := relationMembership_alphabet_eq_of_wellFormed right rhoR qR hRWF.1 hRelR
+  have hEmptyL : cL = ∅ := (skip_step_offers hLeftSkip hStepL.2).2.2.1
+  obtain ⟨qL', hEdgeL, hTargetL⟩ := hLeft.forward_with_future hLeftMenu hRelL hStepL
+  obtain ⟨qR', hEdgeR, hTargetR⟩ := hRight.forward_with_future hRightMenu hRelR hStepR
+  let eL : AutomatonFragmentEdge := ⟨qL, envL, .visible TypeLabel.silent, cL, fL, qL'⟩
+  let eR : AutomatonFragmentEdge := ⟨qR, envR, .visible label, cR, fR, qR'⟩
+  have hEL := (compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdgeL
+  have hER := (compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdgeR
+  have hLE : LocalTypeOfferEnvironment outer interface rhoL eR.environment
+      eR.current eR.future eL.environment := hLocalL
+  have hRE : LocalTypeOfferEnvironment outer interface rhoR eL.environment
+      eL.current eL.future eR.environment := hLocalR
+  obtain ⟨hEnv, hEdgesSync⟩ := sync_of_local hOuter hHidden hLE hRE
+    (offers_disjoint hStepL.2) (offers_disjoint hStepR.2)
+    (fun hClock => edge_offers_empty_of_clock hLeftMenu hTargetL hEdgeL
+      (localEnvironment_clock hLE hClock))
+    (fun hClock => edge_offers_empty_of_clock hRightMenu hTargetR hEdgeR
+      (localEnvironment_clock hRE hClock)) hSync
+  rw [hAlphaL, hAlphaR] at hEdgesSync
+  -- Both left states represent `skip`, and both right states are live.
+  have hSourceFinal : eL.source ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting :=
+    (related_accepting_iff hRelL).mpr hLeftSkip
+  have hTargetFinal : eL.target ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting :=
+    (related_accepting_iff hTargetL).mpr hLeftSkip
+  have hSourceLive : eR.source ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting :=
+    mt (related_accepting_iff hRelR).mp hRightLive
+  have hTargetNotFinal :
+      eR.target ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting :=
+    mt (related_accepting_iff hTargetR).mp hTargetLive
+  let state : TypeAutomatonState := .survivor 1 qR'
+  let combined := AutomatonConstructionLabel.combine interface eL.label eR.label
+  let published := hideOffers interface (eL.current ∪ eR.current)
   let raw : PendingAutomatonEdge :=
-    ⟨.pair qL qR, outer, .visible label, current,
-      parallelFutureSpec (.visible label) (.survivor 1 q') current, .survivor 1 q'⟩
+    ⟨.pair qL qR, combineAutomatonEnvironment interface envL envR, combined,
+      published, parallelFutureSpec combined state published, state⟩
   have hRaw : raw ∈ (compileTypeFuel
       (typeCompilationFuel (.par alphabet left right interface))
       (.par alphabet left right interface)).edges := by
@@ -605,22 +521,105 @@ theorem currentOffer_par_leftComplete_forward
     simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
     apply Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inr
     simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
-      Finset.mem_filter, Finset.mem_inter]
-    exact ⟨qL, ⟨hFinal, hState⟩, edge,
-      ⟨(compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdge,
-        hRLive, hLive, hCurrentHidden, hFutureHidden⟩,
-      outer, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed hOuter, hProjection⟩, rfl⟩
-  refine ⟨q', (match raw.future with
+      Finset.mem_filter]
+    exact ⟨eL, hEL, eR, ⟨hER, hEdgesSync, hSourceFinal, hTargetFinal, hSourceLive,
+      hTargetNotFinal⟩, rfl⟩
+  have hLabelEq : raw.label = .visible label := by
+    simp only [raw, combined, eL, eR, AutomatonConstructionLabel.combine,
+      TypeLabel.combine_silent_left interface label hSync]
+  have hCurrentEq : raw.current = hideTypeOffers interface cR := by
+    simp only [raw, published, eL, eR, hEmptyL, Finset.empty_union, hideOffers,
+      hideTypeOffers]
+  refine ⟨qR', (match raw.future with
     | .explicit future => future
-    | .at state removed => computeFutureOf (.par alphabet left right interface) state \ removed),
+    | .at target removed =>
+        computeFutureOf (.par alphabet left right interface) target \ removed),
     ?_, ?_⟩
-  · rw [hide_eq_of_restrict_empty hCurrentHidden, compileType_hasEdge_iff_hasResolvedEdge]
-    exact ⟨raw, hRaw, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · rw [compileType_hasEdge_iff_hasResolvedEdge]
+    exact ⟨raw, hRaw, rfl, hEnv, hLabelEq, hCurrentEq, rfl, rfl⟩
   · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, hIAS, _⟩ := id hRWF
-    exact survivorRight_relationMembership alphabet left right interface hDisjoint
+    exact survivorRight_relationMembership alphabet left right interface
+      (offerBranchesDisjoint_of_wellFormedIn hRWF)
       (relationMembership_reannotate hRWF hCompat.1
         (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS action
-          (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1 hAction)) hTarget) hLive
+          (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1 hAction)) hTargetR)
+      hTargetNotFinal
+
+/-- Invert a left survivor-entry edge through the `SyncEdges_I` witness it was
+built from.  The finished component's edge runs between accepting states, so it
+carries `skip`'s silent step and `Sync_I(ε, α₂)` is exactly the premise
+T-Par-Left needs. -/
+theorem currentOffer_par_leftComplete_backward
+    {alphabet : PactTypeAlphabet} {left right rhoL rhoR : PactType}
+    {interface : Interface} {bound : List String}
+    (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
+    (hLeft : CurrentOfferCorrespondence left) (hRight : CurrentOfferCorrespondence right)
+    (hLeftMenu : FutureOffersAgree left) (hRightMenu : FutureOffersAgree right)
+    {eL eR : AutomatonFragmentEdge} {labelL labelR : TypeLabel}
+    (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL eL.source)
+    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR eR.source)
+    (hMemL : eL ∈ resolveAutomatonEdgesWith
+      (compileTypeFuel (typeCompilationFuel left) left) (computeFutureOf left))
+    (hMemR : eR ∈ resolveAutomatonEdgesWith
+      (compileTypeFuel (typeCompilationFuel right) right) (computeFutureOf right))
+    (hLabelL : eL.label = .visible labelL) (hLabelR : eR.label = .visible labelR)
+    (hSync : syncAutomatonEdges left.alphabet right.alphabet interface eL eR)
+    (hSourceFinal : eL.source ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
+    (hTargetFinal : eL.target ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
+    (hSourceLive : eR.source ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting)
+    (hTargetLive : eR.target ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting) :
+    ∃ target future,
+      DecoratedTypeTransition
+        (combineAutomatonEnvironment interface eL.environment eR.environment)
+        (.par alphabet rhoL rhoR interface) (TypeLabel.combine interface labelL labelR)
+        ⟨hideTypeOffers interface (eL.current ∪ eR.current), future⟩ target ∧
+      relationMembership (buildRelationSet (.par alphabet left right interface)
+        (compileType (.par alphabet left right interface))) target
+        (.survivor 1 eR.target) := by
+  obtain ⟨hLWF, hRWF⟩ := typeWellFormedIn_par hWF
+  have hCompat := hWF.1
+  simp only [PactType.AlphabetWellFormed] at hCompat
+  have hAlphaL := relationMembership_alphabet_eq_of_wellFormed left rhoL _ hLWF.1 hRelL
+  have hAlphaR := relationMembership_alphabet_eq_of_wellFormed right rhoR _ hRWF.1 hRelR
+  obtain ⟨targetL, hStepL, hTargetL⟩ := hLeft.backward_with_future hLeftMenu hRelL
+    (resolved_hasEdge hMemL hLabelL)
+  obtain ⟨targetR, hStepR, hTargetR⟩ := hRight.backward_with_future hRightMenu hRelR
+    (resolved_hasEdge hMemR hLabelR)
+  have hEnvWF : eL.environment.WellFormed left.alphabet := by
+    rw [← hAlphaL]
+    exact PactType.typeOffers_env_wellFormed hStepL.2
+      (represented_alphabetWellFormed hLWF hRelL)
+  have hOuter := combined_environment_wellFormed hCompat.2.1.parent_eq_left hEnvWF hSync
+  obtain ⟨hLE, hRE, _, _, _, _, hLabelSync⟩ := hSync
+  rw [← hAlphaL] at hLE
+  rw [← hAlphaR] at hRE
+  have hLocalL := (localEnvironment_iff _ _ rhoL eR eL).mp hLE
+  have hLocalR := (localEnvironment_iff _ _ rhoR eL eR).mp hRE
+  simp only [hLabelL, hLabelR, AutomatonConstructionLabel.semantic] at hLabelSync
+  -- The finished component's edge is `skip`'s silent self-loop.
+  have hLeftSkip : rhoL = .skip rhoL.alphabet := (related_accepting_iff hRelL).mp hSourceFinal
+  obtain ⟨hSilent, hLoop, hEmptyRaw, -⟩ := skip_step_offers hLeftSkip hStepL.2
+  have hEmptyL : eL.current = ∅ := hEmptyRaw
+  rw [hSilent] at hStepL hLabelSync
+  rw [hLoop] at hStepL
+  have hRightNotSkip := mt (related_accepting_iff hRelR).mpr hSourceLive
+  have hTargetNotSkip := mt (related_accepting_iff hTargetR).mpr hTargetLive
+  have hOffers := TypeOffers.left_complete
+    (combineAutomatonEnvironment interface eL.environment eR.environment)
+    eL.environment eR.environment interface alphabet rhoL rhoR targetR labelR
+    eL.current eL.future eR.current eR.future hLeftSkip hRightNotSkip hStepL.2
+    hStepR.2 hTargetNotSkip hLocalL hLocalR hOuter hLabelSync
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, hIAS, _⟩ := id hRWF
+  have hTargetRel := survivorRight_relationMembership alphabet left right interface
+    (offerBranchesDisjoint_of_wellFormedIn hRWF)
+    (relationMembership_reannotate hRWF hCompat.1
+      (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS action
+        (PactTypeAlphabet.parent_actions_subset_right hCompat.2.1 hAction)) hTargetR)
+    hTargetLive
+  -- `ε ∪_I α₂ = α₂`, and the finished component published nothing.
+  rw [hSilent, TypeLabel.combine_silent_left interface labelR hLabelSync, hEmptyL,
+    Finset.empty_union]
+  exact ⟨targetR.reannotate alphabet, _, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
 
 /-- A re-signed left-child step stays in its survivor copy, or enters the
 parallel final state when the child completes. -/
@@ -835,48 +834,75 @@ theorem currentOffer_par_survivorRight_backward
     exact survivorRight_relationMembership alphabet left right interface hDisjoint hTarget hNot
 
 
-/-- Entry into the left survivor uses an edge of the written left child.
-Only its residual is re-signed; exact survivor transport supplies membership. -/
+/-- Survivor entry on the right: mirror of `currentOffer_par_leftComplete_forward`.
+The finished right component contributes its silent `skip` edge, so the witness
+carries `Sync_I(α₁, ε)` and `α₁ ∪_I ε = α₁`. -/
 theorem currentOffer_par_rightComplete_forward
-    {alphabet : PactTypeAlphabet} {right left rhoR rhoL target : PactType}
+    {alphabet : PactTypeAlphabet} {left right rhoL rhoR targetL : PactType}
     {interface : Interface} {bound : List String}
     (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
-    (hLeft : CurrentOfferCorrespondence left) (hLeftMenu : FutureOffersAgree left)
-    {qR qL : TypeAutomatonState} {outer envL : TypeEnvironment}
-    {label : TypeLabel} {current future : Finset BareMessage}
-    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR qR)
+    (hLeft : CurrentOfferCorrespondence left) (hRight : CurrentOfferCorrespondence right)
+    (hLeftMenu : FutureOffersAgree left) (hRightMenu : FutureOffersAgree right)
+    {qL qR : TypeAutomatonState} {outer envL envR : TypeEnvironment}
+    {label : TypeLabel} {cL fL cR fR : Finset BareMessage}
     (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL qL)
+    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR qR)
     (hRightSkip : rhoR = .skip rhoR.alphabet)
     (hLeftLive : rhoL ≠ .skip rhoL.alphabet)
-    (hTargetLive : target ≠ .skip target.alphabet)
-    (hStep : DecoratedTypeTransition envL rhoL label ⟨current, future⟩ target)
-    (hCurrentHidden : restrictTypeOffers interface current = ∅)
-    (hFutureHidden : restrictTypeOffers interface future = ∅)
-    (hLocal : LocalTypeOfferEnvironment outer interface rhoL envL ∅ ∅ envL)
-    (hOuter : outer.WellFormed alphabet) :
+    (hTargetLive : targetL ≠ .skip targetL.alphabet)
+    (hStepL : DecoratedTypeTransition envL rhoL label ⟨cL, fL⟩ targetL)
+    (hStepR : DecoratedTypeTransition envR rhoR TypeLabel.silent ⟨cR, fR⟩ rhoR)
+    (hLocalL : LocalTypeOfferEnvironment outer interface rhoL envR cR fR envL)
+    (hLocalR : LocalTypeOfferEnvironment outer interface rhoR envL cL fL envR)
+    (hOuter : outer.WellFormed alphabet)
+    (hSync : TypeLabel.Sync interface label TypeLabel.silent) :
     ∃ q' future',
       (compileType (.par alphabet left right interface)).HasEdge (.pair qL qR) outer label
-        ⟨hideTypeOffers interface current, future'⟩ (.survivor 0 q') ∧
+        ⟨hideTypeOffers interface cL, future'⟩ (.survivor 0 q') ∧
       relationMembership (buildRelationSet (.par alphabet left right interface)
         (compileType (.par alphabet left right interface)))
-        (target.reannotate alphabet) (.survivor 0 q') := by
+        (targetL.reannotate alphabet) (.survivor 0 q') := by
   obtain ⟨hLWF, hRWF⟩ := typeWellFormedIn_par hWF
   have hCompat := hWF.1
   simp only [PactType.AlphabetWellFormed] at hCompat
-  have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hLWF
-  have hFinal := (related_accepting_iff hRelR).mpr hRightSkip
-  have hState := relationMembership_state_mem right rhoR qR
-    (offerBranchesDisjoint_of_wellFormedIn hRWF) hRelR
-  obtain ⟨q', hEdge, hTarget⟩ := hLeft.forward_with_future hLeftMenu hRelL hStep
-  have hLLive := mt (related_accepting_iff hRelL).mp hLeftLive
-  have hLive := mt (related_accepting_iff hTarget).mp hTargetLive
-  have hProjection : projectAutomatonEnvironment left.alphabet outer = envL := by
-    rw [projectEnvironment_eq hOuter (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1),
-      completionEnvironment_eq hOuter hLocal]
-  let edge : AutomatonFragmentEdge := ⟨qL, envL, .visible label, current, future, q'⟩
+  have hHidden : ∀ action ∈ alphabet.actions, action.1 ∉ interface :=
+    fun _ hAction => parent_no_interface hCompat.2.1 hAction
+  have hAlphaL := relationMembership_alphabet_eq_of_wellFormed left rhoL qL hLWF.1 hRelL
+  have hAlphaR := relationMembership_alphabet_eq_of_wellFormed right rhoR qR hRWF.1 hRelR
+  have hEmptyR : cR = ∅ := (skip_step_offers hRightSkip hStepR.2).2.2.1
+  obtain ⟨qL', hEdgeL, hTargetL⟩ := hLeft.forward_with_future hLeftMenu hRelL hStepL
+  obtain ⟨qR', hEdgeR, hTargetR⟩ := hRight.forward_with_future hRightMenu hRelR hStepR
+  let eL : AutomatonFragmentEdge := ⟨qL, envL, .visible label, cL, fL, qL'⟩
+  let eR : AutomatonFragmentEdge := ⟨qR, envR, .visible TypeLabel.silent, cR, fR, qR'⟩
+  have hEL := (compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdgeL
+  have hER := (compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdgeR
+  have hLE : LocalTypeOfferEnvironment outer interface rhoL eR.environment
+      eR.current eR.future eL.environment := hLocalL
+  have hRE : LocalTypeOfferEnvironment outer interface rhoR eL.environment
+      eL.current eL.future eR.environment := hLocalR
+  obtain ⟨hEnv, hEdgesSync⟩ := sync_of_local hOuter hHidden hLE hRE
+    (offers_disjoint hStepL.2) (offers_disjoint hStepR.2)
+    (fun hClock => edge_offers_empty_of_clock hLeftMenu hTargetL hEdgeL
+      (localEnvironment_clock hLE hClock))
+    (fun hClock => edge_offers_empty_of_clock hRightMenu hTargetR hEdgeR
+      (localEnvironment_clock hRE hClock)) hSync
+  rw [hAlphaL, hAlphaR] at hEdgesSync
+  -- Both right states represent `skip`, and both left states are live.
+  have hSourceFinal : eR.source ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting :=
+    (related_accepting_iff hRelR).mpr hRightSkip
+  have hTargetFinal : eR.target ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting :=
+    (related_accepting_iff hTargetR).mpr hRightSkip
+  have hSourceLive : eL.source ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting :=
+    mt (related_accepting_iff hRelL).mp hLeftLive
+  have hTargetNotFinal :
+      eL.target ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting :=
+    mt (related_accepting_iff hTargetL).mp hTargetLive
+  let state : TypeAutomatonState := .survivor 0 qL'
+  let combined := AutomatonConstructionLabel.combine interface eL.label eR.label
+  let published := hideOffers interface (eL.current ∪ eR.current)
   let raw : PendingAutomatonEdge :=
-    ⟨.pair qL qR, outer, .visible label, current,
-      parallelFutureSpec (.visible label) (.survivor 0 q') current, .survivor 0 q'⟩
+    ⟨.pair qL qR, combineAutomatonEnvironment interface envL envR, combined,
+      published, parallelFutureSpec combined state published, state⟩
   have hRaw : raw ∈ (compileTypeFuel
       (typeCompilationFuel (.par alphabet left right interface))
       (.par alphabet left right interface)).edges := by
@@ -884,89 +910,103 @@ theorem currentOffer_par_rightComplete_forward
     simp only [buildParallelAutomaton, finishAutomatonFragment, Finset.mem_union]
     apply Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inl ∘ Or.inr
     simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
-      Finset.mem_filter, Finset.mem_inter]
-    exact ⟨qR, ⟨hFinal, hState⟩, edge,
-      ⟨(compileType_hasEdge_iff_resolvedEdge_mem _ _ _ _ _ _).mp hEdge,
-        hLLive, hLive, hCurrentHidden, hFutureHidden⟩,
-      outer, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed hOuter, hProjection⟩, rfl⟩
-  refine ⟨q', (match raw.future with
+      Finset.mem_filter]
+    exact ⟨eL, hEL, eR, ⟨hER, hEdgesSync, hSourceFinal, hTargetFinal, hSourceLive,
+      hTargetNotFinal⟩, rfl⟩
+  have hLabelEq : raw.label = .visible label := by
+    simp only [raw, combined, eL, eR, AutomatonConstructionLabel.combine,
+      TypeLabel.combine_silent_right interface label hSync]
+  have hCurrentEq : raw.current = hideTypeOffers interface cL := by
+    simp only [raw, published, eL, eR, hEmptyR, Finset.union_empty, hideOffers,
+      hideTypeOffers]
+  refine ⟨qL', (match raw.future with
     | .explicit future => future
-    | .at state removed => computeFutureOf (.par alphabet left right interface) state \ removed),
+    | .at target removed =>
+        computeFutureOf (.par alphabet left right interface) target \ removed),
     ?_, ?_⟩
-  · rw [hide_eq_of_restrict_empty hCurrentHidden, compileType_hasEdge_iff_hasResolvedEdge]
-    exact ⟨raw, hRaw, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · rw [compileType_hasEdge_iff_hasResolvedEdge]
+    exact ⟨raw, hRaw, rfl, hEnv, hLabelEq, hCurrentEq, rfl, rfl⟩
   · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, hIAS, _⟩ := id hLWF
-    exact survivorLeft_relationMembership alphabet left right interface hDisjoint
+    exact survivorLeft_relationMembership alphabet left right interface
+      (offerBranchesDisjoint_of_wellFormedIn hLWF)
       (relationMembership_reannotate hLWF hCompat.1
         (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS action
-          (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1 hAction)) hTarget) hLive
+          (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1 hAction)) hTargetL)
+      hTargetNotFinal
 
-
+/-- Invert a right survivor-entry edge through its `SyncEdges_I` witness:
+mirror of `currentOffer_par_leftComplete_backward`. -/
 theorem currentOffer_par_rightComplete_backward
-    {alphabet : PactTypeAlphabet} {right left rhoR rhoL : PactType}
+    {alphabet : PactTypeAlphabet} {left right rhoL rhoR : PactType}
     {interface : Interface} {bound : List String}
     (hWF : TypeWellFormedIn bound (.par alphabet left right interface))
-    (hLeft : CurrentOfferCorrespondence left) (hLeftMenu : FutureOffersAgree left)
-    {qR : TypeAutomatonState} {edge : AutomatonFragmentEdge}
-    {outer : TypeEnvironment} {label : TypeLabel}
-    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR qR)
-    (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL edge.source)
-    (hRightFinal : qR ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
-    (hMem : edge ∈ resolveAutomatonEdgesWith
+    (hLeft : CurrentOfferCorrespondence left) (hRight : CurrentOfferCorrespondence right)
+    (hLeftMenu : FutureOffersAgree left) (hRightMenu : FutureOffersAgree right)
+    {eL eR : AutomatonFragmentEdge} {labelL labelR : TypeLabel}
+    (hRelL : relationMembership (buildRelationSet left (compileType left)) rhoL eL.source)
+    (hRelR : relationMembership (buildRelationSet right (compileType right)) rhoR eR.source)
+    (hMemL : eL ∈ resolveAutomatonEdgesWith
       (compileTypeFuel (typeCompilationFuel left) left) (computeFutureOf left))
-    (hLabel : edge.label = .visible label)
-    (hLeftLive : edge.source ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting)
-    (hTargetLive : edge.target ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting)
-    (hCurrentHidden : restrictTypeOffers interface edge.current = ∅)
-    (hFutureHidden : restrictTypeOffers interface edge.future = ∅)
-    (hOuter : outer.WellFormed alphabet)
-    (hProjection : projectAutomatonEnvironment left.alphabet outer = edge.environment) :
+    (hMemR : eR ∈ resolveAutomatonEdgesWith
+      (compileTypeFuel (typeCompilationFuel right) right) (computeFutureOf right))
+    (hLabelL : eL.label = .visible labelL) (hLabelR : eR.label = .visible labelR)
+    (hSync : syncAutomatonEdges left.alphabet right.alphabet interface eL eR)
+    (hSourceFinal : eR.source ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
+    (hTargetFinal : eR.target ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
+    (hSourceLive : eL.source ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting)
+    (hTargetLive : eL.target ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting) :
     ∃ target future,
-      DecoratedTypeTransition outer (.par alphabet rhoL rhoR interface) label
-        ⟨edge.current, future⟩ target ∧
+      DecoratedTypeTransition
+        (combineAutomatonEnvironment interface eL.environment eR.environment)
+        (.par alphabet rhoL rhoR interface) (TypeLabel.combine interface labelL labelR)
+        ⟨hideTypeOffers interface (eL.current ∪ eR.current), future⟩ target ∧
       relationMembership (buildRelationSet (.par alphabet left right interface)
-        (compileType (.par alphabet left right interface))) target (.survivor 0 edge.target) := by
+        (compileType (.par alphabet left right interface))) target
+        (.survivor 0 eL.target) := by
   obtain ⟨hLWF, hRWF⟩ := typeWellFormedIn_par hWF
   have hCompat := hWF.1
   simp only [PactType.AlphabetWellFormed] at hCompat
-  obtain ⟨target, hStep, hTarget⟩ := hLeft.backward_with_future hLeftMenu hRelL
-    (resolved_hasEdge hMem hLabel)
-  have hLocal : LocalTypeOfferEnvironment outer interface rhoL edge.environment ∅ ∅
-      edge.environment := by
-    rw [← hProjection, projectEnvironment_eq hOuter
-      (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1)]
-    exact completionEnvironment_self hOuter interface rhoL
-  have hRightSkip := (related_accepting_iff hRelR).mp hRightFinal
-  have hLeftNotSkip := mt (related_accepting_iff hRelL).mpr hLeftLive
-  have hTargetNotSkip := mt (related_accepting_iff hTarget).mpr hTargetLive
-  have hDisjoint := offerBranchesDisjoint_of_wellFormedIn hLWF
+  have hAlphaL := relationMembership_alphabet_eq_of_wellFormed left rhoL _ hLWF.1 hRelL
+  have hAlphaR := relationMembership_alphabet_eq_of_wellFormed right rhoR _ hRWF.1 hRelR
+  obtain ⟨targetL, hStepL, hTargetL⟩ := hLeft.backward_with_future hLeftMenu hRelL
+    (resolved_hasEdge hMemL hLabelL)
+  obtain ⟨targetR, hStepR, hTargetR⟩ := hRight.backward_with_future hRightMenu hRelR
+    (resolved_hasEdge hMemR hLabelR)
+  have hEnvWF : eL.environment.WellFormed left.alphabet := by
+    rw [← hAlphaL]
+    exact PactType.typeOffers_env_wellFormed hStepL.2
+      (represented_alphabetWellFormed hLWF hRelL)
+  have hOuter := combined_environment_wellFormed hCompat.2.1.parent_eq_left hEnvWF hSync
+  obtain ⟨hLE, hRE, _, _, _, _, hLabelSync⟩ := hSync
+  rw [← hAlphaL] at hLE
+  rw [← hAlphaR] at hRE
+  have hLocalL := (localEnvironment_iff _ _ rhoL eR eL).mp hLE
+  have hLocalR := (localEnvironment_iff _ _ rhoR eL eR).mp hRE
+  simp only [hLabelL, hLabelR, AutomatonConstructionLabel.semantic] at hLabelSync
+  -- The finished component's edge is `skip`'s silent self-loop.
+  have hRightSkip : rhoR = .skip rhoR.alphabet := (related_accepting_iff hRelR).mp hSourceFinal
+  obtain ⟨hSilent, hLoop, hEmptyRaw, -⟩ := skip_step_offers hRightSkip hStepR.2
+  have hEmptyR : eR.current = ∅ := hEmptyRaw
+  rw [hSilent] at hStepR hLabelSync
+  rw [hLoop] at hStepR
+  have hLeftNotSkip := mt (related_accepting_iff hRelL).mpr hSourceLive
+  have hTargetNotSkip := mt (related_accepting_iff hTargetL).mpr hTargetLive
+  have hOffers := TypeOffers.right_complete
+    (combineAutomatonEnvironment interface eL.environment eR.environment)
+    eL.environment eR.environment interface alphabet rhoL targetL rhoR labelL
+    eL.current eL.future eR.current eR.future hRightSkip hLeftNotSkip hStepR.2
+    hStepL.2 hTargetNotSkip hLocalL hLocalR hOuter hLabelSync
   obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, hIAS, _⟩ := id hLWF
-  have hTargetRel := survivorLeft_relationMembership alphabet left right interface hDisjoint
+  have hTargetRel := survivorLeft_relationMembership alphabet left right interface
+    (offerBranchesDisjoint_of_wellFormedIn hLWF)
     (relationMembership_reannotate hLWF hCompat.1
       (fun action hAction => PactType.InterfaceAlphabetScoped.avoids hIAS action
-        (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1 hAction)) hTarget) hTargetLive
-  by_cases hClock : label = TypeLabel.tock
-  · have hOffers := TypeOffers.right_complete_tock outer edge.environment interface alphabet
-      rhoL target rhoR label edge.current edge.future hRightSkip hLeftNotSkip hStep.2
-      hTargetNotSkip hCurrentHidden hFutureHidden hLocal hOuter hClock
-    have hEmpty : edge.current = ∅ := hStep.2.current_eq_empty_of_label_tock hClock
-    rw [hEmpty]
-    exact ⟨target.reannotate alphabet, ∅, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
-  · have hOffers := TypeOffers.right_complete outer edge.environment interface alphabet
-      rhoL target rhoR label edge.current edge.future hRightSkip hLeftNotSkip hStep.2
-      hTargetNotSkip hCurrentHidden hFutureHidden hLocal hOuter hClock
-    rw [hide_eq_of_restrict_empty hCurrentHidden] at hOffers
-    exact ⟨target.reannotate alphabet, _, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
-
-
-private theorem source_live_of_target_live {env : TypeEnvironment} {source target : PactType}
-    {label : TypeLabel} {current future : Finset BareMessage}
-    (hStep : DecoratedTypeTransition env source label ⟨current, future⟩ target)
-    (hTarget : target ≠ .skip target.alphabet) : source ≠ .skip source.alphabet := by
-  intro hSource
-  rw [hSource] at hStep
-  cases hStep.1
-  exact hTarget rfl
+        (PactTypeAlphabet.parent_actions_subset_left hCompat.2.1 hAction)) hTargetL)
+    hTargetLive
+  -- `α₁ ∪_I ε = α₁`, and the finished component published nothing.
+  rw [hSilent, TypeLabel.combine_silent_right interface labelL hLabelSync, hEmptyR,
+    Finset.union_empty]
+  exact ⟨targetL.reannotate alphabet, _, ⟨hOffers.toTypeTransition, hOffers⟩, hTargetRel⟩
 
 /-- Forward direction at a product state, by the semantic parallel rule. -/
 theorem currentOffer_par_pair_forward
@@ -1020,40 +1060,18 @@ theorem currentOffer_par_pair_forward
     simp only [hCL, hCR, Finset.union_empty, hideTypeOffers, Finset.filter_empty] at hEdge
     rw [hTarget, hLabel, hCurrent]
     exact ⟨.final, future', hEdge, relationMembership_par_final alphabet left right interface⟩
-  | left_complete envR targetR cR fR hTarget hLeftSkip hTargetLive hRightStep
-      hCurrentHidden hFutureHidden hLocal hOuter hNotClock hCurrent _ =>
+  | left_complete envL envR targetR cL fL cR fR hTarget hLeftSkip hRightLive
+      hTargetLive hStepL hStepR hLocalL hLocalR hOuter hSync hCurrent _ =>
     obtain ⟨q', future', hEdge, hRelated⟩ := currentOffer_par_leftComplete_forward
-      hWF hRight hRightMenu hRelL hRelR hLeftSkip
-      (source_live_of_target_live hRightStep hTargetLive) hTargetLive hRightStep
-      hCurrentHidden hFutureHidden hLocal hOuter
+      hWF hLeft hRight hLeftMenu hRightMenu hRelL hRelR hLeftSkip hRightLive
+      hTargetLive hStepL hStepR hLocalL hLocalR hOuter hSync
     rw [hTarget, hCurrent]
     exact ⟨.survivor 1 q', future', hEdge, hRelated⟩
-  | left_complete_tock envR targetR cR fR hTarget hLeftSkip hTargetLive hRightStep
-      hCurrentHidden hFutureHidden hLocal hOuter hClock hCurrent _ =>
-    obtain ⟨q', future', hEdge, hRelated⟩ := currentOffer_par_leftComplete_forward
-      hWF hRight hRightMenu hRelL hRelR hLeftSkip
-      (source_live_of_target_live hRightStep hTargetLive) hTargetLive hRightStep
-      hCurrentHidden hFutureHidden hLocal hOuter
-    have hEmpty : cR = ∅ := hRightStep.2.current_eq_empty_of_label_tock hClock
-    simp only [hEmpty, hideTypeOffers, Finset.filter_empty] at hEdge
-    rw [hTarget, hCurrent]
-    exact ⟨.survivor 1 q', future', hEdge, hRelated⟩
-  | right_complete envL targetL cL fL hTarget hRightSkip hTargetLive hLeftStep
-      hCurrentHidden hFutureHidden hLocal hOuter hNotClock hCurrent _ =>
+  | right_complete envL envR targetL cL fL cR fR hTarget hRightSkip hLeftLive
+      hTargetLive hStepR hStepL hLocalL hLocalR hOuter hSync hCurrent _ =>
     obtain ⟨q', future', hEdge, hRelated⟩ := currentOffer_par_rightComplete_forward
-      hWF hLeft hLeftMenu hRelR hRelL hRightSkip
-      (source_live_of_target_live hLeftStep hTargetLive) hTargetLive hLeftStep
-      hCurrentHidden hFutureHidden hLocal hOuter
-    rw [hTarget, hCurrent]
-    exact ⟨.survivor 0 q', future', hEdge, hRelated⟩
-  | right_complete_tock envL targetL cL fL hTarget hRightSkip hTargetLive hLeftStep
-      hCurrentHidden hFutureHidden hLocal hOuter hClock hCurrent _ =>
-    obtain ⟨q', future', hEdge, hRelated⟩ := currentOffer_par_rightComplete_forward
-      hWF hLeft hLeftMenu hRelR hRelL hRightSkip
-      (source_live_of_target_live hLeftStep hTargetLive) hTargetLive hLeftStep
-      hCurrentHidden hFutureHidden hLocal hOuter
-    have hEmpty : cL = ∅ := hLeftStep.2.current_eq_empty_of_label_tock hClock
-    simp only [hEmpty, hideTypeOffers, Finset.filter_empty] at hEdge
+      hWF hLeft hRight hLeftMenu hRightMenu hRelL hRelR hRightSkip hLeftLive
+      hTargetLive hStepL hStepR hLocalL hLocalR hOuter hSync
     rw [hTarget, hCurrent]
     exact ⟨.survivor 0 q', future', hEdge, hRelated⟩
 
@@ -1107,29 +1125,33 @@ theorem currentOffer_par_pair_backward
     rw [hTarget] at hRelated
     exact ⟨target, future', hStep, hRelated⟩
   · simp only [parallelLeftCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
-      Finset.mem_filter, Finset.mem_inter] at hLC
-    obtain ⟨qLF, ⟨hFinal, _⟩, edge, ⟨hEdgeMem, hLive, hTargetLive, hCH, hFH⟩,
-      outer, ⟨hOuter, hProjection⟩, rfl⟩ := hLC
+      Finset.mem_filter] at hLC
+    obtain ⟨eL, hEL, eR, ⟨hER, hSync, hSourceFinal, hTargetFinal, hSourceLive,
+      hTargetLive⟩, rfl⟩ := hLC
     simp only at hSource hEnv hLabel hCurrent hTarget
+    obtain ⟨labelL, labelR, hLL, hLR, hLabelEq⟩ := combine_visible_inv hLabel
     injection hSource with hQL hQR
     obtain ⟨target, future', hStep, hRelated⟩ := currentOffer_par_leftComplete_backward
-      hWF hRight hRightMenu (by rw [hQL]; exact hRelL) (by rw [hQR]; exact hRelR)
-      hFinal hEdgeMem hLabel hLive hTargetLive hCH hFH
-      (PactTypeAlphabet.environment_wellFormed hOuter) hProjection
-    rw [hEnv, hCurrent] at hStep
+      hWF hLeft hRight hLeftMenu hRightMenu
+      (by rw [hQL]; exact hRelL) (by rw [hQR]; exact hRelR)
+      hEL hER hLL hLR hSync hSourceFinal hTargetFinal hSourceLive hTargetLive
+    change hideTypeOffers interface (eL.current ∪ eR.current) = current at hCurrent
+    rw [hEnv, hLabelEq, hCurrent] at hStep
     rw [hTarget] at hRelated
     exact ⟨target, future', hStep, hRelated⟩
   · simp only [parallelRightCompleteEdges, Finset.mem_biUnion, Finset.mem_image,
-      Finset.mem_filter, Finset.mem_inter] at hRC
-    obtain ⟨qRF, ⟨hFinal, _⟩, edge, ⟨hEdgeMem, hLive, hTargetLive, hCH, hFH⟩,
-      outer, ⟨hOuter, hProjection⟩, rfl⟩ := hRC
+      Finset.mem_filter] at hRC
+    obtain ⟨eL, hEL, eR, ⟨hER, hSync, hSourceFinal, hTargetFinal, hSourceLive,
+      hTargetLive⟩, rfl⟩ := hRC
     simp only at hSource hEnv hLabel hCurrent hTarget
+    obtain ⟨labelL, labelR, hLL, hLR, hLabelEq⟩ := combine_visible_inv hLabel
     injection hSource with hQL hQR
     obtain ⟨target, future', hStep, hRelated⟩ := currentOffer_par_rightComplete_backward
-      hWF hLeft hLeftMenu (by rw [hQR]; exact hRelR) (by rw [hQL]; exact hRelL)
-      hFinal hEdgeMem hLabel hLive hTargetLive hCH hFH
-      (PactTypeAlphabet.environment_wellFormed hOuter) hProjection
-    rw [hEnv, hCurrent] at hStep
+      hWF hLeft hRight hLeftMenu hRightMenu
+      (by rw [hQL]; exact hRelL) (by rw [hQR]; exact hRelR)
+      hEL hER hLL hLR hSync hSourceFinal hTargetFinal hSourceLive hTargetLive
+    change hideTypeOffers interface (eL.current ∪ eR.current) = current at hCurrent
+    rw [hEnv, hLabelEq, hCurrent] at hStep
     rw [hTarget] at hRelated
     exact ⟨target, future', hStep, hRelated⟩
   · obtain ⟨edge, _, rfl⟩ := Finset.mem_image.mp hLS

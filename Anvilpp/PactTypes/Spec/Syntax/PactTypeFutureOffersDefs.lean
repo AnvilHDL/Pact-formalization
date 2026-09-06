@@ -262,83 +262,55 @@ mutual
           (TypeLabel.combine interface leftLabel rightLabel)
           (.skip alphabet)
           ∅ ∅
-    -- The left side is already `skip` at the source, so only the right survives
-    -- and the product carries the survivor's own label and offers.
-    | left_complete (outer rightEnv : TypeEnvironment)
+    -- T-Par-Left: the left side is already `skip`, so only the right survives.
+    -- The finished side still takes its silent `skip` step, both local
+    -- environments are checked against the sibling's offers, and the labels
+    -- synchronize.  `skip` cannot step under a clock environment, so survivor
+    -- entry is non-clock and there is no separate tock clause.
+    | left_complete (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface) (alphabet : PactTypeAlphabet)
         (left right right' : PactType) (rightLabel : TypeLabel)
-        (rightCurrent rightFuture : Finset BareMessage) :
+        (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
         left = .skip left.alphabet →
         right ≠ .skip right.alphabet →
+        TypeOffers leftEnv left TypeLabel.silent left leftCurrent leftFuture →
         TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
         right' ≠ .skip right'.alphabet →
-        restrictTypeOffers interface rightCurrent = ∅ →
-        restrictTypeOffers interface rightFuture = ∅ →
-        -- The finished side has no menu, so the survivor's own environment
-        -- stands in the sibling slot and the premise projects `outer` alone.
-        LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv →
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv →
         outer.WellFormed alphabet →
-        rightLabel ≠ TypeLabel.tock →
+        TypeLabel.Sync interface TypeLabel.silent rightLabel →
         TypeOffers outer (.par alphabet left right interface)
           rightLabel
           (right'.reannotate alphabet)
           (hideTypeOffers interface rightCurrent)
           (typeFutureOffers (right'.reannotate alphabet) \
             hideTypeOffers interface rightCurrent)
-    | left_complete_tock (outer rightEnv : TypeEnvironment)
-        (interface : Interface) (alphabet : PactTypeAlphabet)
-        (left right right' : PactType) (rightLabel : TypeLabel)
-        (rightCurrent rightFuture : Finset BareMessage) :
-        left = .skip left.alphabet →
-        right ≠ .skip right.alphabet →
-        TypeOffers rightEnv right rightLabel right' rightCurrent rightFuture →
-        right' ≠ .skip right'.alphabet →
-        restrictTypeOffers interface rightCurrent = ∅ →
-        restrictTypeOffers interface rightFuture = ∅ →
-        LocalTypeOfferEnvironment outer interface right rightEnv ∅ ∅ rightEnv →
-        outer.WellFormed alphabet →
-        rightLabel = TypeLabel.tock →
-        TypeOffers outer (.par alphabet left right interface)
-          rightLabel
-          (right'.reannotate alphabet)
-          ∅ ∅
-    -- Mirror of `left_complete`: the right side is already `skip`.
-    | right_complete (outer leftEnv : TypeEnvironment)
+    -- T-Par-Right: mirror of `left_complete`; the right side is already `skip`.
+    | right_complete (outer leftEnv rightEnv : TypeEnvironment)
         (interface : Interface) (alphabet : PactTypeAlphabet)
         (left left' right : PactType) (leftLabel : TypeLabel)
-        (leftCurrent leftFuture : Finset BareMessage) :
+        (leftCurrent leftFuture rightCurrent rightFuture : Finset BareMessage) :
         right = .skip right.alphabet →
         left ≠ .skip left.alphabet →
+        TypeOffers rightEnv right TypeLabel.silent right rightCurrent
+          rightFuture →
         TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
         left' ≠ .skip left'.alphabet →
-        restrictTypeOffers interface leftCurrent = ∅ →
-        restrictTypeOffers interface leftFuture = ∅ →
-        LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
+        LocalTypeOfferEnvironment outer interface left rightEnv rightCurrent
+          rightFuture leftEnv →
+        LocalTypeOfferEnvironment outer interface right leftEnv leftCurrent
+          leftFuture rightEnv →
         outer.WellFormed alphabet →
-        leftLabel ≠ TypeLabel.tock →
+        TypeLabel.Sync interface leftLabel TypeLabel.silent →
         TypeOffers outer (.par alphabet left right interface)
           leftLabel
           (left'.reannotate alphabet)
           (hideTypeOffers interface leftCurrent)
           (typeFutureOffers (left'.reannotate alphabet) \
             hideTypeOffers interface leftCurrent)
-    | right_complete_tock (outer leftEnv : TypeEnvironment)
-        (interface : Interface) (alphabet : PactTypeAlphabet)
-        (left left' right : PactType) (leftLabel : TypeLabel)
-        (leftCurrent leftFuture : Finset BareMessage) :
-        right = .skip right.alphabet →
-        left ≠ .skip left.alphabet →
-        TypeOffers leftEnv left leftLabel left' leftCurrent leftFuture →
-        left' ≠ .skip left'.alphabet →
-        restrictTypeOffers interface leftCurrent = ∅ →
-        restrictTypeOffers interface leftFuture = ∅ →
-        LocalTypeOfferEnvironment outer interface left leftEnv ∅ ∅ leftEnv →
-        outer.WellFormed alphabet →
-        leftLabel = TypeLabel.tock →
-        TypeOffers outer (.par alphabet left right interface)
-          leftLabel
-          (left'.reannotate alphabet)
-          ∅ ∅
 
 end
 
