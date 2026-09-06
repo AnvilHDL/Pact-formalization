@@ -1,0 +1,14 @@
+import Anvilpp.PactTypes.Spec.Syntax.PactTypeCompletionEval
+
+namespace Pact
+
+noncomputable section
+
+/-- Every free variable sits in a tail position.  A closed type has this
+property vacuously, and every subterm of such a type inherits it. -/
+def PactType.TailClosed (processType : PactType) : Prop :=
+  ∀ name : String, processType.TailOccurrences name True
+
+end
+
+end Pact

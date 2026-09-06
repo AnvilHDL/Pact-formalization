@@ -6,6 +6,6 @@ import Anvilpp.ProofHelpers.Objectives
 import Anvilpp.ProofHelpers.Regularity
 import Anvilpp.ProofHelpers.ConformanceTransfer
 import Anvilpp.ProofHelpers.SameCycleHonesty
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.MainHelpers
+import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MainHelpers
 import Anvilpp.ProofHelpers.CompatibilityBridge
 import Anvilpp.ProofHelpers.RefinementLifting

@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.NewCorrespondence.Helpers.MainHelpers
+import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MainHelpers
 
 namespace Pact
 

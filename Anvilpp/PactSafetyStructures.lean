@@ -1,4 +1,4 @@
-import Anvilpp.PactTypes.Automata.CompileTypeLemmas
+import Anvilpp.PactTypes.Proofs.Automata.CompileTypeLemmas
 
 namespace Pact
 

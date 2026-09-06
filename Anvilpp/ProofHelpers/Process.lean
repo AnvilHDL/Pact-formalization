@@ -1,8 +1,8 @@
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.List.Forall2
 import Anvilpp.PactSafetyStructures
-import Anvilpp.PactTypes.NewCorrespondence.TypeAutoRelCore
-import Anvilpp.PactTypes.NewCorrespondence.CompileWFHelpers
+import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
+import Anvilpp.PactTypes.Proofs.Correspondence.CompileWFHelpers
 
 namespace Pact
 
