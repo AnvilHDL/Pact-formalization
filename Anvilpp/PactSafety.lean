@@ -481,8 +481,10 @@ theorem type_compatibility_decidable_and_efficient
 
 The proof is the paper's: lift the componentwise refinements to a refinement of
 the whole composition (Helper Lemma H21), transfer the winning boundary strategy
-along it (Helper Lemma H22), and read off compatibility with Theorem 4.2.  Only
-H21 is left open, as it is in the paper.
+along it (Helper Lemma H22), and read off compatibility with Theorem 4.2.
+
+`hAlphabets` is the paper's `Omega(tau_i) = Omega(tau_i')`: refinement relates
+behaviour, not the fixed alphabets, so H21 states the equality separately.
 
 `hFairIds` is the counterpart of Theorem 4.3's premise: `Ω_T` quantifies its
 fairness hypothesis over `cal(Eta)` of the composition it is stated for, and
@@ -491,6 +493,8 @@ theorem compatibility_monotone_under_refinement
      {precise abstract : List PactType}
     {interfaces : List Interface} {progress : Finset ProcId}
     (hRefines : ComponentwiseRefines precise abstract)
+    (hAlphabets : List.Forall₂
+      (fun left right => left.alphabet = right.alphabet) precise abstract)
     (hPreciseWF : ∀ composition, composeTypes precise interfaces = some composition →
       TypeWellFormedIn [] composition)
     (hAbstractWF : ∀ composition, composeTypes abstract interfaces = some composition →
@@ -508,7 +512,8 @@ theorem compatibility_monotone_under_refinement
   exact ⟨preciseComposition, hPrecise,
     compatibility_monotone_of_refines (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)
       (hFairIds _ _ hPrecise hAbstract)
-      (helper_h21_componentwise_product_lifting hRefines hPrecise hAbstract) hComp⟩
+      (helper_h21_componentwise_product_lifting hRefines hAlphabets hPrecise
+        hAbstract (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)) hComp⟩
 
 #print axioms compatibility_monotone_under_refinement
 

@@ -1,4 +1,4 @@
-import Anvilpp.ProofHelpers.CompatibilitySoundness
+import Anvilpp.ProofHelpers.ResigningRefinement
 
 namespace Pact
 
@@ -12,12 +12,19 @@ lemma helper_h21_componentwise_product_lifting
     {precise abstract : List PactType} {interfaces : List Interface}
     {preciseComposition abstractComposition : PactType}
     (hComponentwise : ComponentwiseRefines precise abstract)
+    (hAlphabets : List.Forall₂
+      (fun left right => left.alphabet = right.alphabet) precise abstract)
     (hPrecise :
       composeTypes precise interfaces = some preciseComposition)
     (hAbstract :
-      composeTypes abstract interfaces = some abstractComposition) :
-    Refines preciseComposition abstractComposition := by
-  sorry -- TODO(section7): induction on the parenthesized composition.
+      composeTypes abstract interfaces = some abstractComposition)
+    (hPreciseWF : TypeWellFormedIn [] preciseComposition)
+    (hAbstractWF : TypeWellFormedIn [] abstractComposition) :
+    Refines preciseComposition abstractComposition :=
+  refines_compose precise abstract interfaces preciseComposition
+    abstractComposition hComponentwise hAlphabets hPrecise hAbstract
+    (ResignRegular.of_typeWellFormedIn hPreciseWF)
+    (ResignRegular.of_typeWellFormedIn hAbstractWF)
 
 /-! ## Helper Lemma H22: matching histories along refinement
 
@@ -211,7 +218,30 @@ lemma helper_h23_refinement_trans
     {left middle right : PactType}
     (hLeft : Refines left middle) (hRight : Refines middle right) :
     Refines left right := by
-  sorry -- TODO(section7): compose refinement witnesses.
+  obtain ⟨witnessLeft⟩ := hLeft
+  obtain ⟨witnessRight⟩ := hRight
+  refine ⟨{
+    relation := fun precise abstract =>
+      ∃ waypoint, witnessLeft.relation precise waypoint ∧
+        witnessRight.relation waypoint abstract
+    initial := ⟨middle, witnessLeft.initial, witnessRight.initial⟩
+    skipIff := ?_
+    availability := ?_
+    response := ?_ }⟩
+  · rintro _ _ ⟨waypoint, hLeftRelated, hRightRelated⟩
+    exact (witnessLeft.skipIff hLeftRelated).trans
+      (witnessRight.skipIff hRightRelated)
+  · rintro _ _ _ env label offers ⟨waypoint, hLeftRelated, hRightRelated⟩ hStep
+    obtain ⟨waypointTarget, hWaypointStep⟩ :=
+      witnessRight.availability hRightRelated hStep
+    exact witnessLeft.availability hLeftRelated hWaypointStep
+  · rintro _ _ _ env label offers ⟨waypoint, hLeftRelated, hRightRelated⟩ hStep
+    obtain ⟨waypointTarget, hWaypointStep, hLeftRelated'⟩ :=
+      witnessLeft.response hLeftRelated hStep
+    obtain ⟨abstractTarget, hAbstractStep, hRightRelated'⟩ :=
+      witnessRight.response hRightRelated hWaypointStep
+    exact ⟨abstractTarget, hAbstractStep, waypointTarget, hLeftRelated',
+      hRightRelated'⟩
 
 end
 
