@@ -1,4 +1,5 @@
 import Anvilpp.ProofHelpers
+import Anvilpp.ProofHelpers.Inference.DecoratedLifting
 import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
 import Anvilpp.PactTypes.Proofs.Correspondence.CasesTop
 import Anvilpp.PactSafetyStructures
@@ -69,14 +70,134 @@ theorem strategy_transfer
     obtain ⟨witnessLog, hWitnessErase, hWitnessMem⟩ := hEnsures typeLog hCompletedType
     exact (hOblivious log witnessLog (hErase.trans hWitnessErase.symm)).mpr hWitnessMem
 
-/-- Lemma 4.2, "Soundness of inferred types": `WFProc(P) ⟹ P ⊧ abs(P)`. -/
+/-! ### Lemma 4.2
+
+The paper's helper chain, in order: abstraction and substitution, one-step
+abstraction, decorated-step lifting, clock-step reflection, readiness
+reflection, and then the two closure clauses of the conformance relation. -/
+
+/-- `P₀` is reachable from `P` when some finite execution leads to it. -/
+def ProcReachable (initial residual : Proc) : Prop :=
+  ∃ entries, PrefixValid initial entries residual
+
+theorem ProcReachable.refl (process : Proc) : ProcReachable process process :=
+  ⟨[], .root⟩
+
+/-- `ConjMsgOwn` is one of the conjuncts of `TypeWF(abs(P))`. -/
+theorem WFProc.conjunctRegular {process : Proc} (hWF : WFProc process) :
+    Proc.ConjunctRegular process := by
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hOwnership, -⟩ := hWF
+  exact Proc.conjunctRegular_of_conjunctiveMessageOwnership hOwnership
+
+/-- Represented residuals: the two structural facts the conjunctive commitment
+reads survive to every reachable residual. -/
+theorem WFProc.sideConditions {initial residual : Proc} (hWF : WFProc initial)
+    (hReach : ProcReachable initial residual) :
+    Proc.AlphabetWellFormed residual ∧ Proc.ConjunctRegular residual := by
+  obtain ⟨entries, hValid⟩ := hReach
+  exact prefixValid_sideConditions hWF.2 hWF.conjunctRegular hValid
+
+theorem ProcReachable.step {initial current next : Proc} {env : Environment}
+    {label : Label} (hReach : ProcReachable initial current)
+    (hStep : ProcessTransition env current label next) :
+    ProcReachable initial next := by
+  obtain ⟨entries, hValid⟩ := hReach
+  obtain ⟨_, _, hOffers⟩ := hStep
+  exact ⟨entries ++ [(env, label)], hValid.step ⟨_, _, hOffers⟩⟩
+
+/-- Data well-formedness is preserved along a step: the only substitutions a
+rule performs are a value for a data variable and a closed recursive process
+for its own binder. -/
+theorem dataWFProc_step {env : Environment} {source target : Proc}
+    {label : Label} (hData : DataWFProc source)
+    (hStep : ProcessTransition env source label target) :
+    DataWFProc target := by
+  obtain ⟨_, _, hOffers⟩ := hStep
+  exact dataWFProc_offers hOffers hData
+
+/-- Helper for Lemma 4.2: decorated steps lift.
+
+An abstract decorated step at a reachable residual is realised by a concrete
+step exposing the erased current offer and the *same* future component.  The
+concrete label agrees with `β` on every message observation and on the clock,
+differing at most in fair-choice outcomes, and the concrete target need not
+abstract to `ρ`: a conditional takes the branch its own guard selects. -/
+theorem decorated_step_lifting
+    {initial process : Proc} (hWF : WFProc initial)
+    (hReach : ProcReachable initial process) (hData : DataWFProc process)
+    {env : Environment} {typeTarget : PactType} {typeLabel : TypeLabel}
+    {current future : Finset BareMessage}
+    (hStep : TypeOffers (eraseEnvironment env) (inferProcess process)
+      typeLabel typeTarget current future) :
+    ∃ target label processCurrent,
+      Offers env process label target processCurrent future ∧
+        processCurrent.image Offer.bare = current := by
+  obtain ⟨hAlpha, hConj⟩ := hWF.sideConditions hReach
+  by_cases hClock : (eraseEnvironment env).clock = false
+  · -- `Imm(E_P) ≠ {#}`: the lifting induction
+    obtain ⟨processCurrent, hImage, hLift⟩ :=
+      lifting_core hStep process rfl hClock hAlpha hConj hData
+    obtain ⟨target, label, hOffers, -⟩ := hLift env rfl
+    exact ⟨target, label, processCurrent, hOffers, hImage⟩
+  · -- `Imm(E_P) = {#}`: clock-step reflection supplies the step
+    have hEnvClock : env.clock = true := by
+      have : env.clock = (eraseEnvironment env).clock := rfl
+      rw [this]
+      cases hBool : (eraseEnvironment env).clock with
+      | false => exact absurd hBool hClock
+      | true => rfl
+    have hTypeWF := hStep.env_wellFormed
+      ((Proc.alphabetWellFormed_iff process).1 hAlpha)
+    have hEnvWF : env.WellFormed (inferProcess process).alphabet :=
+      (environment_wellFormed_iff env _).2 hTypeWF
+    have hEnvTock : env = Environment.tock := environment_eq_tock hEnvWF hEnvClock
+    have hEraseTock : eraseEnvironment env = TypeEnvironment.tock := by
+      rw [hEnvTock]; exact eraseEnvironment_tock
+    obtain ⟨hLabel, hCurrent, hFuture⟩ := hStep.clock_shape hEraseTock
+    obtain ⟨target, hOffers⟩ :=
+      clock_step_reflection hStep hEraseTock process rfl hAlpha
+    subst hCurrent; subst hFuture
+    exact ⟨target, Label.tock, ∅, by rw [hEnvTock]; exact hOffers, by simp⟩
+
+/-- Helper for Lemma 4.2: abstraction reflects readiness. -/
+theorem readiness_abstraction
+    {initial process : Proc} (hWF : WFProc initial)
+    (hReach : ProcReachable initial process) (hData : DataWFProc process)
+    {env : Environment} :
+    TypeReady (eraseEnvironment env) (inferProcess process) →
+      ProcessReady env process := by
+  intro hReady
+  obtain ⟨typeLabel, typeTarget, hTransition⟩ := hReady
+  -- Every derivable type step exposes at least one offer pair.
+  obtain ⟨current, future, hOffers⟩ := hTransition.exists_typeOffers
+  obtain ⟨target, label, _, hProcess, -⟩ :=
+    decorated_step_lifting hWF hReach hData hOffers
+  exact ⟨label, target, _, _, hProcess⟩
+
+/-- Lemma 4.2, "Soundness of inferred types": `WFProc(P) ⟹ P ⊧ abs(P)`.
+
+The witness relates each reachable residual to its own abstraction.  Step
+matching is one-step abstraction; the availability clause is readiness
+reflection at that pair. -/
 theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
     Conforms process (inferProcess process) := by
-  induction hSize : sizeOf process using Nat.strong_induction_on
-      generalizing process with
-    | _ n ih =>
-      cases process with
-      | _ => sorry
+  refine ⟨{
+    relation := fun residual residualType =>
+      ProcReachable process residual ∧ DataWFProc residual ∧
+        residualType = inferProcess residual
+    initial := ⟨ProcReachable.refl process, hWF.1, rfl⟩
+    readyReflect := ?_
+    matchStep := ?_ }⟩
+  · -- Availability: readiness reflection at the related pair.
+    rintro p₀ τ₀ env ⟨hReach, hData, rfl⟩ hReady
+    exact readiness_abstraction hWF hReach hData hReady
+  · -- Step matching: one-step abstraction, and the target stays reachable.
+    rintro p₀ p₁ τ₀ env label ⟨hReach, hData, rfl⟩ hStep
+    obtain ⟨hAlpha, hConj⟩ := hWF.sideConditions hReach
+    exact ⟨inferProcess p₁, one_step_abstraction hAlpha hConj hStep,
+      hReach.step hStep, dataWFProc_step hData hStep, rfl⟩
+
+#print axioms inferred_type_soundness
 /-- Lemma 4.3, "Conformance is closed under refinement". -/
 theorem conformance_closed_under_refinement
     {process : Proc} {precise abstract : PactType}
@@ -206,7 +327,71 @@ theorem process_automaton_correspondence
     Nonempty
       (ProcessAutomatonCorrespondence
         process processType (compileType processType)) := by
-  sorry
+  -- Compose the conformance witness with Lemma 4.5 through the type residual.
+  let typeCorrespondence := (type_automaton_correspondence hAdmissible).some
+  let conformance := hConforms.some
+  have hMatch : ∀ {p₀ p₁ : Proc} {state : TypeAutomatonState}
+      {env : Environment} {label : Label},
+      (∃ residual, conformance.relation p₀ residual ∧
+        typeCorrespondence.relation residual state) →
+      ProcessTransition env p₀ label p₁ →
+      ∃ state' offers,
+        (compileType processType).HasEdge state (eraseEnvironment env)
+          (eraseLabel label) offers state' ∧
+        ∃ residual, conformance.relation p₁ residual ∧
+          typeCorrespondence.relation residual state' := by
+    rintro p₀ p₁ state env label ⟨residual, hConformRel, hAutoRel⟩ hStep
+    -- Erased-step conformance supplies the type target.
+    obtain ⟨residual₁, hTypeStep, hRelated₁⟩ :=
+      conformance.matchStep hConformRel hStep
+    -- Type-step decoration, then the forward direction of Lemma 4.5.
+    obtain ⟨offers, hDecorated⟩ := hTypeStep.exists_decorated
+    obtain ⟨state', hEdge, hAutoRel₁⟩ :=
+      typeCorrespondence.forward hAutoRel hDecorated
+    exact ⟨state', offers, hEdge, residual₁, hRelated₁, hAutoRel₁⟩
+  exact ⟨{
+    relation := fun residual state =>
+      ∃ residualType, conformance.relation residual residualType ∧
+        typeCorrespondence.relation residualType state
+    initial := ⟨processType, conformance.initial, typeCorrespondence.initial⟩
+    matchStep := hMatch
+    readyAgree := by
+      rintro p₀ state env ⟨residual, hConformRel, hAutoRel⟩
+      constructor
+      · -- An edge gives a type step by Lemma 4.5, then availability reflection.
+        rintro ⟨label, offers, state', hEdge⟩
+        obtain ⟨residual', hDecorated, -⟩ :=
+          typeCorrespondence.backward hAutoRel hEdge
+        exact conformance.readyReflect hConformRel ⟨label, residual', hDecorated.1⟩
+      · -- A process step gives its matching edge.
+        rintro ⟨label, target, hStep⟩
+        obtain ⟨state', offers, hEdge, -⟩ :=
+          hMatch ⟨residual, hConformRel, hAutoRel⟩ hStep
+        exact ⟨eraseLabel label, offers, state', hEdge⟩ }⟩
+
+#print axioms process_automaton_correspondence
+
+/-- The finite-path consequence of Lemma 4.6: every finite process execution
+has a matching automaton path with the same erased environments and
+observations, ending at a related state. -/
+theorem process_automaton_path
+    {process : Proc} {processType : PactType}
+    (correspondence :
+      ProcessAutomatonCorrespondence process processType (compileType processType))
+    {entries : List (Environment × Label)} {residual : Proc}
+    (hValid : PrefixValid process entries residual) :
+    ∃ state,
+      AutomatonPath (compileType processType) (compileType processType).initial
+        (entries.map fun entry => (eraseEnvironment entry.1, eraseLabel entry.2))
+        state ∧
+      correspondence.relation residual state := by
+  induction hValid with
+  | root => exact ⟨_, AutomatonPath.root, correspondence.initial⟩
+  | step hPrefix hStep ih =>
+      obtain ⟨state, hPath, hRelated⟩ := ih
+      obtain ⟨state', offers, hEdge, hRelated'⟩ :=
+        correspondence.matchStep hRelated hStep
+      exact ⟨state', by simpa using hPath.step hEdge, hRelated'⟩
 
 /-- Theorem 4.2, "Correctness of the game reduction": the honesty-aware
 Rabin game exactly captures semantic compatibility. -/

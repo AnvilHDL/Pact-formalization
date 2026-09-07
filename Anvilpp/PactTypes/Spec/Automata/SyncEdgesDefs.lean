@@ -22,8 +22,8 @@ def combineAutomatonEnvironment (interface : Interface)
 
 /-- Restrict a parent environment to the actions one child alphabet declares.
 A clocked environment projects to `tock`; otherwise both menus are filtered by
-`projectTypeEnvironmentOffers`, exactly as `AutomatonLocalEnvironment.ordinary`
-projects the outer environment onto a component. -/
+`projectTypeEnvironmentOffers`. The product's `AutomatonLocalEnvironment`
+instead supplies the complete outer boundary environment to each child. -/
 def projectAutomatonEnvironment (alphabet : PactTypeAlphabet)
     (environment : TypeEnvironment) : TypeEnvironment :=
   if environment.clock then TypeEnvironment.tock

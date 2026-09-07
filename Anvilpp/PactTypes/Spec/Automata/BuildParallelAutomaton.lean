@@ -222,13 +222,11 @@ def parallelDoneEdges
 /--
 Build a synchronized parallel product.
 
-`Q = Q₁ × Q₂ ∪ {q_done}`, the initial state is `(i₁,i₂)`, and
-`F_τ = {q_done}`.  Synchronized component edges become product edges.  Their
-interface offers are hidden from the product edge.  If both component targets
-are accepting, the product edge is redirected to `q_done`; otherwise its
-target is the target pair.  Finally, only product edges whose source is
-reachable from `(i₁,i₂)` are retained, and `q_done` receives the usual
-non-clock silent idle self-loop.
+The carrier contains all product pairs, both tagged survivor copies, and
+`q_done`. The initial state is `(i₁,i₂)`, and `F_τ = {q_done}`.
+The product and completion families use synchronized component edges at every
+product source, with interface offers hidden. Survivor continuations use the
+re-signed component edges. The state `q_done` has a non-clock silent idle loop.
 -/
 def buildParallelAutomaton
     (parentAlphabet leftAlphabet rightAlphabet : PactTypeAlphabet)

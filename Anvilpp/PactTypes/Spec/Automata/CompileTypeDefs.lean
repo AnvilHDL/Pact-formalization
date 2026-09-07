@@ -290,7 +290,7 @@ def compileTypeFuel :
               entry.2 = state ∧
                 typeCanCompleteThisCycleFuel (sizeOf entry.1 + 1) entry.1 = true))
 
-      -- parallel: form the reachable synchronized product on `interface`.
+      -- parallel: form all synchronized product and survivor edge families.
       | .par alphabet left right interface =>
           exact buildParallelAutomaton alphabet left.alphabet
             right.alphabet interface
@@ -520,7 +520,8 @@ def compiledChildFutureFuel  (fuel : Nat)
   computeFutureOfFuel (min fuel (typeCompilationFuel processType))
     processType
 
-/-- The graph of menu references used by `computeFutureOfFuel`; it is not
+/-- The graph of non-clock targets and menu dependencies used by
+`computeFutureOfFuel`; it is not
 the compiled execution automaton. -/
 def compiledMenuGraphFuel (fuel : Nat) (processType : PactType) : FiniteMenuGraph :=
   let fragment := compileTypeFuel fuel processType
@@ -532,7 +533,7 @@ def compiledMenuGraphFuel (fuel : Nat) (processType : PactType) : FiniteMenuGrap
 
 `OF(q) = μX.Φ(X)` is a single global least fixed point over the whole
 compiled automaton.  For a product state, the equation reads the two component
-menus directly as `hide_I(X(q₁) ∪ X(q₂))`; this is a clause of the future
+menus directly as `hide_I(OF₁(q₁) ∪ OF₂(q₂))`; this is a clause of the future
 equation, not an extra transition.  `stateProductInfo`/`computeFutureOf`
 recover, purely from a state's shape and the originating `PactType`, which
 `.par` node (if any) a state's core `.pair q₁ q₂` came from, and fold in
@@ -588,8 +589,7 @@ private def typeAutomatonEdgeStates
 against the doc-accurate global `OF` (`computeFutureOf`) rather than a local,
 edge-only closure — this is what makes a product state's future menu include
 its two components' own menus natively, with no synthetic edge needed.  This
-is the internal edge view used by the structural correspondence proof, before
-the public alphabet filter is applied. -/
+is the internal edge view used by the structural correspondence proof. -/
 def AutomatonFragment.HasResolvedEdge
     (processType : PactType) (fragment : AutomatonFragment)
     (source : TypeAutomatonState) (env : TypeEnvironment) (label : TypeLabel)

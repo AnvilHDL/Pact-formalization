@@ -5,6 +5,7 @@ import Anvilpp.ProofHelpers.Composition
 import Anvilpp.ProofHelpers.Objectives
 import Anvilpp.ProofHelpers.Regularity
 import Anvilpp.ProofHelpers.ConformanceTransfer
+import Anvilpp.ProofHelpers.Inference.DataPreservation
 import Anvilpp.ProofHelpers.SameCycleHonesty
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MainHelpers
 import Anvilpp.ProofHelpers.CompatibilityBridge

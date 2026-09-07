@@ -12,29 +12,6 @@ These are the named helper lemmas, stated against
 the current Lean scaffold.  The substantial proof content is intentionally
 left as redevelopment work. -/
 
-/-- Helper Lemma H1: erasure preserves offers. -/
-lemma helper_h1_erasure_preserves_offers
-    {env : Environment} {process target : Proc} {label : Label}
-    {current : Finset Offer} {future : Finset BareMessage}
-    (hOffers : Offers env process label target current future) :
-    TypeOffers (eraseEnvironment env) (inferProcess process) (eraseLabel label)
-      (inferProcess target) (current.image Offer.bare) future := by
-  sorry -- TODO(section7): prove by induction on `hOffers`.
-
-/-- Helper Lemma H1: erasure preserves sibling-local environments. -/
-lemma helper_h1_erasure_preserves_local_environment
-    {outer siblingEnv localEnv : Environment} {interface : Interface}
-    {localProc : Proc}
-    {current : Finset Offer} {future : Finset BareMessage}
-    (hLocal :
-      LocalOfferEnvironment outer interface localProc siblingEnv current
-        future localEnv) :
-    LocalTypeOfferEnvironment (eraseEnvironment outer) interface
-      (inferProcess localProc)
-      (eraseEnvironment siblingEnv) (current.image Offer.bare) future
-      (eraseEnvironment localEnv) := by
-  sorry -- TODO(section7): combine local-env inversion with offer erasure.
-
 /-- `γ(e)`: put back a payload only where erasure removed one.
 Each erased immediate send is given the (arbitrary, but fixed) payload
 `false`; each erased immediate receive and the whole future menu are copied
@@ -492,57 +469,6 @@ lemma helper_h5_honesty_preserved_by_concretization
         (processLog index).1.future := rfl
     rw [← hAvailEq, ← hFutureEq]
     exact hAvail
-
-/-- Helper Lemma H6: abstraction ignores data substitution. -/
-lemma helper_h6_abstraction_expr_substitution
-    (process : Proc) (name : String) (value : Bool) :
-    inferProcess (Semantics.procExprReplace process name value) =
-      inferProcess process := by
-  sorry -- TODO(section7): structural induction on processes.
-
-/-- Helper Lemma H6: abstraction commutes with recursive process substitution. -/
-lemma helper_h6_abstraction_process_substitution
-    (process replacement : Proc) (name : String) :
-    inferProcess (Semantics.procReplace process name replacement) =
-      (inferProcess process).replaceVar name (inferProcess replacement) := by
-  sorry -- TODO(section7): structural induction with branch cases.
-
-/-- Helper Lemma H6: abstraction reflects literal `skip`. -/
-lemma helper_h6_abstraction_skip_iff (process : Proc) :
-    inferProcess process = .skip process.alphabet ↔
-      process = .skip process.alphabet := by
-  sorry -- TODO(section7): inspect the abstraction clauses.
-
-
-/-- Helper Lemma H6: abstraction preserves the selected conjunctive-offer
-transformation from the process semantics.  This is the Lean counterpart of
-`abs(C^P_{B,a_j}) = C^{absB(B)}_{Msg(a_j)}` obligation. -/
-lemma helper_h6_abstraction_offer_transformation_preserved
-    (alphabet : PactTypeAlphabet)
-    (selected : ChoiceBranch) (branches : List ChoiceBranch) :
-    inferProcess (parallelProcessBranchesSelecting alphabet selected branches) =
-      parallelTypeBranchesSelecting alphabet (inferBranch selected)
-        (inferBranches branches) := by
-  sorry
-
--- Need to define the helper lemma h6 for offer transformation.
--- lemma helper_h6_abstraction_offer_transformation_preserved
--- For this we have to define or give name to offer transformation structure
-
-/-- Helper Lemma H7: one process step abstracts to one type step. -/
-lemma helper_h7_one_step_abstraction
-    {env : Environment} {process target : Proc} {label : Label}
-    (hStep : ProcessTransition env process label target) :
-    TypeTransition (eraseEnvironment env) (inferProcess process)
-      (eraseLabel label) (inferProcess target) := by
-  sorry -- TODO(section7): induction on the process-step derivation.
-
-/-- Helper Lemma H8: abstraction reflects readiness. -/
-lemma helper_h8_abstraction_reflects_readiness
-    {process : Proc} (hWF : DataWFProc process) {env : Environment} :
-    TypeReady (eraseEnvironment env) (inferProcess process) →
-      ProcessReady env process := by
-  sorry -- TODO(section7): split on clock/non-clock environments.
 
 /-- Helper Lemma H9: one-step conformance match. -/
 lemma helper_h9_one_step_conformance_match

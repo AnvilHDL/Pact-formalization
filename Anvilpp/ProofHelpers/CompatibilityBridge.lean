@@ -49,7 +49,14 @@ lemma helper_h19_readiness_matches_automaton_readiness
     (hRelated : correspondence.relation residual state) :
     TypeReady env residual ↔
       ∃ label state', compiledTypeEdge automaton state env label state' := by
-  sorry -- TODO(section7): use `correspondence.forward` and `.backward`.
+  constructor
+  · rintro ⟨label, target, hStep⟩
+    obtain ⟨offers, hDecorated⟩ := hStep.exists_decorated
+    obtain ⟨state', hEdge, -⟩ := correspondence.forward hRelated hDecorated
+    exact ⟨label, state', offers, hEdge⟩
+  · rintro ⟨label, state', offers, hEdge⟩
+    obtain ⟨residual', hDecorated, -⟩ := correspondence.backward hRelated hEdge
+    exact ⟨label, residual', hDecorated.1⟩
 
 /-- Helper Lemma H20: semantic strategy prefixes and compatibility-game plays
 can be matched. -/

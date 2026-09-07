@@ -49,7 +49,7 @@ namespace Label
     | .actions obs => obs
     | .tock => ∅
 
-  private def messageIdsWith (wanted : MessageDir) (obs : Finset Observation) :
+  def messageIdsWith (wanted : MessageDir) (obs : Finset Observation) :
       Finset MessageId := by
     classical
     exact (obs.filter fun action =>
@@ -79,7 +79,7 @@ namespace Label
   def synced (interface : Interface) (left right : Label) : Finset MessageId :=
     (interface ∩ left.sends) ∪ (interface ∩ right.sends)
 
-  private def isRawSyncedMessage (syncedMessages : Finset MessageId) :
+  def isRawSyncedMessage (syncedMessages : Finset MessageId) :
       Observation → Bool
     | .message msg _ _ => msg ∈ syncedMessages
     | _ => false
