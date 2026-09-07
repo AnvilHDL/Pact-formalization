@@ -98,15 +98,6 @@ noncomputable def recoverHistory {progress : Finset ProcId}
     (vertices : List (MonitoredVertex initial progress)) : TypeHistory × PactType :=
   vertices.foldl recoverStep ([], initial)
 
-@[simp] lemma recoverHistory_nil {progress : Finset ProcId} :
-    recoverHistory (initial := initial) (progress := progress) [] = ([], initial) := rfl
-
-lemma recoverHistory_append {progress : Finset ProcId}
-    (vertices : List (MonitoredVertex initial progress))
-    (vertex : MonitoredVertex initial progress) :
-    recoverHistory (vertices ++ [vertex]) = recoverStep (recoverHistory vertices) vertex := by
-  simp [recoverHistory]
-
 /-- The boundary environment Player 0 offers: the strategy's, guarded so that
 the move is always legal. -/
 noncomputable def gameEnv {progress : Finset ProcId} (strategy : TypeStrategy)

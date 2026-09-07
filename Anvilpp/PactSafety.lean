@@ -4,6 +4,7 @@ import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
 import Anvilpp.PactTypes.Proofs.Correspondence.CasesTop
 import Anvilpp.PactSafetyStructures
 import Anvilpp.ProofHelpers.PrefixPlayMatch
+import Anvilpp.ProofHelpers.CompatibilitySoundness
 
 /-!
 # Communication safety
@@ -412,14 +413,56 @@ theorem game_reduction_correctness
 
 /-- Theorem 4.3, "Soundness of type compatibility" (the main soundness
 theorem): conformance of the fixed process composition plus compatibility of
-the matching type composition implies communication safety of the processes. -/
+the matching type composition implies communication safety of the processes.
+
+`hFairIds` is the paper's "matching type composition": Step 3a reads
+`Fair(ℓ_P)` off `TypeFair(Erase(ℓ_P))`, and the two range over `cal(Eta)(Q_0)`
+and `cal(Eta)(Θ_0)` respectively. -/
 theorem type_compatibility_soundness
      {process : Proc} {processType : PactType}
     {progress : Finset ProcId}
+    (hWellFormed : TypeWellFormedIn [] processType)
+    (hFairIds : typeFairIds processType ⊆ processFairIds process)
     (hConforms : Conforms process processType)
     (hCompatible : TypeCompatible processType progress) :
     ProcessCompatible process progress := by
-  sorry
+  -- Step 1: Theorem 4.2 turns compatibility into a winning boundary strategy.
+  obtain ⟨typeStrategy, hTypeWins⟩ :=
+    (game_reduction_correctness processType progress hWellFormed).mp hCompatible
+  -- Step 2: Lemma 4.1 transfers it along conformance against the objective
+  -- `Φ(ℓ) = Ω_T(Erase(ℓ))`, which is value-oblivious by construction.
+  obtain ⟨strategy, hHonest, hEnsures⟩ :=
+    strategy_transfer (objective :=
+        {log | TypeWinningObjective processType progress (eraseProcessLog log)})
+      hConforms
+      (fun left right hErase => by simp only [Set.mem_setOf_eq, hErase])
+      ⟨typeStrategy, fun log hCompleted => (hTypeWins log hCompleted).1,
+        fun log hCompleted =>
+          ⟨concreteLog log, eraseProcessLog_concreteLog log, by
+            simp only [Set.mem_setOf_eq, eraseProcessLog_concreteLog]
+            exact hTypeWins log hCompleted⟩⟩
+  refine ⟨strategy, hHonest, ?_, ?_⟩
+  · -- Step 3b: a stuck reachable prefix completes with the absorbing suffix, so
+    -- its clock stops recurring, contradicting the transferred objective.
+    intro historyPrefix hFollows hStuck
+    obtain ⟨log, bound, hCompleted, hTail⟩ := completedProcessLog_of_stuck hFollows hStuck
+    obtain ⟨-, hTock, -⟩ := hEnsures log hCompleted
+    rw [tockOccursInfinitely_erase] at hTock
+    obtain ⟨index, hMem, hGe⟩ := set_infinite_nat_iff.mp hTock (bound + 1)
+    have hTockAt : (log index).2 = Label.tock := hMem
+    rw [hTail index (by omega)] at hTockAt
+    exact absurd hTockAt (by simp [Label.silent])
+  · -- Step 3a: erasure preserves the clock, the progress markers and the
+    -- fair-choice outcomes, so liveness translates entry by entry.
+    intro log hCompleted
+    obtain ⟨-, hTock, hLive⟩ := hEnsures log hCompleted
+    refine ⟨(tockOccursInfinitely_erase log).mp hTock, fun hFair pid hPid => ?_⟩
+    refine (progressOccursInfinitely_erase log pid).mp (hLive ?_ pid hPid)
+    intro bid hBid
+    rw [fairOccursInfinitely_erase, fairOccursInfinitely_erase]
+    exact hFair bid (hFairIds hBid)
+
+  #print axioms type_compatibility_soundness
 
 /-- Theorem 4.4, "Decidability and complexity of compatibility": for a
 monitored game with `N` vertices, `M` edges, and `K = 1+2|cal(Eta)(Θ_0)|`
