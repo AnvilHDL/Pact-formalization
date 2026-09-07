@@ -517,31 +517,95 @@ theorem compatibility_monotone_under_refinement
 
 #print axioms compatibility_monotone_under_refinement
 
-/-- Theorem 4.5, "Optimality of inferred types". -/
+/-- The user-type domain of Theorem 4.5: the claimed tuple carries the component
+alphabets of the inferred one, its composition is well formed, and it declares no
+fair identifier the inferred composition lacks. -/
+def UserTypeDomain (processes : List Proc) (interfaces : List Interface)
+    (claimedTypes : List PactType) : Prop :=
+  List.Forall₂
+      (fun process claimed => claimed.alphabet = (inferProcess process).alphabet)
+      processes claimedTypes ∧
+    (∀ composition, composeTypes claimedTypes interfaces = some composition →
+      TypeWellFormedIn [] composition) ∧
+    (∀ preciseComposition abstractComposition,
+      composeTypes (processes.map inferProcess) interfaces =
+        some preciseComposition →
+      composeTypes claimedTypes interfaces = some abstractComposition →
+      typeFairIds abstractComposition ⊆ typeFairIds preciseComposition)
+
+/-- Theorem 4.5, "Optimality of inferred types".
+
+The forward direction exhibits the inferred tuple itself, which checks against
+itself because refinement is reflexive.  The backward direction is Lemma 4.7
+applied to the inferred tuple and the claimed one.  `hInferredWF` is the paper's
+`WFProc` on the composition, and `UserTypeDomain` is the domain the paper's
+quantifier ranges over. -/
 theorem inferred_types_optimal
      (processes : List Proc) (interfaces : List Interface)
-    (progress : Finset ProcId) :
+    (progress : Finset ProcId)
+    (hInferredWF : ∀ composition,
+      composeTypes (processes.map inferProcess) interfaces = some composition →
+      TypeWellFormedIn [] composition) :
     TypeTupleCompatible (processes.map inferProcess) interfaces progress ↔
       ∃ claimedTypes,
+        UserTypeDomain processes interfaces claimedTypes ∧
         List.Forall₂
           (fun process claimed => DataObliviousChecks process claimed)
           processes claimedTypes ∧
         TypeTupleCompatible claimedTypes interfaces progress := by
-  sorry
+  constructor
+  · intro hCompatible
+    have hAlphabets : ∀ list : List Proc,
+        List.Forall₂
+          (fun process claimed => claimed.alphabet = (inferProcess process).alphabet)
+          list (list.map inferProcess) := by
+      intro list
+      induction list with
+      | nil => exact List.Forall₂.nil
+      | cons head tail ih => exact List.Forall₂.cons rfl ih
+    have hChecks : ∀ list : List Proc,
+        List.Forall₂ (fun process claimed => DataObliviousChecks process claimed)
+          list (list.map inferProcess) := by
+      intro list
+      induction list with
+      | nil => exact List.Forall₂.nil
+      | cons head tail ih =>
+          exact List.Forall₂.cons (Refines.refl (inferProcess head)) ih
+    refine ⟨processes.map inferProcess,
+      ⟨hAlphabets processes, hInferredWF, ?_⟩, hChecks processes, hCompatible⟩
+    intro preciseComposition abstractComposition hPrecise hAbstract
+    rw [Option.some.inj (hPrecise.symm.trans hAbstract)]
+  · rintro ⟨claimedTypes, ⟨hAlphabets, hClaimedWF, hFairIds⟩, hChecks, hCompatible⟩
+    exact compatibility_monotone_under_refinement
+      (List.forall₂_map_left_iff.mpr hChecks)
+      (List.forall₂_map_left_iff.mpr (hAlphabets.imp fun _ _ h => h.symm))
+      hInferredWF hClaimedWF hFairIds hCompatible
 
-/-- Corollary 4.1, "Failure rules out data-oblivious proofs". -/
+#print axioms inferred_types_optimal
+
+/-- Corollary 4.1, "Failure rules out data-oblivious proofs".
+
+Exactly the contrapositive of the backward direction of Theorem 4.5. -/
 theorem inferred_failure_rules_out_data_oblivious_proofs
      {processes : List Proc} {interfaces : List Interface}
     {progress : Finset ProcId}
+    (hInferredWF : ∀ composition,
+      composeTypes (processes.map inferProcess) interfaces = some composition →
+      TypeWellFormedIn [] composition)
     (hFailure :
       ¬ TypeTupleCompatible (processes.map inferProcess) interfaces
         progress) :
     ¬ ∃ claimedTypes,
+        UserTypeDomain processes interfaces claimedTypes ∧
         List.Forall₂
           (fun process claimed => DataObliviousChecks process claimed)
           processes claimedTypes ∧
-        TypeTupleCompatible claimedTypes interfaces progress := by
-  sorry
+        TypeTupleCompatible claimedTypes interfaces progress :=
+  fun hClaimed =>
+    hFailure ((inferred_types_optimal processes interfaces progress
+      hInferredWF).mpr hClaimed)
+
+#print axioms inferred_failure_rules_out_data_oblivious_proofs
 
 end
 
