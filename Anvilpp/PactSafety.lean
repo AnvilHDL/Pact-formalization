@@ -259,6 +259,8 @@ theorem type_checking_soundness
     simpa using hChecks
   simpa using conformance_closed_under_refinement hPreciseConfirms hRefines
 
+#print axioms type_checking_soundness
+
 /-- Theorem 4.1, "Decidability and complexity of type inference and
 checking": inference and checking are decidable; inference runs in `O(|P|)`
 and checking (given explicit automata of sizes `m`, `n`) in `O(mn)`. -/

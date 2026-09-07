@@ -492,7 +492,11 @@ lemma helper_h10_refinement_response_coherence
     ∃ type₁',
       TypeTransition env type₀' label type₁' ∧
       witness.relation type₁ type₁' := by
-  sorry -- TODO(section7): decorate the step using H17, then use response.
+  -- Decorate the step (Helper Lemma H17), then use the response clause of
+  -- refinement, which is indexed by that decoration.
+  obtain ⟨offers, hDecorated⟩ := hStep.exists_decorated
+  obtain ⟨type₁', hDecorated', hRelated'⟩ := witness.response hRelated hDecorated
+  exact ⟨type₁', hDecorated'.1, hRelated'⟩
 
 end
 
