@@ -12,4 +12,3 @@ import Anvilpp.ProofHelpers.SameCycleHonesty
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MainHelpers
 import Anvilpp.ProofHelpers.CompatibilityBridge
 import Anvilpp.ProofHelpers.StrategyExtension
-import Anvilpp.ProofHelpers.RefinementLifting

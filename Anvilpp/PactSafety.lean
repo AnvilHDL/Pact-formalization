@@ -5,6 +5,7 @@ import Anvilpp.PactTypes.Proofs.Correspondence.CasesTop
 import Anvilpp.PactSafetyStructures
 import Anvilpp.ProofHelpers.PrefixPlayMatch
 import Anvilpp.ProofHelpers.CompatibilitySoundness
+import Anvilpp.ProofHelpers.RefinementLifting
 
 /-!
 # Communication safety
@@ -476,14 +477,40 @@ theorem type_compatibility_decidable_and_efficient
 
 /-! ## Optimality of inferred types -/
 
-/-- Lemma 4.7, "Compatibility is monotone under type refinement". -/
+/-- Lemma 4.7, "Compatibility is monotone under type refinement".
+
+The proof is the paper's: lift the componentwise refinements to a refinement of
+the whole composition (Helper Lemma H21), transfer the winning boundary strategy
+along it (Helper Lemma H22), and read off compatibility with Theorem 4.2.  Only
+H21 is left open, as it is in the paper.
+
+`hFairIds` is the counterpart of Theorem 4.3's premise: `Ω_T` quantifies its
+fairness hypothesis over `cal(Eta)` of the composition it is stated for, and
+`Refine` does not relate the two syntactic sets. -/
 theorem compatibility_monotone_under_refinement
      {precise abstract : List PactType}
     {interfaces : List Interface} {progress : Finset ProcId}
     (hRefines : ComponentwiseRefines precise abstract)
+    (hPreciseWF : ∀ composition, composeTypes precise interfaces = some composition →
+      TypeWellFormedIn [] composition)
+    (hAbstractWF : ∀ composition, composeTypes abstract interfaces = some composition →
+      TypeWellFormedIn [] composition)
+    (hFairIds : ∀ preciseComposition abstractComposition,
+      composeTypes precise interfaces = some preciseComposition →
+      composeTypes abstract interfaces = some abstractComposition →
+      typeFairIds abstractComposition ⊆ typeFairIds preciseComposition)
     (hCompatible : TypeTupleCompatible abstract interfaces progress) :
     TypeTupleCompatible precise interfaces progress := by
-  sorry
+  obtain ⟨abstractComposition, hAbstract, hComp⟩ := hCompatible
+  obtain ⟨preciseComposition, hPrecise⟩ :=
+    composeTypes_congr_length precise abstract interfaces abstractComposition
+      hRefines.length_eq hAbstract
+  exact ⟨preciseComposition, hPrecise,
+    compatibility_monotone_of_refines (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)
+      (hFairIds _ _ hPrecise hAbstract)
+      (helper_h21_componentwise_product_lifting hRefines hPrecise hAbstract) hComp⟩
+
+#print axioms compatibility_monotone_under_refinement
 
 /-- Theorem 4.5, "Optimality of inferred types". -/
 theorem inferred_types_optimal
