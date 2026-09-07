@@ -242,7 +242,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_clockEdgesAreTock
     rcases hEnabled with hEmpty | ⟨indexed, _, hNewEdge⟩
     · simp at hEmpty
     · simp only [Finset.mem_image, Finset.mem_filter] at hNewEdge
-      obtain ⟨environment, ⟨hEnvMem, hEnabledNeed, _⟩, rfl⟩ := hNewEdge
+      obtain ⟨environment, ⟨hEnvMem, hEnabledNeed⟩, rfl⟩ := hNewEdge
       simp only at hClock
       rw [PactTypeAlphabet.immediate_eq_empty_of_mem_localEnvironments_of_clock
         hEnvMem hClock] at hEnabledNeed
@@ -382,22 +382,58 @@ theorem buildExclusiveOfferAutomaton_root_edge_cases
     obtain ⟨environment, -, hEq⟩ := hElse
     exact Or.inr (Or.inr ⟨by rw [← hEq], by rw [← hEq], by rw [← hEq]⟩)
 
-/-- An exclusive-offer root offers exactly the branch head actions: each branch
-edge exposes its own head, a wait edge exposes only heads, and the default edge
-exposes nothing. -/
+/-- Complementing an admissible environment menu yields declared actions. -/
+theorem typeNeed_image_subset_actions {offers actions : Finset BareMessage}
+    (h : offers ⊆ actions.image typeNeed) : offers.image typeNeed ⊆ actions := by
+  intro action ha
+  obtain ⟨need, hNeed, rfl⟩ := Finset.mem_image.mp ha
+  obtain ⟨original, hOriginal, rfl⟩ := Finset.mem_image.mp (h hNeed)
+  simpa [typeNeed] using hOriginal
+
+theorem buildExclusiveOfferAutomaton_root_current_subset
+    (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
+    (elseAutomaton : AutomatonFragment) (branchAutomata : List (BareMessage × AutomatonFragment))
+    (edge : PendingAutomatonEdge)
+    (hEdge : edge ∈ (buildExclusiveOfferAutomaton alphabet branches elseAutomaton branchAutomata).edges)
+    (hSource : edge.source = .root) : edge.current ⊆ alphabet.actions := by
+  classical
+  simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment, Finset.mem_union,
+    childPendingEdges, Finset.mem_image, Finset.mem_filter] at hEdge
+  rcases hEdge with (((hElse | hIndexed) | hBranch) | hWait) | hDefault
+  · obtain ⟨child, _, rfl⟩ := hElse
+    simp [childPendingEdge, childState] at hSource
+  · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
+    rcases hIndexed with hEmpty | ⟨indexed, _, hChild⟩
+    · simp at hEmpty
+    · obtain ⟨child, _, rfl⟩ := Finset.mem_image.mp hChild
+      simp [childPendingEdge, childState] at hSource
+  · rw [mem_foldl_union_iff] at hBranch
+    rcases hBranch with hEmpty | ⟨indexed, _, hRoot⟩
+    · simp at hEmpty
+    · obtain ⟨env, hEnv, rfl⟩ := Finset.mem_image.mp hRoot
+      obtain ⟨hLocal, hNeed, _⟩ := Finset.mem_filter.mp hEnv
+      have hBound := typeNeed_image_subset_actions
+        (PactTypeAlphabet.environment_wellFormed hLocal).2.2.1
+      simpa [typeNeed] using hBound (Finset.mem_image_of_mem typeNeed hNeed)
+  · obtain ⟨env, ⟨hLocal, _⟩, rfl⟩ := hWait
+    exact Finset.Subset.trans Finset.inter_subset_left
+      (typeNeed_image_subset_actions (PactTypeAlphabet.environment_wellFormed hLocal).2.2.2)
+  · obtain ⟨env, _, rfl⟩ := hDefault
+    exact Finset.empty_subset _
+
+/-- An exclusive root exposes exactly the declared branch heads. -/
 theorem buildExclusiveOfferAutomaton_offersAt_root
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment))
-    (hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst)
-    (hGuard : ∀ branch ∈ branches, branch.1 ∈ alphabet.actions) :
+    (hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst) :
     ({ states := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
          branchAutomata).states
        edges := (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
          branchAutomata).edges } : PendingAutomaton).offersAt
         TypeAutomatonState.root =
-      typeBranchActions branches := by
+      typeBranchActions branches ∩ alphabet.actions := by
   classical
   apply Finset.Subset.antisymm
   · intro action hAction
@@ -408,6 +444,9 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
     · rw [if_pos hTock] at hIn
       exact absurd hIn (Finset.notMem_empty _)
     · rw [if_neg hTock] at hIn
+      refine Finset.mem_inter.mpr ⟨?_,
+        buildExclusiveOfferAutomaton_root_current_subset alphabet branches elseAutomaton
+          branchAutomata edge hEdge hSource hIn⟩
       rcases buildExclusiveOfferAutomaton_root_edge_cases alphabet branches
           elseAutomaton branchAutomata edge hEdge hSource with
         ⟨indexed, hIndexed, hCurrent, hFuture, -, -⟩ |
@@ -427,6 +466,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
       · rw [hCurrent] at hIn
         exact absurd hIn (Finset.notMem_empty _)
   · intro action hAction
+    obtain ⟨hAction, hDeclaredAction⟩ := Finset.mem_inter.mp hAction
     rw [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
     obtain ⟨branch, hBranch, rfl⟩ := hAction
     have hHead : branch.1 ∈ branchAutomata.map Prod.fst := by
@@ -439,7 +479,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
       List.mk_mem_zipIdx_iff_getElem?.mpr hGet
     have hDeclared : entry.1 ∈ alphabet.actions := by
       rw [hEntryHead]
-      exact hGuard branch hBranch
+      exact hDeclaredAction
     set environment : TypeEnvironment :=
       { immediate := {typeNeed entry.1}, future := ∅, clock := false }
       with hEnvironmentDef
@@ -460,8 +500,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
       rw [Finset.mem_image]
       refine ⟨environment, Finset.mem_filter.mpr
         ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
-          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _,
-          hGuard⟩, rfl⟩
+          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _⟩, rfl⟩
     · rw [if_neg (by
         rw [hEdgeDef]
         simp [AutomatonConstructionLabel.semantic, TypeLabel.message]), hEdgeDef]
@@ -560,8 +599,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_menuStep_root
       refine Or.inr ?_
       rw [Finset.mem_image]
       refine ⟨TypeEnvironment.empty, Finset.mem_filter.mpr
-        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_,
-          hGuard⟩, rfl⟩
+        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_⟩, rfl⟩
       · simp [TypeEnvironment.empty]
       · simp [TypeEnvironment.empty]
     · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
@@ -597,8 +635,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_menuStep_root
       rw [Finset.mem_image]
       refine ⟨environment, Finset.mem_filter.mpr
         ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
-          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _,
-          hGuard⟩, rfl⟩
+          hDeclared, Finset.mem_singleton_self _, Finset.inter_empty _⟩, rfl⟩
     · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
         TypeLabel.message])]
       exact Finset.mem_singleton_self _
@@ -700,9 +737,9 @@ theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
     refine ⟨{ source := TypeAutomatonState.root
               environment := TypeEnvironment.empty
               label := .visible TypeLabel.silent
-              current := typeBranchActions branches
+              current := typeBranchActions branches ∩ alphabet.actions
               future := .at (childState 0 elseAutomaton.initial)
-                (typeBranchActions branches)
+                (typeBranchActions branches ∩ alphabet.actions)
               target := childState 0 elseAutomaton.initial },
       ⟨?_, rfl⟩, ?_⟩
     · simp only [buildSelectedConjunctiveOfferAutomaton,
@@ -710,8 +747,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
       refine Or.inr ?_
       rw [Finset.mem_image]
       refine ⟨TypeEnvironment.empty, Finset.mem_filter.mpr
-        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_,
-          hGuard⟩, rfl⟩
+        ⟨PactTypeAlphabet.empty_mem_localEnvironments alphabet, rfl, ?_, ?_⟩, rfl⟩
       · simp [TypeEnvironment.empty]
       · simp [TypeEnvironment.empty]
     · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
@@ -747,7 +783,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
       rw [Finset.mem_image]
       refine ⟨environment, Finset.mem_filter.mpr
         ⟨PactTypeAlphabet.singleton_need_mem_localEnvironments alphabet
-          hDeclared, Finset.mem_singleton_self _, hGuard⟩, rfl⟩
+          hDeclared, Finset.mem_singleton_self _⟩, rfl⟩
     · rw [if_neg (by simp [AutomatonConstructionLabel.semantic,
         TypeLabel.silent])]
       exact Finset.mem_singleton_self _

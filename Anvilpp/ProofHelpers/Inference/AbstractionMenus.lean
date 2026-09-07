@@ -78,8 +78,7 @@ theorem branchesDeclared_eq_decide (alphabet : PactTypeAlphabet)
 
 @[simp] theorem canCompleteDeclared_message (alphabet : PactTypeAlphabet)
     (msg : MessageId) (dir : MessageDir) :
-    (PactType.message alphabet msg dir).CanCompleteDeclared =
-      decide ((msg, dir) ∈ alphabet.actions) := by
+    (PactType.message alphabet msg dir).CanCompleteDeclared = true := by
   rw [PactType.canCompleteDeclared_eq]
 
 @[simp] theorem canCompleteDeclared_skip (alphabet : PactTypeAlphabet) :
@@ -153,18 +152,12 @@ private theorem canComplete_aux : ∀ n : Nat,
             rw [Proc.CanCompleteBeforeTock, inferProcess,
               PactType.canCompleteDeclared_eq,
               ihProc elseProcess (by simp at hSize ⊢; omega),
-              ihBranch branches (by simp at hSize ⊢; omega),
-              branchesDeclared_eq_decide]
-            congr 1
-            exact decide_eq_decide.2 (branchesDeclared_inferBranches alphabet branches).symm
+              ihBranch branches (by simp at hSize ⊢; omega)]
         | offer alphabet elseProcess branches =>
             rw [Proc.CanCompleteBeforeTock, inferProcess,
               PactType.canCompleteDeclared_eq,
               ihProc elseProcess (by simp at hSize ⊢; omega),
-              ihBranch branches (by simp at hSize ⊢; omega),
-              branchesDeclared_eq_decide]
-            congr 1
-            exact decide_eq_decide.2 (branchesDeclared_inferBranches alphabet branches).symm
+              ihBranch branches (by simp at hSize ⊢; omega)]
       · intro branches hSize
         cases branches with
         | nil =>
@@ -217,6 +210,8 @@ theorem typeFutureOffers_message (alphabet : PactTypeAlphabet)
   change typeFutureOffersFuel (sizeOf (PactType.var alphabet name) + 1) _ = _
   simp only [typeFutureOffersFuel]
 
+/- Obsolete under projected menus: one undeclared head no longer removes
+the default and continuation menus.
 theorem typeFutureOffers_xoffer_of_undeclared (alphabet : PactTypeAlphabet)
     (elseType : PactType) (branches : List (BareMessage × PactType))
     (hGate : ¬ ∀ b ∈ branches, b.1 ∈ alphabet.actions) :
@@ -233,6 +228,8 @@ theorem typeFutureOffers_offer_of_undeclared (alphabet : PactTypeAlphabet)
     (sizeOf (PactType.offer alphabet elseType branches) + 1) _ = _
   simp only [typeFutureOffersFuel, if_neg hGate]
 
+/-- The two hiding operators coincide on bare menus. -/
+ -/
 /-- The two hiding operators coincide on bare menus. -/
 theorem hideProcOffers_eq (interface : Interface) (offers : Finset BareMessage) :
     hideProcOffers interface offers = hideTypeOffers interface offers := rfl
@@ -339,18 +336,10 @@ private theorem futureOffers_aux : ∀ n : Nat,
               have hMem := List.sizeOf_lt_of_mem hBranch
               have hCont := ChoiceBranch.continuation_sizeOf_lt branch
               simp at hFuel ⊢; omega
-            rw [inferProcess]
-            by_cases hGate : BranchesDeclared alphabet branches
-            · rw [typeFutureOffers_xoffer _ _ _
-                ((branchesDeclared_inferBranches alphabet branches).2 hGate)]
-              simp only [procFutureOffersFuel,
-                branchesDeclared_eq_decide, decide_eq_true_eq, if_pos hGate,
-                ihProc fuel elseProcess hp.1 hp.2]
-              exact ihBranch fuel branches _ hb.1 hb.2
-            · rw [typeFutureOffers_xoffer_of_undeclared _ _ _
-                (fun h => hGate ((branchesDeclared_inferBranches alphabet branches).1 h))]
-              simp only [procFutureOffersFuel,
-                branchesDeclared_eq_decide, decide_eq_true_eq, if_neg hGate]
+            rw [inferProcess, typeFutureOffers_xoffer]
+            simp only [procFutureOffersFuel, ihProc fuel elseProcess hp.1 hp.2]
+            exact congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+              (ihBranch fuel branches _ hb.1 hb.2)
         | offer alphabet elseProcess branches =>
             have hp : sizeOf elseProcess < n ∧ sizeOf elseProcess < fuel := by
               simp at hSize hFuel ⊢; omega
@@ -362,18 +351,10 @@ private theorem futureOffers_aux : ∀ n : Nat,
               have hMem := List.sizeOf_lt_of_mem hBranch
               have hCont := ChoiceBranch.continuation_sizeOf_lt branch
               simp at hFuel ⊢; omega
-            rw [inferProcess]
-            by_cases hGate : BranchesDeclared alphabet branches
-            · rw [typeFutureOffers_offer _ _ _
-                ((branchesDeclared_inferBranches alphabet branches).2 hGate)]
-              simp only [procFutureOffersFuel,
-                branchesDeclared_eq_decide, decide_eq_true_eq, if_pos hGate,
-                ihProc fuel elseProcess hp.1 hp.2]
-              exact ihBranch fuel branches _ hb.1 hb.2
-            · rw [typeFutureOffers_offer_of_undeclared _ _ _
-                (fun h => hGate ((branchesDeclared_inferBranches alphabet branches).1 h))]
-              simp only [procFutureOffersFuel,
-                branchesDeclared_eq_decide, decide_eq_true_eq, if_neg hGate]
+            rw [inferProcess, typeFutureOffers_offer]
+            simp only [procFutureOffersFuel, ihProc fuel elseProcess hp.1 hp.2]
+            exact congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+              (ihBranch fuel branches _ hb.1 hb.2)
       · intro fuel branches initial hSize hFuel
         cases branches with
         | nil => simp [inferBranches]

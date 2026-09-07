@@ -23,8 +23,7 @@ def indexedFragmentCompletes
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childCompletes (indexed.2 + 1) indexed.1.2) ∅
 
-/-- `c(⊕(τ₀,B)) = c(∧(τ₀,B))`: the head gate, and either the default or some
-selected branch. -/
+/-- An offer may optimistically complete through its default or a branch. -/
 def offerRootCompletes (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
@@ -32,9 +31,8 @@ def offerRootCompletes (alphabet : PactTypeAlphabet)
     Finset TypeAutomatonState := by
   classical
   exact
-    if (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) ∧
-        (elseAutomaton.initial ∈ elseAutomaton.completes ∨
-          ∃ entry ∈ branchAutomata, entry.2.initial ∈ entry.2.completes) then
+    if elseAutomaton.initial ∈ elseAutomaton.completes ∨
+        ∃ entry ∈ branchAutomata, entry.2.initial ∈ entry.2.completes then
       {TypeAutomatonState.root}
     else ∅
 
@@ -54,8 +52,8 @@ From the root there are three kinds of edges:
 * `waitEdges`: remain at the root while a branch may still arrive this cycle;
 * `elseEdges`: select the else continuation once no branch can still arrive.
 
-All three root families are gated on `alphabet`, exactly as the semantic
-`xoffer_*` rules are: a partly-declared offer emits no root edge at all.
+Admissible environments determine enabling and resolution; undeclared heads
+do not prevent waiting or selecting the default.
 -/
 def buildExclusiveOfferAutomaton
     (alphabet : PactTypeAlphabet)
@@ -78,8 +76,7 @@ def buildExclusiveOfferAutomaton
         let enablingEnvironments :=
           (alphabet.localEnvironments).filter fun environment =>
           typeNeed action ∈ environment.immediate ∧
-          needs ∩ environment.future = ∅ ∧
-          ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+          needs ∩ environment.future = ∅
         enablingEnvironments.image fun environment =>
           { source := TypeAutomatonState.root
             environment := environment
@@ -92,8 +89,7 @@ def buildExclusiveOfferAutomaton
     let waitingEnvironments :=
       (alphabet.localEnvironments).filter fun environment =>
       environment.clock = false ∧
-      needs ∩ environment.future ≠ ∅ ∧
-      ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+      needs ∩ environment.future ≠ ∅
     waitingEnvironments.image fun environment =>
       let waiting := (environment.future.image typeNeed) ∩ actions
       { source := TypeAutomatonState.root
@@ -107,8 +103,7 @@ def buildExclusiveOfferAutomaton
       (alphabet.localEnvironments).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
-      needs ∩ environment.future = ∅ ∧
-      ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+      needs ∩ environment.future = ∅
     resolvedEnvironments.image fun environment =>
       { source := TypeAutomatonState.root
         environment := environment
@@ -127,8 +122,7 @@ def buildExclusiveOfferAutomaton
 its own copy of the singleton product with that witness's synthetic else arm
 removed; the other singleton else arms remain available.
 
-All three root families are gated on `alphabet`, exactly as the semantic
-`offer_*` rules are: a partly-declared offer emits no root edge at all. -/
+Waiting and default edges advertise only declared branch heads. -/
 def buildSelectedConjunctiveOfferAutomaton
     (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
@@ -141,15 +135,14 @@ def buildSelectedConjunctiveOfferAutomaton
   let accepting := childAccepting 0 elseAutomaton ∪
     indexedFragmentAccepting selectedConjunctions
   let needs := typeBranchNeeds branches
-  let actions := typeBranchActions branches
+  let actions := typeBranchActions branches ∩ alphabet.actions
   let enabledEdges : Finset PendingAutomatonEdge :=
     selectedConjunctions.zipIdx.foldl (fun edges indexed =>
       let index := indexed.2
       let action := indexed.1.1
       let conjunction := indexed.1.2
       let enablingEnvironments := (alphabet.localEnvironments).filter
-        fun environment => typeNeed action ∈ environment.immediate ∧
-          ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+        fun environment => typeNeed action ∈ environment.immediate
       edges ∪ enablingEnvironments.image fun environment =>
         { source := TypeAutomatonState.root
           environment := environment
@@ -162,8 +155,7 @@ def buildSelectedConjunctiveOfferAutomaton
       (alphabet.localEnvironments).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
-      needs ∩ environment.future ≠ ∅ ∧
-      ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+      needs ∩ environment.future ≠ ∅
     waitingEnvironments.image fun environment =>
       { source := TypeAutomatonState.root
         environment := environment
@@ -176,8 +168,7 @@ def buildSelectedConjunctiveOfferAutomaton
       (alphabet.localEnvironments).filter fun environment =>
       environment.clock = false ∧
       needs ∩ environment.immediate = ∅ ∧
-      needs ∩ environment.future = ∅ ∧
-      ∀ branch ∈ branches, branch.1 ∈ alphabet.actions
+      needs ∩ environment.future = ∅
     resolvedEnvironments.image fun environment =>
       { source := TypeAutomatonState.root
         environment := environment

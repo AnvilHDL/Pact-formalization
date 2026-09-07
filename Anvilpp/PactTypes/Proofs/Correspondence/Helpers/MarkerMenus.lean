@@ -119,7 +119,9 @@ theorem menuReachesVar_of_absent (name : String) (ty : PactType)
 
 /-- Paper: substitution adds the replacement menu exactly when `b_X` holds. -/
 theorem typeFutureOffers_replaceVar_tail (name : String)
-    (replacement ty : PactType) (hTail : ty.TailOccurrences name True) :
+    (replacement ty : PactType) (hTail : ty.TailOccurrences name True)
+    (hWF : ty.AlphabetWellFormed)
+    (hMenu : typeFutureOffers replacement ⊆ ty.alphabet.actions) :
     typeFutureOffers (ty.replaceVar name replacement) =
       typeFutureOffers ty ∪
         (if menuReachesVar name ty then typeFutureOffers replacement else ∅) := by
@@ -129,17 +131,66 @@ theorem typeFutureOffers_replaceVar_tail (name : String)
     le_max_right _ _
   rw [← typeFutureOffersFuel_eq_typeFutureOffers _ fuel hReplacedFuel,
     typeFutureOffersFuel_replaceVar name replacement fuel ty hReplacedFuel,
-    typeFutureOffersFuelSubst_split name _ _ fuel ty (by omega) hTail,
+    typeFutureOffersFuelSubst_split name _ _ fuel ty (by omega) hTail hWF hMenu,
     typeFutureOffersFuelSubst_empty name _ fuel ty (by omega) hTail,
     typeFutureOffersFuel_eq_typeFutureOffers ty fuel hTyFuel,
     menuReachesVarFuel_eq_menuReachesVar name replacement.CanCompleteDeclared
       fuel ty (by omega) hTail]
 
+/-- Increasing the variable menu increases every projected menu. -/
+theorem typeFutureOffersFuelSubst_mono (name : String) (complete : Bool)
+    {lower upper : Finset BareMessage} (hMenu : lower ⊆ upper) :
+    ∀ fuel ty, typeFutureOffersFuelSubst name lower complete fuel ty ⊆
+      typeFutureOffersFuelSubst name upper complete fuel ty := by
+  intro fuel
+  induction fuel with
+  | zero => intro ty; exact Finset.Subset.refl _
+  | succ fuel ih =>
+    have hFold : ∀ (bs : List (BareMessage × PactType)) (a b : Finset BareMessage),
+        a ⊆ b →
+        bs.foldl (fun acc br => acc ∪ {br.1} ∪
+          typeFutureOffersFuelSubst name lower complete fuel br.2) a ⊆
+        bs.foldl (fun acc br => acc ∪ {br.1} ∪
+          typeFutureOffersFuelSubst name upper complete fuel br.2) b := by
+      intro bs
+      induction bs with
+      | nil => intro a b h; exact h
+      | cons br rest hRest =>
+        intro a b h
+        exact hRest _ _ (Finset.union_subset_union
+          (Finset.union_subset_union h (Finset.Subset.refl _)) (ih br.2))
+    intro ty
+    cases ty with
+    | message | progress | tock | skip => exact Finset.Subset.refl _
+    | var a other =>
+      simp only [typeFutureOffersFuelSubst]
+      split_ifs <;> first | exact hMenu | exact Finset.Subset.refl _
+    | recur a other body =>
+      simp only [typeFutureOffersFuelSubst]
+      split_ifs <;> first | exact Finset.Subset.refl _ | exact ih body
+    | choice a left right | fairChoice a tag left right =>
+      exact Finset.union_subset_union (ih left) (ih right)
+    | seq a left right =>
+      simp only [typeFutureOffersFuelSubst]
+      split_ifs
+      · exact Finset.union_subset_union (ih left) (ih right)
+      · exact ih left
+    | par a left right interface =>
+      exact Finset.filter_subset_filter _ (Finset.union_subset_union (ih left) (ih right))
+    | xoffer a body branches | offer a body branches =>
+      exact Finset.inter_subset_inter (hFold branches _ _ (ih body)) (Finset.Subset.refl _)
+
 theorem typeFutureOffers_subset_replaceVar_tail (name : String)
     (replacement ty : PactType) (hTail : ty.TailOccurrences name True) :
     typeFutureOffers ty ⊆ typeFutureOffers (ty.replaceVar name replacement) := by
-  rw [typeFutureOffers_replaceVar_tail name replacement ty hTail]
-  exact Finset.subset_union_left
+  let fuel := max (sizeOf ty + 1) (sizeOf (ty.replaceVar name replacement) + 1)
+  have hTy : sizeOf ty + 1 ≤ fuel := le_max_left _ _
+  have hReplaced : sizeOf (ty.replaceVar name replacement) + 1 ≤ fuel := le_max_right _ _
+  rw [← typeFutureOffersFuel_eq_typeFutureOffers _ fuel hReplaced,
+    typeFutureOffersFuel_replaceVar name replacement fuel ty hReplaced,
+    ← typeFutureOffersFuel_eq_typeFutureOffers _ fuel hTy,
+    ← typeFutureOffersFuelSubst_empty name replacement.CanCompleteDeclared fuel ty (by omega) hTail]
+  exact typeFutureOffersFuelSubst_mono name _ (Finset.empty_subset _) fuel ty
 
 private theorem menuReachesVarFuel_branches (name : String) (fuel : Nat)
     (branches : List (BareMessage × PactType))
@@ -205,9 +256,7 @@ theorem menuReachesVar_xoffer (name : String) (a : PactTypeAlphabet)
     (hBody : body.TailOccurrences name True)
     (hBranches : PactType.TailBranchOccurrences name True branches) :
     menuReachesVar name (.xoffer a body branches) =
-      if ∀ b ∈ branches, b.1 ∈ a.actions then
-        menuReachesVar name body || branches.any (fun b => menuReachesVar name b.2)
-      else false := by
+      (menuReachesVar name body || branches.any (fun b => menuReachesVar name b.2)) := by
   conv_lhs => unfold menuReachesVar
   rw [menuReachesVarFuel,
     menuReachesVarFuel_eq_menuReachesVar name false _ body (by simp; omega) hBody,
@@ -218,7 +267,7 @@ theorem menuReachesVar_offer (name : String) (a : PactTypeAlphabet)
     (hBody : body.TailOccurrences name True)
     (hBranches : PactType.TailBranchOccurrences name False branches) :
     menuReachesVar name (.offer a body branches) =
-      if ∀ b ∈ branches, b.1 ∈ a.actions then menuReachesVar name body else false := by
+      menuReachesVar name body := by
   have hAbsent : (branches.any fun b => menuReachesVar name b.2) = false := by
     induction branches with
     | nil => rfl
@@ -344,9 +393,8 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
       rw [menuReachesVar_xoffer name a _ _ (hTailSubst body hName.1 hOther.1) hBTail,
         menuReachesVar_xoffer name a body branches hName.1 hName.2,
         menuReachesVar_xoffer other a body branches hOther.1 hOther.2]
-      simp only [replaceBranches_gate]
       rw [ih (sizeOf body) (by rw [← hSize]; simp; omega) body rfl hName.1 hOther.1 hFresh.1, hB]
-      split_ifs <;> cases hS : menuReachesVar name replacement <;>
+      cases hS : menuReachesVar name replacement <;>
         simp_all only [Bool.and_true, Bool.and_false, Bool.false_and,
           Bool.or_false, Bool.false_or, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
     | offer a body branches =>
@@ -359,7 +407,6 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
         menuReachesVar_offer name a body branches hName.1 hName.2,
         menuReachesVar_offer other a body branches hOther.1 hOther.2,
         ih (sizeOf body) (by rw [← hSize]; simp; omega) body rfl hName.1 hOther.1 hFresh.1]
-      split_ifs <;> simp
 
 end
 

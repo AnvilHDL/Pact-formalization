@@ -105,19 +105,14 @@ private theorem typeFutureOffersFuel_succ_stable :
                 omega
               omega)]
       | xoffer alphabet elseType branches =>
-          change (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-              branches.foldl (fun offers branch =>
+          change (branches.foldl (fun offers branch =>
                 offers ∪ {branch.1} ∪
                   typeFutureOffersFuel (fuel + 1) branch.2)
-                (typeFutureOffersFuel (fuel + 1) elseType)
-            else ∅) =
-            (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-              branches.foldl (fun offers branch =>
+                (typeFutureOffersFuel (fuel + 1) elseType)) ∩ alphabet.actions =
+            (branches.foldl (fun offers branch =>
                 offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-                (typeFutureOffersFuel fuel elseType)
-            else ∅)
-          split_ifs with hGate
-          case neg => rfl
+                (typeFutureOffersFuel fuel elseType)) ∩ alphabet.actions
+          apply congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.xoffer alphabet elseType branches) := by
@@ -156,19 +151,14 @@ private theorem typeFutureOffersFuel_succ_stable :
                 exact hSubset other (by simp [hOther])
           exact hFold branches _ (by simp)
       | offer alphabet elseType branches =>
-          change (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-              branches.foldl (fun offers branch =>
+          change (branches.foldl (fun offers branch =>
                 offers ∪ {branch.1} ∪
                   typeFutureOffersFuel (fuel + 1) branch.2)
-                (typeFutureOffersFuel (fuel + 1) elseType)
-            else ∅) =
-            (if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-              branches.foldl (fun offers branch =>
+                (typeFutureOffersFuel (fuel + 1) elseType)) ∩ alphabet.actions =
+            (branches.foldl (fun offers branch =>
                 offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-                (typeFutureOffersFuel fuel elseType)
-            else ∅)
-          split_ifs with hGate
-          case neg => rfl
+                (typeFutureOffersFuel fuel elseType)) ∩ alphabet.actions
+          apply congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.offer alphabet elseType branches) := by
@@ -228,6 +218,100 @@ theorem typeFutureOffersFuel_eq_typeFutureOffers
   unfold typeFutureOffers
   exact typeFutureOffersFuel_add_stable processType
     (sizeOf processType + 1) extra (by omega)
+
+/-- Folding branch menus introduces only heads and messages used by their bodies. -/
+theorem foldl_typeMenu_subset_messageActions (menu : PactType → Finset BareMessage)
+    (hMenu : ∀ ty, menu ty ⊆ ty.MessageActions) :
+    ∀ (branches : List (BareMessage × PactType)) (initial : Finset BareMessage),
+      branches.foldl (fun offers branch => offers ∪ {branch.1} ∪ menu branch.2) initial ⊆
+        initial ∪ PactType.BranchMessageActions branches := by
+  intro branches
+  induction branches with
+  | nil => intro initial; simp [PactType.BranchMessageActions]
+  | cons branch rest ih =>
+      rcases branch with ⟨head, body⟩
+      intro initial action hAction
+      have h := ih (initial ∪ {head} ∪ menu body) hAction
+      simp only [PactType.BranchMessageActions, Finset.mem_union] at h ⊢
+      rcases h with ((hInitial | hHead) | hBody) | hRest
+      · exact Or.inl hInitial
+      · exact Or.inr (Or.inl (Or.inl hHead))
+      · exact Or.inr (Or.inl (Or.inr (hMenu body hBody)))
+      · exact Or.inr (Or.inr hRest)
+
+/-- Future menus contain only syntactic message actions, regardless of well-formedness. -/
+theorem typeFutureOffersFuel_subset_messageActions (fuel : Nat) (ty : PactType) :
+    typeFutureOffersFuel fuel ty ⊆ ty.MessageActions := by
+  induction fuel generalizing ty with
+  | zero => simp [typeFutureOffersFuel]
+  | succ fuel ih =>
+      cases ty with
+      | message alphabet msg dir =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          split_ifs <;> simp
+      | progress | tock | skip | var => simp [typeFutureOffersFuel]
+      | recur alphabet name body =>
+          simpa only [typeFutureOffersFuel, PactType.MessageActions] using ih body
+      | choice alphabet left right | fairChoice alphabet bid left right =>
+          simpa only [typeFutureOffersFuel, PactType.MessageActions] using
+            Finset.union_subset_union (ih left) (ih right)
+      | seq alphabet left right =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          split_ifs
+          · exact Finset.union_subset_union (ih left) (ih right)
+          · exact Finset.Subset.trans (ih left) Finset.subset_union_left
+      | par alphabet left right interface =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          exact Finset.Subset.trans (Finset.filter_subset _ _)
+            (Finset.union_subset_union (ih left) (ih right))
+      | xoffer alphabet other branches | offer alphabet other branches =>
+          simp only [typeFutureOffersFuel, PactType.MessageActions]
+          exact Finset.Subset.trans Finset.inter_subset_left
+            (Finset.Subset.trans
+              (foldl_typeMenu_subset_messageActions (typeFutureOffersFuel fuel) ih branches _)
+              (Finset.union_subset_union (ih other) (Finset.Subset.refl _)))
+
+/-- Every optimistic menu respects the written alphabet of a well-formed type. -/
+theorem typeFutureOffersFuel_subset_alphabet (fuel : Nat) (ty : PactType)
+    (hWF : ty.AlphabetWellFormed) :
+    typeFutureOffersFuel fuel ty ⊆ ty.alphabet.actions := by
+  induction fuel generalizing ty with
+  | zero => simp [typeFutureOffersFuel]
+  | succ fuel ih =>
+      cases ty with
+      | message alphabet msg dir =>
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          split_ifs with h <;> simp_all
+      | progress | tock | skip | var => simp [typeFutureOffersFuel]
+      | recur alphabet name body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          exact hWF.2.1 ▸ ih body hWF.2.2
+      | choice alphabet left right | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          exact Finset.union_subset (hWF.2.1 ▸ ih left hWF.2.2.2.1)
+            (hWF.2.2.1 ▸ ih right hWF.2.2.2.2)
+      | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [typeFutureOffersFuel, PactType.alphabet]
+          split_ifs
+          · exact Finset.union_subset (hWF.2.1 ▸ ih left hWF.2.2.2.1)
+              (hWF.2.2.1 ▸ ih right hWF.2.2.2.2)
+          · exact hWF.2.1 ▸ ih left hWF.2.2.2.1
+      | par alphabet left right interface =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          intro action hAction
+          obtain ⟨hChild, hOutside⟩ := Finset.mem_filter.mp hAction
+          rcases Finset.mem_union.mp hChild with hLeft | hRight
+          · rw [← hWF.2.1.parent_eq_left]
+            exact Finset.mem_filter.mpr ⟨ih left hWF.2.2.1 hLeft, hOutside⟩
+          · rw [← hWF.2.1.parent_eq_right]
+            exact Finset.mem_filter.mpr ⟨ih right hWF.2.2.2 hRight, hOutside⟩
+      | xoffer | offer => exact Finset.inter_subset_right
+
+theorem typeFutureOffers_subset_alphabet (ty : PactType)
+    (hWF : ty.AlphabetWellFormed) :
+    typeFutureOffers ty ⊆ ty.alphabet.actions :=
+  typeFutureOffersFuel_subset_alphabet _ ty hWF
 
 end
 

@@ -741,13 +741,13 @@ theorem dataWFProc_offers {env : Environment} {source target : Proc}
     (hOffers : Offers env source label target current future)
     (hData : DataWFProc source) : DataWFProc target := by
   induction hOffers with
-  | send _ alphabet msg expr process value _ _ =>
+  | send _ alphabet msg expr process value _ =>
       exact ((dataWFProc_send_iff alphabet msg expr process).1 hData).2
-  | send_wait _ _ _ _ _ _ _ _ => exact hData
-  | recv _ alphabet msg varName process value _ _ =>
+  | send_wait _ _ _ _ _ _ _ => exact hData
+  | recv _ alphabet msg varName process value _ =>
       exact Proc.allVariablesBound_procExprReplace
         ((dataWFProc_recv_iff alphabet msg varName process).1 hData)
-  | recv_wait _ _ _ _ _ _ _ => exact hData
+  | recv_wait _ _ _ _ _ _ => exact hData
   | cycle _ alphabet _ => exact dataWFProc_skip alphabet
   | cycle_wait _ _ _ => exact hData
   | skip _ _ _ => exact hData
@@ -778,25 +778,25 @@ theorem dataWFProc_offers {env : Environment} {source target : Proc}
       exact ((dataWFProc_seq_iff alphabet left right).1 hData).2
   | seq_fuse_tock _ alphabet _ left right _ _ _ _ =>
       exact ((dataWFProc_seq_iff alphabet left right).1 hData).2
-  | xoffer_send _ alphabet elseProcess branches _ _ _ _ hPrem _ =>
+  | xoffer_send _ alphabet elseProcess branches _ _ _ _ hPrem =>
       have hBranch := branchBound_of_mem
         ((dataWFProc_xoffer_iff alphabet elseProcess branches).1 hData).2 hPrem.2.1
       rw [BranchBound] at hBranch
       exact hBranch.2
-  | xoffer_recv _ alphabet elseProcess branches _ _ _ _ hPrem _ =>
+  | xoffer_recv _ alphabet elseProcess branches _ _ _ _ hPrem =>
       have hBranch := branchBound_of_mem
         ((dataWFProc_xoffer_iff alphabet elseProcess branches).1 hData).2 hPrem.2.1
       rw [BranchBound] at hBranch
       exact Proc.allVariablesBound_procExprReplace hBranch
-  | xoffer_else _ alphabet elseProcess branches _ _ =>
+  | xoffer_else _ alphabet elseProcess branches _ =>
       exact ((dataWFProc_xoffer_iff alphabet elseProcess branches).1 hData).1
-  | xoffer_wait _ _ _ _ _ _ => exact hData
-  | offer_some _ alphabet elseProcess branches _ hPrem _ =>
+  | xoffer_wait _ _ _ _ _ => exact hData
+  | offer_some _ alphabet elseProcess branches _ hPrem =>
       exact dataWFProc_parallelProcessBranchesSelecting
         ((dataWFProc_offer_iff alphabet elseProcess branches).1 hData).2 hPrem.2.1
-  | offer_else _ alphabet elseProcess branches _ _ =>
+  | offer_else _ alphabet elseProcess branches _ =>
       exact ((dataWFProc_offer_iff alphabet elseProcess branches).1 hData).1
-  | offer_wait _ _ _ _ _ _ => exact hData
+  | offer_wait _ _ _ _ _ => exact hData
   | par _ _ _ interface alphabet left left' right right' _ _ _ _ _ _
       _ _ _ _ _ _ _ _ ihLeft ihRight =>
       exact (dataWFProc_par_iff alphabet left' right' interface).2

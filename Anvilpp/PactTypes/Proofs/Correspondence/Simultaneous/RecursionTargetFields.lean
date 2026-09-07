@@ -30,8 +30,8 @@ private theorem targetMenuSource_future {source target : PactType} {env : TypeEn
   | offer a other branches => exact hOffers.offer_future_eq
   | xoffer a other branches =>
     cases hOffers with
-    | xoffer_branch _ _ _ _ _ _ hCond _ => exact (hSource hCond.2.2.2).elim
-    | xoffer_else _ _ _ _ hCond _ => exact (hSource hCond.2.2.2).elim
+    | xoffer_branch _ _ _ _ _ _ hCond => exact (hSource hCond.2.2.2).elim
+    | xoffer_else _ _ _ _ hCond => exact (hSource hCond.2.2.2).elim
     | xoffer_wait => rfl
   | _ => exact hSource.elim
 
@@ -267,7 +267,7 @@ private theorem compileTypeFuel_targetMenuSource :
         first
         | have hEq := relationMembership_functional _ _ hCanonical (relationMembership_xoffer_root a other branches)
           rw [hEq]
-          exact (Finset.mem_filter.mp hEnv).2.2.1
+          exact (Finset.mem_filter.mp hEnv).2.2
         | have hEq := relationMembership_functional _ _ hCanonical (relationMembership_offer_root a other branches)
           rw [hEq]; trivial
       · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hDefault

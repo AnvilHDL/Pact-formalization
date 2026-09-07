@@ -8,17 +8,15 @@ noncomputable section
 
 /-- The erased, environment-indexed type judgment `Eτ ⊢ τ -α→ τ'`.
 
-Action rules are gated on the type's own alphabet: a rule fires only when the
-action it involves is declared there.  Offer rules require *every* branch head
-to be declared, so a partly-declared offer is stuck rather than silently
-narrowed to its declared branches. -/
+Environment admissibility prevents undeclared heads from firing. Waiting and
+offer resolution have no additional declaration premise; the decorated rules
+project advertised actions to the source alphabet. -/
 @[aesop unsafe]
 inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactType → Prop where
   | action (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (msg : MessageId) (dir : MessageDir) :
       env.WellFormed alphabet ∧
       env.hasNeed (msg, dir) →
-      (msg, dir) ∈ alphabet.actions →
       --
       TypeTransition env (.message alphabet msg dir)
       (TypeLabel.message msg dir)
@@ -28,7 +26,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed alphabet ∧
       ¬ env.hasNeed (msg, dir) ∧
       env.clock = false →
-      (msg, dir) ∈ alphabet.actions →
       --
       TypeTransition env (.message alphabet msg dir)
       TypeLabel.silent
@@ -125,7 +122,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       (action, processType) ∈ branches ∧
       TypeBranchEnabled env (action, processType) ∧
       TypeResolved env branches →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       (TypeLabel.message action.1 action.2)
@@ -137,7 +133,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       TypeLabel.silent
@@ -148,7 +143,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed alphabet ∧
       ¬ TypeResolved env branches ∧
       env.clock = false →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.xoffer alphabet elseType branches)
       TypeLabel.silent
@@ -160,7 +154,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.WellFormed alphabet ∧
       enabled ∈ branches ∧
       TypeBranchEnabled env enabled →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -172,7 +165,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       TypeResolved env branches →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent
@@ -184,7 +176,6 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
       env.clock = false ∧
       TypeNoImmediateBranch env branches ∧
       ¬ TypeResolved env branches →
-      (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
       --
       TypeTransition env (.offer alphabet elseType branches)
       TypeLabel.silent

@@ -172,8 +172,7 @@ theorem typeCanCompleteThisCycleFuel_reannotate_mono (fuel : Nat) (ty : PactType
   | zero => simp [typeCanCompleteThisCycleFuel]
   | succ fuel ih =>
       cases ty with
-      | message a m d => simpa only [PactType.reannotate, typeCanCompleteThisCycleFuel,
-          decide_eq_true_eq] using (fun h => hSub h : (m, d) ∈ small.actions → (m, d) ∈ large.actions)
+      | message a m d => simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
       | progress a p | skip a | tock a | var a n => simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
       | recur a n body =>
           simp only [PactType.reannotate, typeCanCompleteThisCycleFuel]
@@ -191,9 +190,9 @@ theorem typeCanCompleteThisCycleFuel_reannotate_mono (fuel : Nat) (ty : PactType
           simp only [PactType.reannotate, typeCanCompleteThisCycleFuel, PactType.reannotateBranches_map,
             PactType.reannotateOfferBranches_map, List.forall_mem_map, List.any_map,
             Function.comp_def, Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, List.any_eq_true]
-          rintro ⟨hGate, hElse | ⟨branch, hMem, hComplete⟩⟩
-          · exact ⟨fun b hb => hSub (hGate b hb), Or.inl (ih other small large hSub hElse)⟩
-          · exact ⟨fun b hb => hSub (hGate b hb), Or.inr ⟨branch, hMem, ih branch.2 small large hSub hComplete⟩⟩
+          rintro (hElse | ⟨branch, hMem, hComplete⟩)
+          · exact Or.inl (ih other small large hSub hElse)
+          · exact Or.inr ⟨branch, hMem, ih branch.2 small large hSub hComplete⟩
 
 theorem PactType.canCompleteDeclared_reannotate_mono (ty : PactType)
     (small large : PactTypeAlphabet) (hSub : small.actions ⊆ large.actions)

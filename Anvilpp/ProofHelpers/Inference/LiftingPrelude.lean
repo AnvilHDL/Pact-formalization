@@ -181,10 +181,10 @@ theorem Offers.label_ne_tock {env : Environment} {source target : Proc}
     (hOffers : Offers env source label target current future)
     (hClock : env.clock = false) : label ≠ Label.tock := by
   induction hOffers with
-  | send _ _ _ _ _ _ _ _ => simp [Label.message]
-  | send_wait _ _ _ _ _ _ _ _ => simp [Label.silent]
-  | recv _ _ _ _ _ _ _ _ => simp [Label.message]
-  | recv_wait _ _ _ _ _ _ _ => simp [Label.silent]
+  | send _ _ _ _ _ _ _ => simp [Label.message]
+  | send_wait _ _ _ _ _ _ _ => simp [Label.silent]
+  | recv _ _ _ _ _ _ _ => simp [Label.message]
+  | recv_wait _ _ _ _ _ _ => simp [Label.silent]
   | cycle env _ hPrem => exact absurd hPrem.2 (by rw [hClock]; simp)
   | cycle_wait _ _ _ => simp [Label.silent]
   | skip _ _ _ => simp [Label.silent]
@@ -199,13 +199,13 @@ theorem Offers.label_ne_tock {env : Environment} {source target : Proc}
   | seq_tock _ _ _ _ _ _ _ hOffers _ ih => exact absurd rfl (ih hClock)
   | seq_fuse _ _ _ _ _ _ _ _ _ hTock _ => exact hTock
   | seq_fuse_tock _ _ _ _ _ _ _ hOffers ih => exact absurd rfl (ih hClock)
-  | xoffer_send _ _ _ _ _ _ _ _ _ _ => simp [Label.message]
-  | xoffer_recv _ _ _ _ _ _ _ _ _ _ => simp [Label.message]
-  | xoffer_else _ _ _ _ _ _ => simp [Label.silent]
-  | xoffer_wait _ _ _ _ _ _ => simp [Label.silent]
-  | offer_some _ _ _ _ _ _ _ => simp [Label.silent]
-  | offer_else _ _ _ _ _ _ => simp [Label.silent]
-  | offer_wait _ _ _ _ _ _ => simp [Label.silent]
+  | xoffer_send _ _ _ _ _ _ _ _ _ => simp [Label.message]
+  | xoffer_recv _ _ _ _ _ _ _ _ _ => simp [Label.message]
+  | xoffer_else _ _ _ _ _ => simp [Label.silent]
+  | xoffer_wait _ _ _ _ _ => simp [Label.silent]
+  | offer_some _ _ _ _ _ _ => simp [Label.silent]
+  | offer_else _ _ _ _ _ => simp [Label.silent]
+  | offer_wait _ _ _ _ _ => simp [Label.silent]
   | par outer _ _ interface _ _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _
       hLocalLeft _ _ ihLeft _ =>
       intro hAbsurd

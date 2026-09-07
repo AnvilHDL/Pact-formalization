@@ -208,8 +208,8 @@ theorem computeFutureOf_recur_root (alphabet : PactTypeAlphabet)
       change TypeAutomatonState.root ∈ (compileTypeFuel (typeCompilationFuel whole) whole).states
       rw [compileTypeFuel_recur_eq]
       exact Finset.mem_union_left _ (Finset.mem_singleton_self _))
-    (by rw [hRefs]; exact Finset.subset_insert _ _)
-    (by rw [hRefs])
+    (by rw [hRefs]; simp [whole, typeCompilationFuel])
+    (by rw [hRefs]; exact Finset.subset_union_left)
     (by
       unfold stateProductInfo
       rw [show typeCompilationFuel whole = typeCompilationFuel body + 1 by

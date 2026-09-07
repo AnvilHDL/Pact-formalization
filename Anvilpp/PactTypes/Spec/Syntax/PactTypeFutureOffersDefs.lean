@@ -65,16 +65,16 @@ mutual
     | action (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
         env.WellFormed alphabet ∧ env.hasNeed (msg, dir) →
-        (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) (TypeLabel.message msg dir)
-          (.skip alphabet) {(msg, dir)} (typeFutureOffers (.skip alphabet))
+          (.skip alphabet) ({(msg, dir)} ∩ alphabet.actions)
+          (typeFutureOffers (.skip alphabet))
     | action_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (msg : MessageId) (dir : MessageDir) :
         env.WellFormed alphabet ∧ ¬ env.hasNeed (msg, dir) ∧ env.clock = false →
-        (msg, dir) ∈ alphabet.actions →
         TypeOffers env (.message alphabet msg dir) TypeLabel.silent
-          (.message alphabet msg dir) {(msg, dir)}
-          (typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)})
+          (.message alphabet msg dir) ({(msg, dir)} ∩ alphabet.actions)
+          (typeFutureOffers (.message alphabet msg dir) \
+            ({(msg, dir)} ∩ alphabet.actions))
     | choice_left (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (left right : PactType) :
         env.WellFormed alphabet ∧ env.clock = false →
@@ -157,7 +157,6 @@ mutual
           (action, processType) ∈ branches ∧
           TypeBranchEnabled env (action, processType) ∧
           TypeResolved env branches →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches)
           (TypeLabel.message action.1 action.2) processType
           {action}
@@ -168,7 +167,6 @@ mutual
         (branches : List (BareMessage × PactType)) :
         env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           elseType ∅
           (typeFutureOffers (.xoffer alphabet elseType branches) \
@@ -177,7 +175,6 @@ mutual
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
         env.WellFormed alphabet ∧ ¬ TypeResolved env branches ∧ env.clock = false →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
           (.xoffer alphabet elseType branches) (typeWaitingOffers env branches)
           (typeFutureOffers (.xoffer alphabet elseType branches) \
@@ -187,7 +184,6 @@ mutual
         (branches : List (BareMessage × PactType))
         (enabled : BareMessage × PactType) :
         env.WellFormed alphabet ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
           (parallelTypeBranchesSelecting alphabet enabled branches) ∅
           (typeFutureOffers
@@ -197,20 +193,18 @@ mutual
         (branches : List (BareMessage × PactType)) :
         env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          elseType (typeBranchActions branches)
-          (typeFutureOffers elseType \ typeBranchActions branches)
+          elseType (typeBranchActions branches ∩ alphabet.actions)
+          (typeFutureOffers elseType \ (typeBranchActions branches ∩ alphabet.actions))
     | offer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :
         env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ ¬ TypeResolved env branches →
-        (∀ b ∈ branches, b.1 ∈ alphabet.actions) →
         TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          (.offer alphabet elseType branches) (typeBranchActions branches)
+          (.offer alphabet elseType branches) (typeBranchActions branches ∩ alphabet.actions)
           (typeFutureOffers (.offer alphabet elseType branches) \
-            typeBranchActions branches)
+            (typeBranchActions branches ∩ alphabet.actions))
     | par (outer leftEnv rightEnv : TypeEnvironment) (interface : Interface)
         (alphabet : PactTypeAlphabet)
         (left left' right right' : PactType) (leftLabel rightLabel : TypeLabel)

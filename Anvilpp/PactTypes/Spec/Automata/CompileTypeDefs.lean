@@ -145,31 +145,26 @@ def compileTypeFuel :
                 target := .root }
 
       -- message: fire to final when its complement is immediate; otherwise wait.
-      -- Both action families are gated on the type's own alphabet, exactly as
-      -- the semantic `action`/`action_wait` rules are.  The final idle loop
-      -- mirrors `skip`, which carries no such gate.
       | .message alphabet msg dir =>
           let action : BareMessage := (msg, dir)
           let firingEdges : Finset PendingAutomatonEdge :=
             ((alphabet.localEnvironments).filter fun environment =>
-              environment.hasNeed action ∧
-              action ∈ alphabet.actions).image fun environment =>
+              environment.hasNeed action).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible (TypeLabel.message msg dir)
-                  current := {action}
+                  current := {action} ∩ alphabet.actions
                   future := .at .final ∅
                   target := .final }
           let waitingEdges : Finset PendingAutomatonEdge :=
             ((alphabet.localEnvironments).filter fun environment =>
               environment.clock = false ∧
-              ¬ environment.hasNeed action ∧
-              action ∈ alphabet.actions).image fun environment =>
+              ¬ environment.hasNeed action).image fun environment =>
                 { source := TypeAutomatonState.root
                   environment := environment
                   label := .visible TypeLabel.silent
-                  current := {action}
-                  future := .at .root {action}
+                  current := {action} ∩ alphabet.actions
+                  future := .at .root ({action} ∩ alphabet.actions)
                   target := .root }
           let finalEdges : Finset PendingAutomatonEdge :=
             let idleEnvironments :=
@@ -183,7 +178,7 @@ def compileTypeFuel :
                 future := .at .final ∅
                 target := .final }
           exact finishAutomatonFragment {.root, .final} .root {.final}
-            (if (msg, dir) ∈ alphabet.actions then {.root, .final} else {.final})
+            {.root, .final}
             (firingEdges ∪ waitingEdges ∪ finalEdges)
 
       -- clock: a clock environment moves root to final; non-clock input waits.
@@ -474,14 +469,21 @@ def compileTypeMenuLinksFuel :
       | .xoffer _ elseType branches =>
           exact branches.zipIdx.foldl (fun links indexed =>
             links ∪ copy (indexed.2 + 1)
-              (compileTypeMenuLinksFuel fuel indexed.1.2))
-            (copy 0 (compileTypeMenuLinksFuel fuel elseType))
+              (compileTypeMenuLinksFuel fuel indexed.1.2) ∪
+              {(TypeAutomatonState.root, childState (indexed.2 + 1)
+                (compileTypeFuel fuel indexed.1.2).initial)})
+            (copy 0 (compileTypeMenuLinksFuel fuel elseType) ∪
+              {(TypeAutomatonState.root, childState 0 (compileTypeFuel fuel elseType).initial)})
       | .offer alphabet elseType branches =>
           exact branches.zipIdx.foldl (fun links indexed =>
             links ∪ copy (indexed.2 + 1)
               (compileTypeMenuLinksFuel fuel
-                (parallelTypeBranchesSelecting alphabet indexed.1 branches)))
-            (copy 0 (compileTypeMenuLinksFuel fuel elseType))
+                (parallelTypeBranchesSelecting alphabet indexed.1 branches)) ∪
+              {(TypeAutomatonState.root, childState (indexed.2 + 1)
+                (compileTypeFuel fuel
+                  (parallelTypeBranchesSelecting alphabet indexed.1 branches)).initial)})
+            (copy 0 (compileTypeMenuLinksFuel fuel elseType) ∪
+              {(TypeAutomatonState.root, childState 0 (compileTypeFuel fuel elseType).initial)})
       | _ => exact ∅
 termination_by fuel processType => (fuel, 0)
 

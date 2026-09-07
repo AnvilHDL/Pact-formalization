@@ -5,12 +5,11 @@ namespace Pact
 noncomputable section
 
 mutual
-  /-- The structural completion view blocks undeclared actions and offer heads.
-  It is used only by the completion analysis, not by the execution compiler. -/
+  /-- Structural view used by completion and substitution transport.
+  Alphabet annotations do not gate optimistic completion. -/
   def PactType.completionView : PactType → PactType
     | .message alphabet name polarity =>
-        if (name, polarity) ∈ alphabet.actions then .message alphabet name polarity
-        else .tock alphabet
+        .message alphabet name polarity
     | .progress alphabet name => .progress alphabet name
     | .skip alphabet => .skip alphabet
     | .tock alphabet => .tock alphabet
@@ -21,13 +20,9 @@ mutual
     | .seq alphabet left right => .seq alphabet left.completionView right.completionView
     | .par alphabet left right interface => .par alphabet left.completionView right.completionView interface
     | .xoffer alphabet other branches =>
-        if ∀ branch ∈ branches, branch.1 ∈ alphabet.actions then
-          .xoffer alphabet other.completionView (PactType.completionViewBranches branches)
-        else .tock alphabet
+        .xoffer alphabet other.completionView (PactType.completionViewBranches branches)
     | .offer alphabet other branches =>
-        if ∀ branch ∈ branches, branch.1 ∈ alphabet.actions then
-          .offer alphabet other.completionView (PactType.completionViewBranches branches)
-        else .tock alphabet
+        .offer alphabet other.completionView (PactType.completionViewBranches branches)
   termination_by ty => sizeOf ty
 
   def PactType.completionViewBranches : List (BareMessage × PactType) → List (BareMessage × PactType)
@@ -37,7 +32,7 @@ mutual
 decreasing_by all_goals simp_wf; omega
 end
 
-/-- Optimistic completion, including every written alphabet gate. -/
+/-- Alphabet-independent optimistic completion before the next clock. -/
 def PactType.CanCompleteDeclared (ty : PactType) : Bool := ty.completionView.CanCompleteBeforeTock
 
 def PactType.BranchCanCompleteDeclared (branches : List (BareMessage × PactType)) : Bool :=
@@ -45,20 +40,17 @@ def PactType.BranchCanCompleteDeclared (branches : List (BareMessage × PactType
 
 theorem PactType.canCompleteDeclared_eq (ty : PactType) :
     ty.CanCompleteDeclared = match ty with
-    | .message alphabet name polarity => decide ((name, polarity) ∈ alphabet.actions)
+    | .message _ _ _ => true
     | .progress _ _ | .skip _ => true
     | .tock _ | .var _ _ => false
     | .recur _ _ body => body.CanCompleteDeclared
     | .choice _ left right | .fairChoice _ _ left right => left.CanCompleteDeclared || right.CanCompleteDeclared
     | .seq _ left right | .par _ left right _ => left.CanCompleteDeclared && right.CanCompleteDeclared
-    | .xoffer alphabet other branches | .offer alphabet other branches =>
-        decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) &&
-          (other.CanCompleteDeclared || PactType.BranchCanCompleteDeclared branches) := by
+    | .xoffer _ other branches | .offer _ other branches =>
+        other.CanCompleteDeclared || PactType.BranchCanCompleteDeclared branches := by
   classical
   cases ty <;> simp only [CanCompleteDeclared, completionView, BranchCanCompleteDeclared]
-  all_goals try split_ifs
-  all_goals simp_all only [CanCompleteBeforeTock, decide_true, decide_false,
-    Bool.true_and, Bool.false_and, implies_true]
+  all_goals simp only [CanCompleteBeforeTock]
 
 theorem PactType.branchCanCompleteDeclared_nil : PactType.BranchCanCompleteDeclared [] = false := by
   simp [BranchCanCompleteDeclared, completionViewBranches, BranchCanCompleteBeforeTock]

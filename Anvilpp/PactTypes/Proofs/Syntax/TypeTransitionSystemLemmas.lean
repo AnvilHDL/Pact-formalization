@@ -10,10 +10,10 @@ theorem TypeTransition.exists_typeOffers
     (transition : TypeTransition env source label target) :
     ∃ current future, TypeOffers env source label target current future := by
   induction transition with
-  | action env alphabet msg dir conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.action env alphabet msg dir conditions hAlphabet⟩
-  | action_wait env alphabet msg dir conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.action_wait env alphabet msg dir conditions hAlphabet⟩
+  | action env alphabet msg dir conditions =>
+      exact ⟨_, _, TypeOffers.action env alphabet msg dir conditions⟩
+  | action_wait env alphabet msg dir conditions =>
+      exact ⟨_, _, TypeOffers.action_wait env alphabet msg dir conditions⟩
   | choice_left env alphabet left right hEnv hClock =>
       exact ⟨_, _, TypeOffers.choice_left env alphabet left right ⟨hEnv, hClock⟩⟩
   | choice_right env alphabet left right hEnv hClock =>
@@ -48,25 +48,19 @@ theorem TypeTransition.exists_typeOffers
             hOffers hNotSkip⟩
       · exact ⟨_, _, TypeOffers.seq env alphabet left left' right label current childFuture
             hOffers hNotSkip hTock⟩
-  | xoffer_branch env alphabet elseType branches action processType conditions
-      hAlphabet =>
+  | xoffer_branch env alphabet elseType branches action processType conditions =>
       exact ⟨_, _, TypeOffers.xoffer_branch env alphabet elseType branches action
-          processType conditions hAlphabet⟩
-  | xoffer_else env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.xoffer_else env alphabet elseType branches conditions
-          hAlphabet⟩
-  | xoffer_wait env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.xoffer_wait env alphabet elseType branches conditions
-          hAlphabet⟩
-  | offer_some env alphabet elseType branches enabled conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.offer_some env alphabet elseType branches enabled conditions
-          hAlphabet⟩
-  | offer_else env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.offer_else env alphabet elseType branches conditions
-          hAlphabet⟩
-  | offer_wait env alphabet elseType branches conditions hAlphabet =>
-      exact ⟨_, _, TypeOffers.offer_wait env alphabet elseType branches conditions
-          hAlphabet⟩
+          processType conditions⟩
+  | xoffer_else env alphabet elseType branches conditions =>
+      exact ⟨_, _, TypeOffers.xoffer_else env alphabet elseType branches conditions⟩
+  | xoffer_wait env alphabet elseType branches conditions =>
+      exact ⟨_, _, TypeOffers.xoffer_wait env alphabet elseType branches conditions⟩
+  | offer_some env alphabet elseType branches enabled conditions =>
+      exact ⟨_, _, TypeOffers.offer_some env alphabet elseType branches enabled conditions⟩
+  | offer_else env alphabet elseType branches conditions =>
+      exact ⟨_, _, TypeOffers.offer_else env alphabet elseType branches conditions⟩
+  | offer_wait env alphabet elseType branches conditions =>
+      exact ⟨_, _, TypeOffers.offer_wait env alphabet elseType branches conditions⟩
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel
       rightLabel leftCurrent leftFuture rightCurrent rightFuture hLeftNotSkip
       hRightNotSkip _ hLeftOffers

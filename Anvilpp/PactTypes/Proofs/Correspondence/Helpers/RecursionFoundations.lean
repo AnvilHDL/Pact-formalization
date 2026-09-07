@@ -140,14 +140,12 @@ def typeFutureOffersFuelSubst (name : String) (menuValue : Finset BareMessage)
             (typeFutureOffersFuelSubst name menuValue completeValue fuel left ∪
               typeFutureOffersFuelSubst name menuValue completeValue fuel right)
       | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
-          if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-            branches.foldl (fun offers branch =>
+          (branches.foldl (fun offers branch =>
               offers ∪ {branch.1} ∪
                 typeFutureOffersFuelSubst name menuValue completeValue fuel
                   branch.2)
               (typeFutureOffersFuelSubst name menuValue completeValue fuel
-                elseType)
-          else ∅
+                elseType)) ∩ alphabet.actions
 
 /-- Substitution rewrites branch bodies only, so an offer's alphabet gate reads
 the same before and after. -/
@@ -268,21 +266,13 @@ theorem typeFutureOffersFuel_replaceVar (name : String) (replacement : PactType)
           simp at hSize
           simp only [PactType.replaceVar, typeFutureOffersFuel,
             typeFutureOffersFuelSubst]
-          simp only [replaceBranches_gate]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · rw [if_pos hGate, if_pos hGate, ih elseType (by omega),
-              hBranches branches (by omega)]
-          · rw [if_neg hGate, if_neg hGate]
+          rw [ih elseType (by omega), hBranches branches (by omega)]
       | offer alphabet elseType branches =>
           simp only [PactType.replaceVar] at hSize
           simp at hSize
           simp only [PactType.replaceVar, typeFutureOffersFuel,
             typeFutureOffersFuelSubst]
-          simp only [replaceBranches_gate]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · rw [if_pos hGate, if_pos hGate, ih elseType (by omega),
-              hBranches branches (by omega)]
-          · rw [if_neg hGate, if_neg hGate]
+          rw [ih elseType (by omega), hBranches branches (by omega)]
 
 #print axioms typeFutureOffersFuel_replaceVar
 
@@ -311,11 +301,9 @@ def menuReachesVarFuel (name : String) (completeValue : Bool) :
       | .par _ left right _ =>
           menuReachesVarFuel name completeValue fuel left ||
             menuReachesVarFuel name completeValue fuel right
-      | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
-          if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-            menuReachesVarFuel name completeValue fuel elseType ||
-              branches.any fun b => menuReachesVarFuel name completeValue fuel b.2
-          else false
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
+          menuReachesVarFuel name completeValue fuel elseType ||
+            branches.any fun b => menuReachesVarFuel name completeValue fuel b.2
 
 /-- A binder that does not occur is invisible to both the substituted menu and
 the reach test. -/
@@ -421,22 +409,16 @@ theorem typeFutureOffersFuelSubst_of_absent (name : String)
           obtain ⟨hB, hRB⟩ := hBranches branches (by simp at hFuel; omega) hTail.2
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel,
             menuReachesVarFuel, hE, hRE, hRB]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · rw [if_pos hGate, if_pos hGate, if_pos hGate]
-            exact ⟨congrFun hB _, by simp⟩
-          · rw [if_neg hGate, if_neg hGate, if_neg hGate]
-            exact ⟨rfl, rfl⟩
+          exact ⟨congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+            (congrFun hB _), by simp⟩
       | offer alphabet elseType branches =>
           simp only [PactType.TailOccurrences] at hTail
           obtain ⟨hE, hRE⟩ := ih elseType (by simp at hFuel; omega) hTail.1
           obtain ⟨hB, hRB⟩ := hBranches branches (by simp at hFuel; omega) hTail.2
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel,
             menuReachesVarFuel, hE, hRE, hRB]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · rw [if_pos hGate, if_pos hGate, if_pos hGate]
-            exact ⟨congrFun hB _, by simp⟩
-          · rw [if_neg hGate, if_neg hGate, if_neg hGate]
-            exact ⟨rfl, rfl⟩
+          exact ⟨congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+            (congrFun hB _), by simp⟩
 
 
 /-- The substituted menu is the unsubstituted one plus the variable's menu,
@@ -448,15 +430,17 @@ theorem typeFutureOffersFuelSubst_split (name : String)
     ∀ (fuel : Nat) (processType : PactType),
       sizeOf processType < fuel →
       processType.TailOccurrences name True →
+      processType.AlphabetWellFormed →
+      menuValue ⊆ processType.alphabet.actions →
       typeFutureOffersFuelSubst name menuValue completeValue fuel processType =
         typeFutureOffersFuelSubst name ∅ completeValue fuel processType ∪
           (if menuReachesVarFuel name completeValue fuel processType then
             menuValue else ∅) := by
   intro fuel
   induction fuel with
-  | zero => intro processType hFuel _; exact absurd hFuel (by omega)
+  | zero => intro processType hFuel _ _ _; exact absurd hFuel (by omega)
   | succ fuel ih =>
-      intro processType hFuel hTail
+      intro processType hFuel hTail hWF hMenu
       have hAbsent := typeFutureOffersFuelSubst_of_absent name menuValue
         completeValue fuel
       have hAbsent0 := typeFutureOffersFuelSubst_of_absent name ∅
@@ -487,6 +471,8 @@ theorem typeFutureOffersFuelSubst_split (name : String)
           · simp [typeFutureOffersFuelSubst, menuReachesVarFuel, hName]
           · simp [typeFutureOffersFuelSubst, menuReachesVarFuel, hName]
       | recur alphabet other body =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           by_cases hName : name = other
           · simp only [typeFutureOffersFuelSubst, menuReachesVarFuel,
@@ -496,21 +482,30 @@ theorem typeFutureOffersFuelSubst_split (name : String)
             simp only [hName', if_neg, not_false_iff] at hTail
             simp only [typeFutureOffersFuelSubst, menuReachesVarFuel,
               if_neg hName]
-            exact ih body (by simp at hFuel; omega) hTail
+            exact ih body (by simp at hFuel; omega) hTail hWF.2.2
+              (by simpa only [hWF.2.1] using hMenu)
       | choice alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel,
-            ih left (by simp at hFuel; omega) hTail.1,
-            ih right (by simp at hFuel; omega) hTail.2]
+            ih left (by simp at hFuel; omega) hTail.1 hWF.2.2.2.1
+              (by simpa only [hWF.2.1] using hMenu),
+            ih right (by simp at hFuel; omega) hTail.2 hWF.2.2.2.2
+              (by simpa only [hWF.2.2.1] using hMenu)]
           by_cases hL : menuReachesVarFuel name completeValue fuel left <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
             simp [hL, hR, Finset.union_assoc, Finset.union_left_comm,
               Finset.union_comm]
       | fairChoice alphabet bid left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel,
-            ih left (by simp at hFuel; omega) hTail.1,
-            ih right (by simp at hFuel; omega) hTail.2]
+            ih left (by simp at hFuel; omega) hTail.1 hWF.2.2.2.1
+              (by simpa only [hWF.2.1] using hMenu),
+            ih right (by simp at hFuel; omega) hTail.2 hWF.2.2.2.2
+              (by simpa only [hWF.2.2.1] using hMenu)]
           by_cases hL : menuReachesVarFuel name completeValue fuel left <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
             simp [hL, hR, Finset.union_assoc, Finset.union_left_comm,
@@ -528,6 +523,8 @@ theorem typeFutureOffersFuelSubst_split (name : String)
           simp [typeFutureOffersFuelSubst, menuReachesVarFuel, hLEq, hREq,
             hLEq0, hREq0, hLReach, hRReach]
       | seq alphabet left right =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           obtain ⟨hLEq, hLReach⟩ :=
             hAbsent left (by simp at hFuel ⊢; omega) hTail.1
@@ -535,16 +532,20 @@ theorem typeFutureOffersFuelSubst_split (name : String)
             hAbsent0 left (by simp at hFuel ⊢; omega) hTail.1
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel, hLEq,
             hLEq0, hLReach, Bool.false_or,
-            ih right (by simp at hFuel; omega) hTail.2]
+            ih right (by simp at hFuel; omega) hTail.2 hWF.2.2.2.2
+              (by simpa only [hWF.2.2.1] using hMenu)]
           by_cases hGate : PactType.canCompleteBeforeTockSubst name
               completeValue left.completionView <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
             simp [hGate, hR, Finset.union_assoc]
       | xoffer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           have hFold : ∀ bs : List (BareMessage × PactType),
               sizeOf bs < fuel + 1 →
               PactType.TailBranchOccurrences name True bs →
+              PactType.BranchesAlphabetWellFormed alphabet bs →
               ∀ initV init0 : Finset BareMessage, ∀ flag : Bool,
                 initV = init0 ∪ (if flag then menuValue else ∅) →
                 bs.foldl (fun offers b => offers ∪ {b.1} ∪
@@ -558,32 +559,34 @@ theorem typeFutureOffersFuelSubst_split (name : String)
                       menuValue else ∅) := by
             intro bs
             induction bs with
-            | nil => intro _ _ initV init0 flag hInit; simpa using hInit
+            | nil => intro _ _ _ initV init0 flag hInit; simpa using hInit
             | cons b rest restIH =>
                 rcases b with ⟨action, branchType⟩
-                intro hBsSize hBsTail initV init0 flag hInit
+                intro hBsSize hBsTail hBsWF initV init0 flag hInit
                 simp only [List.cons.sizeOf_spec,
                   Prod.mk.sizeOf_spec] at hBsSize
                 simp only [PactType.TailBranchOccurrences] at hBsTail
+                simp only [PactType.BranchesAlphabetWellFormed] at hBsWF
                 simp only [List.foldl_cons, List.any_cons, ← Bool.or_assoc]
-                refine restIH (by omega) hBsTail.2 _ _
+                refine restIH (by omega) hBsTail.2 hBsWF.2.2 _ _
                   (flag || menuReachesVarFuel name completeValue fuel
                     branchType) ?_
-                rw [hInit, ih branchType (by omega) hBsTail.1]
+                rw [hInit, ih branchType (by omega) hBsTail.1 hBsWF.2.1
+                  (by simpa only [hBsWF.1] using hMenu)]
                 by_cases hFlag : flag <;>
                   by_cases hB : menuReachesVarFuel name completeValue fuel
                     branchType <;>
                   simp [hFlag, hB, Finset.union_assoc, Finset.union_left_comm,
                     Finset.union_comm]
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · simp only [if_pos hGate]
-            exact hFold branches (by simp at hFuel ⊢; omega) hTail.2 _ _
-              (menuReachesVarFuel name completeValue fuel elseType)
-              (ih elseType (by simp at hFuel; omega) hTail.1)
-          · simp only [if_neg hGate]
-            simp
+          rw [hFold branches (by simp at hFuel ⊢; omega) hTail.2 hWF.2.2.2 _ _
+            (menuReachesVarFuel name completeValue fuel elseType)
+            (ih elseType (by simp at hFuel; omega) hTail.1 hWF.2.2.1
+              (by simpa only [hWF.2.1] using hMenu))]
+          split_ifs <;> simp [Finset.union_inter_distrib_right, Finset.inter_eq_left.mpr hMenu]
       | offer alphabet elseType branches =>
+          simp only [PactType.AlphabetWellFormed] at hWF
+          simp only [PactType.alphabet] at hMenu
           simp only [PactType.TailOccurrences] at hTail
           have hFold : ∀ bs : List (BareMessage × PactType),
               sizeOf bs < fuel + 1 →
@@ -615,17 +618,13 @@ theorem typeFutureOffersFuelSubst_split (name : String)
                 simp only [List.foldl_cons, hHeadV, hHead0]
                 exact hRestEq
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · simp only [if_pos hGate]
-            obtain ⟨hFoldEq, hFoldReach⟩ :=
-              hFold branches (by simp at hFuel ⊢; omega) hTail.2
-                (typeFutureOffersFuelSubst name menuValue completeValue fuel
-                  elseType)
-            rw [hFoldEq, ih elseType (by simp at hFuel; omega) hTail.1,
-              hFoldInit, hFoldReach]
-            simp
-          · simp only [if_neg hGate]
-            simp
+          obtain ⟨hFoldEq, hFoldReach⟩ :=
+            hFold branches (by simp at hFuel ⊢; omega) hTail.2
+              (typeFutureOffersFuelSubst name menuValue completeValue fuel elseType)
+          rw [hFoldEq, ih elseType (by simp at hFuel; omega) hTail.1 hWF.2.2.1
+            (by simpa only [hWF.2.1] using hMenu), hFoldInit]
+          simp only [hFoldReach, Bool.or_false]
+          split_ifs <;> simp [Finset.union_inter_distrib_right, Finset.inter_eq_left.mpr hMenu]
 
 /-- With the binder absent from every non-tail position, the `∅` reading of the
 substituted menu is the ordinary menu. -/
@@ -712,10 +711,8 @@ theorem typeFutureOffersFuelSubst_empty (name : String) (completeValue : Bool) :
           simp only [PactType.TailOccurrences] at hTail
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel,
             ih elseType (by simp at hFuel; omega) hTail.1]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · simp only [if_pos hGate]
-            exact hBranches branches (by simp at hFuel ⊢; omega) hTail.2 _
-          · simp only [if_neg hGate]
+          exact congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+            (hBranches branches (by simp at hFuel ⊢; omega) hTail.2 _)
       | offer alphabet elseType branches =>
           simp only [PactType.TailOccurrences] at hTail
           have hBranchesFalse : ∀ bs : List (BareMessage × PactType),
@@ -741,10 +738,8 @@ theorem typeFutureOffersFuelSubst_empty (name : String) (completeValue : Bool) :
                 exact restIH (by omega) hBsTail.2 _
           simp only [typeFutureOffersFuelSubst, typeFutureOffersFuel,
             ih elseType (by simp at hFuel; omega) hTail.1]
-          by_cases hGate : ∀ b ∈ branches, b.1 ∈ alphabet.actions
-          · simp only [if_pos hGate]
-            exact hBranchesFalse branches (by simp at hFuel ⊢; omega) hTail.2 _
-          · simp only [if_neg hGate]
+          exact congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
+            (hBranchesFalse branches (by simp at hFuel ⊢; omega) hTail.2 _)
 
 #print axioms typeFutureOffersFuelSubst_split
 

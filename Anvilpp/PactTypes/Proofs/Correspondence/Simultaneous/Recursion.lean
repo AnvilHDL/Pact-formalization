@@ -1440,16 +1440,16 @@ theorem TypeOffers.preserves_tailOccurrences :
           hLeftOffers =>
           simp only [PactType.TailOccurrences] at hTail
           exact hTail.2
-      | xoffer_branch env alphabet elseType branches action processType hConds hHeads =>
+      | xoffer_branch env alphabet elseType branches action processType hConds =>
           simp only [PactType.TailOccurrences] at hTail
           exact PactType.tailOccurrences_of_mem_branches tracked tail hTail.2
             hConds.2.1
-      | xoffer_else env alphabet elseType branches hConds hHeads =>
+      | xoffer_else env alphabet elseType branches hConds =>
           simp only [PactType.TailOccurrences] at hTail
           exact hTail.1
-      | xoffer_wait env alphabet elseType branches hConds hHeads =>
+      | xoffer_wait env alphabet elseType branches hConds =>
           exact hTail
-      | offer_some env alphabet elseType branches enabled hConds hHeads =>
+      | offer_some env alphabet elseType branches enabled hConds =>
           simp only [PactType.TailOccurrences] at hTail
           exact parallelTypeBranchesSelecting_tailOccurrences tracked alphabet
             enabled branches tail
@@ -1458,10 +1458,10 @@ theorem TypeOffers.preserves_tailOccurrences :
                 hBranch)
             (PactType.tailOccurrences_of_mem_branches tracked False hTail.2
               hConds.2.1)
-      | offer_else env alphabet elseType branches hConds hHeads =>
+      | offer_else env alphabet elseType branches hConds =>
           simp only [PactType.TailOccurrences] at hTail
           exact hTail.1
-      | offer_wait env alphabet elseType branches hConds hHeads =>
+      | offer_wait env alphabet elseType branches hConds =>
           exact hTail
       | par outer leftEnv rightEnv interface alphabet left left' right right'
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
@@ -1545,14 +1545,14 @@ theorem TypeOffers.replaceVar_tail (name : String)
   | h n ih =>
       intro target label current future hOffers hTailRec hTail hBound hFresh
       cases hOffers with
-      | action env alphabet msg dir hConds hAction =>
+      | action env alphabet msg dir hConds =>
           refine ⟨typeFutureOffers (.skip alphabet), ?_⟩
           simpa [PactType.replaceVar] using
-            TypeOffers.action env alphabet msg dir hConds hAction
-      | action_wait env alphabet msg dir hConds hAction =>
-          refine ⟨typeFutureOffers (.message alphabet msg dir) \ {(msg, dir)}, ?_⟩
+            TypeOffers.action env alphabet msg dir hConds
+      | action_wait env alphabet msg dir hConds =>
+          refine ⟨typeFutureOffers (.message alphabet msg dir) \ ({(msg, dir)} ∩ alphabet.actions), ?_⟩
           simpa [PactType.replaceVar] using
-            TypeOffers.action_wait env alphabet msg dir hConds hAction
+            TypeOffers.action_wait env alphabet msg dir hConds
       | choice_left env alphabet left right hConds =>
           refine ⟨typeFutureOffers (.choice alphabet
             (target.replaceVar name replacement) (right.replaceVar name replacement)), ?_⟩
@@ -1667,7 +1667,7 @@ theorem TypeOffers.replaceVar_tail (name : String)
             TypeOffers.seq_fuse_tock env alphabet skipAlphabet left
               (PactType.replaceVar target name replacement) current childFuture
               hLeftOffers
-      | xoffer_branch env alphabet elseType branches action processType hConds hHeads =>
+      | xoffer_branch env alphabet elseType branches action processType hConds =>
           have hConds' :
               env.WellFormed alphabet ∧
                 (action, PactType.replaceVar target name replacement) ∈
@@ -1689,8 +1689,7 @@ theorem TypeOffers.replaceVar_tail (name : String)
             TypeOffers.xoffer_branch env alphabet _
               (PactType.replaceBranches branches name replacement) action
               (PactType.replaceVar target name replacement) hConds'
-              (PactType.replaceBranches_heads hHeads)
-      | xoffer_else env alphabet elseType branches hConds hHeads =>
+      | xoffer_else env alphabet elseType branches hConds =>
           have hConds' :
               env.WellFormed alphabet ∧ env.clock = false ∧
                 TypeNoImmediateBranch env
@@ -1710,8 +1709,7 @@ theorem TypeOffers.replaceVar_tail (name : String)
             TypeOffers.xoffer_else env alphabet
               (PactType.replaceVar target name replacement)
               (PactType.replaceBranches branches name replacement) hConds'
-              (PactType.replaceBranches_heads hHeads)
-      | xoffer_wait env alphabet elseType branches hConds hHeads =>
+      | xoffer_wait env alphabet elseType branches hConds =>
           have hConds' :
               env.WellFormed alphabet ∧
                 ¬ TypeResolved env
@@ -1731,8 +1729,7 @@ theorem TypeOffers.replaceVar_tail (name : String)
             TypeOffers.xoffer_wait env alphabet
               (PactType.replaceVar elseType name replacement)
               (PactType.replaceBranches branches name replacement) hConds'
-              (PactType.replaceBranches_heads hHeads)
-      | offer_some env alphabet elseType branches enabled hConds hHeads =>
+      | offer_some env alphabet elseType branches enabled hConds =>
           simp only [PactType.TailOccurrences] at hTail
           have hBranchesInert :=
             PactType.replaceBranches_eq_self_of_tailBranchOccurrences_false
@@ -1750,18 +1747,18 @@ theorem TypeOffers.replaceVar_tail (name : String)
           refine ⟨typeFutureOffers
               (parallelTypeBranchesSelecting alphabet enabled branches), ?_⟩
           simpa [PactType.replaceVar, hBranchesInert, hTargetInert] using
-            TypeOffers.offer_some env alphabet _ branches enabled hConds hHeads
-      | offer_else env alphabet elseType branches hConds hHeads =>
+            TypeOffers.offer_some env alphabet _ branches enabled hConds
+      | offer_else env alphabet elseType branches hConds =>
           simp only [PactType.TailOccurrences] at hTail
           have hBranchesInert :=
             PactType.replaceBranches_eq_self_of_tailBranchOccurrences_false
               name replacement branches hTail.2
           refine ⟨typeFutureOffers (PactType.replaceVar target name replacement) \
-              typeBranchActions branches, ?_⟩
+              (typeBranchActions branches ∩ alphabet.actions), ?_⟩
           simpa [PactType.replaceVar, hBranchesInert] using
             TypeOffers.offer_else env alphabet
-              (PactType.replaceVar target name replacement) branches hConds hHeads
-      | offer_wait env alphabet elseType branches hConds hHeads =>
+              (PactType.replaceVar target name replacement) branches hConds
+      | offer_wait env alphabet elseType branches hConds =>
           simp only [PactType.TailOccurrences] at hTail
           have hBranchesInert :=
             PactType.replaceBranches_eq_self_of_tailBranchOccurrences_false
@@ -1769,11 +1766,10 @@ theorem TypeOffers.replaceVar_tail (name : String)
           refine ⟨typeFutureOffers
               (.offer alphabet (PactType.replaceVar elseType name replacement)
                 branches) \
-              typeBranchActions branches, ?_⟩
+              (typeBranchActions branches ∩ alphabet.actions), ?_⟩
           simpa [PactType.replaceVar, hBranchesInert] using
             TypeOffers.offer_wait env alphabet
               (PactType.replaceVar elseType name replacement) branches hConds
-              hHeads
       | par outer leftEnv rightEnv interface alphabet left left' right right'
           leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
           hLeftNotSkip hRightNotSkip hLeftOffers hRightOffers hNotBoth
@@ -2056,7 +2052,7 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
         simp [PactType.replaceVar]
       rw [hSource] at hOffers
       cases hOffers with
-      | xoffer_branch _ _ _ _ action processType hConds hHeads =>
+      | xoffer_branch _ _ _ _ action processType hConds =>
           obtain ⟨original, hOriginal, hEq⟩ :=
             PactType.mem_replaceBranches_inv name replacement hConds.2.1
           subst hEq
@@ -2066,20 +2062,16 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
               ⟨hConds.1, hOriginal, by simpa [TypeBranchEnabled] using
                 hConds.2.2.1,
                 (TypeResolved_replaceBranches env branches name replacement).mp
-                  hConds.2.2.2⟩
-              (fun b hb => hHeads (b.1, b.2.replaceVar name replacement)
-                (PactType.mem_replaceBranches name replacement hb)), rfl⟩
-      | xoffer_else _ _ _ _ hConds hHeads =>
+                  hConds.2.2.2⟩, rfl⟩
+      | xoffer_else _ _ _ _ hConds =>
           exact ⟨elseType, _,
             TypeOffers.xoffer_else env alphabet elseType branches
               ⟨hConds.1, hConds.2.1,
                 (TypeNoImmediateBranch_replaceBranches env branches name
                   replacement).mp hConds.2.2.1,
                 (TypeResolved_replaceBranches env branches name replacement).mp
-                  hConds.2.2.2⟩
-              (fun b hb => hHeads (b.1, b.2.replaceVar name replacement)
-                (PactType.mem_replaceBranches name replacement hb)), rfl⟩
-      | xoffer_wait _ _ _ _ hConds hHeads =>
+                  hConds.2.2.2⟩, rfl⟩
+      | xoffer_wait _ _ _ _ hConds =>
           rw [typeWaitingOffers_replaceBranches]
           refine ⟨.xoffer alphabet elseType branches,
             typeFutureOffers (.xoffer alphabet elseType branches) \
@@ -2089,9 +2081,7 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
                 fun hResolved => hConds.2.1
                   ((TypeResolved_replaceBranches env branches name
                     replacement).mpr hResolved),
-                hConds.2.2⟩
-              (fun b hb => hHeads (b.1, b.2.replaceVar name replacement)
-                (PactType.mem_replaceBranches name replacement hb)), ?_⟩
+                hConds.2.2⟩, ?_⟩
           simp [PactType.replaceVar]
   | offer alphabet elseType branches =>
       left
@@ -2105,7 +2095,7 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
         simp [PactType.replaceVar, hBranchesInert]
       rw [hSource] at hOffers
       cases hOffers with
-      | offer_some _ _ _ _ enabled hConds hHeads =>
+      | offer_some _ _ _ _ enabled hConds =>
           have hBranchFalse : ∀ branch ∈ branches,
               branch.2.TailOccurrences name False := fun branch hBranch =>
             PactType.tailOccurrences_of_mem_branches name False hTail.2 hBranch
@@ -2115,19 +2105,18 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
           refine ⟨parallelTypeBranchesSelecting alphabet enabled branches,
             typeFutureOffers
               (parallelTypeBranchesSelecting alphabet enabled branches),
-            TypeOffers.offer_some env alphabet elseType branches enabled hConds
-              hHeads, ?_⟩
+            TypeOffers.offer_some env alphabet elseType branches enabled hConds, ?_⟩
           exact (PactType.replaceVar_eq_self_of_tailOccurrences_false name
             replacement _ hTargetTail).symm
-      | offer_else _ _ _ _ hConds hHeads =>
-          exact ⟨elseType, typeFutureOffers elseType \ typeBranchActions branches,
-            TypeOffers.offer_else env alphabet elseType branches hConds hHeads,
+      | offer_else _ _ _ _ hConds =>
+          exact ⟨elseType, typeFutureOffers elseType \ (typeBranchActions branches ∩ alphabet.actions),
+            TypeOffers.offer_else env alphabet elseType branches hConds,
             rfl⟩
-      | offer_wait _ _ _ _ hConds hHeads =>
+      | offer_wait _ _ _ _ hConds =>
           refine ⟨.offer alphabet elseType branches,
             typeFutureOffers (.offer alphabet elseType branches) \
-              typeBranchActions branches,
-            TypeOffers.offer_wait env alphabet elseType branches hConds hHeads,
+              (typeBranchActions branches ∩ alphabet.actions),
+            TypeOffers.offer_wait env alphabet elseType branches hConds,
             ?_⟩
           simp [PactType.replaceVar, hBranchesInert]
 

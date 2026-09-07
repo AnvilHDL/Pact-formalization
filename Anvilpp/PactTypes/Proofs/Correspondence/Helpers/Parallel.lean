@@ -133,10 +133,10 @@ theorem TypeOffers.toTypeTransition
     (hOffers : TypeOffers env source label target current future) :
     TypeTransition env source label target := by
   induction hOffers using TypeOffers.rec with
-  | action env alphabet msg dir hConditions hAlphabet =>
-      exact TypeTransition.action env alphabet msg dir hConditions hAlphabet
-  | action_wait env alphabet msg dir hConditions hAlphabet =>
-      exact TypeTransition.action_wait env alphabet msg dir hConditions hAlphabet
+  | action env alphabet msg dir hConditions =>
+      exact TypeTransition.action env alphabet msg dir hConditions
+  | action_wait env alphabet msg dir hConditions =>
+      exact TypeTransition.action_wait env alphabet msg dir hConditions
   | choice_left env alphabet left right hEnv =>
       exact TypeTransition.choice_left env alphabet left right hEnv.1 hEnv.2
   | choice_right env alphabet left right hEnv =>
@@ -170,25 +170,20 @@ theorem TypeOffers.toTypeTransition
       hOffers ih =>
       exact TypeTransition.seq_fuse env alphabet skipAlphabet left right
         TypeLabel.tock ih
-  | xoffer_branch env alphabet elseType branches action processType hConditions
-      hAlphabet =>
+  | xoffer_branch env alphabet elseType branches action processType hConditions =>
       exact TypeTransition.xoffer_branch env alphabet elseType branches action
-        processType hConditions hAlphabet
-  | xoffer_else env alphabet elseType branches hConditions hAlphabet =>
+        processType hConditions
+  | xoffer_else env alphabet elseType branches hConditions =>
       exact TypeTransition.xoffer_else env alphabet elseType branches hConditions
-        hAlphabet
-  | xoffer_wait env alphabet elseType branches hConditions hAlphabet =>
+  | xoffer_wait env alphabet elseType branches hConditions =>
       exact TypeTransition.xoffer_wait env alphabet elseType branches hConditions
-        hAlphabet
-  | offer_some env alphabet elseType branches enabled hConditions hAlphabet =>
+  | offer_some env alphabet elseType branches enabled hConditions =>
       exact TypeTransition.offer_some env alphabet elseType branches enabled
-        hConditions hAlphabet
-  | offer_else env alphabet elseType branches hConditions hAlphabet =>
+        hConditions
+  | offer_else env alphabet elseType branches hConditions =>
       exact TypeTransition.offer_else env alphabet elseType branches hConditions
-        hAlphabet
-  | offer_wait env alphabet elseType branches hConditions hAlphabet =>
+  | offer_wait env alphabet elseType branches hConditions =>
       exact TypeTransition.offer_wait env alphabet elseType branches hConditions
-        hAlphabet
   | par outer leftEnv rightEnv interface alphabet left leftTarget right rightTarget
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftNotSkip hRightNotSkip
@@ -2822,8 +2817,7 @@ theorem typeCanCompleteThisCycle_reannotate_subset
   | succ fuel ih =>
       cases processType with
       | message alphabet msg dir =>
-          simpa only [PactType.reannotate, typeCanCompleteThisCycleFuel, decide_eq_true_eq]
-            using (fun h => hActions h : (msg, dir) ∈ target.actions → (msg, dir) ∈ alphabet.actions)
+          simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
       | progress _ _ | skip _ | tock _ | var _ _ =>
           simp [PactType.reannotate, typeCanCompleteThisCycleFuel]
       | recur alphabet name body =>
@@ -2863,16 +2857,12 @@ theorem typeCanCompleteThisCycle_reannotate_subset
           simp only [PactType.reannotate, typeCanCompleteThisCycleFuel,
             reannotateBranches_eq_map, reannotateOfferBranches_eq_map,
             Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, List.any_eq_true]
-          rintro ⟨hGate, hElse | ⟨b, hMem, hComplete⟩⟩
-          · refine ⟨?_, Or.inl (ih other target hOther (by rw [hOtherA]; exact hActions) hElse)⟩
-            intro b hb
-            exact hActions (hGate (b.1, b.2.reannotate target) (List.mem_map_of_mem hb))
+          rintro (hElse | ⟨b, hMem, hComplete⟩)
+          · exact Or.inl (ih other target hOther (by rw [hOtherA]; exact hActions) hElse)
           · obtain ⟨original, hOriginal, rfl⟩ := List.mem_map.mp hMem
-            refine ⟨?_, Or.inr ⟨original, hOriginal, ?_⟩⟩
-            · intro b hb
-              exact hActions (hGate (b.1, b.2.reannotate target) (List.mem_map_of_mem hb))
-            · obtain ⟨hA, hW⟩ := hEvery original hOriginal
-              exact ih original.2 target hW (by rw [hA]; exact hActions) hComplete
+            refine Or.inr ⟨original, hOriginal, ?_⟩
+            obtain ⟨hA, hW⟩ := hEvery original hOriginal
+            exact ih original.2 target hW (by rw [hA]; exact hActions) hComplete
 
 /-- Fuel-indexed form of the menu bound. -/
 private theorem typeFutureOffersFuel_reannotate_subset :
@@ -2960,41 +2950,25 @@ private theorem typeFutureOffersFuel_reannotate_subset :
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.alphabet] at hActions
           obtain ⟨hAWF, hElseA, hWFE, hWFB⟩ := hWF
-          rw [reannotateBranches_eq_map]
-          by_cases hg : ∀ b ∈ branches.map (fun b => (b.1, b.2.reannotate target)),
-              b.1 ∈ target.actions
-          · have hg' : ∀ b ∈ branches, b.1 ∈ alphabet.actions := by
-              intro b hb
-              refine hActions (hg (b.1, b.2.reannotate target) ?_)
-              exact List.mem_map_of_mem hb
-            rw [if_pos hg, if_pos hg', List.foldl_map]
-            refine foldl_offers_mono _ _ branches _ _
-              (ih elseType target hWFE (by rw [hElseA]; exact hActions)) ?_
-            intro x hx
-            obtain ⟨hxA, hxW⟩ := branchesWF_mem branches hWFB x hx
-            exact ih x.2 target hxW (by rw [hxA]; exact hActions)
-          · rw [if_neg hg]
-            exact Finset.empty_subset _
+          rw [reannotateBranches_eq_map, List.foldl_map]
+          refine Finset.inter_subset_inter ?_ hActions
+          refine foldl_offers_mono _ _ branches _ _
+            (ih elseType target hWFE (by rw [hElseA]; exact hActions)) ?_
+          intro x hx
+          obtain ⟨hxA, hxW⟩ := branchesWF_mem branches hWFB x hx
+          exact ih x.2 target hxW (by rw [hxA]; exact hActions)
       | offer alphabet elseType branches =>
           simp only [PactType.reannotate, typeFutureOffersFuel]
           simp only [PactType.AlphabetWellFormed] at hWF
           simp only [PactType.alphabet] at hActions
           obtain ⟨hAWF, hElseA, hWFE, hWFB⟩ := hWF
-          rw [reannotateOfferBranches_eq_map]
-          by_cases hg : ∀ b ∈ branches.map (fun b => (b.1, b.2.reannotate target)),
-              b.1 ∈ target.actions
-          · have hg' : ∀ b ∈ branches, b.1 ∈ alphabet.actions := by
-              intro b hb
-              refine hActions (hg (b.1, b.2.reannotate target) ?_)
-              exact List.mem_map_of_mem hb
-            rw [if_pos hg, if_pos hg', List.foldl_map]
-            refine foldl_offers_mono _ _ branches _ _
-              (ih elseType target hWFE (by rw [hElseA]; exact hActions)) ?_
-            intro x hx
-            obtain ⟨hxA, hxW⟩ := offerBranchesWF_mem branches hWFB x hx
-            exact ih x.2 target hxW (by rw [hxA]; exact hActions)
-          · rw [if_neg hg]
-            exact Finset.empty_subset _
+          rw [reannotateOfferBranches_eq_map, List.foldl_map]
+          refine Finset.inter_subset_inter ?_ hActions
+          refine foldl_offers_mono _ _ branches _ _
+            (ih elseType target hWFE (by rw [hElseA]; exact hActions)) ?_
+          intro x hx
+          obtain ⟨hxA, hxW⟩ := offerBranchesWF_mem branches hWFB x hx
+          exact ih x.2 target hxW (by rw [hxA]; exact hActions)
 
 /-- Re-signing a type by an alphabet it already covers can only shrink its
 same-cycle menu. -/

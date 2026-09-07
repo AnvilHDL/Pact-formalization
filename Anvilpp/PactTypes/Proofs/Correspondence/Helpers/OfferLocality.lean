@@ -327,13 +327,11 @@ theorem typeFutureOffersFuel_messageIds (fuel : Nat) (rho : PactType) :
       · exact Finset.mem_union_left _ (ih _ a ha)
       · exact Finset.mem_union_right _ (ih _ a ha)
     case xoffer alphabet elseType branches =>
-      split
-      · exact hBranches branches _ _ (ih elseType)
-      · simp
+      intro a ha
+      exact hBranches branches _ _ (ih elseType) a (Finset.mem_inter.mp ha).1
     case offer alphabet elseType branches =>
-      split
-      · exact hBranches branches _ _ (ih elseType)
-      · simp
+      intro a ha
+      exact hBranches branches _ _ (ih elseType) a (Finset.mem_inter.mp ha).1
 
 theorem typeFutureOffers_messageIds (rho : PactType) :
     ∀ action ∈ typeFutureOffers rho, action.1 ∈ rho.MessageIds :=
@@ -360,7 +358,7 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
     have hm := (replaceVar_ownership_subset name (.recur alphabet name body) body).2.2.2.1
       (typeFutureOffers_messageIds _ a ha)
     simpa [PactType.MessageIds] using hm
-  | offer_some env alphabet elseType branches enabled hEnv hGate =>
+  | offer_some env alphabet elseType branches enabled hEnv =>
     refine ⟨by simp, ?_⟩
     intro a ha
     have hm := typeFutureOffers_messageIds _ a ha
@@ -379,7 +377,7 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
   | cycle | seq_tock | seq_fuse_tock | par_fuse_tock => simp
   | cycle_wait | skip | progress =>
     simp [typeFutureOffers, typeFutureOffersFuel]
-  | xoffer_branch env alphabet elseType branches action processType hEnv hGate =>
+  | xoffer_branch env alphabet elseType branches action processType hEnv =>
     simp only [PactType.MessageIds]
     refine ⟨?_, ?_⟩
     · intro a ha
@@ -391,7 +389,7 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
         typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1
   | xoffer_else =>
     exact ⟨by simp, fun a ha => typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1⟩
-  | xoffer_wait env alphabet elseType branches hEnv hGate =>
+  | xoffer_wait env alphabet elseType branches hEnv =>
     simp only [PactType.MessageIds]
     constructor
     · intro a ha
@@ -400,14 +398,14 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
     · intro a ha
       simpa only [PactType.MessageIds] using
         typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1
-  | offer_else env alphabet elseType branches hEnv hGate =>
+  | offer_else env alphabet elseType branches hEnv =>
     simp only [PactType.MessageIds]
-    exact ⟨fun a ha => Finset.mem_union_right _ (branchHeads_messageIds _ a ha),
+    exact ⟨fun a ha => Finset.mem_union_right _ (branchHeads_messageIds _ a (Finset.mem_inter.mp ha).1),
       fun a ha => Finset.mem_union_left _
         (typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1)⟩
-  | offer_wait env alphabet elseType branches hEnv hGate =>
+  | offer_wait env alphabet elseType branches hEnv =>
     simp only [PactType.MessageIds]
-    refine ⟨fun a ha => Finset.mem_union_right _ (branchHeads_messageIds _ a ha), ?_⟩
+    refine ⟨fun a ha => Finset.mem_union_right _ (branchHeads_messageIds _ a (Finset.mem_inter.mp ha).1), ?_⟩
     intro a ha
     simpa only [PactType.MessageIds] using
       typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1
@@ -489,7 +487,7 @@ theorem TypeOffers.offers_disjoint {env : TypeEnvironment} {rho rho' : PactType}
   | choice_left | choice_right | fair_left | fair_right | cycle | cycle_wait
   | skip | progress | recur | seq_tock | seq_fuse_tock | xoffer_else | offer_some
   | par_fuse_tock => simp
-  | xoffer_branch env alphabet elseType branches action processType hEnv hGate =>
+  | xoffer_branch env alphabet elseType branches action processType hEnv =>
     intro _
     apply Finset.disjoint_left.mpr
     intro a ha hf

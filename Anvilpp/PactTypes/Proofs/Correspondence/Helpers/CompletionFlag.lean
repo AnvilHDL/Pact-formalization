@@ -57,7 +57,7 @@ private theorem selected_canCompleteDeclared_before
   | nil => simp at hSelected
   | cons head rest => exact hWithin (head :: rest) hSelected hComplete
 
-/-- Non-clock steps propagate declared-action completion backwards. -/
+/-- Non-clock steps propagate optimistic completion backwards. -/
 theorem TypeTransition.canCompleteDeclared_backward
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
     (hStep : TypeTransition env source label target)
@@ -92,24 +92,24 @@ theorem TypeTransition.canCompleteDeclared_backward
       rw [PactType.canCompleteDeclared_eq]
       exact Bool.and_eq_true_iff.mpr ⟨ih (PactType.reannotate_eq_self_data hNormal.1).2 hTail.1
         hNonClock (PactType.canCompleteDeclared_eq (.skip skipAlphabet)), hComplete⟩
-  | xoffer_branch env alphabet other branches action body hEnv hGate =>
+  | xoffer_branch env alphabet other branches action body hEnv =>
       rw [PactType.canCompleteDeclared_eq]
       simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
-      exact ⟨hGate, Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1 hComplete)⟩
-  | xoffer_else env alphabet other branches hEnv hGate
-  | offer_else env alphabet other branches hEnv hGate =>
+      exact Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1 hComplete)
+  | xoffer_else env alphabet other branches hEnv
+  | offer_else env alphabet other branches hEnv =>
       rw [PactType.canCompleteDeclared_eq]
       simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
-      exact ⟨hGate, Or.inl hComplete⟩
+      exact Or.inl hComplete
   | xoffer_wait | offer_wait => exact hComplete
-  | offer_some env alphabet other branches selected hEnv hGate =>
+  | offer_some env alphabet other branches selected hEnv =>
       simp only [PactType.alphabet, PactType.reannotate, PactType.offer.injEq, true_and] at hNormal
       rw [PactType.reannotateOfferBranches_map] at hNormal
       rw [PactType.canCompleteDeclared_eq]
       simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
-      exact ⟨hGate, Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1
+      exact Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1
         (selected_canCompleteDeclared_before alphabet selected branches hEnv.2.1
-          (reannotate_branches_fixed_of_mem alphabet branches hNormal.2 selected hEnv.2.1) hComplete))⟩
+          (reannotate_branches_fixed_of_mem alphabet branches hNormal.2 selected hEnv.2.1) hComplete))
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _ hEnv ihLeft ihRight =>
       have hClocks := typeLabel_sync_not_isTock interface leftLabel rightLabel hEnv.2.2.2

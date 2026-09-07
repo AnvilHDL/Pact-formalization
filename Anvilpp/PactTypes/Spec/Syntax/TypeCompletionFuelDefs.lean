@@ -4,14 +4,13 @@ namespace Pact
 
 noncomputable section
 
-/-- Optimistic completion before the next clock, subject to the written
-message and offer-head declarations. Fuel bounds syntax traversal; variables
-and clocks stop the search. -/
+/-- Alphabet-independent optimistic completion before the next clock.
+Fuel bounds syntax traversal; variables and clocks stop the search. -/
 def typeCanCompleteThisCycleFuel : Nat → PactType → Bool
   | 0, _ => false
   | fuel + 1, processType =>
       match processType with
-      | .message alphabet msg dir => decide ((msg, dir) ∈ alphabet.actions)
+      | .message _ _ _ => true
       | .progress _ _ | .skip _ => true
       | .tock _ | .var _ _ => false
       | .recur _ _ body => typeCanCompleteThisCycleFuel fuel body
@@ -24,11 +23,10 @@ def typeCanCompleteThisCycleFuel : Nat → PactType → Bool
       | .par _ left right _ =>
           typeCanCompleteThisCycleFuel fuel left &&
             typeCanCompleteThisCycleFuel fuel right
-      | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
-          decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) &&
-            (typeCanCompleteThisCycleFuel fuel elseType ||
-              branches.any fun branch =>
-                typeCanCompleteThisCycleFuel fuel branch.2)
+      | .xoffer _ elseType branches | .offer _ elseType branches =>
+          typeCanCompleteThisCycleFuel fuel elseType ||
+            branches.any fun branch =>
+              typeCanCompleteThisCycleFuel fuel branch.2
 
 end
 

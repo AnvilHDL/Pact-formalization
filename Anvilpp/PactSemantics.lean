@@ -196,6 +196,11 @@ def branchActions (branches : List ChoiceBranch) : Finset BareMessage :=
 def branchOfferSet (branches : List ChoiceBranch) : Finset Offer :=
   (branches.map ChoiceBranch.offer).toFinset
 
+/-- Project concrete offers by their polarized message, retaining payloads. -/
+def projectCurrent (alphabet : PactTypeAlphabet) (offers : Finset Offer) :
+    Finset Offer :=
+  offers.filter fun offer => offer.bare ∈ alphabet.actions
+
 /-- `Resolved(E,B)`: no branch need remains among the future offers. -/
 def Resolved (env : Environment) (branches : List ChoiceBranch) : Prop :=
   branchNeeds branches ∩ env.future = ∅
@@ -291,17 +296,11 @@ def parallelProcessBranchesSelecting (alphabet : PactTypeAlphabet)
 
 /-! ## Optimistic completion
 
-`canCompleteThisCycle(P)`.  The test reads the written alphabet at each signed
-subterm. -/
+`canCompleteThisCycle(P)`. The test is independent of alphabet annotations. -/
 
 mutual
   def Proc.CanCompleteBeforeTock : Proc → Bool
-    | .send alphabet msg _ p =>
-        decide ((msg, MessageDir.send) ∈ alphabet.actions) &&
-          Proc.CanCompleteBeforeTock p
-    | .recv alphabet msg _ p =>
-        decide ((msg, MessageDir.recv) ∈ alphabet.actions) &&
-          Proc.CanCompleteBeforeTock p
+    | .send _ _ _ p | .recv _ _ _ p => Proc.CanCompleteBeforeTock p
     | .skip _ | .endp _ _ => true
     | .cycle _ | .var _ _ => false
     | .recur _ _ body => Proc.CanCompleteBeforeTock body
@@ -310,11 +309,10 @@ mutual
     | .letp _ _ _ p => Proc.CanCompleteBeforeTock p
     | .ifunfair _ _ left right | .iffair _ _ _ left right =>
         Proc.CanCompleteBeforeTock left || Proc.CanCompleteBeforeTock right
-    | .xoffer alphabet elseProcess branches
-    | .offer alphabet elseProcess branches =>
-        branchesDeclared alphabet branches &&
-          (Proc.CanCompleteBeforeTock elseProcess ||
-            Proc.BranchCanCompleteBeforeTock branches)
+    | .xoffer _ elseProcess branches
+    | .offer _ elseProcess branches =>
+        Proc.CanCompleteBeforeTock elseProcess ||
+          Proc.BranchCanCompleteBeforeTock branches
   termination_by process => sizeOf process
 
   def Proc.BranchCanCompleteBeforeTock : List ChoiceBranch → Bool
@@ -334,20 +332,18 @@ end
 
 /-! ## Future-offer menu
 
-`FutOff(P)`, gated by the written alphabet at each signed subterm. -/
+`FutOff(P)`, with advertised heads projected to their written alphabet. -/
 
 def procFutureOffersFuel : Nat → Proc → Finset BareMessage
   | 0, _ => ∅
   | fuel + 1, process =>
       match process with
       | Proc.send alphabet msg _ p =>
-          if (msg, MessageDir.send) ∈ alphabet.actions then
-            {(msg, MessageDir.send)} ∪ procFutureOffersFuel fuel p
-          else ∅
+          ({(msg, MessageDir.send)} ∩ alphabet.actions) ∪
+            procFutureOffersFuel fuel p
       | Proc.recv alphabet msg _ p =>
-          if (msg, MessageDir.recv) ∈ alphabet.actions then
-            {(msg, MessageDir.recv)} ∪ procFutureOffersFuel fuel p
-          else ∅
+          ({(msg, MessageDir.recv)} ∩ alphabet.actions) ∪
+            procFutureOffersFuel fuel p
       | Proc.var _ _ => ∅
       | Proc.skip _ => ∅
       | Proc.endp _ _ => ∅
@@ -365,12 +361,10 @@ def procFutureOffersFuel : Nat → Proc → Finset BareMessage
           procFutureOffersFuel fuel left ∪ procFutureOffersFuel fuel right
       | Proc.xoffer alphabet elseProcess branches
       | Proc.offer alphabet elseProcess branches =>
-          if branchesDeclared alphabet branches then
-            branches.foldl (fun offers branch =>
+          (branches.foldl (fun offers branch =>
               offers ∪ {ChoiceBranch.action branch} ∪
                 procFutureOffersFuel fuel (ChoiceBranch.continuation branch))
-              (procFutureOffersFuel fuel elseProcess)
-          else ∅
+              (procFutureOffersFuel fuel elseProcess)) ∩ alphabet.actions
 
 /-- All message actions that may still be offered before the next clock. -/
 def procFutureOffers (process : Proc) : Finset BareMessage :=
@@ -420,37 +414,37 @@ inductive Offers :
       (expr : Expr) (process : Proc) (value : Bool) :
       env.WellFormed alphabet ∧ env.hasRecv msg ∧
         Semantics.ExprEval expr value →
-      (msg, MessageDir.send) ∈ alphabet.actions →
       Offers env (Proc.send alphabet msg expr process)
-        (Label.message msg .send value) process {Offer.send msg value}
-        (procFutureOffers process \ {(msg, MessageDir.send)})
+        (Label.message msg .send value) process
+        (projectCurrent alphabet {Offer.send msg value})
+        (procFutureOffers process \ ({(msg, MessageDir.send)} ∩ alphabet.actions))
   | send_wait (env : Environment) (alphabet : PactTypeAlphabet)
       (msg : MessageId) (expr : Expr) (process : Proc) (value : Bool) :
       env.WellFormed alphabet ∧ ¬ env.hasRecv msg ∧ env.clock = false ∧
         Semantics.ExprEval expr value →
-      (msg, MessageDir.send) ∈ alphabet.actions →
       Offers env (Proc.send alphabet msg expr process) Label.silent
-        (Proc.send alphabet msg expr process) {Offer.send msg value}
+        (Proc.send alphabet msg expr process)
+        (projectCurrent alphabet {Offer.send msg value})
         (procFutureOffers (Proc.send alphabet msg expr process) \
-          {(msg, MessageDir.send)})
+          ({(msg, MessageDir.send)} ∩ alphabet.actions))
   | recv (env : Environment) (alphabet : PactTypeAlphabet) (msg : MessageId)
       (varName : String) (process : Proc) (value : Bool) :
       env.WellFormed alphabet ∧ env.hasSend msg value →
-      (msg, MessageDir.recv) ∈ alphabet.actions →
       Offers env (Proc.recv alphabet msg varName process)
         (Label.message msg .recv value)
-        (Semantics.procExprReplace process varName value) {Offer.recv msg}
+        (Semantics.procExprReplace process varName value)
+        (projectCurrent alphabet {Offer.recv msg})
         (procFutureOffers (Semantics.procExprReplace process varName value) \
-          {(msg, MessageDir.recv)})
+          ({(msg, MessageDir.recv)} ∩ alphabet.actions))
   | recv_wait (env : Environment) (alphabet : PactTypeAlphabet)
       (msg : MessageId) (varName : String) (process : Proc) :
       env.WellFormed alphabet ∧ (∀ value, ¬ env.hasSend msg value) ∧
         env.clock = false →
-      (msg, MessageDir.recv) ∈ alphabet.actions →
       Offers env (Proc.recv alphabet msg varName process) Label.silent
-        (Proc.recv alphabet msg varName process) {Offer.recv msg}
+        (Proc.recv alphabet msg varName process)
+        (projectCurrent alphabet {Offer.recv msg})
         (procFutureOffers (Proc.recv alphabet msg varName process) \
-          {(msg, MessageDir.recv)})
+          ({(msg, MessageDir.recv)} ∩ alphabet.actions))
   | cycle (env : Environment) (alphabet : PactTypeAlphabet) :
       env.WellFormed alphabet ∧ env.clock = true →
       Offers env (Proc.cycle alphabet) Label.tock (Proc.skip alphabet) ∅ ∅
@@ -544,7 +538,6 @@ inductive Offers :
       env.WellFormed alphabet ∧ ChoiceBranch.send msg expr process ∈ branches ∧
         env.hasRecv msg ∧ Semantics.ExprEval expr value ∧
         Resolved env branches →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches)
         (Label.message msg .send value) process {Offer.send msg value}
         (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
@@ -555,7 +548,6 @@ inductive Offers :
       env.WellFormed alphabet ∧
         ChoiceBranch.recv msg varName process ∈ branches ∧
         env.hasSend msg value ∧ Resolved env branches →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches)
         (Label.message msg .recv value)
         (Semantics.procExprReplace process varName value) {Offer.recv msg}
@@ -565,7 +557,6 @@ inductive Offers :
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         NoImmediateBranch env branches ∧ Resolved env branches →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
         elseProcess ∅
         (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
@@ -573,7 +564,6 @@ inductive Offers :
   | xoffer_wait (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ ¬ Resolved env branches ∧ env.clock = false →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
         (Proc.xoffer alphabet elseProcess branches)
         (waitingOfferSet env branches)
@@ -583,7 +573,6 @@ inductive Offers :
       (elseProcess : Proc) (branches : List ChoiceBranch)
       (enabled : ChoiceBranch) :
       env.WellFormed alphabet ∧ enabled ∈ branches ∧ BranchEnabled env enabled →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.offer alphabet elseProcess branches) Label.silent
         (parallelProcessBranchesSelecting alphabet enabled branches) ∅
         (procFutureOffers
@@ -592,19 +581,18 @@ inductive Offers :
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         NoImmediateBranch env branches ∧ Resolved env branches →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.offer alphabet elseProcess branches) Label.silent
-        elseProcess (branchOfferSet branches)
-        (procFutureOffers elseProcess \ branchActions branches)
+        elseProcess (projectCurrent alphabet (branchOfferSet branches))
+        (procFutureOffers elseProcess \ (branchActions branches ∩ alphabet.actions))
   | offer_wait (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ env.clock = false ∧
         NoImmediateBranch env branches ∧ ¬ Resolved env branches →
-      BranchesDeclared alphabet branches →
       Offers env (Proc.offer alphabet elseProcess branches) Label.silent
-        (Proc.offer alphabet elseProcess branches) (branchOfferSet branches)
+        (Proc.offer alphabet elseProcess branches)
+        (projectCurrent alphabet (branchOfferSet branches))
         (procFutureOffers (Proc.offer alphabet elseProcess branches) \
-          branchActions branches)
+          (branchActions branches ∩ alphabet.actions))
   | par (outer leftEnv rightEnv : Environment) (interface : Interface)
       (alphabet : PactTypeAlphabet)
       (left left' right right' : Proc) (leftLabel rightLabel : Label)

@@ -92,12 +92,12 @@ theorem Offers.preserves_alphabet {env : Environment} {source target : Proc}
     (hOffers : Offers env source label target current future)
     (hWF : Proc.AlphabetWellFormed source) : target.alphabet = source.alphabet := by
   induction hOffers with
-  | send _ _ _ _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
-  | send_wait _ _ _ _ _ _ _ _ => rfl
-  | recv _ alphabet _ varName p value _ _ =>
+  | send _ _ _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
+  | send_wait _ _ _ _ _ _ _ => rfl
+  | recv _ alphabet _ varName p value _ =>
       rw [Proc.AlphabetWellFormed] at hWF
       rw [alphabet_procExprReplace]; exact hWF.2.1
-  | recv_wait _ _ _ _ _ _ _ => rfl
+  | recv_wait _ _ _ _ _ _ => rfl
   | cycle _ _ _ => rfl
   | cycle_wait _ _ _ => rfl
   | skip _ _ _ => rfl
@@ -119,20 +119,20 @@ theorem Offers.preserves_alphabet {env : Environment} {source target : Proc}
       rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.2.1
   | seq_fuse_tock _ _ _ _ _ _ _ _ _ =>
       rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.2.1
-  | xoffer_send _ _ _ _ _ _ _ _ hPrem _ =>
+  | xoffer_send _ _ _ _ _ _ _ _ hPrem =>
       rw [Proc.AlphabetWellFormed] at hWF
       exact (Proc.branchesAlphabetWellFormed_of_mem hWF.2.2.2 hPrem.2.1).1
-  | xoffer_recv _ _ _ _ _ _ _ _ hPrem _ =>
+  | xoffer_recv _ _ _ _ _ _ _ _ hPrem =>
       rw [Proc.AlphabetWellFormed] at hWF
       rw [alphabet_procExprReplace]
       exact (Proc.branchesAlphabetWellFormed_of_mem hWF.2.2.2 hPrem.2.1).1
-  | xoffer_else _ _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
-  | xoffer_wait _ _ _ _ _ _ => rfl
-  | offer_some _ alphabet _ branches enabled hPrem _ =>
+  | xoffer_else _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
+  | xoffer_wait _ _ _ _ _ => rfl
+  | offer_some _ alphabet _ branches enabled hPrem =>
       exact alphabet_parallelProcessBranchesSelecting alphabet enabled
         (by rintro rfl; exact absurd hPrem.2.1 (by simp))
-  | offer_else _ _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
-  | offer_wait _ _ _ _ _ _ => rfl
+  | offer_else _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
+  | offer_wait _ _ _ _ _ => rfl
   | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
   | par_fuse _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl
   | par_fuse_tock _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl

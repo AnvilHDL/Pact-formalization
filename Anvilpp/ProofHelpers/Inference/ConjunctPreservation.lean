@@ -466,12 +466,12 @@ theorem conjunctRegular_offers {env : Environment} {source target : Proc}
     (hOffers : Offers env source label target current future)
     (hRegular : Proc.ConjunctRegular source) : Proc.ConjunctRegular target := by
   induction hOffers with
-  | send _ _ _ _ _ _ _ _ => rwa [Proc.ConjunctRegular] at hRegular
-  | send_wait _ _ _ _ _ _ _ _ => exact hRegular
-  | recv _ _ _ _ _ _ _ _ =>
+  | send _ _ _ _ _ _ _ => rwa [Proc.ConjunctRegular] at hRegular
+  | send_wait _ _ _ _ _ _ _ => exact hRegular
+  | recv _ _ _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact Proc.conjunctRegular_procExprReplace hRegular
-  | recv_wait _ _ _ _ _ _ _ => exact hRegular
+  | recv_wait _ _ _ _ _ _ => exact hRegular
   | cycle _ alphabet _ => exact conjunctRegular_skip alphabet
   | cycle_wait _ _ _ => exact hRegular
   | skip _ _ _ => exact hRegular
@@ -501,24 +501,24 @@ theorem conjunctRegular_offers {env : Environment} {source target : Proc}
   | seq_fuse_tock _ _ _ _ _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact hRegular.2
-  | xoffer_send _ _ _ _ _ _ _ _ hPrem _ =>
+  | xoffer_send _ _ _ _ _ _ _ _ hPrem =>
       rw [Proc.ConjunctRegular] at hRegular
       exact Proc.conjunctRegular_of_mem_branches hRegular.2 hPrem.2.1
-  | xoffer_recv _ _ _ _ _ _ _ _ hPrem _ =>
+  | xoffer_recv _ _ _ _ _ _ _ _ hPrem =>
       rw [Proc.ConjunctRegular] at hRegular
       exact Proc.conjunctRegular_procExprReplace
         (Proc.conjunctRegular_of_mem_branches hRegular.2 hPrem.2.1)
-  | xoffer_else _ _ _ _ _ _ =>
+  | xoffer_else _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact hRegular.1
-  | xoffer_wait _ _ _ _ _ _ => exact hRegular
-  | offer_some _ _ _ _ _ _ _ =>
+  | xoffer_wait _ _ _ _ _ => exact hRegular
+  | offer_some _ _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact conjunctRegular_parallelProcessBranchesSelecting hRegular.2.2
-  | offer_else _ _ _ _ _ _ =>
+  | offer_else _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact hRegular.2.1
-  | offer_wait _ _ _ _ _ _ => exact hRegular
+  | offer_wait _ _ _ _ _ => exact hRegular
   | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihLeft ihRight =>
       rw [Proc.ConjunctRegular] at hRegular
       rw [Proc.ConjunctRegular]

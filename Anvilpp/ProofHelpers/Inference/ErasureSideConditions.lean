@@ -77,6 +77,18 @@ theorem hasNeed_recv_iff (env : Environment) (msg : MessageId) :
 
 /-! ## Branch side conditions -/
 
+/-- Projection commutes with erasure of concrete offers. -/
+theorem projectCurrent_image (alphabet : PactTypeAlphabet) (offers : Finset Offer) :
+    (projectCurrent alphabet offers).image Offer.bare =
+      offers.image Offer.bare ∩ alphabet.actions := by
+  ext action
+  simp only [projectCurrent, Finset.mem_image, Finset.mem_filter, Finset.mem_inter]
+  constructor
+  · rintro ⟨offer, ⟨hOffer, hDeclared⟩, rfl⟩
+    exact ⟨⟨offer, hOffer, rfl⟩, hDeclared⟩
+  · rintro ⟨⟨offer, hOffer, rfl⟩, hDeclared⟩
+    exact ⟨offer, ⟨hOffer, hDeclared⟩, rfl⟩
+
 @[simp] theorem inferBranch_fst (branch : ChoiceBranch) :
     (inferBranch branch).1 = ChoiceBranch.action branch := rfl
 

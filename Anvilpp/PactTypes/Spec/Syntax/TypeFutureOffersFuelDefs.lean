@@ -24,11 +24,9 @@ def typeFutureOffersFuel : Nat → PactType → Finset BareMessage
           hideTypeOffers interface
             (typeFutureOffersFuel fuel left ∪ typeFutureOffersFuel fuel right)
       | .xoffer alphabet elseType branches | .offer alphabet elseType branches =>
-          if ∀ b ∈ branches, b.1 ∈ alphabet.actions then
-            branches.foldl (fun offers branch =>
+          (branches.foldl (fun offers branch =>
               offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
-              (typeFutureOffersFuel fuel elseType)
-          else ∅
+              (typeFutureOffersFuel fuel elseType)) ∩ alphabet.actions
 
 /-- All message actions that may still be offered before the next clock. -/
 def typeFutureOffers (processType : PactType) : Finset BareMessage :=

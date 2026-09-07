@@ -2218,8 +2218,11 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
         edges := (compileTypeFuel (typeCompilationFuel whole) whole).edges })
     (hClosed : pending.MenuClosed)
     (hSource : source ∈ pending.states)
-    (hUpper : pending.menuStep source ⊆ insert source entries)
-    (hEntries : entries ⊆ pending.menuStep source)
+    (hUpper : pending.menuStep source ∪
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source ⊆
+        insert source entries)
+    (hEntries : entries ⊆ pending.menuStep source ∪
+      menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source)
     (hNoProduct : stateProductInfo whole source = none)
     (hOffersDeclared : ∀ action ∈ pending.offersAt source,
       action ∈ whole.alphabet.actions)
@@ -2238,10 +2241,6 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
   have hGraphClosed : graph.ReferencesClosed := by
     simpa only [graph, hPending, compiledMenuGraphFuel, hk, Nat.min_self] using
       compiledMenuGraphFuel_referencesClosed (typeCompilationFuel whole) whole le_rfl hWholeDisjoint
-  have hGraphReferences : graph.referencedStates source = pending.menuStep source := by
-    change pending.menuStep source ∪ menuDependencyTargets
-      (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source = _
-    rw [hRoot, compileTypeMenuLinksFuel_root, Finset.union_empty]
   set summand : TypeAutomatonState → Finset BareMessage := fun visited =>
     pending.offersAt visited ∪
       match stateProductInfo whole visited with
@@ -2262,8 +2261,7 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     simp only [hSummand, hNoProduct]
     simp
   have hReach := graph.futureReachable_eq_self_union_biUnion source entries
-    hGraphClosed hSource (by rw [hGraphReferences]; exact hUpper)
-    (by rw [hGraphReferences]; exact hEntries)
+    hGraphClosed hSource hUpper hEntries
   rw [hUnfold source, hReach]
   apply Finset.Subset.antisymm
   · intro action hAction

@@ -243,7 +243,7 @@ private theorem compileTypeFuel_sourceFieldRepresented :
           | obtain ⟨rfl, rfl⟩ := FutureSpec.at.inj hFuture
             exact ⟨.xoffer a other branches, by simp only [buildRelationSetCoreFuel,
               Finset.mem_insert, true_or],
-              (Finset.mem_filter.mp hEnv).2.2.1, rfl⟩
+              (Finset.mem_filter.mp hEnv).2.2, rfl⟩
       · intro reference removed hFuture hNotTarget
         obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hWait
         exact (hNotTarget (FutureSpec.at.inj hFuture).1.symm).elim
@@ -254,7 +254,7 @@ private theorem compileTypeFuel_sourceFieldRepresented :
         | obtain ⟨rfl, rfl⟩ := FutureSpec.at.inj hFuture
           exact ⟨.xoffer a other branches, by simp only [buildRelationSetCoreFuel,
             Finset.mem_insert, true_or],
-            (Finset.mem_filter.mp hEnv).2.2.2.1, rfl⟩
+            (Finset.mem_filter.mp hEnv).2.2.2, rfl⟩
 
 /-- A non-target plain field reads the source menu with the same mask after substitution. -/
 theorem TypeOffers.replaceVar_compiled_at_source_future

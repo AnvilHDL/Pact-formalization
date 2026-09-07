@@ -232,24 +232,26 @@ theorem liveEqBody_futureOffersFuel : ∀ (fuel : Nat) (rho theta : PactType),
           simp only [LiveEqBody] at hLive
           obtain ⟨-, -, hb⟩ := hLive
           simp only [typeFutureOffersFuel, ih _ _ hb]
-      case xoffer.xoffer =>
+      case xoffer.xoffer | offer.offer =>
+          rename_i alphabet other bs alphabet' other' bs'
           simp only [LiveEqBody] at hLive
           obtain ⟨hA, he, hbs⟩ := hLive
           rw [MessageActions] at hA
           simp only [typeFutureOffersFuel]
-          exact if_congr
-            (liveEqBranches_head_gate _ _ _ _ hbs
-              (fun act hact => hA act (Finset.mem_union_right _ hact)))
-            (branches _ _ _ _ hbs (ih _ _ he)) rfl
-      case offer.offer =>
-          simp only [LiveEqBody] at hLive
-          obtain ⟨hA, he, hbs⟩ := hLive
-          rw [MessageActions] at hA
-          simp only [typeFutureOffersFuel]
-          exact if_congr
-            (liveEqBranches_head_gate _ _ _ _ hbs
-              (fun act hact => hA act (Finset.mem_union_right _ hact)))
-            (branches _ _ _ _ hbs (ih _ _ he)) rfl
+          rw [← branches _ _ _ _ hbs (ih _ _ he)]
+          ext action
+          simp only [Finset.mem_inter]
+          by_cases hMenu : action ∈ bs.foldl
+              (fun offers branch => offers ∪ {branch.1} ∪ typeFutureOffersFuel fuel branch.2)
+              (typeFutureOffersFuel fuel other)
+          · have hSupport := foldl_typeMenu_subset_messageActions
+              (typeFutureOffersFuel fuel) (typeFutureOffersFuel_subset_messageActions fuel)
+              bs (typeFutureOffersFuel fuel other) hMenu
+            have hUsed : action ∈ other.MessageActions ∪ BranchMessageActions bs :=
+              Finset.union_subset_union (typeFutureOffersFuel_subset_messageActions fuel other)
+                (Finset.Subset.refl _) hSupport
+            exact and_congr Iff.rfl (hA action hUsed)
+          · simp only [hMenu, false_and]
 
 /-- `FutOff` agrees on live-equivalent residuals.  The two may have different
 `sizeOf`, so both menus are read at one fuel large enough for either. -/

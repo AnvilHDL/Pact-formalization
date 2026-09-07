@@ -194,58 +194,12 @@ lemma computeFutureOf_var_root
   · simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   · simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
 
-/-- When the action a message fragment carries is not declared by its own
-alphabet, the compiler's gate removes both root families, so the root menu is
-empty — matching the semantic gate. -/
+/-- An undeclared atomic head has an empty projected menu, although it may wait. -/
 lemma computeFutureOf_message_root_of_not_declared
     {alphabet : PactTypeAlphabet} (msg : MessageId) (dir : MessageDir)
     (hDeclared : (msg, dir) ∉ alphabet.actions) :
     computeFutureOf (.message alphabet msg dir) .root = ∅ := by
-  classical
-  show computeFutureOfFuel
-    (typeCompilationFuel (.message alphabet msg dir))
-    (.message alphabet msg dir) .root = ∅
-  simp only [typeCompilationFuel, computeFutureOfFuel, Nat.min_self,
-    compileTypeMenuLinksFuel, PendingAutomaton.withMenuDependencies_empty]
-  have hReferences :
-      ({ states := (compileTypeFuel 1 (.message alphabet msg dir)).states,
-          edges := (compileTypeFuel 1 (.message alphabet msg dir)).edges } :
-        PendingAutomaton).menuStep .root ⊆
-        {TypeAutomatonState.root} := by
-    simp only [PendingAutomaton.menuStep, compileTypeFuel,
-      finishAutomatonFragment]
-    intro reference hReference
-    simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
-      Finset.mem_image] at hReference
-    obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hReference⟩ := hReference
-    rcases hEdgeMem with (⟨_, ⟨-, -, hAction⟩, hEq⟩ | ⟨_, ⟨-, -, -, hAction⟩, hEq⟩) |
-      ⟨_, -, hEq⟩
-    · exact absurd hAction hDeclared
-    · exact absurd hAction hDeclared
-    · rw [← hEq] at hSource; simp at hSource
-  rw [futureReachable_eq_singleton_of_menuStep_subset_self _ _
-    hReferences, Finset.singleton_biUnion]
-  have hNoProduct :
-      stateProductInfo (.message alphabet msg dir)
-        TypeAutomatonState.root = none := by
-    simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
-  rw [hNoProduct]
-  simp only [Finset.union_empty]
-  refine Finset.eq_empty_iff_forall_notMem.mpr ?_
-  intro action hAction
-  rw [Finset.mem_filter] at hAction
-  obtain ⟨hAction, -⟩ := hAction
-  simp only [PendingAutomaton.offersAt, compileTypeFuel,
-    finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
-    Finset.mem_union, Finset.mem_image] at hAction
-  obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction
-  rcases hEdgeMem with (⟨_, ⟨-, -, hDecl⟩, hEq⟩ | ⟨_, ⟨-, -, -, hDecl⟩, hEq⟩) |
-    ⟨_, -, hEq⟩
-  · exact absurd hDecl hDeclared
-  · exact absurd hDecl hDeclared
-  · rw [← hEq] at hSource; simp at hSource
-
-/-! ### Menus agree at the base fragments -/
+  simp [computeFutureOf_message_root_projected, hDeclared]
 
 lemma futureOffersAgree_skip (alphabet : PactTypeAlphabet) :
     FutureOffersAgree (.skip alphabet) := by
@@ -462,29 +416,15 @@ private lemma progress_edge_families (alphabet : PactTypeAlphabet)
       ⟨environment, ⟨hLocal, -⟩, hEq⟩ <;>
     · rw [← hEq]; exact hLocal
 
-private lemma compileType_message_root_edge_declared
-    {alphabet : PactTypeAlphabet} (msg : MessageId) (dir : MessageDir)
-    {target : TypeAutomatonState} {env : TypeEnvironment} {label : TypeLabel}
-    {offers : TypeOfferSummary}
-    (hEdge : (compileType (.message alphabet msg dir)).HasEdge
-      TypeAutomatonState.root env label offers target) :
+private lemma action_declared_of_hasNeed {alphabet : PactTypeAlphabet}
+    {env : TypeEnvironment} (msg : MessageId) (dir : MessageDir)
+    (hEnv : env.WellFormed alphabet) (hNeed : env.hasNeed (msg, dir)) :
     (msg, dir) ∈ alphabet.actions := by
-  classical
-  obtain ⟨edge, hPending, hSource, -, -, -, -, -⟩ :=
-    (compileType_hasEdge_iff_hasResolvedEdge (.message alphabet msg dir)
-      TypeAutomatonState.root target env label offers).mp hEdge
-  simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-    Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hPending
-  rcases hPending with (⟨environment, ⟨-, -, hA⟩, hEq⟩ |
-      ⟨environment, ⟨-, -, -, hA⟩, hEq⟩) | ⟨environment, -, hEq⟩
-  · exact hA
-  · exact hA
-  · rw [← hEq] at hSource; simp at hSource
+  obtain ⟨⟨m, d⟩, hMem, hEq⟩ := Finset.mem_image.mp (hEnv.2.2.1 hNeed)
+  cases d <;> cases dir <;> simp_all [typeNeed, MessageDir.invert]
 
-/-- The shape of the guard obligation the base cases must discharge: the
-symbol carried by an actual step, or by an actual edge, lies in the fixed
-transition alphabet.  This is recoverable exactly because every base rule and
-every base edge family carries its own declaration gate. -/
+/-- Admissible environments and projected offer fields put every base step
+and edge inside the fixed transition alphabet. -/
 def BaseGuard (processType : PactType) : Prop :=
   ∀ {residual : PactType} {state : TypeAutomatonState}
     {env : TypeEnvironment} {label : TypeLabel} {offers : TypeOfferSummary},
@@ -526,46 +466,36 @@ private lemma message_guard (alphabet : PactTypeAlphabet)
     ⟨hR, hS⟩ | ⟨hR, hS⟩ <;> subst hR <;> subst hS
   · rcases hCase with ⟨target, hTrans, hOffers⟩ | ⟨state', hEdge⟩
     · cases hOffers with
-      | action _ _ _ _ cond hA =>
+      | action _ _ _ _ cond =>
+          have hA := action_declared_of_hasNeed msg dir cond.1 cond.2
           refine mem_transitionAlphabet_of
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (message_mem_labels hA)
             (mem_localOfferSummaries_of_subset ?_ ?_)
-          · intro x hx
-            simp at hx
-            subst hx; exact hA
+          · exact Finset.inter_subset_right
           · simp [typeFutureOffers, typeFutureOffersFuel]
-      | action_wait _ _ _ _ cond hA =>
+      | action_wait _ _ _ _ cond =>
           refine mem_transitionAlphabet_of
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (silent_mem_labels _)
             (mem_localOfferSummaries_of_subset ?_ ?_)
-          · intro x hx
-            simp at hx
-            subst hx; exact hA
+          · exact Finset.inter_subset_right
           · have hFut : typeFutureOffers (PactType.message alphabet msg dir) ⊆
                 alphabet.actions := by
-              rw [show typeFutureOffers (PactType.message alphabet msg dir)
-                    = ({(msg, dir)} : Finset BareMessage) from by
-                simp [typeFutureOffers, typeFutureOffersFuel, hA]]
-              intro y hy
-              simp at hy
-              subst hy
-              exact hA
+              by_cases hA : (msg, dir) ∈ alphabet.actions <;>
+                simp [typeFutureOffers, typeFutureOffersFuel, hA]
             exact Finset.Subset.trans Finset.sdiff_subset hFut
     · have hEnvMem := compileType_base_edge_env_mem
         (message_edge_families alphabet msg dir) hEdge
-      have hDeclared : (msg, dir) ∈ alphabet.actions :=
-        compileType_message_root_edge_declared msg dir hEdge
-      have hCurrentSub : ({(msg, dir)} : Finset BareMessage) ⊆ alphabet.actions := by
-        intro x hx
-        simp only [Finset.mem_singleton] at hx
-        subst hx; exact hDeclared
+      have hCurrentSub : ({(msg, dir)} ∩ alphabet.actions : Finset BareMessage) ⊆
+          alphabet.actions := Finset.inter_subset_right
       rcases compileType_message_edge_cases msg dir hEdge with
-        ⟨-, -, hLabel, hCurrent, hFuture, -⟩ |
+        ⟨-, -, hLabel, hCurrent, hFuture, hNeed⟩ |
         ⟨-, -, hLabel, hCurrent, hFuture, -, -⟩ |
         ⟨hSource, -, -, -, -, -⟩
       · subst hLabel; subst hCurrent; subst hFuture
+        have hDeclared := action_declared_of_hasNeed msg dir
+          (PactTypeAlphabet.environment_wellFormed hEnvMem) hNeed
         exact mem_transitionAlphabet_of hEnvMem (message_mem_labels hDeclared)
           (mem_localOfferSummaries_of_subset hCurrentSub (by simp))
       · subst hLabel; subst hCurrent; subst hFuture
@@ -1331,8 +1261,8 @@ lemma edgeLocal_message (alphabet : PactTypeAlphabet)
   · exact hLocal
   · exact hLocal
   · exact hLocal
-  · exact ⟨by simpa using hCond.2, by simp [FutureSpec.AlphabetLocal]⟩
-  · exact ⟨by simpa using hCond.2.2, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨Finset.inter_subset_right, by simp [FutureSpec.AlphabetLocal]⟩
+  · exact ⟨Finset.inter_subset_right, by simp [FutureSpec.AlphabetLocal]⟩
   · exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
 
 lemma edgeLocal_tock (alphabet : PactTypeAlphabet) :

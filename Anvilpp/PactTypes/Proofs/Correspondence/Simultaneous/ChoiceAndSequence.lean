@@ -485,7 +485,7 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
       (by
         rw [hRefs]
         simp [Finset.insert_subset_iff])
-      (by rw [hRefs])
+      (by rw [hRefs]; exact Finset.subset_union_left)
       (by
         simp only [hWholeDef]
         exact stateProductInfo_choice_root alphabet left right)
@@ -1006,7 +1006,7 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
       (by
         rw [hRefs]
         simp [Finset.insert_subset_iff])
-      (by rw [hRefs])
+      (by rw [hRefs]; exact Finset.subset_union_left)
       (by
         simp only [hWholeDef]
         exact stateProductInfo_fairChoice_root alphabet bid left right)

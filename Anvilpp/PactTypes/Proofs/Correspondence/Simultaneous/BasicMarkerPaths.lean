@@ -78,10 +78,13 @@ theorem compiledMenuMarkerPath_root (ty : PactType) (name : String)
     (hNoMarker : ¬ MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty)
       name .root)
     (hUpper : ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-        PendingAutomaton).menuStep .root ⊆ insert .root entries)
+        PendingAutomaton).menuStep .root ∪
+        menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) .root ⊆
+        insert .root entries)
     (hEntries : entries ⊆
       ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-          PendingAutomaton).menuStep .root) :
+          PendingAutomaton).menuStep .root ∪
+        menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) .root) :
     (∃ r ∈ (compiledMenuGraphFuel (typeCompilationFuel ty) ty).futureReachable .root,
       MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty) name r) ↔
     ∃ entry ∈ entries,
@@ -89,10 +92,10 @@ theorem compiledMenuMarkerPath_root (ty : PactType) (name : String)
         MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty) name r := by
   have hRefs : (compiledMenuGraphFuel (typeCompilationFuel ty) ty).referencedStates
       .root = ({ states := (compileTypeFuel (typeCompilationFuel ty) ty).states, edges := (compileTypeFuel (typeCompilationFuel ty) ty).edges } :
-          PendingAutomaton).menuStep .root := by
+          PendingAutomaton).menuStep .root ∪
+        menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) .root := by
     simp only [compiledMenuGraphFuel, Nat.min_self,
-      PendingAutomaton.withMenuDependencies, compileTypeMenuLinksFuel_root,
-      Finset.union_empty]
+      PendingAutomaton.withMenuDependencies]
   rw [FiniteMenuGraph.futureReachable_eq_self_union_biUnion _ .root entries
     (compiledMenuGraphFuel_referencesClosed _ ty le_rfl hDisjoint) hRoot
     (by rw [hRefs]; exact hUpper) (by rw [hRefs]; exact hEntries)]
@@ -111,6 +114,8 @@ theorem compiledMenuMarkerPath_root_of_no_outgoing (ty : PactType) (name : Strin
       (compileTypeFuel (typeCompilationFuel ty) ty).states)
     (hNoMarker : ¬ MarkerSource (compileTypeFuel (typeCompilationFuel ty) ty)
       name .root)
+    (hNoDependencies : menuDependencyTargets
+      (compileTypeMenuLinksFuel (typeCompilationFuel ty) ty) .root = ∅)
     (hNoOutgoing : ∀ edge ∈
       (compileTypeFuel (typeCompilationFuel ty) ty).edges,
       edge.source ≠ TypeAutomatonState.root) :
@@ -125,7 +130,7 @@ theorem compiledMenuMarkerPath_root_of_no_outgoing (ty : PactType) (name : Strin
     rw [Finset.filter_eq_empty_iff.mpr (fun edge hEdge => hNoOutgoing edge hEdge)]
     simp
   have hPath := compiledMenuMarkerPath_root ty name ∅ hDisjoint hRoot hNoMarker
-    (by rw [hReferences]; simp) (by simp)
+    (by rw [hReferences, hNoDependencies]; simp) (by simp)
   simpa using hPath
 
 theorem compiledMenuMarkerPath_of_absent (ty : PactType) (name : String)
@@ -214,6 +219,8 @@ private theorem compiledMenuMarkerPath_binaryChoice (a : PactTypeAlphabet)
     (hWholeDisjoint : whole.OfferBranchesDisjoint)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
     (hRightDisjoint : right.OfferBranchesDisjoint)
+    (hLinksRoot : menuDependencyTargets
+      (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) .root = ∅)
     (hLinksLeft : ∀ q,
       menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
         (.child 0 q) =
@@ -284,8 +291,8 @@ private theorem compiledMenuMarkerPath_binaryChoice (a : PactTypeAlphabet)
       hWholeDisjoint
       (by rw [hCompile]; simp [buildChoiceAutomaton, finishAutomatonFragment])
       (by rw [hCompile]; exact buildChoiceAutomaton_markerSource_root a _ _ _ _ name)
-      (by rw [hCompile, hRefs]; exact Finset.subset_insert _ _)
-      (by rw [hCompile, hRefs])]
+      (by rw [hLinksRoot, Finset.union_empty, hCompile, hRefs]; exact Finset.subset_insert _ _)
+      (by rw [hCompile, hRefs]; exact Finset.subset_union_left)]
     simp only [Finset.mem_insert, Finset.mem_singleton, exists_eq_or_imp, exists_eq_left,
       childState]
     have hLeftEntry := hLeft (buildRelationSet_initial left _ rfl)
@@ -324,6 +331,7 @@ theorem compiledMenuMarkerPath_choice (a : PactTypeAlphabet) (left right : PactT
     (offerBranchesDisjoint_of_wellFormedIn hWF)
     (offerBranchesDisjoint_of_wellFormedIn hL)
     (offerBranchesDisjoint_of_wellFormedIn hR)
+    (by simp [typeCompilationFuel])
     (menuDependencyTargets_choice_left a left right)
     (menuDependencyTargets_choice_right a left right)
     (menuReachesVar_choice name a left right (hL.2.2.2.1 name) (hR.2.2.2.1 name))
@@ -354,6 +362,7 @@ theorem compiledMenuMarkerPath_fairChoice (a : PactTypeAlphabet) (bid : BranchId
     (offerBranchesDisjoint_of_wellFormedIn hWF)
     (offerBranchesDisjoint_of_wellFormedIn hL)
     (offerBranchesDisjoint_of_wellFormedIn hR)
+    (by simp [typeCompilationFuel])
     (menuDependencyTargets_fairChoice_left a bid left right)
     (menuDependencyTargets_fairChoice_right a bid left right)
     (menuReachesVar_fairChoice name a bid left right
@@ -456,108 +465,79 @@ theorem compiledMenuMarkerPath_xoffer (a : PactTypeAlphabet) (elseType : PactTyp
     simp only [PactType.TailOccurrences] at hWholeTail
     rw [menuReachesVar_xoffer name a elseType branches
       (hElseWF.2.2.2.1 name) hWholeTail.2]
-    by_cases hGuard : ∀ branch ∈ branches, branch.1 ∈ a.actions
-    · simp only [if_pos hGuard]
-      have hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst := by
-        simp [branchAutomata, List.map_map]
-      have hRootPath := compiledMenuMarkerPath_root whole name
-        (exclusiveOfferEntries
-          (compileTypeFuel (typeCompilationFuel elseType) elseType) branchAutomata)
-        hWholeDisjoint
-        (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            simp [buildExclusiveOfferAutomaton, finishAutomatonFragment])
-        (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            exact buildExclusiveOfferAutomaton_markerSource_root a branches _ _ name)
-        (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            exact buildExclusiveOfferAutomaton_menuStep_root_subset a branches _ _)
-        (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-            exact buildExclusiveOfferAutomaton_entries_subset_menuStep_root
-              a branches _ _ hHeads hGuard)
-      rw [hRootPath]
-      constructor
-      · rintro ⟨entry, hEntry, reached, hReach, hMarker⟩
-        simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
-          List.mem_map] at hEntry
-        rcases hEntry with rfl | ⟨indexed, hIndexed, rfl⟩
-        · rw [Bool.or_eq_true]
-          apply Or.inl
-          apply (hElse (buildRelationSet_initial elseType _ rfl)).mp
-          apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mp
-          exact ⟨reached, hReach, hMarker⟩
-        · rcases indexed with ⟨entry, index⟩
-          have hGetAuto : branchAutomata[index]? = some entry :=
-            List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
-          simp only [branchAutomata, List.getElem?_map,
-            Option.map_eq_some_iff] at hGetAuto
-          obtain ⟨branch, hGet, rfl⟩ := hGetAuto
-          have hMem : branch ∈ branches := List.mem_of_getElem? hGet
-          rw [Bool.or_eq_true]
-          apply Or.inr
-          rw [List.any_eq_true]
-          refine ⟨branch, hMem, ?_⟩
+    have hHeads : branchAutomata.map Prod.fst = branches.map Prod.fst := by
+      simp [branchAutomata, List.map_map]
+    have hRootPath := compiledMenuMarkerPath_root whole name
+      (exclusiveOfferEntries
+        (compileTypeFuel (typeCompilationFuel elseType) elseType) branchAutomata)
+      hWholeDisjoint
+      (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
+          simp [buildExclusiveOfferAutomaton, finishAutomatonFragment])
+      (by rw [show whole = .xoffer a elseType branches by rfl, hCompile]
+          exact buildExclusiveOfferAutomaton_markerSource_root a branches _ _ name)
+      (by
+        rw [show whole = .xoffer a elseType branches by rfl, menuDependencyTargets_xoffer_root]
+        refine Finset.union_subset ?_ (Finset.subset_insert _ _)
+        rw [hCompile]
+        exact buildExclusiveOfferAutomaton_menuStep_root_subset a branches _ _)
+      (by
+        rw [show whole = .xoffer a elseType branches by rfl, menuDependencyTargets_xoffer_root]
+        exact Finset.subset_union_right)
+    rw [hRootPath]
+    constructor
+    · rintro ⟨entry, hEntry, reached, hReach, hMarker⟩
+      simp only [exclusiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+        List.mem_map] at hEntry
+      rcases hEntry with rfl | ⟨indexed, hIndexed, rfl⟩
+      · rw [Bool.or_eq_true]
+        apply Or.inl
+        apply (hElse (buildRelationSet_initial elseType _ rfl)).mp
+        apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mp
+        exact ⟨reached, hReach, hMarker⟩
+      · rcases indexed with ⟨entry, index⟩
+        have hGetAuto : branchAutomata[index]? = some entry :=
+          List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
+        simp only [branchAutomata, List.getElem?_map,
+          Option.map_eq_some_iff] at hGetAuto
+        obtain ⟨branch, hGet, rfl⟩ := hGetAuto
+        have hMem : branch ∈ branches := List.mem_of_getElem? hGet
+        rw [Bool.or_eq_true]
+        apply Or.inr
+        rw [List.any_eq_true]
+        refine ⟨branch, hMem, ?_⟩
+        apply (hBranches branch hMem
+          (buildRelationSet_initial branch.2 _ rfl)).mp
+        apply (hCopyBranch index branch.1 branch.2 hGet _
+          (compileTypeFuel_initial_mem _ branch.2 le_rfl)).mp
+        exact ⟨reached, hReach, hMarker⟩
+    · intro hSyntax
+      rw [Bool.or_eq_true] at hSyntax
+      rcases hSyntax with hElseTest | hBranchTest
+      · refine ⟨childState 0
+            (compileTypeFuel (typeCompilationFuel elseType) elseType).initial,
+          Finset.mem_insert_self _ _, ?_⟩
+        apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mpr
+        apply (hElse (buildRelationSet_initial elseType _ rfl)).mpr
+        exact hElseTest
+      · rw [List.any_eq_true] at hBranchTest
+        obtain ⟨branch, hMem, hBranchTest⟩ := hBranchTest
+        obtain ⟨index, hGet⟩ := List.getElem?_of_mem hMem
+        have hAutomatonGet : branchAutomata[index]? = some
+            (branch.1, compileTypeFuel (typeCompilationFuel branch.2) branch.2) := by
+          simp [branchAutomata, List.getElem?_map, hGet]
+        refine ⟨.child (index + 1)
+              (compileTypeFuel (typeCompilationFuel branch.2) branch.2).initial,
+          ?_, ?_⟩
+        · simp only [exclusiveOfferEntries, Finset.mem_insert,
+            List.mem_toFinset, List.mem_map]
+          exact Or.inr ⟨((branch.1,
+            compileTypeFuel (typeCompilationFuel branch.2) branch.2), index),
+            List.mk_mem_zipIdx_iff_getElem?.mpr hAutomatonGet, rfl⟩
+        · apply (hCopyBranch index branch.1 branch.2 hGet _
+            (compileTypeFuel_initial_mem _ branch.2 le_rfl)).mpr
           apply (hBranches branch hMem
-            (buildRelationSet_initial branch.2 _ rfl)).mp
-          apply (hCopyBranch index branch.1 branch.2 hGet _
-            (compileTypeFuel_initial_mem _ branch.2 le_rfl)).mp
-          exact ⟨reached, hReach, hMarker⟩
-      · intro hSyntax
-        rw [Bool.or_eq_true] at hSyntax
-        rcases hSyntax with hElseTest | hBranchTest
-        · refine ⟨childState 0
-              (compileTypeFuel (typeCompilationFuel elseType) elseType).initial,
-            Finset.mem_insert_self _ _, ?_⟩
-          apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mpr
-          apply (hElse (buildRelationSet_initial elseType _ rfl)).mpr
-          exact hElseTest
-        · rw [List.any_eq_true] at hBranchTest
-          obtain ⟨branch, hMem, hBranchTest⟩ := hBranchTest
-          obtain ⟨index, hGet⟩ := List.getElem?_of_mem hMem
-          have hAutomatonGet : branchAutomata[index]? = some
-              (branch.1, compileTypeFuel (typeCompilationFuel branch.2) branch.2) := by
-            simp [branchAutomata, List.getElem?_map, hGet]
-          refine ⟨.child (index + 1)
-                (compileTypeFuel (typeCompilationFuel branch.2) branch.2).initial,
-            ?_, ?_⟩
-          · simp only [exclusiveOfferEntries, Finset.mem_insert,
-              List.mem_toFinset, List.mem_map]
-            exact Or.inr ⟨((branch.1,
-              compileTypeFuel (typeCompilationFuel branch.2) branch.2), index),
-              List.mk_mem_zipIdx_iff_getElem?.mpr hAutomatonGet, rfl⟩
-          · apply (hCopyBranch index branch.1 branch.2 hGet _
-              (compileTypeFuel_initial_mem _ branch.2 le_rfl)).mpr
-            apply (hBranches branch hMem
-              (buildRelationSet_initial branch.2 _ rfl)).mpr
-            exact hBranchTest
-    · simp only [if_neg hGuard, Bool.false_eq_true, iff_false]
-      apply compiledMenuMarkerPath_root_of_no_outgoing whole name hWholeDisjoint
-      · rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-        simp [buildExclusiveOfferAutomaton, finishAutomatonFragment]
-      · rw [show whole = .xoffer a elseType branches by rfl, hCompile]
-        exact buildExclusiveOfferAutomaton_markerSource_root a branches _ _ name
-      · intro edge hEdge hSource
-        rw [show whole = .xoffer a elseType branches by rfl, hCompile] at hEdge
-        simp only [buildExclusiveOfferAutomaton, finishAutomatonFragment,
-          childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
-        rcases hEdge with ((((hElseEdge | hIndexed) | hBranch) | hWait) | hResolved)
-        · obtain ⟨childEdge, -, rfl⟩ := hElseEdge
-          simp [childPendingEdge, childState] at hSource
-        · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
-          rcases hIndexed with hEmpty | ⟨indexed, -, hChild⟩
-          · simp at hEmpty
-          · obtain ⟨childEdge, -, rfl⟩ := Finset.mem_image.mp hChild
-            simp [childPendingEdge, childState] at hSource
-        · rw [mem_foldl_union_iff] at hBranch
-          rcases hBranch with hEmpty | ⟨indexed, -, hEnabled⟩
-          · simp at hEmpty
-          · simp only [Finset.mem_image, Finset.mem_filter] at hEnabled
-            obtain ⟨environment, hEnvironment, rfl⟩ := hEnabled
-            exact hGuard hEnvironment.2.2.2
-        · obtain ⟨environment, hEnvironment, rfl⟩ := hWait
-          rw [Finset.mem_filter] at hEnvironment
-          exact hGuard hEnvironment.2.2.2
-        · obtain ⟨environment, hEnvironment, rfl⟩ := hResolved
-          rw [Finset.mem_filter] at hEnvironment
-          exact hGuard hEnvironment.2.2.2.2
+            (buildRelationSet_initial branch.2 _ rfl)).mpr
+          exact hBranchTest
   · subst hState
     exact (hCopyElse state (relationMembership_state_mem elseType rho state
       hElseDisjoint hChild)).trans (hElse hChild)
@@ -679,94 +659,61 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
     subst hStateEq
     rw [menuReachesVar_offer name a elseType branches
       (hElseWF.2.2.2.1 name) hWholeTail.2]
-    by_cases hGuard : ∀ branch ∈ branches, branch.1 ∈ a.actions
-    · simp only [if_pos hGuard]
-      have hHeads : selectedAutomata.map Prod.fst = branches.map Prod.fst := by
-        simp [selectedAutomata, List.map_map]
-      have hRootPath := compiledMenuMarkerPath_root whole name
-        (conjunctiveOfferEntries
-          (compileTypeFuel (typeCompilationFuel elseType) elseType) selectedAutomata)
-        hWholeDisjoint
-        (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-            simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment])
-        (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-            exact buildSelectedConjunctiveOfferAutomaton_markerSource_root
-              a branches _ _ name)
-        (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-            exact buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset
-              a branches _ _)
-        (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-            exact
-              buildSelectedConjunctiveOfferAutomaton_entries_subset_menuStep_root
-                a branches _ _ hHeads hGuard)
-      rw [hRootPath]
-      constructor
-      · rintro ⟨entry, hEntry, reached, hReach, hMarker⟩
-        simp only [conjunctiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
-          List.mem_map] at hEntry
-        rcases hEntry with rfl | ⟨indexed, hIndexed, rfl⟩
-        · apply (hElse (buildRelationSet_initial elseType _ rfl)).mp
-          apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mp
-          exact ⟨reached, hReach, hMarker⟩
-        · rcases indexed with ⟨entry, index⟩
-          have hGetAuto : selectedAutomata[index]? = some entry :=
-            List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
-          simp only [selectedAutomata, List.getElem?_map,
-            Option.map_eq_some_iff] at hGetAuto
-          obtain ⟨selected, hGet, rfl⟩ := hGetAuto
-          have hMem : selected ∈ branches := List.mem_of_getElem? hGet
-          have hSelectedPath := (hCopySelected index selected hGet _
-            (compileTypeFuel_initial_mem _
-              (parallelTypeBranchesSelecting a selected branches) le_rfl)).mp
-            ⟨reached, hReach, hMarker⟩
-          have hNoPath := compiledMenuMarkerPath_of_absent
-            (parallelTypeBranchesSelecting a selected branches) name
-            (hSelectedWF selected hMem).2.2.2.2.2.1
-            (hSelectedTail selected hMem)
-            (buildRelationSet_initial
-              (parallelTypeBranchesSelecting a selected branches) _ rfl)
-          have hFalse := hNoPath.mp hSelectedPath
-          rw [menuReachesVar_of_absent name _ (hSelectedTail selected hMem)] at hFalse
-          cases hFalse
-      · intro hElseTest
-        refine ⟨childState 0
-            (compileTypeFuel (typeCompilationFuel elseType) elseType).initial,
-          Finset.mem_insert_self _ _, ?_⟩
-        apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mpr
-        apply (hElse (buildRelationSet_initial elseType _ rfl)).mpr
-        exact hElseTest
-    · simp only [if_neg hGuard, Bool.false_eq_true, iff_false]
-      apply compiledMenuMarkerPath_root_of_no_outgoing whole name hWholeDisjoint
-      · rw [show whole = .offer a elseType branches by rfl, hCompile]
-        simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment]
-      · rw [show whole = .offer a elseType branches by rfl, hCompile]
-        exact buildSelectedConjunctiveOfferAutomaton_markerSource_root
-          a branches _ _ name
-      · intro edge hEdge hSource
-        rw [show whole = .offer a elseType branches by rfl, hCompile] at hEdge
-        simp only [buildSelectedConjunctiveOfferAutomaton,
-          finishAutomatonFragment, childPendingEdges, Finset.mem_union,
-          Finset.mem_image, Finset.mem_filter] at hEdge
-        rcases hEdge with
-          ((((hElseEdge | hIndexed) | hEnabled) | hWait) | hResolved)
-        · obtain ⟨childEdge, -, rfl⟩ := hElseEdge
-          simp [childPendingEdge, childState] at hSource
-        · rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
-          rcases hIndexed with hEmpty | ⟨indexed, -, hChild⟩
-          · simp at hEmpty
-          · obtain ⟨childEdge, -, rfl⟩ := Finset.mem_image.mp hChild
-            simp [childPendingEdge, childState] at hSource
-        · rw [mem_foldl_union_iff] at hEnabled
-          rcases hEnabled with hEmpty | ⟨indexed, -, hEntry⟩
-          · simp at hEmpty
-          · rw [Finset.mem_image] at hEntry
-            obtain ⟨environment, hEnvironment, rfl⟩ := hEntry
-            rw [Finset.mem_filter] at hEnvironment
-            exact hGuard hEnvironment.2.2
-        · obtain ⟨environment, hEnvironment, rfl⟩ := hWait
-          exact hGuard hEnvironment.2.2.2.2
-        · obtain ⟨environment, hEnvironment, rfl⟩ := hResolved
-          exact hGuard hEnvironment.2.2.2.2
+    have hHeads : selectedAutomata.map Prod.fst = branches.map Prod.fst := by
+      simp [selectedAutomata, List.map_map]
+    have hRootPath := compiledMenuMarkerPath_root whole name
+      (conjunctiveOfferEntries
+        (compileTypeFuel (typeCompilationFuel elseType) elseType) selectedAutomata)
+      hWholeDisjoint
+      (by rw [show whole = .offer a elseType branches by rfl, hCompile]
+          simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment])
+      (by rw [show whole = .offer a elseType branches by rfl, hCompile]
+          exact buildSelectedConjunctiveOfferAutomaton_markerSource_root
+            a branches _ _ name)
+      (by
+        rw [show whole = .offer a elseType branches by rfl, menuDependencyTargets_offer_root]
+        refine Finset.union_subset ?_ (Finset.subset_insert _ _)
+        rw [hCompile]
+        exact buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset a branches _ _)
+      (by
+        rw [show whole = .offer a elseType branches by rfl, menuDependencyTargets_offer_root]
+        exact Finset.subset_union_right)
+    rw [hRootPath]
+    constructor
+    · rintro ⟨entry, hEntry, reached, hReach, hMarker⟩
+      simp only [conjunctiveOfferEntries, Finset.mem_insert, List.mem_toFinset,
+        List.mem_map] at hEntry
+      rcases hEntry with rfl | ⟨indexed, hIndexed, rfl⟩
+      · apply (hElse (buildRelationSet_initial elseType _ rfl)).mp
+        apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mp
+        exact ⟨reached, hReach, hMarker⟩
+      · rcases indexed with ⟨entry, index⟩
+        have hGetAuto : selectedAutomata[index]? = some entry :=
+          List.mk_mem_zipIdx_iff_getElem?.mp hIndexed
+        simp only [selectedAutomata, List.getElem?_map,
+          Option.map_eq_some_iff] at hGetAuto
+        obtain ⟨selected, hGet, rfl⟩ := hGetAuto
+        have hMem : selected ∈ branches := List.mem_of_getElem? hGet
+        have hSelectedPath := (hCopySelected index selected hGet _
+          (compileTypeFuel_initial_mem _
+            (parallelTypeBranchesSelecting a selected branches) le_rfl)).mp
+          ⟨reached, hReach, hMarker⟩
+        have hNoPath := compiledMenuMarkerPath_of_absent
+          (parallelTypeBranchesSelecting a selected branches) name
+          (hSelectedWF selected hMem).2.2.2.2.2.1
+          (hSelectedTail selected hMem)
+          (buildRelationSet_initial
+            (parallelTypeBranchesSelecting a selected branches) _ rfl)
+        have hFalse := hNoPath.mp hSelectedPath
+        rw [menuReachesVar_of_absent name _ (hSelectedTail selected hMem)] at hFalse
+        cases hFalse
+    · intro hElseTest
+      refine ⟨childState 0
+          (compileTypeFuel (typeCompilationFuel elseType) elseType).initial,
+        Finset.mem_insert_self _ _, ?_⟩
+      apply (hCopyElse _ (compileTypeFuel_initial_mem _ elseType le_rfl)).mpr
+      apply (hElse (buildRelationSet_initial elseType _ rfl)).mpr
+      exact hElseTest
   · subst hState
     exact (hCopyElse state (relationMembership_state_mem elseType rho state
       hElseDisjoint hChild)).trans (hElse hChild)

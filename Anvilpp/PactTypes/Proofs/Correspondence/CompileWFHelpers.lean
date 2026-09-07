@@ -202,17 +202,16 @@ lemma compileType_message_action_edge
       hLocal, hNeed, hAction]
   · simp [computeFutureOf_message_final]
 
-/-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
-lemma computeFutureOf_message_root
+/-- A message root exposes its head exactly when the alphabet declares it. -/
+lemma computeFutureOf_message_root_projected
      {alphabet : PactTypeAlphabet}
-    (msg : MessageId) (dir : MessageDir)
-    (hDeclared : (msg, dir) ∈ alphabet.actions) :
+    (msg : MessageId) (dir : MessageDir) :
     computeFutureOf (.message alphabet msg dir) .root =
-      {(msg, dir)} := by
+      {(msg, dir)} ∩ alphabet.actions := by
   classical
   show computeFutureOfFuel
     (typeCompilationFuel (.message alphabet msg dir))
-    (.message alphabet msg dir) .root = {(msg, dir)}
+    (.message alphabet msg dir) .root = {(msg, dir)} ∩ alphabet.actions
   simp only [typeCompilationFuel, computeFutureOfFuel]
   simp only [Nat.min_self, compileTypeMenuLinksFuel,
     PendingAutomaton.withMenuDependencies_empty]
@@ -283,12 +282,13 @@ lemma computeFutureOf_message_root
       stateProductInfo (.message alphabet msg dir)
         TypeAutomatonState.final = none := by
     simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
-  have hOffersRoot : pending.offersAt TypeAutomatonState.root = {(msg, dir)} := by
+  have hOffersRoot : pending.offersAt TypeAutomatonState.root =
+      {(msg, dir)} ∩ alphabet.actions := by
     apply Finset.ext
     intro action
     simp only [hPendingDef, PendingAutomaton.offersAt, typeCompilationFuel,
       compileTypeFuel, finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
-      Finset.mem_union, Finset.mem_image, Finset.mem_singleton]
+      Finset.mem_union, Finset.mem_image, Finset.mem_inter, Finset.mem_singleton]
     constructor
     · rintro ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩
       rcases hEdgeMem with (⟨_, _, hEq⟩ | ⟨_, _, hEq⟩) | ⟨environment, _, hEq⟩
@@ -297,8 +297,7 @@ lemma computeFutureOf_message_root
       · rw [← hEq] at hSource hAction
         simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent] using hAction
       · rw [← hEq] at hSource; simp at hSource
-    · intro hAction
-      subst hAction
+    · rintro ⟨rfl, hDeclared⟩
       have hEmptyLocal :
           TypeEnvironment.empty ∈ alphabet.localEnvironments := by
         simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
@@ -307,8 +306,9 @@ lemma computeFutureOf_message_root
       have hEmptyNoNeed : ¬ TypeEnvironment.empty.hasNeed (msg, dir) := by
         simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
       refine ⟨_, ⟨Or.inl (Or.inr ⟨TypeEnvironment.empty,
-        ⟨hEmptyLocal, rfl, hEmptyNoNeed, hDeclared⟩, rfl⟩), rfl⟩, ?_⟩
-      simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
+        ⟨hEmptyLocal, rfl, hEmptyNoNeed⟩, rfl⟩), rfl⟩, ?_⟩
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent,
+        hDeclared]
   have hOffersFinal : pending.offersAt TypeAutomatonState.final = ∅ := by
     apply Finset.eq_empty_iff_forall_notMem.mpr
     intro action hAction
@@ -334,12 +334,19 @@ lemma computeFutureOf_message_root
       exact absurd hAction (by simp)
   · intro action hAction
     rw [Finset.mem_filter]
-    simp only [Finset.mem_singleton] at hAction
-    subst hAction
+    obtain ⟨hHead, hDeclared⟩ := Finset.mem_inter.mp hAction
+    obtain rfl := Finset.mem_singleton.mp hHead
     refine ⟨Finset.mem_biUnion.mpr ⟨TypeAutomatonState.root, hLower, ?_⟩,
       by simpa [PactType.alphabet] using hDeclared⟩
     rw [hNoProductRoot, Finset.union_empty, hOffersRoot]
-    simp
+    simp [hDeclared]
+
+lemma computeFutureOf_message_root {alphabet : PactTypeAlphabet}
+    (msg : MessageId) (dir : MessageDir)
+    (hDeclared : (msg, dir) ∈ alphabet.actions) :
+    computeFutureOf (.message alphabet msg dir) .root = {(msg, dir)} := by
+  rw [computeFutureOf_message_root_projected]
+  simp [hDeclared]
 
 /-- Proves that compiled message has the waiting edge in a non-clock no-need environment. -/
 lemma compileType_message_wait_edge
@@ -348,26 +355,25 @@ lemma compileType_message_wait_edge
     {env : TypeEnvironment}
     (hLocal : env ∈ alphabet.localEnvironments)
     (hNoNeed : ¬ env.hasNeed (msg, dir))
-    (hClock : env.clock = false)
-    (hDeclared : (msg, dir) ∈ alphabet.actions) :
+    (hClock : env.clock = false) :
     (compileType (.message alphabet msg dir)).HasEdge .root env
-      TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅) .root := by
+      TypeLabel.silent (TypeOfferSummary.mk ({(msg, dir)} ∩ alphabet.actions) ∅) .root := by
   classical
   rw [compileType_hasEdge_iff_hasResolvedEdge
     (.message alphabet msg dir)
     .root .root env TypeLabel.silent
-    (TypeOfferSummary.mk {(msg, dir)} ∅)]
+    (TypeOfferSummary.mk ({(msg, dir)} ∩ alphabet.actions) ∅)]
   refine ⟨
     { source := .root
       environment := env
       label := .visible TypeLabel.silent
-      current := {(msg, dir)}
-      future := .at .root {(msg, dir)}
+      current := {(msg, dir)} ∩ alphabet.actions
+      future := .at .root ({(msg, dir)} ∩ alphabet.actions)
       target := .root }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
-      hLocal, hClock, hNoNeed, hDeclared]
+      hLocal, hClock, hNoNeed]
   · simp [PactType.alphabet,
-      computeFutureOf_message_root msg dir hDeclared]
+      computeFutureOf_message_root_projected]
 
 /-- Proves that compiled message has the final-state non-clock idle edge. -/
 lemma compileType_message_final_edge
@@ -403,10 +409,10 @@ lemma compileType_message_edge_cases
       source env label
       (TypeOfferSummary.mk current future) target) :
     (source = .root ∧ target = .final ∧
-        label = TypeLabel.message msg dir ∧ current = {(msg, dir)} ∧
+        label = TypeLabel.message msg dir ∧ current = {(msg, dir)} ∩ alphabet.actions ∧
         future = ∅ ∧ env.hasNeed (msg, dir)) ∨
       (source = .root ∧ target = .root ∧ label = TypeLabel.silent ∧
-        current = {(msg, dir)} ∧ future = ∅ ∧ env.clock = false ∧
+        current = {(msg, dir)} ∩ alphabet.actions ∧ future = ∅ ∧ env.clock = false ∧
         ¬ env.hasNeed (msg, dir)) ∨
       (source = .final ∧ target = .final ∧ label = TypeLabel.silent ∧
         current = ∅ ∧ future = ∅ ∧ env.clock = false) := by
@@ -420,7 +426,7 @@ lemma compileType_message_edge_cases
   simp only [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
     Finset.mem_union, Finset.mem_image, Finset.mem_filter] at hPending
   rcases hPending with (hFiring | hWaiting) | hFinal
-  · rcases hFiring with ⟨edgeEnv, ⟨_hLocal, hNeed, _hDeclared⟩, hEdgeEq⟩
+  · rcases hFiring with ⟨edgeEnv, ⟨_hLocal, hNeed⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
     simp only [computeFutureOf_message_final] at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
@@ -428,10 +434,10 @@ lemma compileType_message_edge_cases
     injection hLabel with hLabelVisible
     subst label; subst current; subst target
     exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hNeed⟩
-  · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed, hDeclared⟩, hEdgeEq⟩
+  · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
     simp only [PactType.alphabet,
-      computeFutureOf_message_root msg dir hDeclared]
+      computeFutureOf_message_root_projected]
       at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env

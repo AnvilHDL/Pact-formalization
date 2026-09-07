@@ -18,6 +18,13 @@ noncomputable section
     menuDependencyTargets ∅ source = ∅ := by
   simp [menuDependencyTargets]
 
+@[simp] theorem menuDependencyTargets_singleton
+    (origin target source : TypeAutomatonState) :
+    menuDependencyTargets {(origin, target)} source =
+      if origin = source then {target} else ∅ := by
+  classical
+  by_cases h : origin = source <;> ext state <;> simp [menuDependencyTargets, h, eq_comm]
+
 theorem menuDependencyTargets_child
     (dependencies : Finset (TypeAutomatonState × TypeAutomatonState))
     (index tag : Nat) (source : TypeAutomatonState) :

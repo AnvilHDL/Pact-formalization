@@ -76,97 +76,97 @@ theorem erasure_preserves_offers
     TypeOffers (eraseEnvironment env) (inferProcess process) (eraseLabel label)
       (inferProcess target) (current.image Offer.bare) future := by
   induction hOffers with
-  | send env alphabet msg expr p value hPrem hDecl =>
+  | send env alphabet msg expr p value hPrem =>
       rw [Proc.AlphabetWellFormed] at hAlpha
       have hLeft : TypeOffers (eraseEnvironment env)
           (.message alphabet msg MessageDir.send)
           (TypeLabel.message msg MessageDir.send) (.skip alphabet)
-          {(msg, MessageDir.send)} (typeFutureOffers (.skip alphabet)) :=
+          ({(msg, MessageDir.send)} ∩ alphabet.actions) (typeFutureOffers (.skip alphabet)) :=
         TypeOffers.action _ _ _ _
           ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
-            (hasNeed_send_iff env msg).2 hPrem.2.1⟩ hDecl
+            (hasNeed_send_iff env msg).2 hPrem.2.1⟩
       have hFuture :
           ((typeFutureOffers (PactType.skip alphabet) ∪
               sequenceRightMenu (.message alphabet msg MessageDir.send)
-                (inferProcess p)) \ {(msg, MessageDir.send)}) =
-            procFutureOffers p \ {(msg, MessageDir.send)} := by
+                (inferProcess p)) \ ({(msg, MessageDir.send)} ∩ alphabet.actions)) =
+            procFutureOffers p \ ({(msg, MessageDir.send)} ∩ alphabet.actions) := by
         simp only [typeFutureOffers_skip, Finset.empty_union, sequenceRightMenu,
-          canCompleteDeclared_message, decide_eq_true_eq, if_pos hDecl,
+          canCompleteDeclared_message, ↓reduceIte,
           procFutureOffers_inferProcess]
-      rw [inferProcess, eraseLabel_message, image_bare_send, ← hFuture]
+      rw [inferProcess, eraseLabel_message, projectCurrent_image, image_bare_send, ← hFuture]
       exact TypeOffers.seq_fuse _ _ _ _ _ _ _ _ hLeft
         (typeLabel_message_ne_tock _ _)
-  | send_wait env alphabet msg expr p value hPrem hDecl =>
+  | send_wait env alphabet msg expr p value hPrem =>
       rw [Proc.AlphabetWellFormed] at hAlpha
       have hLeft : TypeOffers (eraseEnvironment env)
           (.message alphabet msg MessageDir.send) TypeLabel.silent
-          (.message alphabet msg MessageDir.send) {(msg, MessageDir.send)}
+          (.message alphabet msg MessageDir.send) ({(msg, MessageDir.send)} ∩ alphabet.actions)
           (typeFutureOffers (.message alphabet msg MessageDir.send) \
-            {(msg, MessageDir.send)}) :=
+            ({(msg, MessageDir.send)} ∩ alphabet.actions)) :=
         TypeOffers.action_wait _ _ _ _
           ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
-            fun h => hPrem.2.1 ((hasNeed_send_iff env msg).1 h), hPrem.2.2.1⟩ hDecl
+            fun h => hPrem.2.1 ((hasNeed_send_iff env msg).1 h), hPrem.2.2.1⟩
       have hFuture :
           (((typeFutureOffers (.message alphabet msg MessageDir.send) \
-                {(msg, MessageDir.send)}) ∪
+                ({(msg, MessageDir.send)} ∩ alphabet.actions)) ∪
               sequenceRightMenu (.message alphabet msg MessageDir.send)
-                (inferProcess p)) \ {(msg, MessageDir.send)}) =
+                (inferProcess p)) \ ({(msg, MessageDir.send)} ∩ alphabet.actions)) =
             procFutureOffers (Proc.send alphabet msg expr p) \
-              {(msg, MessageDir.send)} := by
+              ({(msg, MessageDir.send)} ∩ alphabet.actions) := by
         rw [sdiff_union_sdiff, procFutureOffers_inferProcess, inferProcess,
           typeFutureOffers_sequence]
-        simp only [canCompleteDeclared_message, decide_eq_true_eq, if_pos hDecl,
+        simp only [canCompleteDeclared_message, ↓reduceIte,
           sequenceRightMenu]
-      rw [inferProcess, eraseLabel_silent, image_bare_send, ← hFuture]
+      rw [inferProcess, eraseLabel_silent, projectCurrent_image, image_bare_send, ← hFuture]
       exact TypeOffers.seq _ _ _ _ _ _ _ _ hLeft (by simp) typeLabel_silent_ne_tock
-  | recv env alphabet msg varName p value hPrem hDecl =>
+  | recv env alphabet msg varName p value hPrem =>
       rw [Proc.AlphabetWellFormed] at hAlpha
       have hLeft : TypeOffers (eraseEnvironment env)
           (.message alphabet msg MessageDir.recv)
           (TypeLabel.message msg MessageDir.recv) (.skip alphabet)
-          {(msg, MessageDir.recv)} (typeFutureOffers (.skip alphabet)) :=
+          ({(msg, MessageDir.recv)} ∩ alphabet.actions) (typeFutureOffers (.skip alphabet)) :=
         TypeOffers.action _ _ _ _
           ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
-            (hasNeed_recv_iff env msg).2 ⟨value, hPrem.2⟩⟩ hDecl
+            (hasNeed_recv_iff env msg).2 ⟨value, hPrem.2⟩⟩
       have hFuture :
           ((typeFutureOffers (PactType.skip alphabet) ∪
               sequenceRightMenu (.message alphabet msg MessageDir.recv)
-                (inferProcess p)) \ {(msg, MessageDir.recv)}) =
+                (inferProcess p)) \ ({(msg, MessageDir.recv)} ∩ alphabet.actions)) =
             procFutureOffers (Semantics.procExprReplace p varName value) \
-              {(msg, MessageDir.recv)} := by
+              ({(msg, MessageDir.recv)} ∩ alphabet.actions) := by
         simp only [typeFutureOffers_skip, Finset.empty_union, sequenceRightMenu,
-          canCompleteDeclared_message, decide_eq_true_eq, if_pos hDecl,
+          canCompleteDeclared_message, ↓reduceIte,
           procFutureOffers_procExprReplace, procFutureOffers_inferProcess,
           inferProcess_procExprReplace]
-      rw [inferProcess, eraseLabel_message, image_bare_recv, ← hFuture,
+      rw [inferProcess, eraseLabel_message, projectCurrent_image, image_bare_recv, ← hFuture,
         inferProcess_procExprReplace]
       exact TypeOffers.seq_fuse _ _ _ _ _ _ _ _ hLeft
         (typeLabel_message_ne_tock _ _)
-  | recv_wait env alphabet msg varName p hPrem hDecl =>
+  | recv_wait env alphabet msg varName p hPrem =>
       rw [Proc.AlphabetWellFormed] at hAlpha
       have hLeft : TypeOffers (eraseEnvironment env)
           (.message alphabet msg MessageDir.recv) TypeLabel.silent
-          (.message alphabet msg MessageDir.recv) {(msg, MessageDir.recv)}
+          (.message alphabet msg MessageDir.recv) ({(msg, MessageDir.recv)} ∩ alphabet.actions)
           (typeFutureOffers (.message alphabet msg MessageDir.recv) \
-            {(msg, MessageDir.recv)}) :=
+            ({(msg, MessageDir.recv)} ∩ alphabet.actions)) :=
         TypeOffers.action_wait _ _ _ _
           ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
             fun h => by
               obtain ⟨value, hValue⟩ := (hasNeed_recv_iff env msg).1 h
               exact hPrem.2.1 value hValue,
-            hPrem.2.2⟩ hDecl
+            hPrem.2.2⟩
       have hFuture :
           (((typeFutureOffers (.message alphabet msg MessageDir.recv) \
-                {(msg, MessageDir.recv)}) ∪
+                ({(msg, MessageDir.recv)} ∩ alphabet.actions)) ∪
               sequenceRightMenu (.message alphabet msg MessageDir.recv)
-                (inferProcess p)) \ {(msg, MessageDir.recv)}) =
+                (inferProcess p)) \ ({(msg, MessageDir.recv)} ∩ alphabet.actions)) =
             procFutureOffers (Proc.recv alphabet msg varName p) \
-              {(msg, MessageDir.recv)} := by
+              ({(msg, MessageDir.recv)} ∩ alphabet.actions) := by
         rw [sdiff_union_sdiff, procFutureOffers_inferProcess, inferProcess,
           typeFutureOffers_sequence]
-        simp only [canCompleteDeclared_message, decide_eq_true_eq, if_pos hDecl,
+        simp only [canCompleteDeclared_message, ↓reduceIte,
           sequenceRightMenu]
-      rw [inferProcess, eraseLabel_silent, image_bare_recv, ← hFuture]
+      rw [inferProcess, eraseLabel_silent, projectCurrent_image, image_bare_recv, ← hFuture]
       exact TypeOffers.seq _ _ _ _ _ _ _ _ hLeft (by simp) typeLabel_silent_ne_tock
   | cycle env alphabet hPrem =>
       rw [inferProcess, inferProcess, eraseLabel_tock, image_bare_empty]
@@ -263,8 +263,7 @@ theorem erasure_preserves_offers
       rw [inferProcess_skip, eraseLabel_tock] at hLeft
       rw [inferProcess, eraseLabel_tock, image_bare_empty]
       exact TypeOffers.seq_fuse_tock _ _ _ _ _ _ _ hLeft
-  | xoffer_send env alphabet elseProcess branches msg expr p value hPrem hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
+  | xoffer_send env alphabet elseProcess branches msg expr p value hPrem =>
       have hMem : ((msg, MessageDir.send), inferProcess p) ∈
           inferBranches branches := inferBranch_mem hPrem.2.1
       rw [inferProcess, eraseLabel_message, image_bare_send,
@@ -273,10 +272,8 @@ theorem erasure_preserves_offers
       exact TypeOffers.xoffer_branch _ _ _ _ (msg, MessageDir.send) _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1, hMem,
           (hasNeed_send_iff env msg).2 hPrem.2.2.1,
-          (typeResolved_iff env branches).2 hPrem.2.2.2.2⟩ hGate
-  | xoffer_recv env alphabet elseProcess branches msg varName p value hPrem
-      hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
+          (typeResolved_iff env branches).2 hPrem.2.2.2.2⟩
+  | xoffer_recv env alphabet elseProcess branches msg varName p value hPrem =>
       have hMem : ((msg, MessageDir.recv), inferProcess p) ∈
           inferBranches branches := inferBranch_mem hPrem.2.1
       rw [inferProcess, eraseLabel_message, image_bare_recv,
@@ -285,28 +282,25 @@ theorem erasure_preserves_offers
       exact TypeOffers.xoffer_branch _ _ _ _ (msg, MessageDir.recv) _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1, hMem,
           (hasNeed_recv_iff env msg).2 ⟨value, hPrem.2.2.1⟩,
-          (typeResolved_iff env branches).2 hPrem.2.2.2⟩ hGate
-  | xoffer_else env alphabet elseProcess branches hPrem hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
+          (typeResolved_iff env branches).2 hPrem.2.2.2⟩
+  | xoffer_else env alphabet elseProcess branches hPrem =>
       rw [inferProcess, eraseLabel_silent, image_bare_empty,
         procFutureOffers_inferProcess, inferProcess,
         ← typeBranchActions_inferBranches]
       exact TypeOffers.xoffer_else _ _ _ _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1, hPrem.2.1,
           (typeNoImmediateBranch_iff env branches).2 hPrem.2.2.1,
-          (typeResolved_iff env branches).2 hPrem.2.2.2⟩ hGate
-  | xoffer_wait env alphabet elseProcess branches hPrem hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
+          (typeResolved_iff env branches).2 hPrem.2.2.2⟩
+  | xoffer_wait env alphabet elseProcess branches hPrem =>
       rw [inferProcess, eraseLabel_silent, waitingOfferSet_image,
         ← typeWaitingOffers_eq env branches, procFutureOffers_inferProcess,
         inferProcess]
       exact TypeOffers.xoffer_wait _ _ _ _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
-          fun h => hPrem.2.1 ((typeResolved_iff env branches).1 h), hPrem.2.2⟩ hGate
-  | offer_some env alphabet elseProcess branches enabled hPrem hDecl =>
+          fun h => hPrem.2.1 ((typeResolved_iff env branches).1 h), hPrem.2.2⟩
+  | offer_some env alphabet elseProcess branches enabled hPrem =>
       rw [Proc.AlphabetWellFormed] at hAlpha
       rw [Proc.ConjunctRegular] at hConj
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
       have hCommit := inferProcess_parallelProcessBranchesSelecting
         hAlpha.2.2.2 hConj.1 hPrem.2.1
       rw [inferProcess, eraseLabel_silent, image_bare_empty,
@@ -314,24 +308,22 @@ theorem erasure_preserves_offers
       exact TypeOffers.offer_some _ _ _ _ (inferBranch enabled)
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
           inferBranch_mem hPrem.2.1,
-          (typeBranchEnabled_iff env enabled).2 hPrem.2.2⟩ hGate
-  | offer_else env alphabet elseProcess branches hPrem hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
-      rw [inferProcess, eraseLabel_silent, branchOfferSet_image,
+          (typeBranchEnabled_iff env enabled).2 hPrem.2.2⟩
+  | offer_else env alphabet elseProcess branches hPrem =>
+      rw [inferProcess, eraseLabel_silent, projectCurrent_image, branchOfferSet_image,
         procFutureOffers_inferProcess, ← typeBranchActions_inferBranches]
       exact TypeOffers.offer_else _ _ _ _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1, hPrem.2.1,
           (typeNoImmediateBranch_iff env branches).2 hPrem.2.2.1,
-          (typeResolved_iff env branches).2 hPrem.2.2.2⟩ hGate
-  | offer_wait env alphabet elseProcess branches hPrem hDecl =>
-      have hGate := (branchesDeclared_inferBranches alphabet branches).2 hDecl
-      rw [inferProcess, eraseLabel_silent, branchOfferSet_image,
+          (typeResolved_iff env branches).2 hPrem.2.2.2⟩
+  | offer_wait env alphabet elseProcess branches hPrem =>
+      rw [inferProcess, eraseLabel_silent, projectCurrent_image, branchOfferSet_image,
         procFutureOffers_inferProcess, inferProcess,
         ← typeBranchActions_inferBranches]
       exact TypeOffers.offer_wait _ _ _ _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1, hPrem.2.1,
           (typeNoImmediateBranch_iff env branches).2 hPrem.2.2.1,
-          fun h => hPrem.2.2.2 ((typeResolved_iff env branches).1 h)⟩ hGate
+          fun h => hPrem.2.2.2 ((typeResolved_iff env branches).1 h)⟩
   | par outer leftEnv rightEnv interface alphabet left left' right right'
       leftLabel rightLabel leftCurrent rightCurrent leftFuture rightFuture
       hLeftSkip hRightSkip hLeftOffers hRightOffers hNotBoth hLocalLeft
@@ -457,9 +449,9 @@ theorem TypeOffers.toTypeTransition
     (hOffers : TypeOffers env source label target current future) :
     TypeTransition env source label target := by
   induction hOffers with
-  | action _ _ _ _ hPrem hGate => exact TypeTransition.action _ _ _ _ hPrem hGate
-  | action_wait _ _ _ _ hPrem hGate =>
-      exact TypeTransition.action_wait _ _ _ _ hPrem hGate
+  | action _ _ _ _ hPrem => exact TypeTransition.action _ _ _ _ hPrem
+  | action_wait _ _ _ _ hPrem =>
+      exact TypeTransition.action_wait _ _ _ _ hPrem
   | choice_left _ _ _ _ hPrem =>
       exact TypeTransition.choice_left _ _ _ _ hPrem.1 hPrem.2
   | choice_right _ _ _ _ hPrem =>
@@ -479,18 +471,18 @@ theorem TypeOffers.toTypeTransition
   | seq_fuse _ _ _ _ _ _ _ _ _ _ ih => exact TypeTransition.seq_fuse _ _ _ _ _ _ ih
   | seq_fuse_tock _ _ _ _ _ _ _ _ ih =>
       exact TypeTransition.seq_fuse _ _ _ _ _ _ ih
-  | xoffer_branch _ _ _ _ _ _ hPrem hGate =>
-      exact TypeTransition.xoffer_branch _ _ _ _ _ _ hPrem hGate
-  | xoffer_else _ _ _ _ hPrem hGate =>
-      exact TypeTransition.xoffer_else _ _ _ _ hPrem hGate
-  | xoffer_wait _ _ _ _ hPrem hGate =>
-      exact TypeTransition.xoffer_wait _ _ _ _ hPrem hGate
-  | offer_some _ _ _ _ _ hPrem hGate =>
-      exact TypeTransition.offer_some _ _ _ _ _ hPrem hGate
-  | offer_else _ _ _ _ hPrem hGate =>
-      exact TypeTransition.offer_else _ _ _ _ hPrem hGate
-  | offer_wait _ _ _ _ hPrem hGate =>
-      exact TypeTransition.offer_wait _ _ _ _ hPrem hGate
+  | xoffer_branch _ _ _ _ _ _ hPrem =>
+      exact TypeTransition.xoffer_branch _ _ _ _ _ _ hPrem
+  | xoffer_else _ _ _ _ hPrem =>
+      exact TypeTransition.xoffer_else _ _ _ _ hPrem
+  | xoffer_wait _ _ _ _ hPrem =>
+      exact TypeTransition.xoffer_wait _ _ _ _ hPrem
+  | offer_some _ _ _ _ _ hPrem =>
+      exact TypeTransition.offer_some _ _ _ _ _ hPrem
+  | offer_else _ _ _ _ hPrem =>
+      exact TypeTransition.offer_else _ _ _ _ hPrem
+  | offer_wait _ _ _ _ hPrem =>
+      exact TypeTransition.offer_wait _ _ _ _ hPrem
   | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLeftSkip hRightSkip hLeftOffers
       hRightOffers hNotBoth hLocalLeft hLocalRight hEnv ihLeft ihRight =>
       exact TypeTransition.par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLeftSkip hRightSkip

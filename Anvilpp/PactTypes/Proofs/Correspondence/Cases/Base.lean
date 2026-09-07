@@ -126,7 +126,10 @@ theorem correspondence_message_stepIff
       subst state
       rcases hStep with ⟨hTransition, hOffers⟩
       cases hTransition with
-      | action _ _ _ _ conditions hAction =>
+      | action _ _ _ _ conditions =>
+          have hAction : (msg, dir) ∈ alphabet.actions := by
+            obtain ⟨⟨m, d⟩, hMem, hEq⟩ := Finset.mem_image.mp (conditions.1.2.2.1 conditions.2)
+            cases d <;> cases dir <;> simp_all [typeNeed, MessageDir.invert]
           have hFields : current = {(msg, dir)} ∧ future = ∅ := by
             generalize hLabelEq :
               TypeLabel.message msg dir = actualLabel at hOffers
@@ -137,7 +140,7 @@ theorem correspondence_message_stepIff
               DecoratedTypeTransition env (.message alphabet msg dir)
                 (TypeLabel.message msg dir)
                 (TypeOfferSummary.mk {(msg, dir)} ∅) (.skip alphabet) :=
-            ⟨TypeTransition.action env alphabet msg dir conditions hAction,
+            ⟨TypeTransition.action env alphabet msg dir conditions,
               by
                 simpa [typeFutureOffers, typeFutureOffersFuel] using
                   hOffers⟩
@@ -147,24 +150,24 @@ theorem correspondence_message_stepIff
           refine ⟨.final, hEdge, ?_⟩
           unfold relationMembership buildRelationSet buildRelationSetCore
           simp [typeCompilationFuel, buildRelationSetCoreFuel]
-      | action_wait _ _ _ _ conditions hAction =>
-          have hFields : current = {(msg, dir)} ∧ future = ∅ := by
+      | action_wait _ _ _ _ conditions =>
+          have hFields : current = {(msg, dir)} ∩ alphabet.actions ∧ future = ∅ := by
             generalize hLabelEq : TypeLabel.silent = actualLabel at hOffers
             cases hOffers
-            all_goals simp_all [typeFutureOffers, typeFutureOffersFuel,
-              Finset.ext_iff]
+            all_goals by_cases hDeclared : (msg, dir) ∈ alphabet.actions
+            all_goals simp_all [typeFutureOffers, typeFutureOffersFuel, Finset.ext_iff]
           obtain ⟨rfl, rfl⟩ := hFields
           let decorated :
               DecoratedTypeTransition env (.message alphabet msg dir)
-                TypeLabel.silent (TypeOfferSummary.mk {(msg, dir)} ∅)
+                TypeLabel.silent (TypeOfferSummary.mk ({(msg, dir)} ∩ alphabet.actions) ∅)
                 (.message alphabet msg dir) :=
-            ⟨TypeTransition.action_wait env alphabet msg dir conditions hAction,
+            ⟨TypeTransition.action_wait env alphabet msg dir conditions,
               by
                 simpa [typeFutureOffers, typeFutureOffersFuel] using
                   hOffers⟩
           have hEdge := NewCorrespondence.compileType_message_wait_edge
             (alphabet := alphabet) msg dir
-            hLocal conditions.2.1 conditions.2.2 hAction
+            hLocal conditions.2.1 conditions.2.2
           refine ⟨.root, hEdge, ?_⟩
           unfold relationMembership buildRelationSet buildRelationSetCore
           simp [typeCompilationFuel, buildRelationSetCoreFuel]
@@ -207,17 +210,11 @@ theorem correspondence_message_stepIff
           · simp at hRoot
           · exact hFinal.1
         subst residual'
-        -- The compiled symbol's offers are drawn from this type's own actions.
-        have hAction : (msg, dir) ∈ alphabet.actions := by
-          have h := hSymbol.2
-          simp only [PactTypeAlphabet.mem_localOfferSummaries_iff] at h
-          have hIn := h.1 (Finset.mem_singleton_self ((msg, dir) : BareMessage))
-          simpa only [PactTypeAlphabet.actions] using hIn
         exact ⟨TypeTransition.action env alphabet msg dir
-            ⟨hWellFormed, hNeed⟩ hAction,
+            ⟨hWellFormed, hNeed⟩,
           by
             simpa [typeFutureOffers, typeFutureOffersFuel] using
-              TypeOffers.action env alphabet msg dir ⟨hWellFormed, hNeed⟩ hAction⟩
+              TypeOffers.action env alphabet msg dir ⟨hWellFormed, hNeed⟩⟩
       · rcases hWait with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
           hClock, hNoNeed⟩
         subst label
@@ -232,18 +229,13 @@ theorem correspondence_message_stepIff
           · rcases hTargetFinal with ⟨_, hStateTarget⟩
             simp at hStateTarget
         subst residual'
-        -- The compiled symbol's offers are drawn from this type's own actions.
-        have hAction : (msg, dir) ∈ alphabet.actions := by
-          have h := hSymbol.2
-          simp only [PactTypeAlphabet.mem_localOfferSummaries_iff] at h
-          have hIn := h.1 (Finset.mem_singleton_self ((msg, dir) : BareMessage))
-          simpa only [PactTypeAlphabet.actions] using hIn
         exact ⟨TypeTransition.action_wait env alphabet msg dir
-            ⟨hWellFormed, hNoNeed, hClock⟩ hAction,
+            ⟨hWellFormed, hNoNeed, hClock⟩,
           by
-            simpa [typeFutureOffers, typeFutureOffersFuel, hAction] using
-              TypeOffers.action_wait env alphabet msg dir
-                ⟨hWellFormed, hNoNeed, hClock⟩ hAction⟩
+            have hOffers := TypeOffers.action_wait env alphabet msg dir
+              ⟨hWellFormed, hNoNeed, hClock⟩
+            by_cases hDeclared : (msg, dir) ∈ alphabet.actions <;>
+              simpa [typeFutureOffers, typeFutureOffersFuel, hDeclared] using hOffers⟩
       · rcases hIdle with ⟨hSource, _⟩
         simp at hSource
     · rcases hFinal with ⟨hResidual, hState⟩

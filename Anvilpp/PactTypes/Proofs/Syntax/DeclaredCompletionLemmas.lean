@@ -14,7 +14,6 @@ mutual
     cases ty with
     | message a m d =>
         simp only [replaceVar, completionView]
-        split_ifs <;> simp [replaceVar]
     | var a other =>
         by_cases h : name = other
         all_goals simp only [replaceVar, completionView, h, ↓reduceIte]
@@ -24,9 +23,8 @@ mutual
         · simp only [replaceVar, completionView, h, ↓reduceIte]
           rw [completionView_replaceVar body name replacement]
     | xoffer a other branches | offer a other branches =>
-        simp only [replaceVar, completionView, replaceBranches_head_gate_iff]
-        split_ifs <;> simp only [replaceVar]
-        all_goals rw [completionView_replaceVar other name replacement,
+        simp only [replaceVar, completionView]
+        rw [completionView_replaceVar other name replacement,
           completionViewBranches_replaceBranches branches name replacement]
     | progress a p | skip a | tock a => simp only [replaceVar, completionView]
     | choice a l r | fairChoice a b l r | seq a l r | par a l r i =>
@@ -50,7 +48,7 @@ mutual
 decreasing_by all_goals simp_wf; omega
 end
 
-/-- The existing structural substitution evaluator applies to the gated view. -/
+/-- The structural substitution evaluator applies to the completion view. -/
 theorem PactType.replaceVar_canCompleteDeclared (name : String) (replacement ty : PactType) :
     (ty.replaceVar name replacement).CanCompleteDeclared =
       canCompleteBeforeTockSubst name replacement.CanCompleteDeclared ty.completionView := by

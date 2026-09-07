@@ -114,7 +114,6 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 omega
               omega)]
       | xoffer alphabet elseType branches =>
-          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -155,7 +154,6 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 intro other hOther
                 exact hEvery other (by simp [hOther]))]
       | offer alphabet elseType branches =>
-          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           change (typeCanCompleteThisCycleFuel (fuel + 1) elseType ||
               branches.any (fun branch =>
                 typeCanCompleteThisCycleFuel (fuel + 1) branch.2)) =
@@ -197,7 +195,7 @@ theorem typeCanCompleteThisCycleFuel_succ_stable :
                 exact hEvery other (by simp [hOther]))]
 
 /-- Once fuel covers the finite syntax tree, the bounded completion analysis
-agrees with the alphabet-aware predicate. -/
+agrees with the structural completion predicate. -/
 theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
     ∀ fuel processType, sizeOf processType < fuel →
       typeCanCompleteThisCycleFuel fuel processType =
@@ -284,7 +282,6 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
       | xoffer alphabet elseType branches =>
           rw [PactType.canCompleteDeclared_eq]
           simp only [typeCanCompleteThisCycleFuel]
-          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.xoffer alphabet elseType branches) := by
@@ -311,7 +308,6 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
       | offer alphabet elseType branches =>
           rw [PactType.canCompleteDeclared_eq]
           simp only [typeCanCompleteThisCycleFuel]
-          apply congrArg (fun value => decide (∀ branch ∈ branches, branch.1 ∈ alphabet.actions) && value)
           rw [ih elseType (by
             have : sizeOf elseType <
                 sizeOf (PactType.offer alphabet elseType branches) := by

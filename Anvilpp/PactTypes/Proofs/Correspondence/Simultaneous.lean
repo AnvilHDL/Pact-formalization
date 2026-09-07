@@ -204,9 +204,19 @@ theorem correspondence_simultaneous :
               hDisjoint hTail hBody.1.toCurrent hBody.2 hChildRelated]
             have hRhoTail := relationMembership_tailOccurrences body rho q name True
               hBodyWF.2.2.2.2.2.1 (hTail name) hChildRelated
+            have hRhoWF := relationMembership_alphabetWellFormed
+              committedOfferAlphabetWellFormed_holds committedOfferScoping_holds
+              body rho q hBodyWF.1 hBodyWF.2.2.2.2.2.2.2.2.2.2.2.2.1
+              hBodyWF.2.2.2.2.2.2.2.2.2.2.2.2.2.1
+              hBodyWF.2.2.2.2.2.1 hDisjoint hChildRelated
+            have hRhoAlphabet := relationMembership_alphabet_eq_of_wellFormed
+              body rho q hBodyWF.1 hChildRelated
             -- Paper: substitution adds the body menu exactly when b_X holds.
             rw [typeFutureOffers_replaceVar_tail name (.recur alphabet name body)
-              rho hRhoTail, typeFutureOffers_recur]
+              rho hRhoTail hRhoWF (by
+                rw [hRhoAlphabet, typeFutureOffers_recur]
+                exact typeFutureOffers_subset_alphabet body hBodyWF.1),
+              typeFutureOffers_recur]
             have hMarker :
                 (∃ reached ∈ (compiledMenuGraphFuel (typeCompilationFuel body) body).futureReachable q,
                   MarkerSource (compileTypeFuel (typeCompilationFuel body) body) name reached) ↔
@@ -293,13 +303,12 @@ theorem correspondence_simultaneous :
             (fun selected hMem =>
               parallelTypeBranchesSelecting_alphabet_eq_of_mem hMem)
             ?_ hElse.2 (fun selected hMem => (hSelected selected hMem).2)
-          -- The generated product's menu, from the raw branch bodies.  The gate
-          -- is exactly the declaredness the syntax lemma needs.
-          intro hGate selected hMem
+          -- Paper: every selected product has the projected branch menu.
+          intro selected hMem
           have h := hWF.1
           simp only [PactType.AlphabetWellFormed] at h
           exact typeFutureOffers_parallelTypeBranchesSelecting alphabet selected
-            branches hGate
+            branches
             (fun b hb => (offerBranchesWellFormed_of_mem h.2.2.2 hb).1)
             (fun b hb => (offerBranchesWellFormed_of_mem h.2.2.2 hb).2)
         refine ⟨?_, hMenus⟩
