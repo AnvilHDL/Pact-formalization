@@ -71,373 +71,173 @@ lemma helper_h2_concrete_representative_of_erased_environment
     simp only [concreteRepresentative, TypeEnvironment.empty, Finset.image_empty]
     rfl
 
-/-- Erase a process prefix's recorded entries into a `TypeHistory`, pairing
-each erased `(env, label)` with the fixed starting type — matching the
-convention `CompletedTypeLog` already uses when it calls a `TypeStrategy`. -/
-def eraseProcessHistory {process : Proc} (processType : PactType)
-    (history : ProcessPrefix process) : TypeHistory :=
-  history.entries.map fun entry =>
-    (eraseEnvironment entry.1, eraseLabel entry.2, processType)
+/-- The matching type residual chosen at one recorded entry.  Conformance's
+step-matching supplies at least one; the construction fixes a choice, which is
+all the paper's simultaneous induction needs. -/
+noncomputable def matchingResidual {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType) (source : PactType)
+    (entry : Environment × Label × Proc) : PactType :=
+  if h : ∃ target, TypeTransition (eraseEnvironment entry.1) source
+      (eraseLabel entry.2.1) target ∧ witness.relation entry.2.2 target then
+    h.choose
+  else source
 
-private theorem List.Forall₂.append' {α β} {R : α → β → Prop}
-    {l1 : List α} {l2 : List β} {l1' : List α} {l2' : List β}
-    (h1 : List.Forall₂ R l1 l2) (h2 : List.Forall₂ R l1' l2') :
-    List.Forall₂ R (l1 ++ l1') (l2 ++ l2') := by
-  induction h1 with
-  | nil => simpa
-  | cons hx _ ih => exact List.Forall₂.cons hx ih
+theorem matchingResidual_spec {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType) (source : PactType)
+    (env : Environment) (label : Label) (next : Proc)
+    (hExists : ∃ target, TypeTransition (eraseEnvironment env) source
+      (eraseLabel label) target ∧ witness.relation next target) :
+    TypeTransition (eraseEnvironment env) source (eraseLabel label)
+        (matchingResidual witness source (env, label, next)) ∧
+      witness.relation next (matchingResidual witness source (env, label, next)) := by
+  rw [matchingResidual, dif_pos hExists]
+  exact hExists.choose_spec
 
-/-- The process strategy built from a type strategy: erase the history so
-far, ask the type strategy for its next environment, then concretize it via
-`γ`. This is `𝓢_P` from Helper Lemma H3. -/
-def concretizingStrategy {process : Proc} (processType : PactType)
+/-- One step of the paper's simultaneous induction: extend the matching type
+history by the erased entry and its chosen residual. -/
+noncomputable def matchingTypeStep {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType)
+    (state : TypeHistory × PactType) (entry : Environment × Label × Proc) :
+    TypeHistory × PactType :=
+  (state.1 ++ [(eraseEnvironment entry.1, eraseLabel entry.2.1,
+      matchingResidual witness state.2 entry)],
+    matchingResidual witness state.2 entry)
+
+/-- The matching type history of a represented process prefix, `h_τ` of the
+paper's Helper Lemma H3, as a function of `h_P`. -/
+noncomputable def matchingTypeRun {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType)
+    (entries : List (Environment × Label × Proc)) : TypeHistory × PactType :=
+  entries.foldl (matchingTypeStep witness) ([], processType)
+
+@[simp] theorem matchingTypeRun_nil {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType) :
+    matchingTypeRun witness [] = ([], processType) := rfl
+
+theorem matchingTypeRun_append {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType)
+    (entries : List (Environment × Label × Proc))
+    (entry : Environment × Label × Proc) :
+    matchingTypeRun witness (entries ++ [entry]) =
+      matchingTypeStep witness (matchingTypeRun witness entries) entry := by
+  simp [matchingTypeRun]
+
+/-- Helper Lemma H3 — "Matching finite strategy histories": the matching type
+history is a valid represented type prefix ending at a related residual. -/
+theorem matchingTypeRun_spec {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType) :
+    ∀ {entries : List (Environment × Label × Proc)} {residual : Proc},
+      PrefixValid process entries residual →
+      TypePrefixValid processType (matchingTypeRun witness entries).1
+          (matchingTypeRun witness entries).2 ∧
+        witness.relation residual (matchingTypeRun witness entries).2 := by
+  intro entries residual hValid
+  induction hValid with
+  | root => exact ⟨.root, witness.initial⟩
+  | step hPrefix hStep ih =>
+      obtain ⟨hValidType, hRelated⟩ := ih
+      obtain ⟨hTypeStep, hRelated'⟩ :=
+        matchingResidual_spec witness _ _ _ _ (witness.matchStep hRelated hStep)
+      rw [matchingTypeRun_append, matchingTypeStep]
+      exact ⟨hValidType.step hTypeStep, hRelated'⟩
+
+/-- The matching type prefix of a represented process prefix. -/
+noncomputable def matchingTypePrefix {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType)
+    (history : ProcessPrefix process) : TypePrefix processType where
+  entries := (matchingTypeRun witness history.entries).1
+  residual := (matchingTypeRun witness history.entries).2
+  valid := (matchingTypeRun_spec witness history.valid).1
+
+/-- `S_P` from `S_τ`: read the matching type history off the process history,
+ask the type strategy, then concretize its environment with `γ`. -/
+noncomputable def concretizingStrategy {process : Proc} {processType : PactType}
+    (witness : ConformanceWitness process processType)
     (typeStrategy : TypeStrategy) : ProcessStrategy process :=
   fun history => concreteRepresentative
-    (typeStrategy (eraseProcessHistory processType history))
+    (typeStrategy (matchingTypePrefix witness history).entries)
 
-/-- The invariant carried alongside a process prefix generated by
-`concretizingStrategy`: a related type prefix of the same length, agreeing
-entrywise after erasure, with every recorded process environment the
-concretization of the matching type environment. This is the
-five-clause "matching finite strategy history" (Helper Lemma H3), packaged as
-data so it can be extended one step at a time. -/
-structure MatchingTypeHistory {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
-    (procHistory : ProcessPrefix process) : Type where
-  typeHistory : TypePrefix processType
-  hRelated : witness.relation procHistory.residual typeHistory.residual
-  hEntries : List.Forall₂
-    (fun (procEntry : Environment × Label) (typeEntry : TypeEnvironment × TypeLabel) =>
-      eraseEnvironment procEntry.1 = typeEntry.1 ∧
-      eraseLabel procEntry.2 = typeEntry.2 ∧
-      procEntry.1 = concreteRepresentative typeEntry.1)
-    procHistory.entries typeHistory.entries
+theorem eraseEnvironment_concretizingStrategy {process : Proc}
+    {processType : PactType} (witness : ConformanceWitness process processType)
+    (typeStrategy : TypeStrategy) (history : ProcessPrefix process) :
+    eraseEnvironment (concretizingStrategy witness typeStrategy history) =
+      typeStrategy (matchingTypePrefix witness history).entries :=
+  eraseEnvironment_concreteRepresentative _
 
-/-- The root case: the empty process prefix is matched by the empty type
-prefix, related by conformance's own initial pair. -/
-def MatchingTypeHistory.root {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy) :
-    MatchingTypeHistory witness typeStrategy ⟨[], process, .root⟩ where
-  typeHistory := ⟨[], processType, .root⟩
-  hRelated := witness.initial
-  hEntries := List.Forall₂.nil
-
-/-- Extends a matching type history by one strategy step: `γ` inverts the
-type strategy's chosen environment unconditionally, so the process step
-erases to a step under exactly that environment, and conformance's
-`matchStep` supplies the related type target. -/
-noncomputable def MatchingTypeHistory.extend {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
-    {procHistory : ProcessPrefix process}
-    (matching : MatchingTypeHistory witness typeStrategy procHistory)
-    {label : Label} {next : Proc}
-    (hStep : ProcessTransition
-      (concretizingStrategy processType typeStrategy procHistory)
-      procHistory.residual label next) :
-    MatchingTypeHistory witness typeStrategy
-      ⟨procHistory.entries ++
-          [(concretizingStrategy processType typeStrategy procHistory, label)],
-        next, procHistory.valid.step hStep⟩ := by
-  set chosenEnv := typeStrategy (eraseProcessHistory processType procHistory) with hChosenEnv
-  have hEraseChosen :
-      eraseEnvironment (concretizingStrategy processType typeStrategy procHistory) =
-        chosenEnv :=
-    eraseEnvironment_concreteRepresentative chosenEnv
-  have hExists := witness.matchStep matching.hRelated hStep
-  rw [hEraseChosen] at hExists
-  set typeTarget := hExists.choose with hTypeTargetDef
-  have hSpec := hExists.choose_spec
-  obtain ⟨hTypeStep, hTargetRelated⟩ := hSpec
-  refine
-    { typeHistory :=
-        ⟨matching.typeHistory.entries ++ [(chosenEnv, eraseLabel label)],
-          typeTarget, matching.typeHistory.valid.step hTypeStep⟩
-      hRelated := hTargetRelated
-      hEntries := ?_ }
-  exact List.Forall₂.append' matching.hEntries
-    (List.Forall₂.cons ⟨hEraseChosen, rfl, by simp [concretizingStrategy, chosenEnv]⟩
-      List.Forall₂.nil)
-
-/-- Helper Lemma H3: every finite process history generated by
-`concretizingStrategy` has a matching finite type history generated by
-`typeStrategy` along conformance — five clauses, packaged as the
-`MatchingTypeHistory` invariant. Existence only (`Nonempty`): the underlying
-process semantics is not target-deterministic (an unresolved process choice
-may step to either branch), so distinct process histories of the same length
-generally have distinct matching type histories; the proof needs
-only that *a* match exists for *the* history actually produced, never a
-canonical choice independent of it. -/
-theorem helper_h3_matching_finite_strategy_histories
-    {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy) :
-    ∀ {procHistory : ProcessPrefix process},
-      FollowsProcessStrategy (concretizingStrategy processType typeStrategy) procHistory →
-      Nonempty (MatchingTypeHistory witness typeStrategy procHistory)
-  | _, .root => ⟨MatchingTypeHistory.root witness typeStrategy⟩
-  | _, .step follows transition =>
-      let prevMatching := (helper_h3_matching_finite_strategy_histories witness typeStrategy
-        follows).some
-      ⟨prevMatching.extend witness typeStrategy transition⟩
-
-/-- The per-entry matching clauses at one step of the two histories:
-the process environment and label erase to the type ones, and the process
-environment is the concretization `γ` of the type environment. -/
-def EntryMatches (procEntry : Environment × Label)
-    (typeEntry : TypeEnvironment × TypeLabel) : Prop :=
-  eraseEnvironment procEntry.1 = typeEntry.1 ∧
-  eraseLabel procEntry.2 = typeEntry.2 ∧
-  procEntry.1 = concreteRepresentative typeEntry.1
-
-/-- Entrywise matching lets the erased process history be read off the type
-history — which is the history the type strategy is actually applied to in
-`CompletedTypeLog`. -/
-private theorem eraseProcessHistory_map_eq {processType : PactType}
-    {procEntries : List (Environment × Label)}
-    {typeEntries : List (TypeEnvironment × TypeLabel)}
-    (h : List.Forall₂ EntryMatches procEntries typeEntries) :
-    procEntries.map (fun entry =>
-        (eraseEnvironment entry.1, eraseLabel entry.2, processType)) =
-      typeEntries.map (fun entry => (entry.1, entry.2, processType)) := by
-  induction h with
-  | nil => rfl
-  | cons hEntry _ ih => simp [hEntry.1, hEntry.2.1, ih]
-
-/-- One step of the type-side sequence matching a *given* completed process
-log: if the erased log entry at `n` admits a type step out of `tp` whose
-target stays related to the process residual, take such a continuation;
-otherwise stay put.  This mirrors `CompletedProcessLog`'s own step/stuck
-disjunction on the type side.  Because a `TypePrefix` does not depend on the
-process prefix, this recursion needs no transport along process-history
-equalities — the obstacle that makes a directly `procHistory`-indexed
-construction unworkable. -/
-noncomputable def nextTypePrefix {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType)
-    (procPrefixAt : ℕ → ProcessPrefix process) (processLog : ProcessLog)
-    (n : ℕ) (tp : TypePrefix processType) : TypePrefix processType :=
-  if h : ∃ tp' : TypePrefix processType,
-      tp'.entries = tp.entries ++ [eraseProcessLog processLog n] ∧
-      TypeTransition (eraseProcessLog processLog n).1 tp.residual
-        (eraseProcessLog processLog n).2 tp'.residual ∧
-      witness.relation (procPrefixAt (n + 1)).residual tp'.residual then
-    h.choose
-  else tp
-
-/-- The type-side prefix sequence matching a given completed process log:
-`h_τ`, built one step at a time alongside `h_P`. -/
-noncomputable def typePrefixAtOf {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType)
-    (procPrefixAt : ℕ → ProcessPrefix process) (processLog : ProcessLog) :
-    ℕ → TypePrefix processType
-  | 0 => ⟨[], processType, .root⟩
-  | n + 1 =>
-      nextTypePrefix witness procPrefixAt processLog n
-        (typePrefixAtOf witness procPrefixAt processLog n)
-
-/-- The step branch of the induction: a genuine process step, matched
-by conformance, makes the type-side existential hold, so `nextTypePrefix`
-appends exactly the erased log entry and lands on a related type residual. -/
-private theorem nextTypePrefix_of_step {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
-    {procPrefixAt : ℕ → ProcessPrefix process} {processLog : ProcessLog}
-    {n : ℕ} {tp : TypePrefix processType}
-    (hRelated : witness.relation (procPrefixAt n).residual tp.residual)
-    (hEnvEq : (processLog n).1 =
-      concretizingStrategy processType typeStrategy (procPrefixAt n))
-    (hStep : ProcessTransition
-      (concretizingStrategy processType typeStrategy (procPrefixAt n))
-      (procPrefixAt n).residual (processLog n).2 (procPrefixAt (n + 1)).residual) :
-    (nextTypePrefix witness procPrefixAt processLog n tp).entries =
-        tp.entries ++ [eraseProcessLog processLog n] ∧
-      TypeTransition (eraseProcessLog processLog n).1 tp.residual
-        (eraseProcessLog processLog n).2
-        (nextTypePrefix witness procPrefixAt processLog n tp).residual ∧
-      witness.relation (procPrefixAt (n + 1)).residual
-        (nextTypePrefix witness procPrefixAt processLog n tp).residual := by
-  have hErasedEnv : (eraseProcessLog processLog n).1 =
-      eraseEnvironment (concretizingStrategy processType typeStrategy (procPrefixAt n)) := by
-    show eraseEnvironment (processLog n).1 = _
-    rw [hEnvEq]
-  obtain ⟨target, hTypeStep, hRelatedNext⟩ := witness.matchStep hRelated hStep
-  have hTypeStep' : TypeTransition (eraseProcessLog processLog n).1 tp.residual
-      (eraseProcessLog processLog n).2 target := by
-    rw [hErasedEnv]
-    exact hTypeStep
-  have hEx : ∃ tp' : TypePrefix processType,
-      tp'.entries = tp.entries ++ [eraseProcessLog processLog n] ∧
-      TypeTransition (eraseProcessLog processLog n).1 tp.residual
-        (eraseProcessLog processLog n).2 tp'.residual ∧
-      witness.relation (procPrefixAt (n + 1)).residual tp'.residual :=
-    ⟨⟨tp.entries ++ [eraseProcessLog processLog n], target, tp.valid.step hTypeStep'⟩,
-      rfl, hTypeStep', hRelatedNext⟩
-  rw [nextTypePrefix, dif_pos hEx]
-  exact hEx.choose_spec
-
-/-- The stuck branch: availability reflection would turn a type step into a
-process step, contradicting stuckness, so the type-side existential fails and
-`nextTypePrefix` stays put.  This is "the type is also stuck
-under `e_n`" argument. -/
-private theorem nextTypePrefix_of_stuck {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
-    {procPrefixAt : ℕ → ProcessPrefix process} {processLog : ProcessLog}
-    {n : ℕ} {tp : TypePrefix processType}
-    (hRelated : witness.relation (procPrefixAt n).residual tp.residual)
-    (hEnvEq : (processLog n).1 =
-      concretizingStrategy processType typeStrategy (procPrefixAt n))
-    (hStuck : Stuck (concretizingStrategy processType typeStrategy (procPrefixAt n))
-      (procPrefixAt n).residual) :
-    (¬ ∃ label target,
-        TypeTransition (eraseProcessLog processLog n).1 tp.residual label target) ∧
-      nextTypePrefix witness procPrefixAt processLog n tp = tp := by
-  have hErasedEnv : (eraseProcessLog processLog n).1 =
-      eraseEnvironment (concretizingStrategy processType typeStrategy (procPrefixAt n)) := by
-    show eraseEnvironment (processLog n).1 = _
-    rw [hEnvEq]
-  have hNoTypeStep : ¬ ∃ label target,
-      TypeTransition (eraseProcessLog processLog n).1 tp.residual label target := by
-    rintro ⟨label, target, hTypeStep⟩
-    rw [hErasedEnv] at hTypeStep
-    exact hStuck (witness.readyReflect hRelated ⟨label, target, hTypeStep⟩)
-  refine ⟨hNoTypeStep, ?_⟩
-  rw [nextTypePrefix, dif_neg]
-  rintro ⟨tp', -, hTypeStep, -⟩
-  exact hNoTypeStep ⟨_, _, hTypeStep⟩
-
-/-- Helper Lemma H3 — "Matching finite
-strategy histories" — instantiated at one given completed process log.
-
-For the process history `h_P` recorded by that log, the type-side sequence
-built above is `h_τ`, and this lemma is its five clauses:
-`P₀ = P` and `τ₀ = τ` (the `zero` case), `(P_i,τ_i) ∈ 𝓡` (the `relation`
-conjunct), and `e_i = Erase(E_i)`, `β_i = Erase(α_i)`, `E_i = γ(e_i)` (the
-three components of `EntryMatches`, held entrywise).
-
-The invariant is carried along the log's own execution rather than along a
-separately constructed canonical run: the process semantics is not
-target-deterministic (an unresolved choice may step either way), so no
-canonical run independent of the given log exists. -/
-theorem typePrefixAtOf_spec {process : Proc} {processType : PactType}
-    (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
-    {procPrefixAt : ℕ → ProcessPrefix process} {processLog : ProcessLog}
-    (hRoot : procPrefixAt 0 = ⟨[], process, .root⟩)
-    (hStepOrStuck : ∀ n,
-      ((processLog n).1 = concretizingStrategy processType typeStrategy (procPrefixAt n) ∧
-        (procPrefixAt n).entries ++ [processLog n] = (procPrefixAt (n + 1)).entries ∧
-        ProcessTransition (concretizingStrategy processType typeStrategy (procPrefixAt n))
-          (procPrefixAt n).residual (processLog n).2 (procPrefixAt (n + 1)).residual) ∨
-      (Stuck (concretizingStrategy processType typeStrategy (procPrefixAt n))
-          (procPrefixAt n).residual ∧
-        processLog n = (concretizingStrategy processType typeStrategy (procPrefixAt n),
-          Label.silent) ∧
-        procPrefixAt (n + 1) = procPrefixAt n ∧
-        ∀ m, n < m → processLog m = (Environment.empty, Label.silent))) :
-    ∀ n,
-      witness.relation (procPrefixAt n).residual
-          (typePrefixAtOf witness procPrefixAt processLog n).residual ∧
-      List.Forall₂ EntryMatches (procPrefixAt n).entries
-          (typePrefixAtOf witness procPrefixAt processLog n).entries := by
-  intro n
-  induction n with
-  | zero =>
-      rw [hRoot]
-      exact ⟨witness.initial, List.Forall₂.nil⟩
-  | succ n ih =>
-      rcases hStepOrStuck n with
-        ⟨hEnvEq, hEntriesEq, hStep⟩ | ⟨hStuck, hLogEq, hSameNext, -⟩
-      · obtain ⟨hEntriesNext, -, hRelatedNext⟩ :=
-          nextTypePrefix_of_step witness typeStrategy ih.1 hEnvEq hStep
-        refine ⟨hRelatedNext, ?_⟩
-        show List.Forall₂ EntryMatches (procPrefixAt (n + 1)).entries
-          (nextTypePrefix witness procPrefixAt processLog n
-            (typePrefixAtOf witness procPrefixAt processLog n)).entries
-        rw [hEntriesNext, ← hEntriesEq]
-        refine List.Forall₂.append' ih.2 (List.Forall₂.cons ?_ List.Forall₂.nil)
-        refine ⟨rfl, rfl, ?_⟩
-        have hErased : (eraseProcessLog processLog n).1 =
-            typeStrategy (eraseProcessHistory processType (procPrefixAt n)) := by
-          show eraseEnvironment (processLog n).1 = _
-          rw [hEnvEq]
-          exact eraseEnvironment_concreteRepresentative _
-        show (processLog n).1 = concreteRepresentative (eraseProcessLog processLog n).1
-        rw [hErased, hEnvEq]
-        rfl
-      · obtain ⟨-, hSame⟩ :=
-          nextTypePrefix_of_stuck witness typeStrategy ih.1
-            (congrArg Prod.fst hLogEq) hStuck
-        have hSame' : typePrefixAtOf witness procPrefixAt processLog (n + 1) =
-            typePrefixAtOf witness procPrefixAt processLog n := hSame
-        rw [hSame', hSameNext]
-        exact ih
-
-/-- Helper Lemma H4 — "Completed process
-logs erase to type logs".  Every completed process log under `S_P` erases to
-a completed type log under `S_τ`.
-
-The two cases are: an ordinary infinite execution, where each
-step is matched by conformance (`nextTypePrefix_of_step`); and a
-failure-completed log, where the process is stuck and the type is therefore
-stuck too, by availability reflection (`nextTypePrefix_of_stuck`) — after
-which both sides repeat their absorbing suffix, `γ(∅,∅) = (∅,∅)` making the
-erased process suffix exactly the type one. -/
+/-- Helper Lemma H4 — "Completed process logs erase to type logs".  Every
+completed process log under `S_P` erases to a completed type log under `S_τ`. -/
 theorem helper_h4_completed_process_logs_erase
     {process : Proc} {processType : PactType}
     (witness : ConformanceWitness process processType) (typeStrategy : TypeStrategy)
     {processLog : ProcessLog}
     (hCompleted :
-      CompletedProcessLog (initial := process)
-        (concretizingStrategy processType typeStrategy) processLog) :
+      CompletedProcessLog (concretizingStrategy witness typeStrategy) processLog) :
     ∃ typeLog : TypeLog,
       CompletedTypeLog processType typeStrategy typeLog ∧
       eraseProcessLog processLog = typeLog := by
-  obtain ⟨procPrefixAt, hRoot, hFollows, hStepOrStuck⟩ := hCompleted
-  have hSpec := typePrefixAtOf_spec witness typeStrategy hRoot hStepOrStuck
+  obtain ⟨procPrefixAt, hRoot, hFollows, hRun⟩ := hCompleted
   have hSilent : eraseLabel Label.silent = TypeLabel.silent := by
     simp [eraseLabel, Label.silent, TypeLabel.silent]
   have hEmptyEnv : eraseEnvironment Environment.empty = TypeEnvironment.empty := by
     simp [eraseEnvironment, Environment.empty, TypeEnvironment.empty,
       Environment.bareImmediate]
-  -- the type strategy sees exactly the erased process history
-  have hStrategyEq : ∀ k,
-      (processLog k).1 = concretizingStrategy processType typeStrategy (procPrefixAt k) →
-      (eraseProcessLog processLog k).1 =
-        typeStrategy ((typePrefixAtOf witness procPrefixAt processLog k).entries.map
-          fun entry => (entry.1, entry.2, processType)) := by
-    intro k hEnvEq
-    show eraseEnvironment (processLog k).1 = _
-    rw [hEnvEq, ← eraseProcessHistory_map_eq (processType := processType) (hSpec k).2]
-    exact eraseEnvironment_concreteRepresentative _
-  refine ⟨eraseProcessLog processLog,
-    ⟨typePrefixAtOf witness procPrefixAt processLog, rfl, ?_⟩, rfl⟩
-  intro n
-  rcases hStepOrStuck n with
-    ⟨hEnvEq, hEntriesEq, hStep⟩ | ⟨hStuck, hLogEq, hSameNext, hFailTail⟩
-  · -- ordinary step: conformance matches it, and `γ` inverts erasure, so the
-    -- type strategy chose exactly this erased environment
-    left
-    obtain ⟨hEntriesNext, hTypeStep, -⟩ :=
-      nextTypePrefix_of_step witness typeStrategy (hSpec n).1 hEnvEq hStep
-    exact ⟨hStrategyEq n hEnvEq, hEntriesNext.symm, hTypeStep⟩
-  · -- failure completion: the type side is stuck at exactly the same point
-    right
-    obtain ⟨hNoTypeStep, hSame⟩ :=
-      nextTypePrefix_of_stuck witness typeStrategy (hSpec n).1
-        (congrArg Prod.fst hLogEq) hStuck
-    have hStrategy := hStrategyEq n (congrArg Prod.fst hLogEq)
-    refine ⟨?_, ?_, hSame, ?_⟩
-    · rw [← hStrategy]
-      exact hNoTypeStep
-    · show (eraseEnvironment (processLog n).1, eraseLabel (processLog n).2) = _
-      rw [hLogEq, hSilent]
-      have hEnv : eraseEnvironment
-          (concretizingStrategy processType typeStrategy (procPrefixAt n)) =
-          typeStrategy ((typePrefixAtOf witness procPrefixAt processLog n).entries.map
-            fun entry => (entry.1, entry.2, processType)) := by
-        rw [← hStrategy]
-        show _ = eraseEnvironment (processLog n).1
-        rw [hLogEq]
+  -- Each ordinary process step erases to an ordinary type step at the matching
+  -- residual.
+  have hOrdinary : ∀ n,
+      OrdinaryProcessStep (concretizingStrategy witness typeStrategy) processLog
+        procPrefixAt n →
+      OrdinaryTypeStep processType typeStrategy (eraseProcessLog processLog)
+        (fun k => matchingTypePrefix witness (procPrefixAt k)) n := by
+    rintro n ⟨hEnv, hEntries, hStep⟩
+    simp only [OrdinaryTypeStep]
+    rw [← hEnv] at hStep
+    have hRelated := (matchingTypeRun_spec witness (procPrefixAt n).valid).2
+    have hExists := witness.matchStep hRelated hStep
+    have hEntry :
+        (matchingTypeRun witness (procPrefixAt (n + 1)).entries) =
+          matchingTypeStep witness
+            (matchingTypeRun witness (procPrefixAt n).entries)
+            ((processLog n).1, (processLog n).2, (procPrefixAt (n + 1)).residual) := by
+      rw [← hEntries, matchingTypeRun_append]
+    have hResidual :
+        (matchingTypePrefix witness (procPrefixAt (n + 1))).residual =
+          matchingResidual witness
+            (matchingTypePrefix witness (procPrefixAt n)).residual
+            ((processLog n).1, (processLog n).2, (procPrefixAt (n + 1)).residual) := by
+      show (matchingTypeRun witness (procPrefixAt (n + 1)).entries).2 = _
+      rw [hEntry, matchingTypeStep]
+      rfl
+    obtain ⟨hTypeStep, -⟩ := matchingResidual_spec witness
+      (matchingTypePrefix witness (procPrefixAt n)).residual
+      (processLog n).1 (processLog n).2 (procPrefixAt (n + 1)).residual hExists
+    refine ⟨?_, ?_, ?_⟩
+    · show eraseEnvironment (processLog n).1 = _
       rw [hEnv]
-    · intro m hm
-      show (eraseEnvironment (processLog m).1, eraseLabel (processLog m).2) = _
-      rw [hFailTail m hm, hEmptyEnv, hSilent]
+      exact eraseEnvironment_concretizingStrategy witness typeStrategy _
+    · show (matchingTypeRun witness (procPrefixAt n).entries).1 ++ _ =
+        (matchingTypeRun witness (procPrefixAt (n + 1)).entries).1
+      rw [hEntry, matchingTypeStep, hResidual]
+      rfl
+    · rw [hResidual]
+      exact hTypeStep
+  refine ⟨eraseProcessLog processLog,
+    ⟨fun n => matchingTypePrefix witness (procPrefixAt n),
+      by simp only [hRoot]; rfl, ?_⟩, rfl⟩
+  rcases hRun with hAll | ⟨stop, hBefore, hStuck, hLogEq, hTail⟩
+  · exact Or.inl fun n => hOrdinary n (hAll n)
+  -- Failure completion: availability reflection makes the type side stuck too,
+  -- and the absorbing suffix erases entry for entry.
+  refine Or.inr ⟨stop, fun n hn => hOrdinary n (hBefore n hn), ?_, ?_, ?_⟩
+  · have hRelated := (matchingTypeRun_spec witness (procPrefixAt stop).valid).2
+    rintro ⟨label, target, hTypeStep⟩
+    refine hStuck (witness.readyReflect hRelated ?_)
+    rw [eraseEnvironment_concretizingStrategy witness typeStrategy]
+    exact ⟨label, target, hTypeStep⟩
+  · show (eraseEnvironment (processLog stop).1, eraseLabel (processLog stop).2) = _
+    rw [hLogEq, hSilent, eraseEnvironment_concretizingStrategy witness typeStrategy]
+  · intro m hm
+    show (eraseEnvironment (processLog m).1, eraseLabel (processLog m).2) = _
+    rw [hTail m hm, hEmptyEnv, hSilent]
 
 /-- Helper Lemma H5 — "Honesty is preserved
 by concretization".  Erasure keeps clock observations, copies the future menu

@@ -1,6 +1,8 @@
 import Anvilpp.ProofHelpers.Process
 import Anvilpp.ProofHelpers.TypeSemantics
 import Anvilpp.ProofHelpers.CompatibilityGame
+import Anvilpp.ProofHelpers.RoundRobin
+import Anvilpp.ProofHelpers.ObjectiveMonitor
 import Anvilpp.ProofHelpers.Composition
 import Anvilpp.ProofHelpers.Objectives
 import Anvilpp.ProofHelpers.Regularity
@@ -9,4 +11,5 @@ import Anvilpp.ProofHelpers.Inference.DataPreservation
 import Anvilpp.ProofHelpers.SameCycleHonesty
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MainHelpers
 import Anvilpp.ProofHelpers.CompatibilityBridge
+import Anvilpp.ProofHelpers.StrategyExtension
 import Anvilpp.ProofHelpers.RefinementLifting

@@ -61,7 +61,7 @@ abstraction and keeps its conjunctive heads distinct. -/
 theorem prefixValid_represented {initial : Proc}
     (hWF : TypeWellFormedIn [] (inferProcess initial))
     (hConj : Proc.ConjunctRegular initial) :
-    ∀ {entries : List (Environment × Label)} {residual : Proc},
+    ∀ {entries : List (Environment × Label × Proc)} {residual : Proc},
       PrefixValid initial entries residual →
       (∃ state, relationMembership
           (buildRelationSet (inferProcess initial)
@@ -87,7 +87,7 @@ theorem prefixValid_represented {initial : Proc}
 theorem prefixValid_sideConditions {initial : Proc}
     (hWF : TypeWellFormedIn [] (inferProcess initial))
     (hConj : Proc.ConjunctRegular initial)
-    {entries : List (Environment × Label)} {residual : Proc}
+    {entries : List (Environment × Label × Proc)} {residual : Proc}
     (hValid : PrefixValid initial entries residual) :
     Proc.AlphabetWellFormed residual ∧ Proc.ConjunctRegular residual := by
   obtain ⟨⟨state, hRelated⟩, hConjResidual⟩ :=

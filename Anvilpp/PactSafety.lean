@@ -3,6 +3,7 @@ import Anvilpp.ProofHelpers.Inference.DecoratedLifting
 import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
 import Anvilpp.PactTypes.Proofs.Correspondence.CasesTop
 import Anvilpp.PactSafetyStructures
+import Anvilpp.ProofHelpers.PrefixPlayMatch
 
 /-!
 # Communication safety
@@ -54,7 +55,7 @@ theorem strategy_transfer
   obtain ⟨typeStrategy, hHonestType, hEnsures⟩ := hTypeStrategy
   -- Build `S_P` from `S_τ` by concretizing each chosen erased environment
   -- (Helper Lemma H3, via `helper_h2`'s representative `γ`).
-  refine ⟨concretizingStrategy processType typeStrategy, ?_, ?_⟩
+  refine ⟨concretizingStrategy hConforms.some typeStrategy, ?_, ?_⟩
   · -- Honesty: the matching completed type log is honest (`S_τ` is honest),
     -- and honesty is preserved by concretization (Helper Lemmas H4, H5).
     intro log hCompleted
@@ -103,7 +104,7 @@ theorem ProcReachable.step {initial current next : Proc} {env : Environment}
     ProcReachable initial next := by
   obtain ⟨entries, hValid⟩ := hReach
   obtain ⟨_, _, hOffers⟩ := hStep
-  exact ⟨entries ++ [(env, label)], hValid.step ⟨_, _, hOffers⟩⟩
+  exact ⟨entries ++ [(env, label, next)], hValid.step ⟨_, _, hOffers⟩⟩
 
 /-- Data well-formedness is preserved along a step: the only substitutions a
 rule performs are a value for a data variable and a closed recursive process
@@ -380,11 +381,11 @@ theorem process_automaton_path
     {process : Proc} {processType : PactType}
     (correspondence :
       ProcessAutomatonCorrespondence process processType (compileType processType))
-    {entries : List (Environment × Label)} {residual : Proc}
+    {entries : List (Environment × Label × Proc)} {residual : Proc}
     (hValid : PrefixValid process entries residual) :
     ∃ state,
       AutomatonPath (compileType processType) (compileType processType).initial
-        (entries.map fun entry => (eraseEnvironment entry.1, eraseLabel entry.2))
+        (entries.map fun entry => (eraseEnvironment entry.1, eraseLabel entry.2.1))
         state ∧
       correspondence.relation residual state := by
   induction hValid with
@@ -396,12 +397,18 @@ theorem process_automaton_path
       exact ⟨state', by simpa using hPath.step hEdge, hRelated'⟩
 
 /-- Theorem 4.2, "Correctness of the game reduction": the honesty-aware
-Rabin game exactly captures semantic compatibility. -/
+Rabin game exactly captures semantic compatibility.  The paper's premise is
+`TypeWF(Theta_0)`, which it records as replacing the stale `AdmissibleType`. -/
 theorem game_reduction_correctness
-     (initial : PactType) (progress : Finset ProcId) :
+     (initial : PactType) (progress : Finset ProcId)
+    (hWellFormed : TypeWellFormedIn [] initial) :
     TypeCompatible initial progress ↔
       SemanticTypeCompatible initial progress := by
-  sorry
+  constructor
+  · exact game_reduction_forward hWellFormed
+  · exact game_reduction_backward hWellFormed
+
+#print axioms game_reduction_correctness
 
 /-- Theorem 4.3, "Soundness of type compatibility" (the main soundness
 theorem): conformance of the fixed process composition plus compatibility of
