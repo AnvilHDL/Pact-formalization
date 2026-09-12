@@ -296,137 +296,50 @@ theorem correspondence_tock_stepIff
             (compileType (.tock alphabet)))
           residual' state') := by
   rcases offers with ⟨current, future⟩
-  have hEnvironment := hSymbol.1
-  have hLocal := hEnvironment
-  have hWellFormed := PactTypeAlphabet.environment_wellFormed hEnvironment
+  have hLocal := hSymbol.1
+  have hWellFormed := PactTypeAlphabet.environment_wellFormed hLocal
   constructor
-  · intro hStep
-    rcases NewCorrespondence.relationMembership_tock_cases alphabet
-      hRelated with
-      hRoot | hFinal
-    · rcases hRoot with ⟨hResidual, hState⟩
-      subst residual
-      subst state
-      rcases hStep with ⟨hTransition, hOffers⟩
-      cases hTransition with
+  · rintro ⟨_, hOffers⟩
+    rcases relationMembership_tock_cases alphabet hRelated with
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · cases hOffers with
       | cycle _ _ conditions =>
-          have hFields : current = ∅ ∧ future = ∅ := by
-            generalize hLabelEq : TypeLabel.tock = actualLabel at hOffers
-            cases hOffers
-            all_goals simp_all
-          obtain ⟨rfl, rfl⟩ := hFields
-          let decorated :
-              DecoratedTypeTransition env (.tock alphabet) TypeLabel.tock
-                (TypeOfferSummary.mk ∅ ∅) (.skip alphabet) :=
-            ⟨TypeTransition.cycle env alphabet conditions,
-              TypeOffers.cycle env alphabet conditions⟩
-          have hEdge := NewCorrespondence.compileType_tock_action_edge
-            (alphabet := alphabet) hLocal conditions.2
-          refine ⟨.final, hEdge, ?_⟩
-          unfold relationMembership buildRelationSet buildRelationSetCore
-          simp [typeCompilationFuel, buildRelationSetCoreFuel]
+          refine ⟨.final, compileType_tock_action_edge hLocal conditions.2, ?_⟩
+          simp [relationMembership, buildRelationSet, buildRelationSetCore,
+            typeCompilationFuel, buildRelationSetCoreFuel]
       | cycle_wait _ _ conditions =>
-          have hFields : current = ∅ ∧ future = ∅ := by
-            generalize hLabelEq : TypeLabel.silent = actualLabel at hOffers
-            cases hOffers
-            all_goals simp_all
-          obtain ⟨rfl, rfl⟩ := hFields
-          let decorated :
-              DecoratedTypeTransition env (.tock alphabet) TypeLabel.silent
-                (TypeOfferSummary.mk ∅ ∅) (.tock alphabet) :=
-            ⟨TypeTransition.cycle_wait env alphabet conditions,
-              TypeOffers.cycle_wait env alphabet conditions⟩
-          have hEdge := NewCorrespondence.compileType_tock_wait_edge
-            (alphabet := alphabet) hLocal conditions.2
-          refine ⟨.root, hEdge, ?_⟩
-          unfold relationMembership buildRelationSet buildRelationSetCore
-          simp [typeCompilationFuel, buildRelationSetCoreFuel]
-    · rcases hFinal with ⟨hResidual, hState⟩
-      subst residual
-      subst state
-      rcases hStep with ⟨hTransition, hOffers⟩
-      cases hTransition with
+          exact ⟨.root, compileType_tock_wait_edge hLocal conditions.2, hRelated⟩
+    · cases hOffers with
       | skip _ _ conditions =>
-          cases hOffers with
-          | skip _ _ =>
-              have hEdge := NewCorrespondence.compileType_tock_final_edge
-                (alphabet := alphabet) hLocal conditions.2
-              exact ⟨.final, hEdge, hRelated⟩
+          exact ⟨.final, compileType_tock_final_edge hLocal conditions.2, hRelated⟩
   · rintro ⟨state', hEdge, hTargetRelated⟩
-    rcases NewCorrespondence.relationMembership_tock_cases alphabet
-      hRelated with
-      hRoot | hFinal
-    · rcases hRoot with ⟨hResidual, hState⟩
+    have hSource := relationMembership_tock_cases alphabet hRelated
+    have hTarget := relationMembership_tock_cases alphabet hTargetRelated
+    rcases compileType_tock_edge_cases hEdge with hFire | hWait | hIdle
+    · -- The clock fires from `tock` to `skip`.
+      rcases hFire with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
+      have : residual = .tock alphabet := by simpa using hSource
       subst residual
-      subst state
-      have hCases := NewCorrespondence.compileType_tock_edge_cases
-        (alphabet := alphabet) hEdge
-      rcases hCases with hFire | hWait | hIdle
-      · rcases hFire with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
-          hClock⟩
-        subst label
-        subst current
-        subst future
-        subst state'
-        have hTargetAccepting :
-            TypeAutomatonState.final ∈
-              (compileType (.tock alphabet)).accepting := by
-          simp [compileType, typeCompilationFuel, compileTypeFuel,
-            finishAutomatonFragment]
-        have hResidualTarget : residual' = .skip alphabet := by
-          rcases NewCorrespondence.relationMembership_tock_cases
-              alphabet hTargetRelated with hRoot | hFinal
-          · simp at hRoot
-          · exact hFinal.1
-        subst residual'
-        exact ⟨TypeTransition.cycle env alphabet ⟨hWellFormed, hClock⟩,
-          TypeOffers.cycle env alphabet ⟨hWellFormed, hClock⟩⟩
-      · rcases hWait with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
-          hClock⟩
-        subst label
-        subst current
-        subst future
-        subst state'
-        have hResidualTarget : residual' = .tock alphabet := by
-          rcases NewCorrespondence.relationMembership_tock_cases
-              alphabet hTargetRelated with hTargetRoot | hTargetFinal
-          · exact hTargetRoot.1
-          · rcases hTargetFinal with ⟨_, hStateTarget⟩
-            simp at hStateTarget
-        subst residual'
-        exact ⟨TypeTransition.cycle_wait env alphabet ⟨hWellFormed, hClock⟩,
-          TypeOffers.cycle_wait env alphabet ⟨hWellFormed, hClock⟩⟩
-      · rcases hIdle with ⟨hSource, _⟩
-        simp at hSource
-    · rcases hFinal with ⟨hResidual, hState⟩
+      have : residual' = .skip alphabet := by simpa using hTarget
+      subst residual'
+      exact ⟨TypeTransition.cycle env alphabet ⟨hWellFormed, hClock⟩,
+        TypeOffers.cycle env alphabet ⟨hWellFormed, hClock⟩⟩
+    · -- Without a clock tick, `tock` waits at the root.
+      rcases hWait with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
+      have : residual = .tock alphabet := by simpa using hSource
       subst residual
-      subst state
-      have hCases := NewCorrespondence.compileType_tock_edge_cases
-        (alphabet := alphabet) hEdge
-      rcases hCases with hFire | hWait | hIdle
-      · rcases hFire with ⟨hSource, _⟩
-        simp at hSource
-      · rcases hWait with ⟨hSource, _⟩
-        simp at hSource
-      · rcases hIdle with ⟨_hSource, hTarget, hLabel, hCurrent, hFuture,
-          hClock⟩
-        subst label
-        subst current
-        subst future
-        subst state'
-        have hTargetAccepting :
-            TypeAutomatonState.final ∈
-              (compileType (.tock alphabet)).accepting := by
-          simp [compileType, typeCompilationFuel, compileTypeFuel,
-            finishAutomatonFragment]
-        have hResidualTarget : residual' = .skip alphabet := by
-          rcases NewCorrespondence.relationMembership_tock_cases
-              alphabet hTargetRelated with hRoot | hFinal
-          · simp at hRoot
-          · exact hFinal.1
-        subst residual'
-        exact ⟨TypeTransition.skip env alphabet ⟨hWellFormed, hClock⟩,
-          TypeOffers.skip env alphabet ⟨hWellFormed, hClock⟩⟩
+      have : residual' = .tock alphabet := by simpa using hTarget
+      subst residual'
+      exact ⟨TypeTransition.cycle_wait env alphabet ⟨hWellFormed, hClock⟩,
+        TypeOffers.cycle_wait env alphabet ⟨hWellFormed, hClock⟩⟩
+    · -- The final state has the non-clock idle step of `skip`.
+      rcases hIdle with ⟨rfl, rfl, rfl, rfl, rfl, hClock⟩
+      have : residual = .skip alphabet := by simpa using hSource
+      subst residual
+      have : residual' = .skip alphabet := by simpa using hTarget
+      subst residual'
+      exact ⟨TypeTransition.skip env alphabet ⟨hWellFormed, hClock⟩,
+        TypeOffers.skip env alphabet ⟨hWellFormed, hClock⟩⟩
 
 /-- Step correspondence for a progress marker `$t`.
 
