@@ -274,7 +274,7 @@ def futureReachable (graph : FiniteMenuGraph) (source : TypeAutomatonState) :
       · omega
     have hStateClosure : state ∈ closure := by
       apply subset_futureReachableAux automaton automaton.states.card {state}
-      simp [closure, futureReachable]
+      simp
     have hReferenceClosure : ∀ reference,
         reference ∈ automaton.referencedStates state →
           automaton.futureReachable reference ⊆ closure := by
@@ -314,7 +314,7 @@ def futureReachable (graph : FiniteMenuGraph) (source : TypeAutomatonState) :
           rcases hSource with rfl | ⟨first, hFirst, hSourceReachable⟩
           · exact Or.inr ⟨target, hReference,
               subset_futureReachableAux automaton automaton.states.card
-                {target} (by simpa)⟩
+                {target} (by simp)⟩
           · have hFirstState : first ∈ automaton.states :=
               hClosed state hState hFirst
             have hFirstFixed : automaton.futureStep
@@ -408,7 +408,7 @@ def futureReachable (graph : FiniteMenuGraph) (source : TypeAutomatonState) :
       (state : TypeAutomatonState) :
       state ∈ automaton.futureReachable state := by
     apply subset_futureReachableAux automaton automaton.states.card {state}
-    simp [futureReachable]
+    simp
 
   /-- Every immediate same-cycle reference is contained in the finite
   reference closure of its source. -/

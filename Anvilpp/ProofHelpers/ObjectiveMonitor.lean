@@ -455,13 +455,13 @@ lemma infinite_congr {left right : Set ℕ} (hIff : ∀ n, n ∈ left ↔ n ∈ 
 lemma clock_marks_infinite_iff (play : ℕ → MonitoredVertex initial progress) :
     Set.Infinite {n | TypeMark.clock ∈ playMarks play n} ↔
       TypeTockOccursInfinitely (compatibilityPlayLog play) :=
-  infinite_congr fun _ => by simp [playMarks, TypeTockOccursInfinitely]
+  infinite_congr fun _ => by simp [playMarks]
 
 lemma observation_marks_infinite_iff (play : ℕ → MonitoredVertex initial progress)
     (observation : TypeObservation) :
     Set.Infinite {n | TypeMark.observation observation ∈ playMarks play n} ↔
       TypeObservationOccursInfinitely observation (compatibilityPlayLog play) :=
-  infinite_congr fun _ => by simp [playMarks, TypeObservationOccursInfinitely]
+  infinite_congr fun _ => by simp [playMarks]
 
 lemma req_live_infinite_iff (play : ℕ → MonitoredVertex initial progress) :
     (∀ mark ∈ ObjectiveDisjunct.req progress (ObjectiveDisjunct.live : ObjectiveDisjunct initial),

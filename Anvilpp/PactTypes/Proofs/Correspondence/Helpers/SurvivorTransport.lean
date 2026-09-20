@@ -461,7 +461,7 @@ theorem survivorTransport_xoffer (a : PactTypeAlphabet) (elseType : PactType)
     (parent child : PactTypeAlphabet) :
     PactTypeAlphabet.projectParallel parent child ∅ = parent := by
   refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
-  simp only [PactTypeAlphabet.projectParallel, Finset.mem_union,
+  simp only [Finset.mem_union,
     Finset.mem_filter, Finset.notMem_empty, and_false, false_or]
 
 /-- Re-signing a singleton exclusive offer re-signs its head and body. -/

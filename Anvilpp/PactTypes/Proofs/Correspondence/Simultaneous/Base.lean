@@ -121,7 +121,7 @@ lemma computeFutureOf_progress_root
     rcases hEdgeMem with ⟨_, _, hEq⟩ | ⟨_, _, hEq⟩ <;>
       · rw [← hEq] at hReference
         simp only [AutomatonConstructionLabel.semantic, TypeLabel.progress,
-          TypeLabel.silent, TypeLabel.tock] at hReference
+          TypeLabel.silent] at hReference
         simp_all
   · refine Finset.eq_empty_iff_forall_notMem.mpr ?_
     intro action hAction
@@ -132,7 +132,7 @@ lemma computeFutureOf_progress_root
     rcases hEdgeMem with ⟨_, _, hEq⟩ | ⟨_, _, hEq⟩ <;>
       · rw [← hEq] at hAction
         simp [AutomatonConstructionLabel.semantic, TypeLabel.progress,
-          TypeLabel.silent, TypeLabel.tock] at hAction
+          TypeLabel.silent] at hAction
   · refine Finset.eq_empty_iff_forall_notMem.mpr ?_
     intro action hAction
     simp only [PendingAutomaton.offersAt, compileTypeFuel,
@@ -142,7 +142,7 @@ lemma computeFutureOf_progress_root
     rcases hEdgeMem with ⟨_, _, hEq⟩ | ⟨_, _, hEq⟩ <;>
       · rw [← hEq] at hAction
         simp [AutomatonConstructionLabel.semantic, TypeLabel.progress,
-          TypeLabel.silent, TypeLabel.tock] at hAction
+          TypeLabel.silent] at hAction
   · simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
   · simp [stateProductInfo, stateProductInfoFuel, typeCompilationFuel]
 
@@ -169,8 +169,7 @@ lemma computeFutureOf_var_root
     obtain ⟨edge, ⟨hEdgeMem, -⟩, hReference⟩ := hReference
     obtain ⟨_, _, hEq⟩ := hEdgeMem
     rw [← hEq] at hReference
-    simp only [AutomatonConstructionLabel.semantic, TypeLabel.silent,
-      TypeLabel.tock] at hReference
+    simp only [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hReference
     simp_all
   · refine Finset.eq_empty_iff_forall_notMem.mpr ?_
     intro action hAction
@@ -180,8 +179,7 @@ lemma computeFutureOf_var_root
     obtain ⟨edge, ⟨hEdgeMem, -⟩, hAction⟩ := hAction
     obtain ⟨_, _, hEq⟩ := hEdgeMem
     rw [← hEq] at hAction
-    simp [AutomatonConstructionLabel.semantic, TypeLabel.silent,
-      TypeLabel.tock] at hAction
+    simp [AutomatonConstructionLabel.semantic, TypeLabel.silent] at hAction
   · refine Finset.eq_empty_iff_forall_notMem.mpr ?_
     intro action hAction
     simp only [PendingAutomaton.offersAt, compileTypeFuel,
@@ -448,7 +446,7 @@ private lemma skip_guard (alphabet : PactTypeAlphabet) :
           (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
           (silent_mem_labels _)
           (mem_localOfferSummaries_of_subset (by simp) ?_)
-        simp [typeFutureOffers, typeFutureOffersFuel]
+        simp
   · obtain ⟨-, -, hLabel, hCurrent, hFuture, -⟩ :=
       compileType_skip_edge_cases hEdge
     subst hLabel; subst hCurrent; subst hFuture
@@ -473,7 +471,7 @@ private lemma message_guard (alphabet : PactTypeAlphabet)
             (message_mem_labels hA)
             (mem_localOfferSummaries_of_subset ?_ ?_)
           · exact Finset.inter_subset_right
-          · simp [typeFutureOffers, typeFutureOffersFuel]
+          · simp
       | action_wait _ _ _ _ cond =>
           refine mem_transitionAlphabet_of
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
@@ -509,7 +507,7 @@ private lemma message_guard (alphabet : PactTypeAlphabet)
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (silent_mem_labels _)
             (mem_localOfferSummaries_of_subset (by simp) ?_)
-          simp [typeFutureOffers, typeFutureOffersFuel]
+          simp
     · have hEnvMem := compileType_base_edge_env_mem
         (message_edge_families alphabet msg dir) hEdge
       rcases compileType_message_edge_cases msg dir hEdge with
@@ -538,7 +536,7 @@ private lemma tock_guard (alphabet : PactTypeAlphabet) :
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (silent_mem_labels _)
             (mem_localOfferSummaries_of_subset (by simp) ?_)
-          simp [typeFutureOffers, typeFutureOffersFuel]
+          simp
     · have hEnvMem := compileType_base_edge_env_mem
         (tock_edge_families alphabet) hEdge
       rcases compileType_tock_edge_cases hEdge with
@@ -558,7 +556,7 @@ private lemma tock_guard (alphabet : PactTypeAlphabet) :
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (silent_mem_labels _)
             (mem_localOfferSummaries_of_subset (by simp) ?_)
-          simp [typeFutureOffers, typeFutureOffersFuel]
+          simp
     · have hEnvMem := compileType_base_edge_env_mem
         (tock_edge_families alphabet) hEdge
       rcases compileType_tock_edge_cases hEdge with
@@ -582,7 +580,7 @@ private lemma progress_guard (alphabet : PactTypeAlphabet) (pid : ProcId) :
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (progress_mem_labels (pid := pid) (by simp [PactType.ProgressIds]))
             (mem_localOfferSummaries_of_subset (by simp) ?_)
-          simp [typeFutureOffers, typeFutureOffersFuel]
+          simp
     · have hEnvMem := compileType_base_edge_env_mem
         (progress_edge_families alphabet pid) hEdge
       rcases compileType_progress_edge_cases pid hEdge with
@@ -599,7 +597,7 @@ private lemma progress_guard (alphabet : PactTypeAlphabet) (pid : ProcId) :
             (PactTypeAlphabet.mem_localEnvironments_of_wellFormed cond.1)
             (silent_mem_labels _)
             (mem_localOfferSummaries_of_subset (by simp) ?_)
-          simp [typeFutureOffers, typeFutureOffersFuel]
+          simp
     · have hEnvMem := compileType_base_edge_env_mem
         (progress_edge_families alphabet pid) hEdge
       rcases compileType_progress_edge_cases pid hEdge with
@@ -1585,7 +1583,7 @@ lemma buildParallelAutomaton_edge_families
       parentAlphabet)
     (hLeftEnv : ∀ edge ∈ left.edges,
       edge.environment ∈ leftAlphabet.localEnvironments)
-    (hRightEnv : ∀ edge ∈ right.edges,
+    (_hRightEnv : ∀ edge ∈ right.edges,
       edge.environment ∈ rightAlphabet.localEnvironments)
     (hRestampedLeftEnv : ∀ edge ∈ restampedLeft.edges,
       edge.environment ∈ parentAlphabet.localEnvironments)

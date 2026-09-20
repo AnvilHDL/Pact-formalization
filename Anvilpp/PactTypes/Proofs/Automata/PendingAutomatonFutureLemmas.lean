@@ -158,7 +158,7 @@ namespace PendingAutomaton
       · omega
     have hStateClosure : state ∈ closure := by
       apply subset_futureReachableAux automaton automaton.states.card {state}
-      simp [closure, futureReachable]
+      simp
     have hReferenceClosure : ∀ reference,
         reference ∈ automaton.menuStep state →
           automaton.futureReachable reference ⊆ closure := by
@@ -198,7 +198,7 @@ namespace PendingAutomaton
           rcases hSource with rfl | ⟨first, hFirst, hSourceReachable⟩
           · exact Or.inr ⟨target, hReference,
               subset_futureReachableAux automaton automaton.states.card
-                {target} (by simpa)⟩
+                {target} (by simp)⟩
           · have hFirstState : first ∈ automaton.states :=
               hClosed state hState hFirst
             have hFirstFixed : automaton.futureStep
@@ -232,7 +232,7 @@ namespace PendingAutomaton
       (state : TypeAutomatonState) :
       state ∈ automaton.futureReachable state := by
     apply subset_futureReachableAux automaton automaton.states.card {state}
-    simp [futureReachable]
+    simp
 
   /-- Every non-clock target belongs to its source's execution closure. -/
   theorem menuStep_subset_futureReachable

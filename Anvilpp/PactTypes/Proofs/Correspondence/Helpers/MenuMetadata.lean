@@ -75,7 +75,7 @@ theorem compileTypeMenuLinksFuel_succ_stable :
               have hFields := List.mem_zipIdx hItem
               simp only [Nat.zero_le, zero_add, Nat.sub_zero, true_and] at hFields
               obtain ⟨hBound, hValue⟩ := hFields
-              simpa [hValue] using List.getElem_mem hBound
+              simp [hValue]
             have := typeCompilationFuel_le_typeBranchCompilationFuel branches item.1 hMember
             simp [typeCompilationFuel] at hFuel
             omega
@@ -242,7 +242,7 @@ theorem compileTypeMenuLinksFuel_targets_mem :
             exact Or.inl (Or.inr ht)
           · have hMember : item.1 ∈ branches := by
               obtain ⟨hBound, hValue⟩ := List.mem_zipIdx' hItem
-              simpa [hValue] using List.getElem_mem hBound
+              simp [hValue]
             have hItemFuel : typeCompilationFuel item.1.2 ≤ fuel := by
               have := typeCompilationFuel_le_typeBranchCompilationFuel branches item.1 hMember
               simp [typeCompilationFuel] at hFuel
@@ -372,7 +372,7 @@ theorem menuDependencyTargets_indexed_zero {α : Type}
   classical
   ext target
   simp only [menuDependencyTargets, Finset.mem_image, Finset.mem_filter,
-    mem_foldl_union_iff, Prod.exists, TypeAutomatonState.child.injEq]
+    mem_foldl_union_iff, Prod.exists]
   aesop
 
 /-- Links installed at an offer root do not change a copied child's dependencies. -/
@@ -458,7 +458,7 @@ theorem menuDependencyTargets_choice_left
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [menuDependencyTargets_union, menuDependencyTargets_child,
-    ↓reduceIte, Finset.union_empty]
+    ↓reduceIte]
   rw [compileTypeMenuLinksFuel_eq_of_sufficient left (le_max_left _ _) le_rfl]
   simp
 
@@ -476,7 +476,7 @@ theorem menuDependencyTargets_choice_right
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [menuDependencyTargets_union, menuDependencyTargets_child,
-    ↓reduceIte, Finset.empty_union]
+    ↓reduceIte]
   rw [compileTypeMenuLinksFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
   simp
 
@@ -494,7 +494,7 @@ theorem menuDependencyTargets_fairChoice_left
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [menuDependencyTargets_union, menuDependencyTargets_child,
-    ↓reduceIte, Finset.union_empty]
+    ↓reduceIte]
   rw [compileTypeMenuLinksFuel_eq_of_sufficient left (le_max_left _ _) le_rfl]
   simp
 
@@ -512,7 +512,7 @@ theorem menuDependencyTargets_fairChoice_right
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [menuDependencyTargets_union, menuDependencyTargets_child,
-    ↓reduceIte, Finset.empty_union]
+    ↓reduceIte]
   rw [compileTypeMenuLinksFuel_eq_of_sufficient right (le_max_right _ _) le_rfl]
   simp
 
@@ -717,8 +717,7 @@ theorem menuDependencyTargets_par_survivorLeft
   classical
   ext target
   simp only [compileTypeMenuLinksFuel, menuDependencyTargets, Finset.mem_image,
-    Finset.mem_filter, Finset.mem_union, Prod.exists, Prod.mk.injEq,
-    TypeAutomatonState.survivor.injEq]
+    Finset.mem_filter, Finset.mem_union, Prod.exists, Prod.mk.injEq]
   aesop
 
 /-- Survivor dependencies use the same target redirection as the component copy. -/
@@ -736,8 +735,7 @@ theorem menuDependencyTargets_par_survivorRight
   classical
   ext target
   simp only [compileTypeMenuLinksFuel, menuDependencyTargets, Finset.mem_image,
-    Finset.mem_filter, Finset.mem_union, Prod.exists, Prod.mk.injEq,
-    TypeAutomatonState.survivor.injEq]
+    Finset.mem_filter, Finset.mem_union, Prod.exists, Prod.mk.injEq]
   aesop
 
 /-- A retained sequence-left state reads its redirected dependencies and,
@@ -827,7 +825,7 @@ theorem compileTypeMenuLinksFuel_accepting :
             rw [menuDependencyTargets_child]
             simp [hRight]
           rw [hCopied]
-          simp [menuDependencyTargets, childState]
+          simp [menuDependencyTargets]
           aesop
       | par alphabet left right interface =>
           simp only [compileTypeFuel, buildParallelAutomaton, finishAutomatonFragment,
@@ -846,7 +844,7 @@ theorem compileTypeMenuLinksFuel_accepting :
               (fun item => (compileTypeFuel fuel item.2).initial)]
             rw [menuDependencyTargets_indexed_zero branches
               (fun item => compileTypeMenuLinksFuel fuel item.2), menuDependencyTargets_child]
-            simp only [↓reduceIte, childState]
+            simp only [↓reduceIte]
             rw [ih other q hq]
             simp
           · rw [indexedFragmentAccepting, mem_foldl_union_iff] at hBranch
@@ -879,7 +877,7 @@ theorem compileTypeMenuLinksFuel_accepting :
             rw [menuDependencyTargets_indexed_zero branches
               (fun item => compileTypeMenuLinksFuel fuel
                 (parallelTypeBranchesSelecting alphabet item branches)), menuDependencyTargets_child]
-            simp only [↓reduceIte, childState]
+            simp only [↓reduceIte]
             rw [ih other q hq]
             simp
           · rw [indexedFragmentAccepting, mem_foldl_union_iff] at hBranch

@@ -139,8 +139,7 @@ theorem liveEqBody_canComplete : ∀ (fuel : Nat) (rho theta : PactType),
       case message.message =>
         simp only [LiveEqBody] at hLive
         obtain ⟨rfl, rfl, hA⟩ := hLive
-        simp only [typeCanCompleteThisCycleFuel,
-          hA _ (Finset.mem_singleton_self _)]
+        simp only [typeCanCompleteThisCycleFuel]
       case progress.progress => rfl
       case tock.tock => rfl
       case skip.skip => rfl
@@ -161,7 +160,7 @@ theorem liveEqBody_canComplete : ∀ (fuel : Nat) (rho theta : PactType),
         have hGate := liveEqBranches_head_gate _ _ _ _ hBranches
           (fun act hact => hA act (Finset.mem_union_right _ hact))
         simp only [typeCanCompleteThisCycleFuel, ih _ _ hElse,
-          branches _ _ hBranches, hGate]
+          branches _ _ hBranches]
 
 /-- The same-cycle menu reads an alphabet only at actions the subterm still
 uses, so live equivalence preserves it at every fuel. -/

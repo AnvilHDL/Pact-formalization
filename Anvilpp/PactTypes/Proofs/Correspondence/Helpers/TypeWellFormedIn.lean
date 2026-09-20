@@ -1,10 +1,6 @@
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.OfferMenuLinearity
 
-/-!
-`TypeWF_Γ` and its descent to every written child.  Split out of `Simultaneous`
-so that the re-signing transport can state its well-formedness premise without
-depending on the simultaneous induction.
--/
+/-! Context-indexed type well-formedness and descent to constructor children. -/
 
 namespace Pact
 
@@ -13,12 +9,7 @@ noncomputable section
 open Classical
 open Pact.NewCorrespondence
 
-set_option linter.unusedSimpArgs false
-
-/-- `TypeWF_Γ(σ)`: the conjuncts of `AdmissibleType`, with closure and hygiene
-taken relative to the binder context `bound` rather than the empty one, and
-with the two ownership predicates that offer determinacy consumes. -/
-
+/-- Type admissibility under a binder context, including ownership and offer-menu separation. -/
 def TypeWellFormedIn (bound : List String) (processType : PactType) : Prop :=
   processType.AlphabetWellFormed ∧
     PactType.AllVariablesBound bound processType ∧
@@ -294,8 +285,7 @@ theorem PactType.reannotate_allVariablesBound (bound : List String) :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.AllBranchVariablesBound]
+        | nil => simp [PactType.AllBranchVariablesBound]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.AllBranchVariablesBound] at hHold
@@ -407,10 +397,10 @@ theorem reannotateBranches_progressIds (alphabet : PactTypeAlphabet) :
         PactType.BranchProgressIds branches := by
   intro branches
   induction branches with
-  | nil => simp [PactType.reannotateBranches, PactType.BranchProgressIds]
+  | nil => simp [PactType.BranchProgressIds]
   | cons branch rest ih =>
       rcases branch with ⟨action, branchType⟩
-      simp [PactType.reannotateBranches, PactType.BranchProgressIds,
+      simp [PactType.BranchProgressIds,
         (PactType.reannotate_ownership_data alphabet branchType).2.2.1, ih]
 
 theorem reannotateOfferBranches_progressIds (alphabet : PactTypeAlphabet) :
@@ -435,10 +425,10 @@ theorem reannotateBranches_fairChoiceIds (alphabet : PactTypeAlphabet) :
         PactType.BranchFairChoiceIds branches := by
   intro branches
   induction branches with
-  | nil => simp [PactType.reannotateBranches, PactType.BranchFairChoiceIds]
+  | nil => simp [PactType.BranchFairChoiceIds]
   | cons branch rest ih =>
       rcases branch with ⟨action, branchType⟩
-      simp [PactType.reannotateBranches, PactType.BranchFairChoiceIds,
+      simp [PactType.BranchFairChoiceIds,
         (PactType.reannotate_ownership_data alphabet branchType).2.2.2.1, ih]
 
 theorem reannotateOfferBranches_fairChoiceIds (alphabet : PactTypeAlphabet) :
@@ -476,7 +466,7 @@ theorem PactType.reannotate_progressLinear :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches, PactType.ProgressLinearBranches]
+        | nil => simp [PactType.ProgressLinearBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.ProgressLinearBranches] at hHold
@@ -596,7 +586,7 @@ theorem PactType.reannotate_fairChoiceLinear :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches, PactType.FairChoiceLinearBranches]
+        | nil => simp [PactType.FairChoiceLinearBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.FairChoiceLinearBranches] at hHold
@@ -895,8 +885,7 @@ theorem PactType.reannotate_canCompleteBeforeTock :
             PactType.BranchCanCompleteBeforeTock branches := by
         intro branches branchAlphabet hBranchesSize
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.BranchCanCompleteBeforeTock]
+        | nil => simp [PactType.BranchCanCompleteBeforeTock]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hBranchSize : sizeOf branchType < n := by
@@ -1000,8 +989,7 @@ theorem PactType.reannotate_prefixMessageIds :
             PactType.BranchPrefixMessageIds branches := by
         intro branches branchAlphabet hBranchesSize
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.BranchPrefixMessageIds]
+        | nil => simp [PactType.BranchPrefixMessageIds]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hBranchSize : sizeOf branchType < n := by
@@ -1015,8 +1003,7 @@ theorem PactType.reannotate_prefixMessageIds :
                   sizeOf ((action, branchType) :: rest) := by simp_wf; omega
               omega
             simp only [PactType.reannotateBranches,
-              PactType.BranchPrefixMessageIds, PactType.reannotate_canCompleteBeforeTock,
-              ih (sizeOf branchType) hBranchSize branchType rfl branchAlphabet,
+              PactType.BranchPrefixMessageIds, ih (sizeOf branchType) hBranchSize branchType rfl branchAlphabet,
               restIH hRestSize]
       have hOfferBranches : ∀ (branches : List (BareMessage × PactType))
           (branchAlphabet : PactTypeAlphabet) (seen : Finset BareMessage),
@@ -1044,44 +1031,32 @@ theorem PactType.reannotate_prefixMessageIds :
                   sizeOf ((action, branchType) :: rest) := by simp_wf; omega
               omega
             simp only [PactType.reannotateOfferBranches_cons,
-              PactType.BranchPrefixMessageIds, PactType.reannotate_canCompleteBeforeTock,
-              ih (sizeOf branchType) hBranchSize branchType rfl _,
+              PactType.BranchPrefixMessageIds, ih (sizeOf branchType) hBranchSize branchType rfl _,
               restIH _ hRestSize]
       cases processType with
       | message a m d => simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | progress a p => simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | tock a => simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | skip a => simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | var a name => simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | recur a name body =>
           have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf body) hB body rfl alphabet]
       | choice a l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl alphabet, ih (sizeOf r) hR r rfl alphabet]
       | fairChoice a bid l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl alphabet, ih (sizeOf r) hR r rfl alphabet]
       | seq a l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
@@ -1094,22 +1069,16 @@ theorem PactType.reannotate_prefixMessageIds :
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl _, ih (sizeOf r) hR r rfl _]
       | xoffer a e bs =>
           have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
           have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf e) hE e rfl alphabet, hBranches bs alphabet hBs]
       | offer a e bs =>
           have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
           have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.PrefixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf e) hE e rfl alphabet, hOfferBranches bs alphabet ∅ hBs]
 
 theorem PactType.reannotate_suffixMessageIds :
@@ -1129,8 +1098,7 @@ theorem PactType.reannotate_suffixMessageIds :
             PactType.BranchSuffixMessageIds branches := by
         intro branches branchAlphabet hBranchesSize
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.BranchSuffixMessageIds]
+        | nil => simp [PactType.BranchSuffixMessageIds]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hBranchSize : sizeOf branchType < n := by
@@ -1178,39 +1146,28 @@ theorem PactType.reannotate_suffixMessageIds :
               restIH _ hRestSize]
       cases processType with
       | message a m d => simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | progress a p => simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | tock a => simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | skip a => simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | var a name => simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock]
+            ]
       | recur a name body =>
           have hB : sizeOf body < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf body) hB body rfl alphabet]
       | choice a l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl alphabet, ih (sizeOf r) hR r rfl alphabet]
       | fairChoice a bid l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl alphabet, ih (sizeOf r) hR r rfl alphabet]
       | seq a l r =>
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
@@ -1223,22 +1180,16 @@ theorem PactType.reannotate_suffixMessageIds :
           have hL : sizeOf l < n := by rw [← hSize]; simp_wf; omega
           have hR : sizeOf r < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf l) hL l rfl _, ih (sizeOf r) hR r rfl _]
       | xoffer a e bs =>
           have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
           have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf e) hE e rfl alphabet, hBranches bs alphabet hBs]
       | offer a e bs =>
           have hE : sizeOf e < n := by rw [← hSize]; simp_wf; omega
           have hBs : sizeOf bs < n := by rw [← hSize]; simp_wf; omega
           simp [PactType.reannotate, PactType.SuffixMessageIds,
-            PactType.reannotate_canCompleteBeforeTock,
-            PactType.reannotate_canCompleteBeforeTock,
             ih (sizeOf e) hE e rfl alphabet, hOfferBranches bs alphabet ∅ hBs]
 
 /-! ### Same-cycle identifier sets of the generated branch product
@@ -1265,8 +1216,7 @@ theorem PactType.reannotate_sameCycleMessageLinear :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.SameCycleMessageLinearBranches]
+        | nil => simp [PactType.SameCycleMessageLinearBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.SameCycleMessageLinearBranches] at hHold
@@ -1486,8 +1436,7 @@ theorem singletonTypeXOfferAt_ids (alphabet : PactTypeAlphabet)
       PactType.MessageActions, PactType.BranchMessageActions,
       PactType.ProgressIds, PactType.BranchProgressIds,
       PactType.FairChoiceIds, PactType.BranchFairChoiceIds,
-      PactType.reannotate_messageIds, PactType.reannotate_messageActions,
-      PactType.reannotate_progressIds, PactType.reannotate_fairChoiceIds]
+      ]
 
 theorem selectedTypeBranchAt_ids (alphabet : PactTypeAlphabet)
     (branch : BareMessage × PactType) :
@@ -1503,8 +1452,7 @@ theorem selectedTypeBranchAt_ids (alphabet : PactTypeAlphabet)
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
     simp [selectedTypeBranchAt, PactType.MessageIds, PactType.MessageActions,
       PactType.ProgressIds, PactType.FairChoiceIds,
-      PactType.reannotate_messageIds, PactType.reannotate_messageActions,
-      PactType.reannotate_progressIds, PactType.reannotate_fairChoiceIds]
+      ]
 
 theorem parallelTypeBranchesWithin_conjuncts {bound : List String} :
     ∀ (branches : List (BareMessage × PactType)),

@@ -156,7 +156,7 @@ theorem buildSequenceAutomaton_clockEdgesAreTock
 theorem buildSequenceAutomaton_futureTargetsInStates
      (left right : AutomatonFragment)
     (hRightTargets : right.FutureTargetsInStates)
-    (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
+    (_hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
     (hRightInitial : right.initial ∈ right.states) :
     (buildSequenceAutomaton left right leftFuture leftCompletes).FutureTargetsInStates := by
   classical

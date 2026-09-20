@@ -518,8 +518,7 @@ theorem PactType.reannotate_parallelInterfaces :
             PactType.ParallelBranchInterfaces branches := by
         intro branches branchAlphabet hBranchesSize
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.ParallelBranchInterfaces]
+        | nil => simp [PactType.ParallelBranchInterfaces]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hBranchSize : sizeOf branchType < n := by
@@ -628,7 +627,7 @@ theorem parallelTypeBranchesWithin_parallelInterfaces :
           simp [parallelTypeBranchesWithin, singletonTypeXOfferAt,
             PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
             PactType.reannotate_parallelInterfaces,
-            ih alphabet, Finset.union_assoc]
+            ih alphabet]
 
 theorem parallelTypeBranchesSelectingWithin_parallelInterfaces
     (selected : BareMessage × PactType) :
@@ -663,13 +662,12 @@ theorem parallelTypeBranchesSelectingWithin_parallelInterfaces
               PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
               PactType.reannotate_parallelInterfaces,
               parallelTypeBranchesWithin_parallelInterfaces (next :: tail)
-                alphabet,
-              Finset.union_assoc]
+                alphabet]
           · simp [parallelTypeBranchesSelectingWithin, if_neg hSel,
               singletonTypeXOfferAt, PactType.ParallelInterfaces,
               PactType.ParallelBranchInterfaces,
               PactType.reannotate_parallelInterfaces,
-              ih alphabet, Finset.union_assoc]
+              ih alphabet]
 
 /-- Branch-list form of `reannotate_parallelInterfaces`. -/
 theorem PactType.parallelBranchInterfaces_reannotateBranches
@@ -934,8 +932,7 @@ theorem PactType.reannotate_interfaceScoped :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.InterfaceScopedBranches]
+        | nil => simp [PactType.InterfaceScopedBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.InterfaceScopedBranches] at hHold
@@ -3133,12 +3130,12 @@ theorem parallelTypeBranchesSelecting_interfaceScoped
         | cons next tail =>
             by_cases hSel : (action, body) = selected
             · simp only [parallelTypeBranchesSelectingWithin,
-                List.cons_ne_nil, if_pos hSel, PactType.InterfaceScoped]
+                if_pos hSel, PactType.InterfaceScoped]
               refine ⟨by simp, hSelected, ?_⟩
               exact parallelTypeBranchesWithin_interfaceScoped alphabet
                 (next :: tail) hList.2
             · simp only [parallelTypeBranchesSelectingWithin,
-                List.cons_ne_nil, if_neg hSel, PactType.InterfaceScoped]
+                if_neg hSel, PactType.InterfaceScoped]
               exact ⟨by simp, hSingleton, ih hList.2⟩
   cases branches with
   | nil =>

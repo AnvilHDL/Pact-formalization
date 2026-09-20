@@ -127,7 +127,7 @@ def parallelRightCompleteEdges
 /-- The continuation of `parallelLeftCompleteEdges` inside the survivor
 region: the surviving right component keeps stepping from `survivor 1`. -/
 def parallelLeftCompleteSurvivorEdges
-    (interface : Interface)
+    (_interface : Interface)
     (restampedRight : AutomatonFragment)
     (restampedRightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -148,7 +148,7 @@ def parallelLeftCompleteSurvivorEdges
 /-- The survivor's completing step: the re-stamped right component reaches an
 accepting state, so the product enters `q_done`. -/
 def parallelLeftCompleteDoneEdges
-    (interface : Interface)
+    (_interface : Interface)
     (restampedRight : AutomatonFragment)
     (restampedRightFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -168,7 +168,7 @@ def parallelLeftCompleteDoneEdges
 /-- The mirror of `parallelLeftCompleteSurvivorEdges` for a surviving left
 component, stepping from `survivor 0`. -/
 def parallelRightCompleteSurvivorEdges
-    (interface : Interface)
+    (_interface : Interface)
     (restampedLeft : AutomatonFragment)
     (restampedLeftFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by
@@ -189,7 +189,7 @@ def parallelRightCompleteSurvivorEdges
 /-- The mirror of `parallelLeftCompleteDoneEdges` for a surviving left
 component. -/
 def parallelRightCompleteDoneEdges
-    (interface : Interface)
+    (_interface : Interface)
     (restampedLeft : AutomatonFragment)
     (restampedLeftFuture : TypeAutomatonState → Finset BareMessage) :
     Finset PendingAutomatonEdge := by

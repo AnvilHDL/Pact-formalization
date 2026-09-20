@@ -18,8 +18,7 @@ theorem typeCompilationFuel_reannotate
             typeBranchCompilationFuel branches := by
         intro branches hBranches branchAlphabet
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            typeBranchCompilationFuel]
+        | nil => simp [typeBranchCompilationFuel]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hType : sizeOf branchType < n := by
@@ -45,8 +44,7 @@ theorem typeCompilationFuel_reannotate
             conjunctiveCompilationFuel branches := by
         intro branches hBranches branchAlphabet
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            conjunctiveCompilationFuel]
+        | nil => simp [conjunctiveCompilationFuel]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hType : sizeOf branchType < n := by
@@ -63,8 +61,7 @@ theorem typeCompilationFuel_reannotate
               omega
             cases rest with
             | nil =>
-                simp [PactType.reannotateBranches,
-                  conjunctiveCompilationFuel,
+                simp [conjunctiveCompilationFuel,
                   ih (sizeOf branchType) hType branchAlphabet branchType rfl]
             | cons next tail =>
                 rcases next with ⟨nextAction, nextType⟩

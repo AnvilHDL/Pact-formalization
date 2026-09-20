@@ -468,7 +468,7 @@ theorem PactType.reannotate_tailRecursive :
         intro branches branchAlphabet hBranchesSize hBranchesRec
         induction branches with
         | nil =>
-            simp [PactType.reannotateBranches, PactType.TailRecursiveBranches]
+            simp [PactType.TailRecursiveBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             have hFields : branchType.TailRecursive ∧
@@ -1104,8 +1104,7 @@ theorem PactType.reannotate_binderHygienic (bound : List String) :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.BinderHygienicBranches]
+        | nil => simp [PactType.BinderHygienicBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.BinderHygienicBranches] at hHold
@@ -1229,8 +1228,7 @@ theorem PactType.reannotate_binderFreshFor (bound : List String) :
             (PactType.reannotateBranches branchAlphabet branches) := by
         intro branches branchAlphabet hBranchesSize hHold
         induction branches with
-        | nil => simp [PactType.reannotateBranches,
-            PactType.BinderFreshForBranches]
+        | nil => simp [PactType.BinderFreshForBranches]
         | cons branch rest restIH =>
             rcases branch with ⟨action, branchType⟩
             simp only [PactType.BinderFreshForBranches] at hHold
@@ -1517,8 +1515,7 @@ theorem PactType.reannotate_own_alphabet :
               left.alphabet := by
             rw [← hWF.2.1.parent_eq_left]
             refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
-            simp only [PactTypeAlphabet.projectParallel,
-              PactTypeAlphabet.hideInterface, Finset.mem_union,
+            simp only [PactTypeAlphabet.hideInterface, Finset.mem_union,
               Finset.mem_filter]
             constructor
             · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)
@@ -1532,8 +1529,7 @@ theorem PactType.reannotate_own_alphabet :
               right.alphabet := by
             rw [← hWF.2.1.parent_eq_right]
             refine congrArg PactTypeAlphabet.mk (Finset.ext fun action => ?_)
-            simp only [PactTypeAlphabet.projectParallel,
-              PactTypeAlphabet.hideInterface, Finset.mem_union,
+            simp only [PactTypeAlphabet.hideInterface, Finset.mem_union,
               Finset.mem_filter]
             constructor
             · rintro (⟨hMem, hIface⟩ | ⟨hMem, -⟩)

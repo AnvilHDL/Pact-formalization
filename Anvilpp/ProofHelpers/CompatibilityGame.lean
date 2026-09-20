@@ -6,12 +6,7 @@ noncomputable section
 
 open Classical
 
-/-! ## The honesty-aware compatibility game
-
-A concrete rendering of the arena: the honesty memory `H_I`, the two-player
-vertex sets `V_0`/`V_1` with an absorbing failure sink, and the
-environment-choice/resolve/fail edges.  The Rabin winning condition is stated
-directly against the infinite play's label/environment sequence. -/
+/-! Honesty-aware compatibility games and their Rabin acceptance monitors. -/
 
 /-- `H_I = {star} ∪ {E_F | (E_C,E_F) ∈ cal(Env)_I}`. -/
 inductive HonestyMemory : Type where
@@ -36,9 +31,7 @@ def compiledTypeEdge (automaton : TypeAutomaton) (state : TypeAutomatonState)
     Prop :=
   ∃ offers, automaton.HasEdge state env label offers state'
 
-/-- Vertices of the honesty-aware arena, `V_0 ∪ V_1 ∪ {⊥}`: a Player-0
-"about to choose an environment" position, a Player-1 "about to resolve"
-position carrying the chosen environment, or the absorbing failure sink. -/
+/-- Environment-choice vertices, transition-resolution vertices, and an absorbing failure sink. -/
 inductive CompatibilityVertex : Type where
   | choice (state : TypeAutomatonState) (memory : HonestyMemory) :
       CompatibilityVertex
@@ -68,10 +61,7 @@ def compatibilityEdge (automaton : TypeAutomaton)
   | .fail, .fail => True
   | _, _ => False
 
-/-- The log entry fired by a step of the arena.  A bookkeeping `θ_e`
-half-edge fires nothing; a resolving edge fires its own label `⟨e,α⟩`, the same
-`α` that drives the memory update; the failure edges fire `⟨e,ε⟩` and
-`⟨(∅,∅),ε⟩`. -/
+/-- Resolving and failure edges emit log entries; environment-choice edges emit none. -/
 def compatibilityStepEntry (automaton : TypeAutomaton) :
     CompatibilityVertex → CompatibilityVertex →
       Option (TypeEnvironment × TypeLabel) → Prop
@@ -83,10 +73,7 @@ def compatibilityStepEntry (automaton : TypeAutomaton) :
   | .resolve _ _ _, .resolve _ _ _, entry => entry = none
   | .fail, _, entry => entry = some (TypeEnvironment.empty, TypeLabel.silent)
 
-/-- A finite Rabin game: the accepting condition is stated abstractly as
-`List (Set Vertex × Set Vertex)` rather than requiring a `Fintype` instance
-for `Vertex`, since establishing finiteness of the compiled arena is exactly
-the content of Theorem 4.4 and is not needed to *state* the game. -/
+/-- A two-player game with finitely many Rabin pairs; the vertex type is unrestricted. -/
 structure RabinGame : Type 1 where
   Vertex : Type
   initial : Vertex
@@ -94,10 +81,7 @@ structure RabinGame : Type 1 where
   edge : Vertex → Vertex → Prop
   rabinPairs : List (Set Vertex × Set Vertex)
 
-/-- `(G,B)` accepts `π` iff `Inf(π) ∩ G ≠ ∅` and `Inf(π) ∩ B = ∅`; a Rabin
-condition accepts when *some* pair does, matching `R_T = {(F_d,B_d) | d ∈ D_T}`
-over the disjuncts `D_T`.  Recurrence of the visited-vertex sequence agrees
-with the set-intersection reading on a finite graph. -/
+/-- Some Rabin pair has infinitely many good visits and finitely many bad visits. -/
 def RabinGame.Accepts (game : RabinGame) (play : ℕ → game.Vertex) : Prop :=
   ∃ pair ∈ game.rabinPairs,
     Set.Infinite {n | play n ∈ pair.1} ∧ ¬ Set.Infinite {n | play n ∈ pair.2}
@@ -127,9 +111,7 @@ def RabinGame.WinRegion (game : RabinGame) : Set game.Vertex :=
     ∀ play : ℕ → game.Vertex, play 0 = v →
       game.Consistent strategy play → game.Accepts play}
 
-/-- An observation of a completed round, or the clock.  `Req(d)` mentions `#`,
-which is a label rather than a `TypeObservation`, so the monitor alphabet
-adjoins it. -/
+/-- An acceptance-monitor mark: a semantic observation or the clock. -/
 inductive TypeMark : Type where
   | clock : TypeMark
   | observation : TypeObservation → TypeMark
@@ -168,18 +150,13 @@ def ObjectiveDisjunct.forbid {initial : PactType} :
   | .live => ∅
   | .fair bid outcome _ => {TypeMark.observation (.fair bid (!outcome))}
 
-/-- One step of the round-robin monitor `M_d`: strike the marks just observed
-off the outstanding requirements; when none remain the round is complete, so
-the monitor raises its completion flag and starts the next round. -/
+/-- Remove observed requests; when none remain, raise the completion flag and reset. -/
 def monitorAdvance (req pending marks : Finset TypeMark) :
     Finset TypeMark × Bool :=
   let remaining := pending \ marks
   if remaining = ∅ then (req, true) else (remaining, false)
 
-/-- A vertex of `hat(G)_(I,T) = G^H_I × ∏_(d ∈ D_T) M_d`: an arena vertex, the
-outstanding requirements and completion flag of every monitor, and the log
-entry fired by the edge that produced it.  Recording the entry is what makes a
-vertex sequence a path: the log of a play reads the labels its edges fired. -/
+/-- An arena vertex with each monitor's pending requests, completion flag, and incoming log entry. -/
 structure MonitoredVertex (initial : PactType) (progress : Finset ProcId) :
     Type where
   base : CompatibilityVertex
@@ -219,9 +196,7 @@ def monitoredEdge (initial : PactType) (progress : Finset ProcId)
     | none =>
         target.pending = source.pending ∧ target.flag = fun _ => false
 
-/-- `R_T = {(F_d,B_d) | d ∈ D_T}`, with `F_d` the completion flag of monitor
-`d` and `B_d` the marks in `Forbid(d)`.  The failure sink raises no flag, so it
-belongs to no `F_d`. -/
+/-- Completion and forbidden-observation sets for each Rabin pair; failure raises no completion flag. -/
 def objectiveRabinPairs (initial : PactType) (progress : Finset ProcId) :
     List (Set (MonitoredVertex initial progress) ×
       Set (MonitoredVertex initial progress)) :=
@@ -239,9 +214,7 @@ def compatibilityGame (initial : PactType)
   edge := monitoredEdge initial progress
   rabinPairs := objectiveRabinPairs initial progress
 
-/-- The compatibility query for a fixed
-composition `initial` (itself an already-`||_I`-composed `PactType`) and
-progress set. -/
+/-- The initial monitored position is winning for the given composition and progress set. -/
 def TypeCompatible  (initial : PactType)
     (progress : Finset ProcId) : Prop :=
   let game := compatibilityGame initial progress

@@ -86,7 +86,7 @@ def LiveEqBody : PactType → PactType → Prop
       PactTypeAlphabet.AgreeOn a b (MessageActions (.offer a e bs)) ∧
         LiveEqBody e e' ∧ LiveEqBranches bs bs'
   | _, _ => False
-  termination_by rho theta => sizeOf rho
+  termination_by rho _theta => sizeOf rho
 
 /-- Branch lists are live-equivalent pointwise, with the same heads. -/
 def LiveEqBranches :

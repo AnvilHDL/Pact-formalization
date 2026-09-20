@@ -36,7 +36,7 @@ theorem buildParallelAutomaton_clockEdgesAreTock
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
     parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
     parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
-    Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
+    Finset.mem_image, Finset.mem_filter] at hEdge
   -- A product-shaped edge is clocked only when both component environments
   -- are, and then `combine` forces a `tock` label with empty offers.
   have combined : ∀ leftEdge rightEdge : AutomatonFragmentEdge,
@@ -192,11 +192,11 @@ theorem buildParallelAutomaton_futureTargetsInStates
     (left right restampedLeft restampedRight : AutomatonFragment)
     (leftFuture rightFuture restampedLeftFuture restampedRightFuture :
       TypeAutomatonState → Finset BareMessage)
-    (hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
-    (hRightEdgeTargets : ∀ edge ∈ right.edges, edge.target ∈ right.states)
-    (hRestampedLeftEdgeTargets :
+    (_hLeftEdgeTargets : ∀ edge ∈ left.edges, edge.target ∈ left.states)
+    (_hRightEdgeTargets : ∀ edge ∈ right.edges, edge.target ∈ right.states)
+    (_hRestampedLeftEdgeTargets :
       ∀ edge ∈ restampedLeft.edges, edge.target ∈ left.states)
-    (hRestampedRightEdgeTargets :
+    (_hRestampedRightEdgeTargets :
       ∀ edge ∈ restampedRight.edges, edge.target ∈ right.states) :
     (buildParallelAutomaton parentAlphabet leftAlphabet rightAlphabet
       interface left right restampedLeft restampedRight
@@ -209,7 +209,7 @@ theorem buildParallelAutomaton_futureTargetsInStates
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
     parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
     parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_biUnion,
-    Finset.mem_image, Finset.mem_filter, Finset.mem_inter] at hEdge
+    Finset.mem_image, Finset.mem_filter] at hEdge
   rcases hEdge with
       ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hSync⟩, rfl⟩ |
         ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _hFilter⟩, rfl⟩) |

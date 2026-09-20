@@ -52,10 +52,7 @@ def OrdinaryTypeStep (initial : PactType) (strategy : TypeStrategy)
     TypeTransition (log index).1 (prefixAt index).residual (log index).2
       (prefixAt (index + 1)).residual
 
-/-- `cal(L)^omega_(cal(S)_Theta)(Theta_0)`: all ordinary infinite runs together
-with all absorbing failure completions, mirroring `CompletedProcessLog`.  The
-strategy consumes the flat history `TypeHistory`, not the dependent prefix, so
-we track both alongside each other. -/
+/-- Infinite strategy executions, including stuck prefixes completed by silent failure entries. -/
 def CompletedTypeLog
     (initial : PactType) (strategy : TypeStrategy) (log : TypeLog) : Prop :=
   ∃ prefixAt : ℕ → TypePrefix initial,
@@ -133,9 +130,7 @@ def TypeWinningObjective
     ∀ pid ∈ progress,
       TypeObservationOccursInfinitely (.progress pid) log)
 
-/-- Semantic compatibility (Theorem 4.2's right-hand side): some strategy
-forces `Ω_T` on every completed log.  A stuck run is a failure completion whose
-clock never recurs, so it already fails `Ω_T`. -/
+/-- Some strategy enforces the honesty, clock, fairness, and progress objective on every completed log. -/
 def SemanticTypeCompatible (initial : PactType) (progress : Finset ProcId) : Prop :=
   ∃ strategy : TypeStrategy,
     ∀ log, CompletedTypeLog initial strategy log →

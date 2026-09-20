@@ -166,7 +166,7 @@ lemma computeFutureOf_message_final
   intro action hAction
   rw [Finset.mem_filter] at hAction
   obtain ⟨hAction, -⟩ := hAction
-  simp only [PendingAutomaton.offersAt, typeCompilationFuel, compileTypeFuel,
+  simp only [PendingAutomaton.offersAt, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
     Finset.mem_image] at hAction
   obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction
@@ -239,9 +239,7 @@ lemma computeFutureOf_message_root_projected
       exact Or.inr hReference
   have hReferencesRoot : pending.menuStep .root ⊆
       insert TypeAutomatonState.root ({TypeAutomatonState.final} : Finset _) := by
-    simp only [hPendingDef, PendingAutomaton.menuStep, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment, Finset.mem_filter, Finset.mem_union,
-      Finset.mem_image]
+    simp only [hPendingDef, PendingAutomaton.menuStep, compileTypeFuel, finishAutomatonFragment, ]
     intro reference hReference
     simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image] at hReference
@@ -249,11 +247,11 @@ lemma computeFutureOf_message_root_projected
     simp only [Finset.mem_insert, Finset.mem_singleton]
     rcases hEdgeMem with (⟨_, _, hEq⟩ | ⟨_, _, hEq⟩) | ⟨environment, _, hEq⟩
     · rw [← hEq] at hReference
-      simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.message]
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.message]
         at hReference
       exact Or.inr hReference
     · rw [← hEq] at hReference
-      simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent]
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
         at hReference
       exact Or.inl hReference
     · rw [← hEq] at hSource; simp at hSource
@@ -286,8 +284,7 @@ lemma computeFutureOf_message_root_projected
       {(msg, dir)} ∩ alphabet.actions := by
     apply Finset.ext
     intro action
-    simp only [hPendingDef, PendingAutomaton.offersAt, typeCompilationFuel,
-      compileTypeFuel, finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
+    simp only [hPendingDef, PendingAutomaton.offersAt, compileTypeFuel, finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter,
       Finset.mem_union, Finset.mem_image, Finset.mem_inter, Finset.mem_singleton]
     constructor
     · rintro ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩
@@ -307,12 +304,12 @@ lemma computeFutureOf_message_root_projected
         simp [TypeEnvironment.hasNeed, TypeEnvironment.empty]
       refine ⟨_, ⟨Or.inl (Or.inr ⟨TypeEnvironment.empty,
         ⟨hEmptyLocal, rfl, hEmptyNoNeed⟩, rfl⟩), rfl⟩, ?_⟩
-      simp [AutomatonConstructionLabel.semantic, TypeLabel.isTock, TypeLabel.silent,
+      simp [AutomatonConstructionLabel.semantic, TypeLabel.silent,
         hDeclared]
   have hOffersFinal : pending.offersAt TypeAutomatonState.final = ∅ := by
     apply Finset.eq_empty_iff_forall_notMem.mpr
     intro action hAction
-    simp only [hPendingDef, PendingAutomaton.offersAt, typeCompilationFuel, compileTypeFuel,
+    simp only [hPendingDef, PendingAutomaton.offersAt, compileTypeFuel,
       finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
       Finset.mem_image] at hAction
     obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction
@@ -372,8 +369,7 @@ lemma compileType_message_wait_edge
       target := .root }, ?_, rfl, rfl, rfl, rfl, ?_, rfl⟩
   · simp [typeCompilationFuel, compileTypeFuel, finishAutomatonFragment,
       hLocal, hClock, hNoNeed]
-  · simp [PactType.alphabet,
-      computeFutureOf_message_root_projected]
+  · simp [computeFutureOf_message_root_projected]
 
 /-- Proves that compiled message has the final-state non-clock idle edge. -/
 lemma compileType_message_final_edge
@@ -436,8 +432,7 @@ lemma compileType_message_edge_cases
     exact Or.inl ⟨rfl, rfl, rfl, rfl, hFuture.symm, hNeed⟩
   · rcases hWaiting with ⟨edgeEnv, ⟨_hLocal, hClock, hNoNeed⟩, hEdgeEq⟩
     rw [← hEdgeEq] at hSource hEnv hLabel hCurrent hFuture hTarget
-    simp only [PactType.alphabet,
-      computeFutureOf_message_root_projected]
+    simp only [computeFutureOf_message_root_projected]
       at hFuture
     simp only at hSource hEnv hLabel hCurrent hTarget
     subst source; subst env
@@ -727,7 +722,7 @@ lemma computeFutureOf_progress_final
   intro action hAction
   rw [Finset.mem_filter] at hAction
   obtain ⟨hAction, -⟩ := hAction
-  simp only [PendingAutomaton.offersAt, typeCompilationFuel, compileTypeFuel,
+  simp only [PendingAutomaton.offersAt, compileTypeFuel,
     finishAutomatonFragment, Finset.mem_biUnion, Finset.mem_filter, Finset.mem_union,
     Finset.mem_image] at hAction
   obtain ⟨edge, ⟨hEdgeMem, hSource⟩, hAction⟩ := hAction

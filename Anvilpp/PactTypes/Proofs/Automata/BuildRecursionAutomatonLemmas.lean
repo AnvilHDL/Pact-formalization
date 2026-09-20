@@ -41,7 +41,7 @@ theorem buildRecursionAutomaton_offersAt_child
           TypeLabel.tock := by
         simp [AutomatonConstructionLabel.semantic, TypeLabel.silent]
       rw [hMarker] at hAction
-      simpa [hSem, hCurrent] using hAction
+      simp [hSem, hCurrent] at hAction
     · refine ⟨_, ⟨Or.inr ⟨edge, hEdge, rfl⟩, ?_⟩, ?_⟩
       · rw [if_neg hMarker]
         simp [childState, hSource]
@@ -83,7 +83,7 @@ theorem mem_buildRecursionAutomaton_menuStep_child
           simpa [childState] using hSource
         by_cases hTock : original.label.semantic = TypeLabel.tock
         · exfalso
-          simp only [hTock, if_pos rfl] at hTarget
+          simp only [hTock] at hTarget
           simp at hTarget
         · refine ⟨original.target,
             ⟨original, ⟨⟨hOriginal, hMarker⟩, hSourceEq⟩, by simp [hTock]⟩, ?_⟩
@@ -195,7 +195,7 @@ theorem buildRecursionAutomaton_menuStep_root
       · simp only [PactTypeAlphabet.localEnvironments, Finset.mem_union,
           Finset.mem_singleton, Finset.mem_biUnion, Finset.mem_powerset,
           Finset.mem_image]
-        exact Or.inr ⟨∅, by simp, ∅, by simp [TypeEnvironment.empty], rfl⟩
+        exact Or.inr ⟨∅, by simp, ∅, by simp, rfl⟩
       · rfl
     · simpa [AutomatonConstructionLabel.semantic, TypeLabel.silent] using hTarget
 

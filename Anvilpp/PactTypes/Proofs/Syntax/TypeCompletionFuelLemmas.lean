@@ -289,10 +289,10 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
             omega)]
           congr 1
           induction branches with
-          | nil => simp [PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
+          | nil => simp [PactType.branchCanCompleteDeclared_nil]
           | cons branch rest restIH =>
               rcases branch with ⟨action, branchType⟩
-              simp only [List.any_cons, PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
+              simp only [List.any_cons, PactType.branchCanCompleteDeclared_cons]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
                     (PactType.xoffer alphabet elseType
@@ -315,10 +315,10 @@ theorem typeCanCompleteThisCycleFuel_eq_canCompleteDeclared :
             omega)]
           congr 1
           induction branches with
-          | nil => simp [PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
+          | nil => simp [PactType.branchCanCompleteDeclared_nil]
           | cons branch rest restIH =>
               rcases branch with ⟨action, branchType⟩
-              simp only [List.any_cons, PactType.branchCanCompleteDeclared_nil, PactType.branchCanCompleteDeclared_cons]
+              simp only [List.any_cons, PactType.branchCanCompleteDeclared_cons]
               rw [ih branchType (by
                 have : sizeOf branchType < sizeOf
                     (PactType.offer alphabet elseType

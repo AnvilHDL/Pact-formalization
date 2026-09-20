@@ -43,48 +43,34 @@ theorem inferProcess_eq_seq {process : Proc} {alphabet : PactTypeAlphabet}
     (∃ l r, process = Proc.seq alphabet l r ∧
         left = inferProcess l ∧ right = inferProcess r) := by
   cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+    (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)
 
 theorem inferProcess_eq_choice {process : Proc} {alphabet : PactTypeAlphabet}
     {left right : PactType}
     (h : inferProcess process = .choice alphabet left right) :
     ∃ expr l r, process = Proc.ifunfair alphabet expr l r ∧
       left = inferProcess l ∧ right = inferProcess r := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_fairChoice {process : Proc} {alphabet : PactTypeAlphabet}
     {bid : BranchId} {left right : PactType}
     (h : inferProcess process = .fairChoice alphabet bid left right) :
     ∃ expr l r, process = Proc.iffair alphabet bid expr l r ∧
       left = inferProcess l ∧ right = inferProcess r := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_par {process : Proc} {alphabet : PactTypeAlphabet}
     {left right : PactType} {interface : Interface}
     (h : inferProcess process = .par alphabet left right interface) :
     ∃ l r, process = Proc.par alphabet l r interface ∧
       left = inferProcess l ∧ right = inferProcess r := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_recur {process : Proc} {alphabet : PactTypeAlphabet}
     {name : String} {body : PactType}
     (h : inferProcess process = .recur alphabet name body) :
     ∃ b, process = Proc.recur alphabet name b ∧ body = inferProcess b := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_xoffer {process : Proc} {alphabet : PactTypeAlphabet}
     {elseType : PactType} {branches : List (BareMessage × PactType)}
@@ -93,10 +79,7 @@ theorem inferProcess_eq_xoffer {process : Proc} {alphabet : PactTypeAlphabet}
       process = Proc.xoffer alphabet elseProcess processBranches ∧
         elseType = inferProcess elseProcess ∧
         branches = inferBranches processBranches := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_offer {process : Proc} {alphabet : PactTypeAlphabet}
     {elseType : PactType} {branches : List (BareMessage × PactType)}
@@ -105,42 +88,27 @@ theorem inferProcess_eq_offer {process : Proc} {alphabet : PactTypeAlphabet}
       process = Proc.offer alphabet elseProcess processBranches ∧
         elseType = inferProcess elseProcess ∧
         branches = inferBranches processBranches := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_tock {process : Proc} {alphabet : PactTypeAlphabet}
     (h : inferProcess process = .tock alphabet) :
     process = Proc.cycle alphabet := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_progress {process : Proc} {alphabet : PactTypeAlphabet}
     {pid : ProcId} (h : inferProcess process = .progress alphabet pid) :
     process = Proc.endp alphabet pid := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_message {process : Proc} {alphabet : PactTypeAlphabet}
     {msg : MessageId} {dir : MessageDir}
     (h : inferProcess process = .message alphabet msg dir) : False := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 theorem inferProcess_eq_var {process : Proc} {alphabet : PactTypeAlphabet}
     {name : String} (h : inferProcess process = .var alphabet name) :
     process = Proc.var alphabet name := by
-  cases process <;> rw [inferProcess] at h <;> simp_all <;>
-    (try (obtain ⟨rfl, hLeft, hRight⟩ := h; exact hLeft.symm)) <;>
-    (try (obtain ⟨rfl, hLeft⟩ := h; exact hLeft.symm)) <;>
-    (try exact h.symm) <;> (try tauto)
+  cases process <;> rw [inferProcess] at h <;> simp_all
 
 /-- A branch of `abs_B(B)` comes from a branch of `B`. -/
 theorem exists_branch_of_mem_inferBranches :

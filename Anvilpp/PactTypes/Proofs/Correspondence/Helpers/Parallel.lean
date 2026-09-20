@@ -2856,7 +2856,7 @@ theorem typeCanCompleteThisCycle_reannotate_subset
             first | exact branchesWF_mem branches hBranches | exact offerBranchesWF_mem branches hBranches
           simp only [PactType.reannotate, typeCanCompleteThisCycleFuel,
             reannotateBranches_eq_map, reannotateOfferBranches_eq_map,
-            Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, List.any_eq_true]
+            Bool.or_eq_true, List.any_eq_true]
           rintro (hElse | ⟨b, hMem, hComplete⟩)
           · exact Or.inl (ih other target hOther (by rw [hOtherA]; exact hActions) hElse)
           · obtain ⟨original, hOriginal, rfl⟩ := List.mem_map.mp hMem
@@ -3245,7 +3245,7 @@ theorem buildParallelAutomaton_pair_menuStep_subset
       hLeftComplete
     simp only at hSource hTock hMem
     injection hSource with hLeftSource hRightSource
-    simp only [parallelFutureSpec, if_neg hTock, Finset.mem_singleton] at hMem
+    simp only [Finset.mem_singleton] at hMem
     obtain ⟨-, hRightTock⟩ :=
       sync_components_not_tock leftAlphabet rightAlphabet interface hSync
         (by simpa using hTock)
@@ -3262,7 +3262,7 @@ theorem buildParallelAutomaton_pair_menuStep_subset
       hRightComplete
     simp only at hSource hTock hMem
     injection hSource with hLeftSource hRightSource
-    simp only [parallelFutureSpec, if_neg hTock, Finset.mem_singleton] at hMem
+    simp only [Finset.mem_singleton] at hMem
     obtain ⟨hLeftTock, -⟩ :=
       sync_components_not_tock leftAlphabet rightAlphabet interface hSync
         (by simpa using hTock)

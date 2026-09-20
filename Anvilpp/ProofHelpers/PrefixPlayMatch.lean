@@ -320,7 +320,7 @@ lemma playMatch_step {progress : Finset ProcId} (hWF : TypeWellFormedIn [] initi
   have hLog : compatibilityPlayLog play round =
       (strategy (playHistory play round).1, label) := by
     rw [compatibilityPlayLog]
-    simp only [show 2 * round + 2 = 2 * round + 2 from rfl, hEntry]
+    simp only [hEntry]
     rfl
   -- Lemma 4.5 backward matches the edge with a semantic step.
   obtain ⟨offers, hHasEdge⟩ := hCompiled
@@ -593,7 +593,7 @@ lemma matchingTargetVertex_edge {progress : Finset ProcId}
   · show compatibilityEdge (compileType initial) initial.alphabet resolve.base _
     rw [hBase]
     simp only [matchingTargetVertex, hEnv]
-    refine ⟨hAdm, label, hEdge, ?_⟩ <;> trivial
+    exact ⟨hAdm, label, hEdge, by trivial⟩
   · show compatibilityStepEntry (compileType initial) resolve.base _ _
     rw [hBase]
     simp only [matchingTargetVertex, hEnv]

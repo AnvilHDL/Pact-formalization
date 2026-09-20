@@ -1,25 +1,21 @@
-# Anvilpp.PactTypes.Proofs.Syntax
+# Type Laws
 
-Laws of the type language, independent of the compiler.
-
-| Module | Main results |
+| Module | Results |
 |---|---|
-| `PactTypeSubstitutionLemmas` | `replaceVar_canCompleteBeforeTock` — completion commutes with capture-avoiding substitution; `replaceVar_eq_self_of_tailOccurrences_false` — substitution is the identity where the variable does not occur |
-| `TypeDynamicsCoreLemmas` | re-signing (`reannotate_alphabet`, `reannotate_tailOccurrences`) and the conjunctive-offer product (`parallelTypeBranchesSelecting_tailOccurrences`) |
-| `PactTypeFutureOffersLemmas` | constructor equations for `typeFutureOffers`; the sequence clause reads the completion flag |
-| `PactTypeRegularityLemmas` | `guardedOccurrences_mono`, `tailOccurrences_mono` |
-| `TypeCompletionFuelLemmas` | `typeCanCompleteThisCycleFuel_eq_canCompleteDeclared` |
-| `TypeFutureOffersFuelLemmas` | `typeFutureOffersFuel_eq_typeFutureOffers` |
-| `DeclaredCompletionLemmas` | `replaceVar_canCompleteDeclared`, `canCompleteDeclared_recur_unfold` |
-| `CompletionReannotation` | `reannotate_idem` and its interaction with completion |
-| `LiveEquivalenceLemmas` | `liveEq_preserves_futOff` (helper 5) |
-| `TypeTransitionSystemLemmas` | `TypeTransition.exists_typeOffers`, `.exists_decorated` |
-| `TypeOffersAlphabet` | `TypeOffers.preserves_alphabet` (helper 1) |
-| `PactTypeSyntaxLemmas` | `parent_actions_subset_left`/`_right`, `allVariablesBound_mono` |
+| `PactTypeSyntaxLemmas` | Alphabet compatibility and bound-variable laws |
+| `PactTypeSubstitutionLemmas` | Completion under substitution and substitution at absent variables |
+| `PactTypeRegularityLemmas` | Monotonicity of guarding and tail-position conditions |
+| `TypeDynamicsCoreLemmas` | Reannotation and generated branch-product invariants |
+| `PactTypeFutureOffersLemmas` | Constructor equations for future menus |
+| `TypeCompletionFuelLemmas`, `TypeFutureOffersFuelLemmas` | Fuel-based completion/menu agreement |
+| `DeclaredCompletionLemmas` | Completion under substitution and recursion unfolding |
+| `CompletionReannotation` | Reannotation idempotence and completion transport |
+| `LiveEquivalenceLemmas` | Completion and menu agreement under live equivalence |
+| `TypeTransitionSystemLemmas` | Offer witnesses for undecorated transitions |
+| `TypeOffersAlphabet` | Preservation of the source alphabet |
+| `TypeOfferEnvironmentAgreementLemmas` | Distribution of offer hiding over union |
+| `TypeLabelOwnershipLemmas` | Branch message bounds and clock-label ownership |
 
-## Note
-
-`TailOccurrences`, `TailRecursive`, `BinderHygienic` and the other regularity
-predicates are defined by well-founded recursion, so `h.1` and `h.2` do not
-apply to them directly. Unfold with `simp only [P] at h` first; `rw` will not
-work.
+These results supply the semantic invariants used by
+[correspondence](../Correspondence/README.md) and
+[refinement](../../../ProofHelpers/README.md).

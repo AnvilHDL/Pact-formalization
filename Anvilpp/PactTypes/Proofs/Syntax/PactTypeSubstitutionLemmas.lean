@@ -24,7 +24,7 @@ theorem PactType.canCompleteBeforeTock_le_subst
       | recur _ other body =>
           by_cases hName : name = other
           · subst hName
-            simp only [canCompleteBeforeTockSubst, if_pos rfl]
+            simp only [canCompleteBeforeTockSubst]
             simpa [PactType.CanCompleteBeforeTock] using hComplete
           · have hBodySize : sizeOf body < n := by
               rw [← hSize]; simp_wf; omega

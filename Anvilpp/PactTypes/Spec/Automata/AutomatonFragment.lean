@@ -10,14 +10,7 @@ noncomputable section
 
 /-! ### Construction representation -/
 
-/--
-Tagged States
-
-* `root` and `final` are the two distinguished states used by atomic types.
-* `child i q` injects state `q` into child automaton `i` of a sum/sequence.
-* `pair q₁ q₂` is a state of a synchronized parallel product.
-* `survivor i q` is state `q` of the component `i` that outlives its sibling.
--/
+/-- Constructor states, tagged child copies, parallel products, and survivors. -/
 inductive TypeAutomatonState : Type where
   /-- Fresh entry state introduced by a constructor. -/
   | root
@@ -32,26 +25,19 @@ inductive TypeAutomatonState : Type where
   | survivor : Nat → TypeAutomatonState → TypeAutomatonState
   deriving DecidableEq
 
-/-- Exactly the semantic edges--/
+/-- A visible semantic label or an unresolved recursion-variable marker. -/
 inductive AutomatonConstructionLabel : Type where
   | visible : TypeLabel → AutomatonConstructionLabel
   | variable : String → AutomatonConstructionLabel
   deriving DecidableEq
 
-/--
-How to fill an edge's future-offer field.
-
-* `explicit offers` copies a future set already computed by a child.
-* `at state removed` computes `OF(state) \ removed` after the parent graph is
-  complete. This is what prevents a constructor from inspecting a partial
-  automaton during recursive construction.
-* `atUnion offers state removed` computes `(offers ∪ OF(state)) \ removed`.
-  A sequence's left copy needs it: its field combines the copied child field
-  with the right-entry menu.
--/
+/-- A future-offer field resolved after the parent graph's menus are computed. -/
 inductive FutureSpec : Type where
+  /-- A stored future set. -/
   | explicit : Finset BareMessage → FutureSpec
+  /-- A referenced menu with specified actions removed. -/
   | at : TypeAutomatonState → Finset BareMessage → FutureSpec
+  /-- Stored offers unioned with a referenced menu, then restricted by removal. -/
   | atUnion : Finset BareMessage → TypeAutomatonState → Finset BareMessage →
       FutureSpec
   deriving DecidableEq

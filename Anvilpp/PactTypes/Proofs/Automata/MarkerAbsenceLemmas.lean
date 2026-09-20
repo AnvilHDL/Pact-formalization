@@ -203,8 +203,7 @@ theorem buildParallelAutomaton_noMarkerFor
     parallelRightCompleteEdges, parallelLeftCompleteSurvivorEdges,
     parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
     parallelRightCompleteDoneEdges, parallelDoneEdges, Finset.mem_union,
-    Finset.mem_biUnion, Finset.mem_image, Finset.mem_filter,
-    Finset.mem_inter] at hEdge
+    Finset.mem_biUnion, Finset.mem_image, Finset.mem_filter] at hEdge
   rcases hEdge with
       ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩ |
         ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |

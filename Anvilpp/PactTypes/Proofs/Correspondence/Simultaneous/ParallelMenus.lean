@@ -566,9 +566,6 @@ theorem futureOffersAgree_par (alphabet : PactTypeAlphabet)
     rw [computeFutureOf_par_final alphabet left right interface]
     simp only [typeFutureOffers, typeFutureOffersFuel]
 
-#print axioms stateProductInfo_par_final
-#print axioms buildParallelAutomaton_final_edge_shape
-#print axioms computeFutureOf_par_final
 
 /-- The paper's survivor bullet: the re-signed component's menu at a state is
 bounded by the component's own.  The state is related by Lemma 4.5's
@@ -719,9 +716,6 @@ theorem futureOffersAgree_par_of_typeWF
       (fun name => (hTail name).2) hRightCurrent hRight hRightResign)
     hLeft hRight hLeftResign hRightResign hRelated
 
-#print axioms futureReachable_related_of_currentOffer
-#print axioms survivorMenuBound_par
-#print axioms futureOffersAgree_par_of_typeWF
 
 end
 

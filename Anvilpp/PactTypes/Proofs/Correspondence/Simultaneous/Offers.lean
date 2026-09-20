@@ -580,7 +580,7 @@ theorem xoffer_else_edge_restrict (alphabet : PactTypeAlphabet)
       · rw [Finset.mem_image] at hIn
         obtain ⟨environment, -, hEq⟩ := hIn
         rw [← hEq] at hPSource
-        simp [childState] at hPSource
+        simp at hPSource
     · exfalso
       obtain ⟨environment, -, hEq⟩ := hWait
       rw [← hEq] at hPSource
@@ -728,7 +728,7 @@ theorem xoffer_branch_edge_restrict (alphabet : PactTypeAlphabet)
       · rw [Finset.mem_image] at hIn
         obtain ⟨environment, -, hEq⟩ := hIn
         rw [← hEq] at hPSource
-        simp [childState] at hPSource
+        simp at hPSource
     · exfalso
       obtain ⟨environment, -, hEq⟩ := hWait
       rw [← hEq] at hPSource
@@ -891,7 +891,7 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
                 exact ⟨env,
                   ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed hCond.1,
                     hCond.2.2.1, hCond.2.2.2⟩, rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_xoffer_branch alphabet elseType branches
               hBranchGet
               (buildRelationSet_initial residual' (compileType residual'))
@@ -920,7 +920,7 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
               exact Or.inr ⟨env,
                 ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed hCond.1,
                   hCond.2.1, hCond.2.2.1, hCond.2.2.2⟩, rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_xoffer_else alphabet elseType branches
               (buildRelationSet_initial elseType (compileType elseType))
       | xoffer_wait cEnv cAlpha cElse cBranches hCond =>
@@ -1204,7 +1204,7 @@ theorem offer_else_edge_restrict (alphabet : PactTypeAlphabet)
       · rw [Finset.mem_image] at hIn
         obtain ⟨environment, -, hEq⟩ := hIn
         rw [← hEq] at hPSource
-        simp [childState] at hPSource
+        simp at hPSource
     · exfalso
       obtain ⟨environment, -, hEq⟩ := hWait
       rw [← hEq] at hPSource
@@ -1366,7 +1366,7 @@ theorem offer_selected_edge_restrict (alphabet : PactTypeAlphabet)
       · rw [Finset.mem_image] at hIn
         obtain ⟨environment, -, hEq⟩ := hIn
         rw [← hEq] at hPSource
-        simp [childState] at hPSource
+        simp at hPSource
     · exfalso
       obtain ⟨environment, -, hEq⟩ := hWait
       rw [← hEq] at hPSource

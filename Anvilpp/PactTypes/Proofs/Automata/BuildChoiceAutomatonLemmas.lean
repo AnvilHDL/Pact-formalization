@@ -116,8 +116,8 @@ theorem buildChoiceAutomaton_futureTargetsInStates
     (selectionLeft selectionRight : TypeLabel)
     (hLeftTargets : left.FutureTargetsInStates)
     (hRightTargets : right.FutureTargetsInStates)
-    (hLeftInitial : left.initial ∈ left.states)
-    (hRightInitial : right.initial ∈ right.states) :
+    (_hLeftInitial : left.initial ∈ left.states)
+    (_hRightInitial : right.initial ∈ right.states) :
     (buildChoiceAutomaton alphabet left right
       selectionLeft selectionRight).FutureTargetsInStates := by
   classical
@@ -168,12 +168,12 @@ theorem buildChoiceAutomaton_futureTargetsInStates
       simp only at hFuture
       cases hFuture
       simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
-        childState, hLeftInitial]
+        childState]
     · rw [hEdge] at hFuture
       simp only at hFuture
       cases hFuture
       simp [buildChoiceAutomaton, finishAutomatonFragment, childStates,
-        childState, hRightInitial]
+        childState]
 
 /-- The edges leaving a binary-choice root are exactly its two selection edges,
 one per non-clock local environment. -/
@@ -255,7 +255,7 @@ theorem buildChoiceAutomaton_referencedStates_root
     (left right : AutomatonFragment)
     (selectionLeft selectionRight : TypeLabel)
     (hLeftNotTock : selectionLeft ≠ TypeLabel.tock)
-    (hRightNotTock : selectionRight ≠ TypeLabel.tock)
+    (_hRightNotTock : selectionRight ≠ TypeLabel.tock)
     (hEnvironment : ∃ environment ∈ alphabet.localEnvironments,
       environment.clock = false) :
     let choice := buildChoiceAutomaton alphabet left right
@@ -271,7 +271,7 @@ theorem buildChoiceAutomaton_referencedStates_root
     Finset.mem_filter.mpr ⟨hMem, hClock⟩
   ext target
   simp only [PendingAutomaton.referencedStates, Finset.mem_biUnion,
-    Finset.mem_filter, Finset.mem_insert, Finset.mem_singleton]
+    Finset.mem_filter, Finset.mem_singleton]
   constructor
   · rintro ⟨edge, ⟨hEdge, hSource⟩, hIn⟩
     by_cases hTock : edge.label.semantic = TypeLabel.tock
@@ -335,13 +335,13 @@ theorem buildChoiceAutomaton_menuStep_root
                 future := .at .root ∅, target := childState 0 left.initial }, ?_, ?_⟩
       · exact (buildChoiceAutomaton_outgoing_root alphabet left right
           selectionLeft selectionRight _).mpr ⟨environment, hFilter, Or.inl rfl⟩
-      · simpa [AutomatonConstructionLabel.semantic, hLeftNotTock]
+      · simp [AutomatonConstructionLabel.semantic, hLeftNotTock]
     · refine ⟨{ source := .root, environment := environment,
                 label := .visible selectionRight, current := ∅,
                 future := .at .root ∅, target := childState 1 right.initial }, ?_, ?_⟩
       · exact (buildChoiceAutomaton_outgoing_root alphabet left right
           selectionLeft selectionRight _).mpr ⟨environment, hFilter, Or.inr rfl⟩
-      · simpa [AutomatonConstructionLabel.semantic, hRightNotTock]
+      · simp [AutomatonConstructionLabel.semantic, hRightNotTock]
 
 end
 

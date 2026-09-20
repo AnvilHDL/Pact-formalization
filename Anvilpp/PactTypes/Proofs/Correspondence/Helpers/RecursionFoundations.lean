@@ -274,7 +274,6 @@ theorem typeFutureOffersFuel_replaceVar (name : String) (replacement : PactType)
             typeFutureOffersFuelSubst]
           rw [ih elseType (by omega), hBranches branches (by omega)]
 
-#print axioms typeFutureOffersFuel_replaceVar
 
 
 /-- The same-cycle menu of `processType` traverses a tail occurrence of `name`.
@@ -495,7 +494,7 @@ theorem typeFutureOffersFuelSubst_split (name : String)
               (by simpa only [hWF.2.2.1] using hMenu)]
           by_cases hL : menuReachesVarFuel name completeValue fuel left <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
-            simp [hL, hR, Finset.union_assoc, Finset.union_left_comm,
+            simp [hL, hR, Finset.union_left_comm,
               Finset.union_comm]
       | fairChoice alphabet bid left right =>
           simp only [PactType.AlphabetWellFormed] at hWF
@@ -508,7 +507,7 @@ theorem typeFutureOffersFuelSubst_split (name : String)
               (by simpa only [hWF.2.2.1] using hMenu)]
           by_cases hL : menuReachesVarFuel name completeValue fuel left <;>
             by_cases hR : menuReachesVarFuel name completeValue fuel right <;>
-            simp [hL, hR, Finset.union_assoc, Finset.union_left_comm,
+            simp [hL, hR, Finset.union_left_comm,
               Finset.union_comm]
       | par alphabet left right interface =>
           simp only [PactType.TailOccurrences] at hTail
@@ -576,7 +575,7 @@ theorem typeFutureOffersFuelSubst_split (name : String)
                 by_cases hFlag : flag <;>
                   by_cases hB : menuReachesVarFuel name completeValue fuel
                     branchType <;>
-                  simp [hFlag, hB, Finset.union_assoc, Finset.union_left_comm,
+                  simp [hFlag, hB, Finset.union_left_comm,
                     Finset.union_comm]
           simp only [typeFutureOffersFuelSubst, menuReachesVarFuel]
           rw [hFold branches (by simp at hFuel ⊢; omega) hTail.2 hWF.2.2.2 _ _
@@ -741,6 +740,5 @@ theorem typeFutureOffersFuelSubst_empty (name : String) (completeValue : Bool) :
           exact congrArg (fun offers : Finset BareMessage => offers ∩ alphabet.actions)
             (hBranchesFalse branches (by simp at hFuel ⊢; omega) hTail.2 _)
 
-#print axioms typeFutureOffersFuelSubst_split
 
 end Pact

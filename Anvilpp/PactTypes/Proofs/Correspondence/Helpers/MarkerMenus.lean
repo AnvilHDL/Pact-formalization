@@ -327,7 +327,7 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
         simp only [PactType.replaceBranches, List.any_cons]
         rw [ih (sizeOf body) (by omega) body rfl hName.1 hOther.1 hFresh.1, hRest]
         cases hS : menuReachesVar name replacement <;>
-          simp [hS, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
+          simp [Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
     by_cases hAbsent : ty.TailOccurrences other False
     · rw [PactType.replaceVar_eq_self_of_tailOccurrences_false other replacement ty hAbsent,
         menuReachesVar_of_absent other ty hAbsent]
@@ -371,7 +371,7 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
       rw [ih (sizeOf left) (by rw [← hSize]; simp; omega) left rfl hName.1 hOther.1 hFresh.1,
         ih (sizeOf right) (by rw [← hSize]; simp; omega) right rfl hName.2 hOther.2 hFresh.2]
       cases hS : menuReachesVar name replacement <;>
-        simp [hS, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
+        simp [Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
     | seq a left right =>
       simp only [PactType.TailOccurrences] at hName hOther
       simp only [PactType.BinderFreshFor] at hFresh
@@ -381,7 +381,7 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
         menuReachesVar_seq name a left right hName.1 hName.2,
         menuReachesVar_seq other a left right hOther.1 hOther.2,
         ih (sizeOf right) (by rw [← hSize]; simp; omega) right rfl hName.2 hOther.2 hFresh.2]
-      cases hL : left.CanCompleteDeclared <;> simp [hL]
+      cases hL : left.CanCompleteDeclared <;> simp
     | par a left right interface =>
       exact False.elim (hAbsent (by simpa only [PactType.TailOccurrences] using hOther))
     | xoffer a body branches =>
@@ -395,8 +395,7 @@ theorem menuReachesVar_replaceVar (name other : String) (replacement : PactType)
         menuReachesVar_xoffer other a body branches hOther.1 hOther.2]
       rw [ih (sizeOf body) (by rw [← hSize]; simp; omega) body rfl hName.1 hOther.1 hFresh.1, hB]
       cases hS : menuReachesVar name replacement <;>
-        simp_all only [Bool.and_true, Bool.and_false, Bool.false_and,
-          Bool.or_false, Bool.false_or, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
+        simp_all only [Bool.and_true, Bool.and_false, Bool.false_or, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
     | offer a body branches =>
       simp only [PactType.TailOccurrences] at hName hOther
       simp only [PactType.BinderFreshFor] at hFresh

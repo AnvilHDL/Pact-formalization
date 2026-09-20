@@ -324,7 +324,7 @@ def compileTypeFuel :
           exact buildSelectedConjunctiveOfferAutomaton
             alphabet branches elseAutomaton selectedConjunctions
 
-termination_by fuel processType => (fuel, 0)
+termination_by fuel _processType => (fuel, 0)
 
 /-- Relates each residual of `ty` to the compiled state that represents it.
 A rebuilt node carries `ty`'s alphabet; a residual copied from a child keeps
@@ -418,7 +418,7 @@ def buildRelationSetCoreFuel :
                     (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
-termination_by fuel processType => (fuel, 0)
+termination_by fuel _processType => (fuel, 0)
 
 /-- The paper's menu-only dependency relation. Sequence flags are read from
 the existing canonical residual relation, before any menu is saturated. -/
@@ -485,7 +485,7 @@ def compileTypeMenuLinksFuel :
             (copy 0 (compileTypeMenuLinksFuel fuel elseType) ∪
               {(TypeAutomatonState.root, childState 0 (compileTypeFuel fuel elseType).initial)})
       | _ => exact ∅
-termination_by fuel processType => (fuel, 0)
+termination_by fuel _processType => (fuel, 0)
 
 /-- The global future-menu fixed point. The graph closure and every
 product-state contribution are computed from the same type-aware compiler. -/
@@ -510,7 +510,7 @@ def computeFutureOfFuel :
                   computeFutureOfFuel fuel right q2)
           | none => ∅).filter fun action =>
             action ∈ processType.alphabet.actions
-termination_by fuel processType state => (fuel, 1)
+termination_by fuel _processType _state => (fuel, 1)
 decreasing_by
   all_goals omega
 end

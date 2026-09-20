@@ -133,7 +133,7 @@ theorem eraseEnvironment_localEnvironment (outer : Environment)
         clock := false } := by
   simp only [eraseEnvironment, localEnvironment, Environment.bareImmediate,
     Finset.image_union, image_restrictCurrent, restrictFuture_eq,
-    eraseEnvironment_immediate, eraseEnvironment_future]
+    ]
 
 /-! ## Agreement at the atomic labels -/
 
@@ -334,7 +334,6 @@ theorem lifting_core :
       exact absurd hPrem.2 (by rw [hClock]; simp)
   | cycle_wait typeEnv alphabet hPrem =>
       intro process hShape hClock hAlpha hConj hData
-      subst_vars
       rw [inferProcess_eq_tock hShape]
       refine ⟨∅, by simp, ?_⟩
       intro env hErase
@@ -707,8 +706,7 @@ theorem lifting_core :
               ((∅ : Finset BareMessage) ∪
                 sequenceRightMenu (PactType.skip alphabet) (inferProcess p)) \ ∅ := by
           simp only [Finset.empty_union, sequenceRightMenu, canCompleteDeclared_skip,
-            if_pos, Finset.sdiff_empty, procFutureOffers_procExprReplace,
-            procFutureOffers_inferProcess, inferProcess_procExprReplace]
+            if_pos, Finset.sdiff_empty, procFutureOffers_inferProcess, inferProcess_procExprReplace]
         rw [← hFuture]
         exact ⟨_, Label.silent,
           Offers.letp env alphabet varName expr p value

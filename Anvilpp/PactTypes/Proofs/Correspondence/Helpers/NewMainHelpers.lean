@@ -273,7 +273,7 @@ theorem accepting_of_skip_residual
               first
                 | (simp_all [PactType.replaceVar]; done)
                 | (simp only [PactType.replaceVar] at hFst
-                   split_ifs at hFst <;> simp_all)
+                   split_ifs at hFst)
           subst hResidual
           have hq := ih (typeCompilationFuel body)
             (by rw [← hSize, hFuelEq]; omega) body hBody rfl

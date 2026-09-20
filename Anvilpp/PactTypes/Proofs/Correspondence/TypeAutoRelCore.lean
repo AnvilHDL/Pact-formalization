@@ -721,7 +721,7 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
             obtain ⟨hBound, hValue⟩ := hFields
             have hMember : item.1 ∈ branches := by
               have := List.getElem_mem hBound
-              simpa [hValue] using this
+              simp [hValue]
             exact le_trans
               (typeCompilationFuel_le_typeBranchCompilationFuel branches item.1 hMember)
               hBranchesFuel
@@ -819,7 +819,7 @@ def relationMembership
 
 /-- The generated correspondence relation for `ty`, against the
 `auto` was compiled from. -/
-def buildRelationSet (ty : PactType) (auto : TypeAutomaton) :
+def buildRelationSet (ty : PactType) (_auto : TypeAutomaton) :
     Finset (PactType × TypeAutomatonState) :=
   buildRelationSetCore ty
 

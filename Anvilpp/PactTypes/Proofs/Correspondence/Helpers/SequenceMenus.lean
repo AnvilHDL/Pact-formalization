@@ -33,7 +33,7 @@ theorem sequenceLeftEdge_mem (left right : AutomatonFragment)
         (resolveFutureSpec leftFuture edge.future) edge.current (leftCompletes edge.source) := by
   by_cases hFinal : edge.target ∈ left.accepting <;>
     simp [sequenceLeftEdge, sequenceRedirectEdge, sequenceKeptLeftEdge,
-      sequenceRedirect, hFinal]
+      hFinal]
 
 /-- A retained left source redirects exactly its child's non-clock targets. -/
 theorem buildSequenceAutomaton_menuStep_left

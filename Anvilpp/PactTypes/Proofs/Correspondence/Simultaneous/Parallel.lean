@@ -490,7 +490,7 @@ theorem offer_par_leftComplete_forward
   have hNotClock : label ≠ TypeLabel.tock := by
     intro hClock
     have h := hSync.2.2.mpr (by rw [hClock]; trivial)
-    simpa [TypeLabel.silent, TypeLabel.isTock] using h
+    simp [TypeLabel.silent, TypeLabel.isTock] at h
   obtain ⟨qL', hEdgeL, hTargetL⟩ := hLeft.1 hRelL hStepL
   obtain ⟨qR', hEdgeR, hTargetR⟩ := hRight.1 hRelR hStepR
   let eL : AutomatonFragmentEdge := ⟨qL, envL, .visible TypeLabel.silent, cL, fL, qL'⟩
@@ -576,7 +576,7 @@ theorem offer_par_leftComplete_backward
     (hLabelL : eL.label = .visible labelL) (hLabelR : eR.label = .visible labelR)
     (hSync : syncAutomatonEdges left.alphabet right.alphabet interface eL eR)
     (hSourceFinal : eL.source ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
-    (hTargetFinal : eL.target ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
+    (_hTargetFinal : eL.target ∈ (compileTypeFuel (typeCompilationFuel left) left).accepting)
     (hSourceLive : eR.source ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting)
     (hTargetLive : eR.target ∉ (compileTypeFuel (typeCompilationFuel right) right).accepting) :
     ∃ target,
@@ -619,7 +619,7 @@ theorem offer_par_leftComplete_backward
   have hNotClock : labelR ≠ TypeLabel.tock := by
     intro hClock
     have h := hLabelSync.2.2.mpr (by rw [hClock]; trivial)
-    simpa [TypeLabel.silent, TypeLabel.isTock] using h
+    simp [TypeLabel.silent, TypeLabel.isTock] at h
   have hRightNotSkip := mt (related_accepting_iff hRelR).mpr hSourceLive
   have hTargetNotSkip := mt (related_accepting_iff hTargetR).mpr hTargetLive
   have hOffers := TypeOffers.left_complete
@@ -927,7 +927,7 @@ theorem offer_par_rightComplete_forward
   have hNotClock : label ≠ TypeLabel.tock := by
     intro hClock
     have h := hSync.2.2.mp (by rw [hClock]; trivial)
-    simpa [TypeLabel.silent, TypeLabel.isTock] using h
+    simp [TypeLabel.silent, TypeLabel.isTock] at h
   obtain ⟨qL', hEdgeL, hTargetL⟩ := hLeft.1 hRelL hStepL
   obtain ⟨qR', hEdgeR, hTargetR⟩ := hRight.1 hRelR hStepR
   let eL : AutomatonFragmentEdge := ⟨qL, envL, .visible label, cL, fL, qL'⟩
@@ -1011,7 +1011,7 @@ theorem offer_par_rightComplete_backward
     (hLabelL : eL.label = .visible labelL) (hLabelR : eR.label = .visible labelR)
     (hSync : syncAutomatonEdges left.alphabet right.alphabet interface eL eR)
     (hSourceFinal : eR.source ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
-    (hTargetFinal : eR.target ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
+    (_hTargetFinal : eR.target ∈ (compileTypeFuel (typeCompilationFuel right) right).accepting)
     (hSourceLive : eL.source ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting)
     (hTargetLive : eL.target ∉ (compileTypeFuel (typeCompilationFuel left) left).accepting) :
     ∃ target,
@@ -1054,7 +1054,7 @@ theorem offer_par_rightComplete_backward
   have hNotClock : labelL ≠ TypeLabel.tock := by
     intro hClock
     have h := hLabelSync.2.2.mp (by rw [hClock]; trivial)
-    simpa [TypeLabel.silent, TypeLabel.isTock] using h
+    simp [TypeLabel.silent, TypeLabel.isTock] at h
   have hLeftNotSkip := mt (related_accepting_iff hRelL).mpr hSourceLive
   have hTargetNotSkip := mt (related_accepting_iff hTargetL).mpr hTargetLive
   have hOffers := TypeOffers.right_complete

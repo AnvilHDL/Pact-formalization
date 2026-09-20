@@ -1,34 +1,28 @@
-# Anvilpp.PactTypes.Spec.Automata
+# Constructor Automata
 
-The automaton representation and the constructor compiler.
-
-| Module | Defines |
+| Module | Definitions |
 |---|---|
-| `AutomatonFragment` | `TypeAutomatonState`, `AutomatonConstructionLabel`, `FutureSpec`, `PendingAutomatonEdge`, `AutomatonFragment` and its shape invariants |
-| `TypeAlphabetDefs` | `localEnvironments`, `localOfferSummaries`, `TypeAutomatonSymbol`, `transitionAlphabet` |
-| `PendingAutomatonFutureDefs` | `referencedStates`, `offersAt`, `futureReachable`, `ReferencesClosed` |
-| `MarkerReachabilityDefs` | `MarkerSource`, `NoMarkerFor`, `markerStoppedFragment`, and the child-tagging helpers |
-| `MenuDependencies` | `menuDependencyTargets`, `withMenuDependencies` — the optimistic menu edges `L_σ` |
-| `SyncEdgesDefs` | interface hiding, `AutomatonLocalEnvironment`, `syncAutomatonEdges` |
-| `CompileTypeDefs` | `typeCompilationFuel`, `compileTypeFuel`, `compileType`, `computeFutureOf`, `HasEdge` |
-| `BuildChoiceAutomatonDefs` | `buildChoiceAutomaton` (ordinary and fair) |
-| `BuildSequenceAutomatonDefs` | `buildSequenceAutomaton` and its redirect edges |
-| `BuildParallelAutomaton` | the synchronized product, survivor and done edge families |
-| `BuildRecursionAutomatonDefs` | `buildRecursionAutomaton` |
-| `BuildOfferAutomataDefs` | `buildExclusiveOfferAutomaton`, `buildSelectedConjunctiveOfferAutomaton` |
-| `SequenceMenuLemmas` | `menuFrom` |
+| `AutomatonFragment` | Tagged states, pending edges, symbolic future fields, and finite fragments |
+| `TypeAlphabetDefs` | Finite environment, label, and offer alphabets |
+| `PendingAutomatonFutureDefs` | Execution-target closure, current offers, and reference closure |
+| `MarkerReachabilityDefs` | Recursion markers and stopped fragments |
+| `MenuDependencies` | Separate optimistic menu dependencies |
+| `SyncEdgesDefs` | Synchronization, hiding, and local environments |
+| `CompileTypeDefs` | Compilation fuel, constructor dispatch, resolved edges, and future menus |
+| `BuildChoiceAutomatonDefs` | Ordinary and fair choice |
+| `BuildSequenceAutomatonDefs` | Sequence copies and accepting-state redirection |
+| `BuildParallelAutomaton` | Product, survivor-entry, survivor-continuation, and done edges |
+| `BuildRecursionAutomatonDefs` | Recursion header and backedges |
+| `BuildOfferAutomataDefs` | Exclusive and conjunctive offers |
+| `SequenceMenuLemmas` | Menu aggregation from a chosen state |
 
-## Notes
+Public edges are resolved visible edges. Variable markers are construction
+labels used to install recursion backedges, not public execution steps.
 
-**`compileType` does not filter by alphabet.** Its edges are exactly the
-`.visible` edges of the constructed fragment, resolved: `.variable` labels map
-to `∅`, `.visible` to a singleton. `transitionAlphabet` names the automaton's
-alphabet without restricting its edges. So raw fragment edges and public
-`HasEdge`s differ only by the recursion markers.
+Menu aggregation follows non-clock execution targets and separate menu
+dependencies. Dependencies add neither execution states nor transitions.
+Future fields may be stored sets, menu references, or unions with a menu;
+their references do not determine the aggregation graph.
 
-**`FutureSpec.at q removed` resolves to `computeFutureOf q \ removed`.**
-Construction-only `.future` edges contribute to the menu but are not steps.
-
-**Markers carry environments.** `buildRecursionAutomaton` copies a marker
-edge's environment onto the backedge it installs, so matching a semantic step
-with a specific `E` requires a marker edge carrying that same `E`.
+Recursive backedges retain the environments of their variable markers.
+`compileType` does not apply an additional alphabet filter to its edges.

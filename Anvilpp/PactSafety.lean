@@ -169,7 +169,6 @@ theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
     exact ⟨inferProcess p₁, one_step_abstraction hAlpha hConj hStep,
       hReach.step hStep, dataWFProc_step hData hStep, rfl⟩
 
-#print axioms inferred_type_soundness
 /-- A process conforming to a precise type also conforms to any type it refines. -/
 theorem conformance_closed_under_refinement
     {process : Proc} {precise abstract : PactType}
@@ -226,8 +225,6 @@ theorem type_checking_soundness
     simpa using hChecks
   simpa using conformance_closed_under_refinement hPreciseConfirms hRefines
 
-#print axioms type_checking_soundness
-
 /-! ## Type compatibility checking -/
 
 /-- The completed-log objective over the finite boundary alphabet is omega-regular. -/
@@ -275,7 +272,6 @@ theorem type_automaton_correspondence
           (by simpa [typeAutomaton] using hEdge)
     }⟩
 
-#print axioms type_automaton_correspondence
 /-- A conforming process matches steps and readiness with its type's compiled automaton. -/
 theorem process_automaton_correspondence
      {process : Proc} {processType : PactType}
@@ -326,8 +322,6 @@ theorem process_automaton_correspondence
           hMatch ⟨residual, hConformRel, hAutoRel⟩ hStep
         exact ⟨eraseLabel label, offers, state', hEdge⟩ }⟩
 
-#print axioms process_automaton_correspondence
-
 /-- Every finite process execution has an automaton path with the same erased labels
 and environments, ending at a related state. -/
 theorem process_automaton_path
@@ -358,8 +352,6 @@ theorem game_reduction_correctness
   constructor
   · exact game_reduction_forward hWellFormed
   · exact game_reduction_backward hWellFormed
-
-#print axioms game_reduction_correctness
 
 /-- Compatibility transfers to a conforming process with the same fair-choice
 and progress identifiers. -/
@@ -408,8 +400,6 @@ theorem type_compatibility_soundness
     rw [fairOccursInfinitely_erase, fairOccursInfinitely_erase]
     exact hFair bid (hFairIds ▸ hBid)
 
-  #print axioms type_compatibility_soundness
-
 /-! ## Optimality of inferred types -/
 
 /-- Componentwise refinement preserves compatibility at equal component
@@ -440,8 +430,6 @@ theorem compatibility_monotone_under_refinement
       hFairIds hProgressIds
       (helper_h21_componentwise_product_lifting hRefines hAlphabets hPrecise
         hAbstract (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)) hComp⟩
-
-#print axioms compatibility_monotone_under_refinement
 
 /-- Claimed components match the processes' alphabets and identifiers, and
 their composition is well formed. -/
@@ -503,8 +491,6 @@ theorem inferred_types_optimal
           (progressIds_inferProcess process).trans h.2.2.symm⟩))
       hInferredWF hClaimedWF hCompatible
 
-#print axioms inferred_types_optimal
-
 /-- Failure of inferred-type compatibility excludes every compatible checked tuple
 with matching alphabets and identifiers. -/
 theorem inferred_failure_rules_out_data_oblivious_proofs
@@ -525,8 +511,6 @@ theorem inferred_failure_rules_out_data_oblivious_proofs
   fun hClaimed =>
     hFailure ((inferred_types_optimal processes interfaces progress
       hInferredWF).mpr hClaimed)
-
-#print axioms inferred_failure_rules_out_data_oblivious_proofs
 
 end
 

@@ -1,17 +1,14 @@
-# Anvilpp.PactTypes.Proofs.Correspondence.Cases
+# Atomic Correspondence
 
-Step equivalences for the atomic constructors, each an `↔` between a
-`DecoratedTypeTransition` and a `compileType … |>.HasEdge`.
+[Base.lean](Base.lean) matches atomic decorated steps with compiled edges.
 
-| Theorem | Statement |
+| Theorem | Case |
 |---|---|
-| `correspondence_skip_stepIff` | `skip`'s only step is its idle self-loop, matching its single compiled edge |
-| `correspondence_message_stepIff` | a declared message either fires or waits, each matching its edge family; an undeclared message has neither |
-| `correspondence_tock_stepIff` | the clock steps to `skip` on a clock environment and idles otherwise |
-| `correspondence_progress_stepIff` | `progress pid` fires to `skip` |
-| `correspondence_var_stepIff` | an open variable has no semantic step, and its only edge is the recursion marker, which is not public |
+| `correspondence_skip_stepIff` | Silent idle self-loop in a non-clock environment |
+| `correspondence_message_stepIff` | Communication when enabled, silent waiting otherwise; the environment constrains firing |
+| `correspondence_tock_stepIff` | Clock completion or non-clock waiting |
+| `correspondence_progress_stepIff` | Progress emission followed by completion |
+| `correspondence_var_stepIff` | No public step for an open variable; its construction edge is a marker |
 
-Used by the base cases of
-[`../Simultaneous/Base.lean`](../Simultaneous/Base.lean), paired with the
-corresponding `BaseGuard`. For compound constructors the same content is
-supplied by helper 16.
+[Simultaneous/Base](../Simultaneous/Base.lean) uses these equivalences with the
+corresponding base-state guards.

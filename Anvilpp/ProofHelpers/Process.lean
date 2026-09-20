@@ -13,10 +13,7 @@ open Classical
 /-! ## Process strategies, safety, and liveness (`procSem.typ`, "Safety and
 compatibility") -/
 
-/-- A valid finite represented execution prefix beginning at `initial`, i.e.
-`Pref(Q_0) = Q_0 <E_0,α_0> Q_1 … <E_{k-1},α_{k-1}> Q_k`.  Each entry records
-the residual it reaches, so a strategy sees the current residual and the full
-preceding environment/action sequence. -/
+/-- A finite execution from `initial`, recording each environment, label, and target residual. -/
 inductive PrefixValid (initial : Proc) :
     List (Environment × Label × Proc) → Proc → Prop where
   | root : PrefixValid initial [] initial
@@ -65,13 +62,8 @@ def OrdinaryProcessStep {initial : Proc} (strategy : ProcessStrategy initial)
     ProcessTransition (strategy (prefixAt index)) (prefixAt index).residual
       (log index).2 (prefixAt (index + 1)).residual
 
-/--
-`cal(L)^omega_(cal(S)_Q)(Q_0)`: all ordinary infinite logs together with all
-failure completions.  A failure completion is a finite ordinary prefix that
-reaches a stuck residual, contributes one `<E,ε>` entry there, and then repeats
-the absorbing entry `<(∅,∅),ε>` forever, so there are no finite logs: a stuck
-run is an infinite losing log whose clock never recurs.
--/
+/-- Infinite strategy logs, including stuck prefixes followed by one failed entry
+and an infinite empty-environment, silent-label suffix. -/
 def CompletedProcessLog {initial : Proc}
     (strategy : ProcessStrategy initial) (log : ProcessLog) : Prop :=
   ∃ prefixAt : ℕ → ProcessPrefix initial,

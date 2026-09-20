@@ -125,7 +125,7 @@ mutual
         cases hBranch : branch with
         | mk action ty =>
           simp only [hBranch, TailBranchOccurrences] at hTail
-          simp only [hBranch, replaceBranches, reannotateBranches_cons]
+          simp only [replaceBranches, reannotateBranches_cons]
           rw [replaceVar_reannotate_tail ty name replacement alphabet hReplacement hTail.1,
             replaceBranches_reannotate_tail rest name replacement alphabet hReplacement hTail.2]
   termination_by sizeOf branches
@@ -142,7 +142,7 @@ mutual
         cases hBranch : branch with
         | mk action ty =>
           simp only [hBranch, TailBranchOccurrences] at hTail
-          simp only [hBranch, replaceBranches, reannotateOfferBranches_cons]
+          simp only [replaceBranches, reannotateOfferBranches_cons]
           rw [replaceVar_reannotate_tail ty name replacement alphabet hReplacement hTail.1,
             replaceOfferBranches_reannotate_tail rest name replacement alphabet seen hReplacement hTail.2]
   termination_by sizeOf branches
@@ -188,8 +188,8 @@ theorem typeCanCompleteThisCycleFuel_reannotate_mono (fuel : Nat) (ty : PactType
             ih r _ _ (Finset.union_subset_union (Finset.Subset.refl _) hSub) h.2⟩
       | xoffer a other branches | offer a other branches =>
           simp only [PactType.reannotate, typeCanCompleteThisCycleFuel, PactType.reannotateBranches_map,
-            PactType.reannotateOfferBranches_map, List.forall_mem_map, List.any_map,
-            Function.comp_def, Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, List.any_eq_true]
+            PactType.reannotateOfferBranches_map, List.any_map,
+            Function.comp_def, Bool.or_eq_true, List.any_eq_true]
           rintro (hElse | ⟨branch, hMem, hComplete⟩)
           · exact Or.inl (ih other small large hSub hElse)
           · exact Or.inr ⟨branch, hMem, ih branch.2 small large hSub hComplete⟩

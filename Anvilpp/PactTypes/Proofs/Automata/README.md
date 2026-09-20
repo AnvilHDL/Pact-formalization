@@ -1,26 +1,21 @@
-# Anvilpp.PactTypes.Proofs.Automata
+# Compiler Laws
 
-Laws of the compiler and of compiled fragments, independent of the type
-semantics.
-
-| Module | Main results |
+| Module | Results |
 |---|---|
-| `CompileTypeLemmas` | `typeCompilationFuel_sufficient` and `compileTypeFuel_eq_of_sufficient` (fuel irrelevance); `compileType_hasEdge_iff_hasResolvedEdge`, identifying a public edge with a resolved pending edge |
-| `MarkerAbsenceLemmas` | where recursion markers cannot occur: `compileTypeFuel_noMarkerFor`, one `_noMarkerFor` per builder, and the `markerSource` transports |
-| `FiniteMenuGraph` | `futureReachable` as a finite fixed point, with its embedding invariance |
-| `PendingAutomatonFutureLemmas` | `referencesClosed_of_futureTargetsInStates` and the `futureReachableAux` equations |
-| `BuildOfferAutomataLemmas` | offer-graph edge shape; `mem_foldl_union_iff` for the `foldl`-built branch edge sets |
-| `BuildRecursionAutomatonLemmas` | `buildRecursionAutomaton_markerSource_child`, `not_..._markerSource_root` |
-| `BuildSequenceAutomatonLemmas` | `sequenceRedirect_of_accepting`, `mem_sequenceDeleted_iff` |
-| `BuildChoiceAutomatonLemmas` | outgoing-edge characterisations for the children and the root |
-| `BuildParallelAutomatonLemmas` | `buildParallelAutomaton_clockEdgesAreTock`, `_futureTargetsInStates` |
-| `RecursionMenuLemmas` | `futureReachable_recur_child`, `menuFrom_eq_of_pruning` |
-| `MenuDependenciesLemmas` | laws of the optimistic menu edges |
-| `TypeAlphabetLemmas` | `empty_mem_localEnvironments`, `environment_wellFormed` |
+| `CompileTypeLemmas` | Sufficient-fuel stability and resolved/public edge agreement |
+| `FiniteMenuGraph` | Finite reference closure and embedding invariance |
+| `PendingAutomatonFutureLemmas` | Non-clock execution closure and future-reference closure |
+| `MenuDependenciesLemmas` | Optimistic menu-dependency transport |
+| `RecursionMenuLemmas` | Menu closure under recursive copying and pruning |
+| `MarkerAbsenceLemmas`, `MarkerReachabilityLemmas` | Marker exclusion and reachability through constructors |
+| `BuildChoiceAutomatonLemmas` | Root and child edge characterizations |
+| `BuildSequenceAutomatonLemmas` | Accepting redirection and copied-edge membership |
+| `BuildOfferAutomataLemmas` | Offer-root and indexed-branch edge membership |
+| `BuildParallelAutomatonLemmas` | Product shape, clock edges, and target closure |
+| `BuildRecursionAutomatonLemmas` | Header, body, and recursive backedge membership |
+| `SyncEdgesLemmas` | Synchronized edge and local-environment properties |
+| `TypeAlphabetLemmas` | Finite environment membership and well-formedness |
 
-## Note
-
-`compileTypeFuel` takes a fuel argument so the compiler is structurally
-recursive. `compileTypeFuel_eq_of_sufficient` says any sufficient budget gives
-the same fragment; `compileType` fixes the canonical one. Proofs about compound
-constructors normally begin by normalising fuel with it.
+`compileTypeFuel_eq_of_sufficient` makes the compiler independent of the
+chosen sufficient fuel. Constructor proofs use it to compare child fragments
+with their canonical compilations.

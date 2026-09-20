@@ -268,8 +268,8 @@ theorem eraseLabel_combine (interface : Interface) (left right : Label) :
               · exact Finset.mem_union_left _ (Finset.mem_image_of_mem _ h)
               · exact Finset.mem_union_right _ (Finset.mem_image_of_mem _ h)
             · cases source <;>
-                simpa [eraseObservation, Label.isRawSyncedMessage,
-                  TypeLabel.isRawSyncedMessage] using hRaw
+                simp_all [eraseObservation, Label.isRawSyncedMessage,
+                  TypeLabel.isRawSyncedMessage]
           · intro hMem
             obtain ⟨hUnion, hRaw⟩ := Finset.mem_filter.1 hMem
             rcases Finset.mem_union.1 hUnion with h | h
@@ -277,14 +277,14 @@ theorem eraseLabel_combine (interface : Interface) (left right : Label) :
               exact Finset.mem_image_of_mem _ (Finset.mem_filter.2
                 ⟨Finset.mem_union_left _ hSource, by
                   cases source <;>
-                    simpa [eraseObservation, Label.isRawSyncedMessage,
-                      TypeLabel.isRawSyncedMessage] using hRaw⟩)
+                    simp_all [eraseObservation, Label.isRawSyncedMessage,
+                      TypeLabel.isRawSyncedMessage]⟩)
             · obtain ⟨source, hSource, rfl⟩ := Finset.mem_image.1 h
               exact Finset.mem_image_of_mem _ (Finset.mem_filter.2
                 ⟨Finset.mem_union_right _ hSource, by
                   cases source <;>
-                    simpa [eraseObservation, Label.isRawSyncedMessage,
-                      TypeLabel.isRawSyncedMessage] using hRaw⟩)
+                    simp_all [eraseObservation, Label.isRawSyncedMessage,
+                      TypeLabel.isRawSyncedMessage]⟩)
 
 /-! ## Interface restriction and hiding -/
 

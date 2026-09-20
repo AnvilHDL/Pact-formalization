@@ -19,7 +19,7 @@ rule and the selection edge family, and copied states use the lower-rank
 hypothesis. -/
 theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
     (left right : PactType)
-    (hWF : (PactType.choice alphabet left right).AlphabetWellFormed)
+    (_hWF : (PactType.choice alphabet left right).AlphabetWellFormed)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
     (hRightDisjoint : right.OfferBranchesDisjoint)
     (hLeftAlphabet : left.alphabet = (PactType.choice alphabet left right).alphabet)
@@ -60,7 +60,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
                 Finset.mem_insert, Finset.mem_singleton]
               exact Or.inr ⟨env, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed
                 hChoiceEnv.1, hChoiceEnv.2⟩, Or.inl rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_choice_left alphabet left right left
               (buildRelationSet_initial left (compileType left))
       | choice_right cEnv cAlpha cLeft cRight hChoiceEnv =>
@@ -84,7 +84,7 @@ theorem currentOfferCorrespondence_choice (alphabet : PactTypeAlphabet)
                 Finset.mem_insert, Finset.mem_singleton]
               exact Or.inr ⟨env, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed
                 hChoiceEnv.1, hChoiceEnv.2⟩, Or.inr rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_choice_right alphabet left right right
               (buildRelationSet_initial right (compileType right))
     · -- Copied left state: the lower-rank hypothesis, lifted.
@@ -484,7 +484,7 @@ theorem futureOffersAgree_choice (alphabet : PactTypeAlphabet)
           (Finset.mem_union_left _ (Finset.mem_singleton_self _)))
       (by
         rw [hRefs]
-        simp [Finset.insert_subset_iff])
+        simp)
       (by rw [hRefs]; exact Finset.subset_union_left)
       (by
         simp only [hWholeDef]
@@ -760,7 +760,7 @@ rule and the selection edge family, and copied states use the lower-rank
 hypothesis. -/
 theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid : BranchId)
     (left right : PactType)
-    (hWF : (PactType.fairChoice alphabet bid left right).AlphabetWellFormed)
+    (_hWF : (PactType.fairChoice alphabet bid left right).AlphabetWellFormed)
     (hLeftDisjoint : left.OfferBranchesDisjoint)
     (hRightDisjoint : right.OfferBranchesDisjoint)
     (hLeftAlphabet : left.alphabet = (PactType.fairChoice alphabet bid left right).alphabet)
@@ -801,7 +801,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
                 Finset.mem_insert, Finset.mem_singleton]
               exact Or.inr ⟨env, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed
                 hChoiceEnv.1, hChoiceEnv.2⟩, Or.inl rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_fairChoice_left alphabet bid left right left
               (buildRelationSet_initial left (compileType left))
       | fair_right cEnv cAlpha cBid cLeft cRight hChoiceEnv =>
@@ -825,7 +825,7 @@ theorem currentOfferCorrespondence_fairChoice (alphabet : PactTypeAlphabet) (bid
                 Finset.mem_insert, Finset.mem_singleton]
               exact Or.inr ⟨env, ⟨PactTypeAlphabet.mem_localEnvironments_of_wellFormed
                 hChoiceEnv.1, hChoiceEnv.2⟩, Or.inr rfl⟩
-            · simp [childState]
+            · simp
           · exact relationMembership_fairChoice_right alphabet bid left right right
               (buildRelationSet_initial right (compileType right))
     · -- Copied left state: the lower-rank hypothesis, lifted.
@@ -1005,7 +1005,7 @@ theorem futureOffersAgree_fairChoice (alphabet : PactTypeAlphabet)
           (Finset.mem_union_left _ (Finset.mem_singleton_self _)))
       (by
         rw [hRefs]
-        simp [Finset.insert_subset_iff])
+        simp)
       (by rw [hRefs]; exact Finset.subset_union_left)
       (by
         simp only [hWholeDef]

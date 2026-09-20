@@ -136,7 +136,7 @@ theorem erasure_preserves_offers
               ({(msg, MessageDir.recv)} ∩ alphabet.actions) := by
         simp only [typeFutureOffers_skip, Finset.empty_union, sequenceRightMenu,
           canCompleteDeclared_message, ↓reduceIte,
-          procFutureOffers_procExprReplace, procFutureOffers_inferProcess,
+          procFutureOffers_inferProcess,
           inferProcess_procExprReplace]
       rw [inferProcess, eraseLabel_message, projectCurrent_image, image_bare_recv, ← hFuture,
         inferProcess_procExprReplace]
@@ -200,7 +200,7 @@ theorem erasure_preserves_offers
             procFutureOffers (Semantics.procExprReplace p varName value) := by
         simp only [typeFutureOffers_skip, Finset.empty_union, sequenceRightMenu,
           canCompleteDeclared_skip, if_pos, Finset.sdiff_empty,
-          procFutureOffers_procExprReplace, procFutureOffers_inferProcess,
+          procFutureOffers_inferProcess,
           inferProcess_procExprReplace]
       rw [inferProcess, eraseLabel_silent, image_bare_empty, ← hFuture,
         inferProcess_procExprReplace]

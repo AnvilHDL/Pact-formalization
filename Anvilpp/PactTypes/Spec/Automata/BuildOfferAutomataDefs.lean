@@ -24,8 +24,8 @@ def indexedFragmentCompletes
     states ∪ childCompletes (indexed.2 + 1) indexed.1.2) ∅
 
 /-- An offer may optimistically complete through its default or a branch. -/
-def offerRootCompletes (alphabet : PactTypeAlphabet)
-    (branches : List (BareMessage × PactType))
+def offerRootCompletes (_alphabet : PactTypeAlphabet)
+    (_branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
     (branchAutomata : List (BareMessage × AutomatonFragment)) :
     Finset TypeAutomatonState := by

@@ -39,7 +39,7 @@ private theorem selected_canCompleteDeclared_before
       cases rest with
       | nil =>
           have hEq : head = selected := (List.mem_singleton.mp hMem).symm
-          simp only [parallelTypeBranchesSelectingWithin, hEq, if_pos rfl, selectedTypeBranchAt] at hComplete
+          simp only [parallelTypeBranchesSelectingWithin, hEq, selectedTypeBranchAt] at hComplete
           rw [PactType.canCompleteDeclared_eq] at hComplete
           exact hNormal ▸ (Bool.and_eq_true_iff.mp hComplete).2
       | cons next tail =>
@@ -94,19 +94,19 @@ theorem TypeTransition.canCompleteDeclared_backward
         hNonClock (PactType.canCompleteDeclared_eq (.skip skipAlphabet)), hComplete⟩
   | xoffer_branch env alphabet other branches action body hEnv =>
       rw [PactType.canCompleteDeclared_eq]
-      simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
+      simp only [Bool.or_eq_true]
       exact Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1 hComplete)
   | xoffer_else env alphabet other branches hEnv
   | offer_else env alphabet other branches hEnv =>
       rw [PactType.canCompleteDeclared_eq]
-      simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
+      simp only [Bool.or_eq_true]
       exact Or.inl hComplete
   | xoffer_wait | offer_wait => exact hComplete
   | offer_some env alphabet other branches selected hEnv =>
       simp only [PactType.alphabet, PactType.reannotate, PactType.offer.injEq, true_and] at hNormal
       rw [PactType.reannotateOfferBranches_map] at hNormal
       rw [PactType.canCompleteDeclared_eq]
-      simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true]
+      simp only [Bool.or_eq_true]
       exact Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1
         (selected_canCompleteDeclared_before alphabet selected branches hEnv.2.1
           (reannotate_branches_fixed_of_mem alphabet branches hNormal.2 selected hEnv.2.1) hComplete))

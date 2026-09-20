@@ -39,12 +39,11 @@ theorem menuDependencyTargets_child
     simp only [↓reduceIte]
     ext target
     simp only [menuDependencyTargets, Finset.mem_image, Finset.mem_filter,
-      Prod.exists, Prod.mk.injEq, TypeAutomatonState.child.injEq]
+      Prod.exists, Prod.mk.injEq]
     aesop
   · ext target
     simp only [if_neg hIndex, menuDependencyTargets, Finset.mem_image,
-      Finset.mem_filter, Prod.exists, Prod.mk.injEq, TypeAutomatonState.child.injEq,
-      Finset.notMem_empty, iff_false]
+      Finset.mem_filter, Prod.exists, Prod.mk.injEq, Finset.notMem_empty, iff_false]
     aesop
 
 @[simp] theorem menuDependencyTargets_child_root

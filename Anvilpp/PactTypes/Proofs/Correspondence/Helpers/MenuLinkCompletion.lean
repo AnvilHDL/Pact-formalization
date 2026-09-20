@@ -65,7 +65,6 @@ private theorem completionAfter_eq (subs : List (String × PactType)) (ty : Pact
   induction subs generalizing ty with
   | nil =>
     cases ty <;> simp only [completionAfter, List.filter_nil]
-    all_goals try rfl
     all_goals rw [PactType.canCompleteDeclared_eq]
     all_goals simp only [branchCompletion_eq_any]
   | cons s rest ih =>
@@ -75,7 +74,7 @@ private theorem completionAfter_eq (subs : List (String × PactType)) (ty : Pact
     | recur a other body =>
       by_cases hName : name = other
       · subst other
-        simp only [completionAfter, PactType.replaceVar, if_pos rfl, List.filter_cons,
+        simp only [completionAfter, PactType.replaceVar, List.filter_cons,
           bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
         exact ih (.recur a name body)
       · simpa only [completionAfter, PactType.replaceVar, if_neg hName, List.filter_cons,
@@ -86,7 +85,7 @@ private theorem completionAfter_eq (subs : List (String × PactType)) (ty : Pact
     | xoffer | offer =>
       simp only [completionAfter, PactType.replaceVar]
       rw [ih]
-      simp only [replaceBranches_map, List.any_map, Function.comp_def, completionAfter]
+      simp only [replaceBranches_map, List.any_map, Function.comp_def]
 
 private theorem completionAfter_reannotate (ty : PactType) :
     ∀ alphabet subs, completionAfter subs (ty.reannotate alphabet) = completionAfter subs ty := by
@@ -172,7 +171,7 @@ private theorem completionAfter_selected (alphabet : PactTypeAlphabet)
       | cons next tail =>
         by_cases hEq : b = selected
         · subst b
-          simp only [parallelTypeBranchesSelectingWithin, if_pos rfl] at hComplete
+          simp only [parallelTypeBranchesSelectingWithin] at hComplete
           rw [completionAfter_eq] at hComplete
           have hHead := (Bool.and_eq_true_iff.mp hComplete).1
           simp only [selectedTypeBranchAt, completionAfter_seq] at hHead
@@ -362,12 +361,8 @@ private theorem menuLinks_completion_transport :
               obtain ⟨hBound, hValue⟩ := List.mem_zipIdx' hItem
               simp [hValue, List.getElem_mem hBound]
             rcases hItemLink with ⟨entry, hEntry, rfl⟩ | rfl
-            · first
-              | specialize ih item.1.2 (by
+            · specialize ih item.1.2 (by
                   have := typeCompilationFuel_le_typeBranchCompilationFuel branches item.1 hMember
-                  simp [typeCompilationFuel] at hFuel; omega) entry hEntry
-              | specialize ih (parallelTypeBranchesSelecting a item.1 branches) (by
-                  rw [typeCompilationFuel_parallelTypeBranchesSelecting]
                   simp [typeCompilationFuel] at hFuel; omega) entry hEntry
               obtain ⟨rho, theta, hRho, hTheta, hComplete⟩ := ih
               refine ⟨rho, theta, ?_, ?_, hComplete⟩
@@ -388,8 +383,7 @@ private theorem menuLinks_completion_transport :
                   (item.1.2, (compileTypeFuel fuel item.1.2).initial),
                   buildRelationSetCoreFuel_initial_mem fuel item.1.2 hBranchFuel, rfl⟩))
               · intro subs h
-                have hSelected : completionAfter subs item.1.2 = true := by
-                  first | exact h | exact completionAfter_selected a item.1 branches hMember subs h
+                have hSelected : completionAfter subs item.1.2 = true := h
                 rw [completionAfter_eq]
                 simp only [Bool.or_eq_true]
                 exact Or.inr (List.any_eq_true.mpr ⟨item.1, hMember, hSelected⟩)
@@ -421,11 +415,7 @@ private theorem menuLinks_completion_transport :
               obtain ⟨hBound, hValue⟩ := List.mem_zipIdx' hItem
               simp [hValue, List.getElem_mem hBound]
             rcases hItemLink with ⟨entry, hEntry, rfl⟩ | rfl
-            · first
-              | specialize ih item.1.2 (by
-                  have := typeCompilationFuel_le_typeBranchCompilationFuel branches item.1 hMember
-                  simp [typeCompilationFuel] at hFuel; omega) entry hEntry
-              | specialize ih (parallelTypeBranchesSelecting a item.1 branches) (by
+            · specialize ih (parallelTypeBranchesSelecting a item.1 branches) (by
                   rw [typeCompilationFuel_parallelTypeBranchesSelecting]
                   simp [typeCompilationFuel] at hFuel; omega) entry hEntry
               obtain ⟨rho, theta, hRho, hTheta, hComplete⟩ := ih

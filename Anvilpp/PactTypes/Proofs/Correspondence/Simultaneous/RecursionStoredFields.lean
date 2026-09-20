@@ -70,7 +70,8 @@ private theorem compileTypeFuel_storedMenuSource :
       simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
         Finset.mem_image, Finset.mem_filter] at hEdge
       rcases hEdge with ⟨env, _, rfl⟩ | ⟨env, _, rfl⟩
-      · split_ifs at hField <;> simp_all [AutomatonConstructionLabel.semantic]
+      · split_ifs at hField
+        simp_all [AutomatonConstructionLabel.semantic]
       · simp at hField
     | choice a left right | fairChoice a bid left right =>
       have hLeft : typeCompilationFuel left ≤ fuel := by simp [typeCompilationFuel] at hFuel; omega
@@ -151,7 +152,7 @@ private theorem compileTypeFuel_storedMenuSource :
         · simp [hMarker] at hField
         · simp only [if_neg hMarker] at hRelated hNonClock hField
           simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_image,
-            Prod.mk.injEq, childPendingEdge, childState, TypeAutomatonState.child.injEq] at hRelated
+            Prod.mk.injEq, childState, TypeAutomatonState.child.injEq] at hRelated
           rcases hRelated with ⟨_, hImpossible⟩ | ⟨entry, hEntry, hSource, _, hState⟩
           · simp at hImpossible
           change (entry.1, entry.2) ∈ _ at hEntry

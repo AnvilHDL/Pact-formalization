@@ -13,7 +13,7 @@ theorem reannotate_branches_fixed_of_mem
   induction branches with
   | nil => simp at hMem
   | cons head rest ih =>
-      simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at h
+      simp only [List.map_cons, List.cons.injEq] at h
       rcases List.mem_cons.mp hMem with rfl | hRest
       · exact congrArg Prod.snd h.1
       · exact ih h.2 hRest
@@ -105,7 +105,7 @@ theorem TypeTransition.preserves_reannotate_self
       obtain ⟨hA, hL⟩ := PactType.reannotate_eq_self_data hNormal.1
       have hTarget := ih hL hTail.1
       rw [hA] at hTarget
-      simpa only [PactType.alphabet, PactType.reannotate, hTarget, hNormal.2]
+      simp only [PactType.alphabet, PactType.reannotate, hTarget, hNormal.2]
   | seq_fuse env alphabet skipAlphabet left right label _ ih =>
       simp only [PactType.alphabet, PactType.reannotate, PactType.seq.injEq, true_and] at hNormal
       exact hNormal.2

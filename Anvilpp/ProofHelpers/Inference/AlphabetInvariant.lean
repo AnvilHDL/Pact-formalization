@@ -29,7 +29,7 @@ theorem PactTypeAlphabet.projectParallel_left
   | mk actions =>
       simp only [PactTypeAlphabet.projectParallel, hActions,
         PactTypeAlphabet.mk.injEq]
-      exact Finset.filter_union_filter_neg_eq _ _
+      exact Finset.filter_union_filter_not_eq _ _
 
 theorem PactTypeAlphabet.projectParallel_right
     {parent left right : PactTypeAlphabet} {interface : Interface}
@@ -44,7 +44,7 @@ theorem PactTypeAlphabet.projectParallel_right
   | mk actions =>
       simp only [PactTypeAlphabet.projectParallel, hActions,
         PactTypeAlphabet.mk.injEq]
-      exact Finset.filter_union_filter_neg_eq _ _
+      exact Finset.filter_union_filter_not_eq _ _
 
 private theorem reannotate_eq_self_aux : ∀ n : Nat,
     (∀ (process : Proc) (alphabet : PactTypeAlphabet), sizeOf process < n →

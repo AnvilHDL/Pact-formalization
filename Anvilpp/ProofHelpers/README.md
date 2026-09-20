@@ -7,11 +7,9 @@ Supporting definitions and proofs for [PactSafety](../PactSafety.lean).
 | Module | Contents |
 |---|---|
 | `Process`, `TypeSemantics` | Executions, completed logs, fairness, and objectives |
+| `Objectives` | Value-oblivious objectives and erased-log membership |
 | `ConformanceTransfer` | Matching process/type histories and transferring strategies |
-| `Inference/OneStepAbstraction` | Erasure of process steps |
-| `Inference/DecoratedLifting` | Concrete realization of abstract offer pairs and readiness |
-| `Inference/AbstractionIdentifiers` | Preservation of fair-choice and progress IDs |
-| `Inference/DataPreservation`, `Inference/ConjunctPreservation` | Structural invariants of reachable processes |
+| [Inference](Inference/README.md) | Abstraction, offer realization, identifiers, and reachable-process invariants |
 
 ## Compatibility
 
@@ -19,10 +17,12 @@ Supporting definitions and proofs for [PactSafety](../PactSafety.lean).
 |---|---|
 | `CompatibilityGame` | Game construction and compatibility |
 | `ObjectiveMonitor`, `RoundRobin` | Acceptance monitors |
+| `SameCycleHonesty` | Equivalence of adjacent-step and same-cycle honesty |
 | `LogRecognizer`, `ObjectiveRegularity` | Finite Rabin recognizability of the log objective |
 | `CompatibilityBridge`, `StrategyExtension` | Game/semantic strategy correspondence |
 | `PrefixPlayMatch` | Matching finite executions and game plays |
 | `CompatibilitySoundness` | Log erasure and failure completion |
+| `Regularity` | Compiler admissibility |
 
 ## Refinement and Optimality
 
@@ -40,7 +40,4 @@ well-formedness. Compatibility transfer requires equal fair-choice and progress
 identifier sets. These boundary conditions do not require identifier equality
 between every pair of residuals.
 
-`Regularity` defines compiler admissibility. `OmegaRegular` states finite Rabin
-recognizability over the type's boundary environment/label alphabet.
-`ObjectiveRegularity` proves it by combining bounded honesty memory with the
-existing round-robin monitors. No operational states or transitions are added.
+See the [results index](../../RESULTS.md) for public statements and proof chains.

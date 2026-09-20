@@ -153,7 +153,7 @@ private theorem buildParallelAutomaton_edgeTargetsInStates
     parallelRightCompleteSurvivorEdges, parallelLeftCompleteDoneEdges,
     parallelRightCompleteDoneEdges, parallelDoneEdges,
     Finset.mem_union, Finset.mem_biUnion, Finset.mem_image,
-    Finset.mem_filter, Finset.mem_inter] at hEdge
+    Finset.mem_filter] at hEdge
   rcases hEdge with
       ((((((⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, _⟩, rfl⟩ |
         ⟨leftEdge, hLeftEdge, rightEdge, ⟨hRightEdge, -⟩, rfl⟩) |
@@ -777,9 +777,9 @@ theorem compileTypeFuel_futureTargetsInStates  :
           simp only [compileTypeFuel, finishAutomatonFragment, Finset.mem_union,
             Finset.mem_image] at hEdge
           rcases hEdge with ⟨environment, _, rfl⟩ | ⟨environment, _, rfl⟩
-          · split at hFuture <;> simp [FutureSpec.referenced] at hFuture <;>
-              subst target <;>
-              simp [compileTypeFuel, finishAutomatonFragment]
+          · split at hFuture <;> simp [FutureSpec.referenced] at hFuture
+            subst target
+            simp [compileTypeFuel, finishAutomatonFragment]
           · simp [FutureSpec.referenced] at hFuture
             subst target
             simp [compileTypeFuel, finishAutomatonFragment]
@@ -2216,7 +2216,7 @@ theorem computeFutureOf_root_decomposition (whole : PactType)
     (hPending : pending =
       { states := (compileTypeFuel (typeCompilationFuel whole) whole).states,
         edges := (compileTypeFuel (typeCompilationFuel whole) whole).edges })
-    (hClosed : pending.MenuClosed)
+    (_hClosed : pending.MenuClosed)
     (hSource : source ∈ pending.states)
     (hUpper : pending.menuStep source ∪
       menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole) source ⊆

@@ -198,8 +198,7 @@ lemma completedProcessLog_of_stuck {initial : Proc} {strategy : ProcessStrategy 
       · rw [if_neg (Nat.not_lt.mpr hGe), ← hLast, Nat.le_antisymm hLe hGe]
     refine Or.inr ⟨bound, ?_, ?_, ?_, ?_⟩
     · intro n hLt
-      simp only [OrdinaryProcessStep, if_pos hLt, hPrefix n (Nat.le_of_lt hLt),
-        hPrefix (n + 1) (Nat.succ_le_of_lt hLt)]
+      simp only [OrdinaryProcessStep, if_pos hLt, hPrefix (n + 1) (Nat.succ_le_of_lt hLt)]
       exact hSteps n hLt
     · simp only []
       rw [if_neg (Nat.lt_irrefl bound)]

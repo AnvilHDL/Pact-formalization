@@ -167,7 +167,7 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     (hElseTargets : elseAutomaton.FutureTargetsInStates)
     (hBranchTargets : ∀ entry ∈ branchAutomata,
       entry.2.FutureTargetsInStates)
-    (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
+    (_hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
     (hBranchInitial : ∀ entry ∈ branchAutomata,
       entry.2.initial ∈ entry.2.states) :
     (buildExclusiveOfferAutomaton alphabet branches elseAutomaton
@@ -202,8 +202,7 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
         right
         refine ⟨indexed, hIndexedEntry, ?_⟩
         simp [childStates, childState, hInitial]
-      simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
-        hIndexedState]
+      simp [buildExclusiveOfferAutomaton, finishAutomatonFragment]
   · simp only [Finset.mem_image, Finset.mem_filter] at hWait
     rcases hWait with ⟨environment, _, rfl⟩
     simp only at hFuture
@@ -214,7 +213,7 @@ theorem buildExclusiveOfferAutomaton_futureTargetsInStates
     simp only at hFuture
     cases hFuture
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
-      childStates, childState, hElseInitial]
+      childStates, childState]
 
 /-- Wait and else edges carry explicit `clock = false` guards; enabled edges
 require an immediate need, which a clocked environment cannot supply. -/
@@ -298,7 +297,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
       rcases hIndexedFields with ⟨hBound, hValue⟩
       have hEntry : indexed.1 ∈ selectedConjunctions := by
         have hMember := List.getElem_mem hBound
-        simpa [hValue] using hMember
+        simp [hValue]
       have hIndexedState : childState (indexed.2 + 1)
           indexed.1.2.initial ∈
           indexedFragmentStates selectedConjunctions := by
@@ -504,7 +503,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
     · rw [if_neg (by
         rw [hEdgeDef]
         simp [AutomatonConstructionLabel.semantic, TypeLabel.message]), hEdgeDef]
-      simp only [Finset.union_empty, Finset.mem_singleton]
+      simp only [Finset.mem_singleton]
       exact hEntryHead.symm
 
 /-- The states an exclusive-offer root can reach within the cycle: the default

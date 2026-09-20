@@ -24,7 +24,7 @@ theorem typeLabel_sync_not_isTock (interface : Interface) (left right : TypeLabe
 
 lemma helper_h12_compiled_state_shape
      {processType residual : PactType}
-    (hRelated :
+    (_hRelated :
       relationMembership
         (buildRelationSet processType (compileType processType))
         residual (compileType processType).initial) :
@@ -542,13 +542,12 @@ theorem parallelTypeBranchesSelectingWithin_ownershipData
           by_cases hSelected : (action, processType) = selected
           · subst selected
             simp [parallelTypeBranchesSelectingWithin,
-              selectedTypeBranchAt, singletonTypeXOfferAt,
-              PactType.MessageIds, PactType.MessageActions,
+              selectedTypeBranchAt, PactType.MessageIds, PactType.MessageActions,
               PactType.ProgressIds, PactType.FairChoiceIds,
               PactType.BranchMessageIds, PactType.BranchMessageActions,
               PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
           · simp [parallelTypeBranchesSelectingWithin, hSelected,
-              selectedTypeBranchAt, singletonTypeXOfferAt,
+              singletonTypeXOfferAt,
               PactType.MessageIds, PactType.MessageActions,
               PactType.ProgressIds, PactType.FairChoiceIds,
               PactType.BranchMessageIds, PactType.BranchMessageActions,

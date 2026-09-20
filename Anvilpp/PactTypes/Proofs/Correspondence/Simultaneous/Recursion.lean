@@ -2758,7 +2758,7 @@ theorem offer_recur_backedge_backward
         (compileType (.recur alphabet name body))) target q' := by
   have hParentRelated := relationMembership_recur_child alphabet name body
     (.var varAlphabet name) hRelated
-  simp only [PactType.replaceVar, if_pos rfl] at hParentRelated
+  simp only [PactType.replaceVar] at hParentRelated
   exact offer_recur_unfold_backward hCurrent hMenus hParentRelated hEdge
     (compileType_recur_marker_future alphabet name body hBody hRelated hEdge)
 

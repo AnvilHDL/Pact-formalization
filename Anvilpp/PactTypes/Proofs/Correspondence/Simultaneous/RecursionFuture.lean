@@ -137,7 +137,7 @@ private theorem compileTypeFuel_sourceFieldRepresented :
       rcases hEdge with ⟨env, _, rfl⟩ | ⟨child, hChild, rfl⟩
       · simp_all
       · by_cases hMarker : child.label = .variable name
-        · simp_all [hMarker]
+        · simp_all []
         · simp only [if_neg hMarker] at hFuture hNotTarget ⊢
           obtain ⟨q, hField, rfl⟩ := childFutureSpec_at 0 child.future reference removed hFuture
           obtain ⟨source, hSource, hShape⟩ := ih body hBody child hChild q removed hField
@@ -792,7 +792,7 @@ theorem offer_recur_copied_forward
     cases hSpec : edge.future with
     | explicit stored =>
       have hStored : stored = originalFuture := by simpa only [hSpec, resolveFutureSpec] using hOldFuture
-      simp only [hSpec, resolveFutureSpec]
+      simp only [resolveFutureSpec]
       by_cases hClock : label = .tock
       · have hEq : future = originalFuture :=
           (hStep.2.future_eq_empty_of_label_tock hClock).trans

@@ -17,7 +17,7 @@ private theorem targetMenuSource_replaceVar (name : String) (replacement source 
     (env : TypeEnvironment) (hSource : TargetMenuSource source env) :
     TargetMenuSource (source.replaceVar name replacement) env := by
   cases source <;> simp_all [TargetMenuSource, PactType.replaceVar, TypeResolved_replaceBranches]
-  split_ifs <;> simp [TargetMenuSource]
+  split_ifs <;> simp
 
 private theorem targetMenuSource_future {source target : PactType} {env : TypeEnvironment}
     {label : TypeLabel} {current future : Finset BareMessage}

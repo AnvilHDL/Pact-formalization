@@ -1,22 +1,11 @@
-# Anvilpp.PactTypes.Spec
+# Type and Automaton Definitions
 
-The definitions Lemma 4.5 is about: the type language, its operational
-semantics, and the constructor-automaton compiler.
+| Directory | Definitions |
+|---|---|
+| [Syntax](Syntax/README.md) | Types, substitution, well-formedness, transitions, and offers |
+| [Automata](Automata/README.md) | Finite constructor fragments, execution edges, and menu aggregation |
 
-| | Files | Lines | Defs |
-|---|---:|---:|---:|
-| [`Syntax/`](Syntax/README.md) | 13 | 2,586 | 153 |
-| [`Automata/`](Automata/README.md) | 13 | 1,977 | 96 |
-
-`Syntax/` defines the object being compiled and what it means to run it:
-`PactType`, the step relation `TypeTransition`, its decorated form
-`TypeOffers` carrying current and future offer sets, and the syntax-derived
-menu `typeFutureOffers`.
-
-`Automata/` defines the target: `AutomatonFragment`, one builder per type
-constructor, `compileType`, and `computeFutureOf` — the reach-based closed
-form of the paper's Φ least fixed point.
-
-The correspondence relation (`buildRelationSet`, `relationMembership`) is in
-`Proofs/Correspondence/TypeAutoRelCore.lean`, beside the induction that
-establishes its properties.
+`TypeTransition` describes execution; `TypeOffers` also records current and
+future offers. `compileType` resolves constructor fragments into a finite
+automaton. The state/residual relation is defined separately in
+[TypeAutoRelCore](../Proofs/Correspondence/TypeAutoRelCore.lean).
