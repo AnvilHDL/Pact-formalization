@@ -1,5 +1,6 @@
 import Anvilpp.ProofHelpers
 import Anvilpp.ProofHelpers.Inference.DecoratedLifting
+import Anvilpp.ProofHelpers.Inference.AbstractionIdentifiers
 import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
 import Anvilpp.PactTypes.Proofs.Correspondence.CasesTop
 import Anvilpp.PactSafetyStructures
@@ -412,18 +413,14 @@ theorem game_reduction_correctness
 
 #print axioms game_reduction_correctness
 
-/-- Theorem 4.3, "Soundness of type compatibility" (the main soundness
-theorem): conformance of the fixed process composition plus compatibility of
-the matching type composition implies communication safety of the processes.
-
-`hFairIds` is the paper's "matching type composition": Step 3a reads
-`Fair(ℓ_P)` off `TypeFair(Erase(ℓ_P))`, and the two range over `cal(Eta)(Q_0)`
-and `cal(Eta)(Θ_0)` respectively. -/
+/-- Compatibility transfers to a conforming process with the same fair-choice
+and progress identifiers. -/
 theorem type_compatibility_soundness
      {process : Proc} {processType : PactType}
     {progress : Finset ProcId}
     (hWellFormed : TypeWellFormedIn [] processType)
-    (hFairIds : typeFairIds processType ⊆ processFairIds process)
+    (hFairIds : typeFairIds processType = processFairIds process)
+    (_hProgressIds : processType.ProgressIds = processProgressIds process)
     (hConforms : Conforms process processType)
     (hCompatible : TypeCompatible processType progress) :
     ProcessCompatible process progress := by
@@ -461,7 +458,7 @@ theorem type_compatibility_soundness
     refine (progressOccursInfinitely_erase log pid).mp (hLive ?_ pid hPid)
     intro bid hBid
     rw [fairOccursInfinitely_erase, fairOccursInfinitely_erase]
-    exact hFair bid (hFairIds hBid)
+    exact hFair bid (hFairIds ▸ hBid)
 
   #print axioms type_compatibility_soundness
 
@@ -477,69 +474,51 @@ theorem type_compatibility_decidable_and_efficient
 
 /-! ## Optimality of inferred types -/
 
-/-- Lemma 4.7, "Compatibility is monotone under type refinement".
-
-The proof is the paper's: lift the componentwise refinements to a refinement of
-the whole composition (Helper Lemma H21), transfer the winning boundary strategy
-along it (Helper Lemma H22), and read off compatibility with Theorem 4.2.
-
-`hAlphabets` is the paper's `Omega(tau_i) = Omega(tau_i')`: refinement relates
-behaviour, not the fixed alphabets, so H21 states the equality separately.
-
-`hFairIds` is the counterpart of Theorem 4.3's premise: `Ω_T` quantifies its
-fairness hypothesis over `cal(Eta)` of the composition it is stated for, and
-`Refine` does not relate the two syntactic sets. -/
+/-- Componentwise refinement preserves compatibility at equal component
+alphabets, fair-choice identifiers, and progress identifiers. -/
 theorem compatibility_monotone_under_refinement
      {precise abstract : List PactType}
     {interfaces : List Interface} {progress : Finset ProcId}
     (hRefines : ComponentwiseRefines precise abstract)
     (hAlphabets : List.Forall₂
       (fun left right => left.alphabet = right.alphabet) precise abstract)
+    (hIdentifiers : List.Forall₂ (fun left right =>
+      typeFairIds left = typeFairIds right ∧ left.ProgressIds = right.ProgressIds)
+      precise abstract)
     (hPreciseWF : ∀ composition, composeTypes precise interfaces = some composition →
       TypeWellFormedIn [] composition)
     (hAbstractWF : ∀ composition, composeTypes abstract interfaces = some composition →
       TypeWellFormedIn [] composition)
-    (hFairIds : ∀ preciseComposition abstractComposition,
-      composeTypes precise interfaces = some preciseComposition →
-      composeTypes abstract interfaces = some abstractComposition →
-      typeFairIds abstractComposition ⊆ typeFairIds preciseComposition)
     (hCompatible : TypeTupleCompatible abstract interfaces progress) :
     TypeTupleCompatible precise interfaces progress := by
   obtain ⟨abstractComposition, hAbstract, hComp⟩ := hCompatible
   obtain ⟨preciseComposition, hPrecise⟩ :=
     composeTypes_congr_length precise abstract interfaces abstractComposition
       hRefines.length_eq hAbstract
+  obtain ⟨hFairIds, hProgressIds⟩ :=
+    composeTypes_identifier_congr hIdentifiers hPrecise hAbstract
   exact ⟨preciseComposition, hPrecise,
     compatibility_monotone_of_refines (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)
-      (hFairIds _ _ hPrecise hAbstract)
+      hFairIds hProgressIds
       (helper_h21_componentwise_product_lifting hRefines hAlphabets hPrecise
         hAbstract (hPreciseWF _ hPrecise) (hAbstractWF _ hAbstract)) hComp⟩
 
 #print axioms compatibility_monotone_under_refinement
 
-/-- The user-type domain of Theorem 4.5: the claimed tuple carries the component
-alphabets of the inferred one, its composition is well formed, and it declares no
-fair identifier the inferred composition lacks. -/
+/-- Claimed components match the processes' alphabets and identifiers, and
+their composition is well formed. -/
 def UserTypeDomain (processes : List Proc) (interfaces : List Interface)
     (claimedTypes : List PactType) : Prop :=
   List.Forall₂
-      (fun process claimed => claimed.alphabet = (inferProcess process).alphabet)
+      (fun process claimed => claimed.alphabet = (inferProcess process).alphabet ∧
+        typeFairIds claimed = processFairIds process ∧
+        claimed.ProgressIds = processProgressIds process)
       processes claimedTypes ∧
     (∀ composition, composeTypes claimedTypes interfaces = some composition →
-      TypeWellFormedIn [] composition) ∧
-    (∀ preciseComposition abstractComposition,
-      composeTypes (processes.map inferProcess) interfaces =
-        some preciseComposition →
-      composeTypes claimedTypes interfaces = some abstractComposition →
-      typeFairIds abstractComposition ⊆ typeFairIds preciseComposition)
+      TypeWellFormedIn [] composition)
 
-/-- Theorem 4.5, "Optimality of inferred types".
-
-The forward direction exhibits the inferred tuple itself, which checks against
-itself because refinement is reflexive.  The backward direction is Lemma 4.7
-applied to the inferred tuple and the claimed one.  `hInferredWF` is the paper's
-`WFProc` on the composition, and `UserTypeDomain` is the domain the paper's
-quantifier ranges over. -/
+/-- Inferred types are compatible exactly when some well-formed claimed tuple
+with matching component alphabets and identifiers checks and is compatible. -/
 theorem inferred_types_optimal
      (processes : List Proc) (interfaces : List Interface)
     (progress : Finset ProcId)
@@ -555,14 +534,18 @@ theorem inferred_types_optimal
         TypeTupleCompatible claimedTypes interfaces progress := by
   constructor
   · intro hCompatible
-    have hAlphabets : ∀ list : List Proc,
+    have hDomain : ∀ list : List Proc,
         List.Forall₂
-          (fun process claimed => claimed.alphabet = (inferProcess process).alphabet)
+          (fun process claimed => claimed.alphabet = (inferProcess process).alphabet ∧
+            typeFairIds claimed = processFairIds process ∧
+            claimed.ProgressIds = processProgressIds process)
           list (list.map inferProcess) := by
       intro list
       induction list with
       | nil => exact List.Forall₂.nil
-      | cons head tail ih => exact List.Forall₂.cons rfl ih
+      | cons head tail ih =>
+          exact List.Forall₂.cons
+            ⟨rfl, typeFairIds_inferProcess head, progressIds_inferProcess head⟩ ih
     have hChecks : ∀ list : List Proc,
         List.Forall₂ (fun process claimed => DataObliviousChecks process claimed)
           list (list.map inferProcess) := by
@@ -571,15 +554,16 @@ theorem inferred_types_optimal
       | nil => exact List.Forall₂.nil
       | cons head tail ih =>
           exact List.Forall₂.cons (Refines.refl (inferProcess head)) ih
-    refine ⟨processes.map inferProcess,
-      ⟨hAlphabets processes, hInferredWF, ?_⟩, hChecks processes, hCompatible⟩
-    intro preciseComposition abstractComposition hPrecise hAbstract
-    rw [Option.some.inj (hPrecise.symm.trans hAbstract)]
-  · rintro ⟨claimedTypes, ⟨hAlphabets, hClaimedWF, hFairIds⟩, hChecks, hCompatible⟩
+    exact ⟨processes.map inferProcess,
+      ⟨hDomain processes, hInferredWF⟩, hChecks processes, hCompatible⟩
+  · rintro ⟨claimedTypes, ⟨hDomain, hClaimedWF⟩, hChecks, hCompatible⟩
     exact compatibility_monotone_under_refinement
       (List.forall₂_map_left_iff.mpr hChecks)
-      (List.forall₂_map_left_iff.mpr (hAlphabets.imp fun _ _ h => h.symm))
-      hInferredWF hClaimedWF hFairIds hCompatible
+      (List.forall₂_map_left_iff.mpr (hDomain.imp fun _ _ h => h.1.symm))
+      (List.forall₂_map_left_iff.mpr (hDomain.imp fun process _ h =>
+        ⟨(typeFairIds_inferProcess process).trans h.2.1.symm,
+          (progressIds_inferProcess process).trans h.2.2.symm⟩))
+      hInferredWF hClaimedWF hCompatible
 
 #print axioms inferred_types_optimal
 

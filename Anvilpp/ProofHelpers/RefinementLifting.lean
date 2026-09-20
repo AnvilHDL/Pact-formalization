@@ -175,13 +175,13 @@ theorem completedTypeLog_of_refining {precise abstract : PactType}
     exact hStuck ⟨label, preciseTarget, hPreciseStep.1⟩
   · exact hLogStop
 
-/-- Compatibility is monotone along a refinement of the whole composition: this
-is Lemma 4.7 once componentwise lifting has produced the refinement. -/
+/-- Refinement preserves compatibility when fair-choice and progress identifiers agree. -/
 theorem compatibility_monotone_of_refines {precise abstract : PactType}
     {progress : Finset ProcId}
     (hPreciseWF : TypeWellFormedIn [] precise)
     (hAbstractWF : TypeWellFormedIn [] abstract)
-    (hFairIds : typeFairIds abstract ⊆ typeFairIds precise)
+    (hFairIds : typeFairIds precise = typeFairIds abstract)
+    (_hProgressIds : precise.ProgressIds = abstract.ProgressIds)
     (hRefines : Refines precise abstract)
     (hCompatible : TypeCompatible abstract progress) :
     TypeCompatible precise progress := by
@@ -191,7 +191,8 @@ theorem compatibility_monotone_of_refines {precise abstract : PactType}
     ⟨refiningStrategy hRefines.some abstractStrategy, fun log hCompleted => ?_⟩
   obtain ⟨hHonest, hTock, hLive⟩ := hAbstractWins log
     (completedTypeLog_of_refining hRefines.some abstractStrategy hCompleted)
-  exact ⟨hHonest, hTock, fun hFair => hLive fun bid hBid => hFair bid (hFairIds hBid)⟩
+  exact ⟨hHonest, hTock, fun hFair => hLive fun bid hBid =>
+    hFair bid (hFairIds.symm ▸ hBid)⟩
 
 /-- Helper Lemma H23: refinement is reflexive. -/
 lemma helper_h23_refinement_refl (processType : PactType) :

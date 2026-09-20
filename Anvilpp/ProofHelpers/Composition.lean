@@ -92,7 +92,46 @@ lemma composeTypes_congr_length : ∀ (precise abstract : List PactType)
                   refine ⟨parallelType head preciseSuffix i, ?_⟩
                   rw [composeTypes, hPreciseSuffix]
 
-/-! ## Objectives and strategy transfer -/
+/-- Equal component identifiers give equal identifiers in the fixed compositions. -/
+lemma composeTypes_identifier_congr {precise abstract : List PactType}
+    (hIds : List.Forall₂ (fun left right =>
+      typeFairIds left = typeFairIds right ∧ left.ProgressIds = right.ProgressIds)
+      precise abstract)
+    {interfaces : List Interface} {preciseComposition abstractComposition : PactType}
+    (hPrecise : composeTypes precise interfaces = some preciseComposition)
+    (hAbstract : composeTypes abstract interfaces = some abstractComposition) :
+    typeFairIds preciseComposition = typeFairIds abstractComposition ∧
+      preciseComposition.ProgressIds = abstractComposition.ProgressIds := by
+  induction hIds generalizing interfaces preciseComposition abstractComposition with
+  | nil => simp [composeTypes] at hPrecise
+  | @cons left right lefts rights hHead hTail ih =>
+      cases hTail with
+      | nil =>
+          cases interfaces with
+          | nil =>
+              simp only [composeTypes, Option.some.injEq] at hPrecise hAbstract
+              subst preciseComposition; subst abstractComposition
+              exact hHead
+          | cons _ _ => simp [composeTypes] at hPrecise
+      | @cons next other rest others hNext hRest =>
+          cases interfaces with
+          | nil => simp [composeTypes] at hPrecise
+          | cons interface interfaces =>
+              simp only [composeTypes] at hPrecise hAbstract
+              cases hLeft : composeTypes (next :: rest) interfaces with
+              | none => simp [hLeft] at hPrecise
+              | some leftComposition =>
+                  cases hRight : composeTypes (other :: others) interfaces with
+                  | none => simp [hRight] at hAbstract
+                  | some rightComposition =>
+                      simp only [hLeft, Option.some.injEq] at hPrecise
+                      simp only [hRight, Option.some.injEq] at hAbstract
+                      subst preciseComposition; subst abstractComposition
+                      obtain ⟨hFair, hProgress⟩ := ih hLeft hRight
+                      simpa only [parallelType, typeFairIds, PactType.ProgressIds,
+                        hHead.1, hHead.2, hFair, hProgress] using
+                        And.intro (Eq.refl (typeFairIds right ∪ typeFairIds rightComposition))
+                          (Eq.refl (right.ProgressIds ∪ rightComposition.ProgressIds))
 
 end
 
