@@ -1,31 +1,30 @@
-# Anvilpp.PactTypes.Proofs.Correspondence
+# Type-Automaton Correspondence
 
-Lemma 4.5.
+Related type residuals and compiled states have matching decorated steps and menus.
 
 | Module | Contents |
 |---|---|
-| `TypeAutoRelCore` | the correspondence relation: `buildRelationSet`, `relationMembership`, `buildRelationSet_initial` (the seed pair `(τ, i_τ)`), and `TypeAutomatonStepCorrespondence` |
-| `Simultaneous` | `correspondence_simultaneous` — helpers 16 and 17, by strong induction on `typeCompilationFuel`; also the parallel menu clause |
-| `CasesTop` | `correspondence_steps`, instantiating the above at `Γ = ∅` |
-| `CompileWFHelpers` | edge and menu equations for the atomic constructors |
-
-| Subdirectory | Files | Lines | Role |
-|---|---:|---:|---|
-| [`Helpers/`](Helpers/README.md) | 23 | 21,576 | helpers 1–15 |
-| [`Simultaneous/`](Simultaneous/README.md) | 14 | 11,927 | constructor cases of helpers 16–17 |
-| [`Cases/`](Cases/README.md) | 1 | 591 | atomic step equivalences |
+| `TypeAutoRelCore` | State/residual relation and `TypeAutomatonStepCorrespondence` |
+| `Simultaneous` | Constructor induction for full step correspondence and menu agreement |
+| `CasesTop` | Instantiation at the empty binder context |
+| `CompileWFHelpers` | Atomic edge and menu equations |
+| [Helpers](Helpers/README.md) | Structural invariants, substitution, and survivor transport |
+| [Simultaneous](Simultaneous/README.md) | Constructor cases and future-field transport |
+| [Cases](Cases/README.md) | Atomic step equivalences |
 
 ## Assembly
 
+`correspondence_simultaneous` establishes:
+
 ```lean
-theorem correspondence_steps_of_helpers (processType : PactType)
-    (hCurrent : CurrentOfferCorrespondence processType)
-    (hMenus   : FutureOffersAgree processType) :
-    TypeAutomatonStepCorrespondence processType
+TypeAutomatonStepCorrespondence processType ∧ FutureOffersAgree processType
 ```
 
-Both directions come from the same two hypotheses.
-`hCurrent.forward_with_future hMenus` takes a semantic step to a matching edge:
-helper 16 supplies the edge and its current offer, helper 17 identifies the
-future offer at the target. `hCurrent.backward_with_future hMenus` recovers the
-semantic offer pair from an edge the same way.
+The first component already matches both current and future offers. The second
+identifies compiled menus with semantic future offers and supports the
+constructor induction. Source-reading and stored future fields are handled
+directly; a target-only offer law is not assumed.
+
+`correspondence_steps` applies this result to an admissible type in the empty
+binder context. `type_automaton_correspondence` adds the initial pair and its
+state membership to produce the public correspondence witness.

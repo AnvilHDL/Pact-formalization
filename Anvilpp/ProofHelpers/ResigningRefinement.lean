@@ -6,7 +6,7 @@ noncomputable section
 
 open Classical
 
-/-! ## Helper Lemma 21, third bullet: common restriction preserves refinement -/
+/-! ## Refinement under a common restriction -/
 
 /-- Re-signing keeps the `skip` test, in the existential form the refinement
 witness uses. -/
@@ -25,9 +25,7 @@ lemma reannotate_skip_exists (processType : PactType) (restrict : PactTypeAlphab
   · rintro ⟨alphabet, rfl⟩
     exact ⟨restrict, by rw [PactType.reannotate]⟩
 
-/-- The paper's `R_A`: the pairs of `R` re-signed by the common subalphabet.
-Regularity and the common alphabet travel with each pair, which is what
-restricting `R` to reachable pairs buys. -/
+/-- Regular, equal-alphabet pairs from a relation, re-signed by a common subalphabet. -/
 def restrictedRefinement (relation : PactType → PactType → Prop)
     (alphabet restrict : PactTypeAlphabet) : PactType → PactType → Prop :=
   fun precise abstract =>
@@ -110,7 +108,7 @@ theorem refines_reannotate {precise abstract : PactType}
       · rw [hAbstractStep.2.preserves_alphabet hTarget.alphabetWellFormed,
           hTargetAlpha]
 
-/-! ## Refinement as a relation closed under stepping -/
+/-! ## Refinement closure under transitions -/
 
 lemma Refines.refl (processType : PactType) : Refines processType processType := by
   refine ⟨{ relation := fun left right => left = right
@@ -165,7 +163,7 @@ lemma ne_skip_iff (processType : PactType) :
     exact hNe (by rw [hEq, PactType.alphabet])
   · exact fun hNone hEq => hNone ⟨processType.alphabet, hEq⟩
 
-/-! ## Helper Lemma 21, fourth bullet: lifting through one parallel node -/
+/-! ## Parallel step assembly -/
 
 @[simp] lemma hideTypeOffers_empty (interface : Interface) :
     hideTypeOffers interface ∅ = ∅ := by
@@ -308,8 +306,7 @@ lemma Refines.skip_of_skip' {precise abstract : PactType} (h : Refines precise a
   obtain ⟨alphabet, hEq⟩ := h.skip_iff.mpr ⟨abstract.alphabet, hAbstract⟩
   rw [hEq, PactType.alphabet]
 
-/-- The paper's candidate: equal-alphabet refinement together with the pairs of
-alphabet-compatible products whose children refine each other. -/
+/-- Regular equal-alphabet refinements and compatible products with componentwise refinement. -/
 def parallelCandidate (interface : Interface) : PactType → PactType → Prop :=
   fun precise abstract =>
     (Refines precise abstract ∧ ResignRegular precise ∧ ResignRegular abstract ∧
@@ -609,7 +606,7 @@ lemma parallelCandidate_availability {interface : Interface}
       · rw [if_neg hTock] at hRule
         exact ⟨target, hRule.toTypeTransition, hRule⟩
 
-/-! ### Lifting through one parallel node -/
+/-! ### Parallel refinement -/
 
 theorem refines_parallel {preciseLeft preciseRight abstractLeft abstractRight : PactType}
     {interface : Interface}
@@ -654,7 +651,7 @@ theorem refines_parallel {preciseLeft preciseRight abstractLeft abstractRight : 
         hAbstractStep.2.preserves_alphabet hRegAbstract.alphabetWellFormed, hAlpha]
     · exact parallelCandidate_response hLeft hRight hRegP hRegA hAL hAR hStep
 
-/-! ### Induction on the fixed parenthesization -/
+/-! ### Fixed compositions -/
 
 lemma composeTypes_alphabet_congr : ∀ (precise abstract : List PactType)
     (interfaces : List Interface)
@@ -778,8 +775,7 @@ theorem refines_compose : ∀ (precise abstract : List PactType)
                                       hPreciseSuffix hAbstractSuffix)
                                     hRegPrecise hRegAbstract
 
-/-- The side conditions the re-signing argument needs are all `TypeWF_Γ`
-conjuncts. -/
+/-- Type well-formedness supplies the structural conditions for re-signing. -/
 lemma ResignRegular.of_typeWellFormedIn {bound : List String} {processType : PactType}
     (h : TypeWellFormedIn bound processType) : ResignRegular processType := by
   obtain ⟨hA, -, -, hTC, -, hTR, -, -, -, -, -, -, hIS, hIAS, hCMO, -⟩ := h
@@ -788,7 +784,6 @@ lemma ResignRegular.of_typeWellFormedIn {bound : List String} {processType : Pac
 end
 
 end Pact
-
 
 
 

@@ -6,11 +6,7 @@ noncomputable section
 
 open Classical
 
-/-! ## Assembling Theorem 4.3
-
-The erasure dictionary of the paper's Step 3a: erasure changes only valued
-message observations, so the clock, the progress markers and the fair-choice
-outcomes occur in a process log exactly when they occur in its erasure. -/
+/-! ## Log erasure and failure completion -/
 
 /-- A concrete observation erasing to a given type observation. -/
 def concreteObservation : TypeObservation → Observation
@@ -50,7 +46,7 @@ def concreteLog (log : TypeLog) : ProcessLog :=
     eraseLabel (concreteLabel (log index).2)) = log index
   rw [eraseEnvironment_concreteRepresentative, eraseLabel_concreteLabel]
 
-/-! ### Erasure preserves the clock and the unvalued observations -/
+/-! ### Erasure preserves clock and identifier observations -/
 
 lemma mem_image_eraseObservation_progress {observations : Finset Observation}
     {pid : ProcId} :
@@ -111,7 +107,7 @@ lemma fairOccursInfinitely_erase (log : ProcessLog) (bid : BranchId) (taken : Bo
       ObservationOccursInfinitely (.fair bid taken) log :=
   infinite_congr fun index => contains_eraseLabel_fair (log index).2 bid taken
 
-/-! ### Step 3b: a stuck reachable prefix produces a failure-completed log -/
+/-! ### Failure-completed logs -/
 
 lemma extendProcess_head {initial : Proc} {strategy : ProcessStrategy initial}
     {history : ProcessPrefix initial} {bound : ℕ}
@@ -172,8 +168,7 @@ lemma followsProcess_head {initial : Proc} {strategy : ProcessStrategy initial}
         extendProcess_head hRoot hAll hLast hSteps hStep
       exact ⟨bound + 1, headPrefix', headLog', hRoot', hAll', hLast', hSteps'⟩
 
-/-- The paper's Step 3b: continuing a stuck reachable prefix triggers the
-failure-completion rule, giving a completed log whose clock stops. -/
+/-- A stuck strategy-reachable prefix extends to a failure-completed log whose clock stops. -/
 lemma completedProcessLog_of_stuck {initial : Proc} {strategy : ProcessStrategy initial}
     {history : ProcessPrefix initial}
     (hFollows : FollowsProcessStrategy strategy history)

@@ -1,7 +1,20 @@
-# Anvilpp.PactTypes
+# Pact Types
 
-Lemma 4.5, the type–automaton correspondence: an operational type and its
-compiled automaton take exactly the same decorated steps.
+Type semantics, finite constructor automata, and their decorated-step correspondence.
+
+## Layout
+
+| Directory | Contents |
+|---|---|
+| [Spec/Syntax](Spec/Syntax/README.md) | Types, substitution, regularity, and operational semantics |
+| [Spec/Automata](Spec/Automata/README.md) | Automaton representation and constructor compiler |
+| [Proofs/Syntax](Proofs/Syntax/README.md) | Substitution, regularity, and offer laws |
+| [Proofs/Automata](Proofs/Automata/README.md) | Compiler structure, fuel stability, and edge properties |
+| [Proofs/Correspondence](Proofs/Correspondence/README.md) | Relations between type residuals and compiled states |
+
+## Correspondence
+
+The public result in [PactSafety.lean](../PactSafety.lean) is:
 
 ```lean
 theorem type_automaton_correspondence {processType : PactType}
@@ -9,85 +22,47 @@ theorem type_automaton_correspondence {processType : PactType}
     Nonempty (TypeAutomatonCorrespondence processType (compileType processType))
 ```
 
-The statement is in `Anvilpp/PactSafety.lean`; everything here supports it.
-
-## Layout
+Its assembly is:
 
 ```text
-Spec/     Syntax/     type language, semantics, regularity predicates
-          Automata/   automaton representation, constructor compiler
-Proofs/   Syntax/     laws of the type language
-          Automata/   laws of the compiler
-          Correspondence/  Lemma 4.5
-                      Helpers/       helpers 1–15
-                      Simultaneous/  helpers 16–17, one file per constructor
-                      Cases/         atomic step equivalences
+type_automaton_correspondence
+  correspondence_steps
+    correspondence_simultaneous
 ```
 
-`Spec/` holds the definitions the paper gives. Names introduced only to state
-a proof obligation live with their proofs.
-
-## The proof
-
-```text
-type_automaton_correspondence      PactSafety.lean
-  correspondence_steps             Proofs/Correspondence/CasesTop.lean
-    correspondence_simultaneous    Proofs/Correspondence/Simultaneous.lean
-```
-
-`correspondence_simultaneous` proves helpers 16 and 17 together, by strong
-induction on `typeCompilationFuel`:
+The simultaneous induction proves full decorated-step correspondence together
+with menu agreement:
 
 ```lean
 theorem correspondence_simultaneous :
     ∀ (bound : List String) (processType : PactType),
       TypeWellFormedIn bound processType →
-      CurrentOfferCorrespondence processType ∧ FutureOffersAgree processType
+      TypeAutomatonStepCorrespondence processType ∧
+        FutureOffersAgree processType
 ```
 
-`correspondence_steps` instantiates it at `Γ = ∅`. Both directions of the
-correspondence follow from those two helpers alone: helper 16 matches a step
-with an edge carrying the same *current* offer, and helper 17 identifies the
-*future* offer at the target. The uniform offer law
-(`TypeOffers.future_eq_sdiff_of_label_ne_tock`) lets the future offer be
-recomputed at the target rather than transported, which is why no third helper
-is needed.
+Both directions match the environment, label, current offers, future offers,
+and related target. Menu agreement identifies each represented state's menu
+with its type residual's future offers. The induction is on
+`typeCompilationFuel`; `correspondence_steps` instantiates the empty binder context.
 
-## Paper helpers in Lean
+Future fields may contain stored offers, source or target menu references,
+or sequence unions. The proof transports these fields according to the
+constructor; it does not assume that every future is a target menu.
 
-| # | Paper | Lean |
-|---|---|---|
-| 1 | `type-step-alphabet-preservation` | `TypeOffers.preserves_alphabet` |
-| 5 | `dead-declarations-inert` | `liveEq_preserves_futOff` |
-| 6 | `represented-alphabet` | `relationMembership_alphabet_eq` |
-| 7 | `survivor-entry` | `survivorTransport_all` |
-| 9 | `compiled-state-shape` | `relationMembership_*_cases` |
-| 10 | `final-states-completion` | `final_states_completion` |
-| 11 | `uniform-offer-law` | `TypeOffers.future_eq_sdiff_of_label_ne_tock` |
-| 12 | `recursion-substitution-transport` | `TypeOffers.replaceVar_tail`, `..._tail_inv` |
-| 15 | `recursion-marker-invariant` | `markerSourceFor_of_var_residual` |
-| 16 | `current-offer-correspondence` | `correspondence_simultaneous`, first component |
-| 17 | `future-offers-agree` | `correspondence_simultaneous`, second component |
-
-Helpers 13 and 18 are deferred in the paper and are not mechanised.
-
-## Size
-
-| | Files | Lines | Defs | Theorems |
-|---|---:|---:|---:|---:|
-| `Spec/Syntax` | 13 | 2,586 | 153 | 8 |
-| `Spec/Automata` | 13 | 1,977 | 96 | 1 |
-| `Proofs/Syntax` | 14 | 5,897 | 0 | 117 |
-| `Proofs/Automata` | 14 | 6,479 | 11 | 171 |
-| `Proofs/Correspondence` | 42 | 37,084 | 44 | 651 |
+Menu saturation follows non-clock execution targets and explicit menu
+dependencies. The dependencies retain optimistic continuation menus without
+adding execution states or transitions.
 
 ## Verification
 
 ```bash
-lake build
+lake build Anvilpp.PactSafety
 ```
 
 ```lean
+import Anvilpp.PactSafety
 #print axioms Pact.type_automaton_correspondence
--- [propext, Classical.choice, Quot.sound]
 ```
+
+The theorem uses only `propext`, `Classical.choice`, and `Quot.sound`.

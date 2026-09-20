@@ -3,6 +3,7 @@ import Anvilpp.ProofHelpers.TypeSemantics
 import Anvilpp.ProofHelpers.CompatibilityGame
 import Anvilpp.ProofHelpers.RoundRobin
 import Anvilpp.ProofHelpers.ObjectiveMonitor
+import Anvilpp.ProofHelpers.ObjectiveRegularity
 import Anvilpp.ProofHelpers.Composition
 import Anvilpp.ProofHelpers.Objectives
 import Anvilpp.ProofHelpers.Regularity

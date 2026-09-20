@@ -6,11 +6,7 @@ noncomputable section
 
 open Classical
 
-/-! ## Structural side conditions carried along the re-signing induction
-
-The properties the source of a re-signed step must have: `AlphaWF`,
-`IfaceScoped` with its alphabet companion, `TailRec`, and distinct
-conjunctive heads.  Re-signing and a step both preserve them. -/
+/-! ## Structural conditions for re-signing -/
 
 structure ResignRegular (processType : PactType) : Prop where
   alphabetWellFormed : processType.AlphabetWellFormed
@@ -247,7 +243,7 @@ lemma offer_branch {alphabet : PactTypeAlphabet} {elseType : PactType}
   exact PactType.tailOccurrences_mono other False.elim branch.2
     (tailOccurrences_of_mem_branches this.2 branch hMem)
 
-/-- Distinct conjunctive heads, as the committed product needs them. -/
+/-- Regular conjunctive offers have pairwise distinct head messages. -/
 lemma offer_heads_pairwise {alphabet : PactTypeAlphabet} {elseType : PactType}
     {branches : List (BareMessage × PactType)}
     (h : ResignRegular (.offer alphabet elseType branches)) :
@@ -256,7 +252,7 @@ lemma offer_heads_pairwise {alphabet : PactTypeAlphabet} {elseType : PactType}
   simp only [PactType.ConjunctiveMessageOwnership] at hC
   exact branchHeadsPairwise_of_conjunctive hC.2
 
-/-! ### Re-signing preserves the side conditions -/
+/-! ### Preservation under re-signing -/
 
 lemma alphabet_wellFormed {processType : PactType} (h : ResignRegular processType) :
     processType.alphabet.WellFormed :=
@@ -290,10 +286,9 @@ lemma reannotate {processType : PactType} (h : ResignRegular processType)
 
 end ResignRegular
 
-/-! ## Environments and the alphabet they range over -/
+/-! ## Environment admissibility -/
 
-/-- Environment well-formedness only shrinks the menus, so it survives enlarging
-the alphabet. -/
+/-- An environment admissible at an alphabet remains admissible at any larger alphabet. -/
 lemma TypeEnvironment.wellFormed_mono {env : TypeEnvironment}
     {small large : PactTypeAlphabet} (h : env.WellFormed small)
     (hSub : small.actions ⊆ large.actions) : env.WellFormed large := by
@@ -316,10 +311,7 @@ lemma future_image_subset {env : TypeEnvironment} {alphabet : PactTypeAlphabet}
     env.future.image typeNeed ⊆ alphabet.actions :=
   typeNeed_image_subset_actions hWF.2.2.2
 
-/-! ## Offers lie in the alphabet of their source
-
-The paper's "all component offers lie in their component alphabets, by
-induction on their offer derivations". -/
+/-! ## Declared offers -/
 
 /-- Hiding an interface maps the two child alphabets onto the parent. -/
 lemma hideTypeOffers_union_subset {parent left right : PactTypeAlphabet}
@@ -503,10 +495,7 @@ theorem TypeOffers.offers_subset_alphabet
       rw [Finset.union_empty] at hC hF
       exact ⟨hC, hF⟩
 
-/-! ## The step equation
-
-`D_E(ρ[A]) = {(α, O_C ∩ A, O_F ∩ A, η[A]) | (α,O_C,O_F,η) ∈ D_E(ρ)}`, proved
-as its two inclusions.  This is the forward one. -/
+/-! ## Decorated steps under restriction -/
 
 /-- Re-signing keeps the `skip` test, since it keeps every constructor. -/
 lemma reannotate_eq_skip_iff (processType : PactType) (target : PactTypeAlphabet) :
@@ -514,7 +503,7 @@ lemma reannotate_eq_skip_iff (processType : PactType) (target : PactTypeAlphabet
       processType = .skip processType.alphabet := by
   cases processType <;> simp [PactType.reannotate, PactType.alphabet]
 
-/-- Re-signing a `skip` type at its own alphabet. -/
+/-- Re-signing a `skip` type changes only its alphabet. -/
 lemma reannotate_skip (alphabet target : PactTypeAlphabet) :
     (PactType.skip alphabet).reannotate target = .skip target := by
   rw [PactType.reannotate]
@@ -579,10 +568,7 @@ lemma hideTypeOffers_inter_projectParallel {parent left right : PactTypeAlphabet
       mem_projectParallel_of_not_interface hIface]
     tauto
 
-/-! ### The local environments of a parallel node
-
-Their boundary part lies in the restricted alphabet and their interface part is
-retained by the child projection, so they remain admissible after restriction. -/
+/-! ### Local environments -/
 
 /-- Complementary interface actions of the sibling are declared by the child. -/
 lemma restrictTypeOffers_subset_image
@@ -650,10 +636,7 @@ lemma localTypeOfferEnvironment_wellFormed
           (hOuter.2.2.2.trans (Finset.image_subset_image hRestrict))
           (restrictTypeOffers_subset_image hComplementary hSiblingWF hFuture))
 
-/-! ## A step preserves interface scoping
-
-The part of "type steps preserve alphabet well-formedness" that the survivor
-rules need: the target is still scoped and introduces no new interface. -/
+/-! ## Interface scoping under transitions -/
 
 theorem TypeOffers.preserves_scoping
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
@@ -802,11 +785,7 @@ theorem TypeOffers.preserves_scoping
       exact hLeftInterfaces.trans
         (Finset.subset_union_right.trans Finset.subset_union_left)
 
-/-! ## Re-signing through an intermediate alphabet
-
-The survivor rules re-sign their target twice.  When the intermediate alphabet
-declares none of the interfaces below the type, the first re-signing is
-forgotten. -/
+/-! ## Repeated re-signing -/
 
 set_option maxHeartbeats 1000000 in
 theorem reannotate_reannotate_of_avoiding :
@@ -948,7 +927,7 @@ lemma futureOffers_restrict {processType : PactType} {restrict : PactTypeAlphabe
       typeFutureOffers (processType.reannotate restrict) :=
   (typeFutureOffers_reannotate processType restrict hWF hSub).symm
 
-/-- The sequence clause's right menu is projected with everything else. -/
+/-- Re-signing projects the right-continuation menu of a sequence. -/
 lemma sequenceRightMenu_reannotate {left right : PactType}
     {restrict : PactTypeAlphabet} (hWF : right.AlphabetWellFormed)
     (hSub : restrict.actions ⊆ right.alphabet.actions) :
@@ -1040,7 +1019,7 @@ lemma reannotate_eq_skip {processType : PactType} {restrict : PactTypeAlphabet}
   rw [PactType.reannotate_alphabet]
   exact (reannotate_eq_skip_iff processType restrict).mpr h
 
-/-- The restricted child alphabet still sits inside the child's own. -/
+/-- Restricting the parent alphabet keeps each projected child alphabet within its original. -/
 lemma projectParallel_subset_left {parent left right restrict : PactTypeAlphabet}
     {interface : Interface}
     (hCompat : PactTypeAlphabet.ParallelCompatible parent left right interface)
@@ -1063,8 +1042,7 @@ lemma projectParallel_subset_right {parent left right restrict : PactTypeAlphabe
   · exact (Finset.mem_filter.mp h).1
   · exact parent_actions_subset_right hCompat (hSub h)
 
-/-- Restricting the sibling's offers leaves the local environment equations
-untouched, so the same environments serve before and after restriction. -/
+/-- Restricting sibling offers preserves the local environment equations. -/
 lemma localTypeOfferEnvironment_restrict {outer siblingEnv localEnv : TypeEnvironment}
     {interface : Interface} {localType localType' : PactType}
     {siblingCurrent siblingFuture : Finset BareMessage}
@@ -1086,7 +1064,7 @@ lemma localTypeOfferEnvironment_restrict {outer siblingEnv localEnv : TypeEnviro
       · rw [restrictTypeOffers_inter_projectParallel hCurrent]; exact h4
       · rw [restrictTypeOffers_inter_projectParallel hFuture]; exact h5
 
-/-! ## Helper Lemma 21, second bullet: the step equation, forward inclusion -/
+/-! ## Forward step transport -/
 
 set_option maxHeartbeats 2000000 in
 theorem typeOffers_reannotate_forward
@@ -1692,7 +1670,7 @@ theorem typeOffers_reannotate_forward
       simp only [PactType.reannotate]
       exact hRule
 
-/-- The sibling type is a phantom parameter of the local-environment relation. -/
+/-- Changing the local-type parameter leaves the local environment relation unchanged. -/
 lemma LocalTypeOfferEnvironment.congr_localType {outer siblingEnv localEnv : TypeEnvironment}
     {interface : Interface} {localType localType' : PactType}
     {current future : Finset BareMessage}
@@ -1725,7 +1703,7 @@ lemma localTypeOfferEnvironment_unrestrict {outer siblingEnv localEnv : TypeEnvi
       rw [restrictTypeOffers_inter_projectParallel hFuture] at h5
       exact .ordinary _ _ _ _ _ _ _ h1 h2 h3 h4 h5
 
-/-! ## Helper Lemma 21, second bullet: the step equation, backward inclusion -/
+/-! ## Backward step transport -/
 
 set_option maxHeartbeats 4000000 in
 theorem typeOffers_reannotate_backward :
@@ -2473,10 +2451,7 @@ theorem typeOffers_reannotate_backward :
                   · rw [hHide leftCurrent hLCsub]
                   · rw [hHide leftFuture hLFsub]
 
-/-! ## Unfolding preserves the remaining structural side conditions
-
-`TailRec` keeps the recursion variable out of parallel components and
-conjunctive branches, so substitution leaves those subterms alone. -/
+/-! ## Structural preservation under unfolding -/
 
 theorem PactType.replaceVar_conjunctiveMessageOwnership (name : String)
     (replacement : PactType) :
@@ -2771,10 +2746,7 @@ theorem PactType.replaceVar_interfaceAlphabetScoped (name : String)
               hDisjointOf alphabet hAvoid⟩).mono_right
             ((replaceVar_ownership_subset name replacement elseType).2.2.2.2)
 
-/-! ## A step preserves the side conditions
-
-The paper's "type steps preserve alphabet well-formedness", together with the
-two clauses the Lean formulation also carries. -/
+/-! ## Structural preservation under transitions -/
 
 set_option maxHeartbeats 1000000 in
 theorem TypeOffers.preserves_regularity
@@ -3020,6 +2992,4 @@ theorem TypeOffers.preserves_resignRegular
 end
 
 end Pact
-
-
 

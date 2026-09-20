@@ -369,7 +369,7 @@ private theorem union_sdiff_eq_of_menu_subset
       rw [← Finset.union_sdiff_distrib, Finset.union_assoc,
         Finset.union_eq_right.mpr hSubset]
 
-/-- Paper: the left step is unchanged; substitution enlarges only the right-entry menu. -/
+/-- Substitution preserves the left step and enlarges the right-entry menu. -/
 theorem TypeOffers.replaceVar_seq_atUnion
     (name : String) (replacement : PactType)
     {env : TypeEnvironment} {alphabet : PactTypeAlphabet} {left right target : PactType}
@@ -478,7 +478,7 @@ theorem TypeOffers.replaceVar_compiled_atUnion
     hComplete hNonClock (by simp only [hField, resolveFutureSpec, hOldMenu, hRemoved])
   simpa only [hField, resolveFutureSpec, hNewMenu, hRemoved] using hStep
 
-/-- Paper: invert the body edge, then identify the copied sequence field using this rank's menus. -/
+/-- A copied sequence edge has a substituted semantic witness with the same future field. -/
 theorem offer_recur_atUnion_backward
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
@@ -516,7 +516,7 @@ theorem offer_recur_atUnion_backward
     ⟨hOffers.toTypeTransition, hOffers⟩,
     relationMembership_recur_child alphabet name body target hTarget⟩
 
-/-- Paper: substitution changes the source menu, which is read at the tagged source. -/
+/-- A copied source-menu field agrees with the substituted source menu. -/
 theorem offer_recur_at_source_backward
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
@@ -574,7 +574,7 @@ theorem offer_recur_at_source_forward
   rw [hFuture]
   exact compileType_recur_child_pending_lift alphabet name body edge hEdge hLabel
 
-/-- Paper: the copied target represents the substituted body target. -/
+/-- A copied target-menu field agrees with the substituted target menu. -/
 theorem offer_recur_at_target_backward
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
@@ -748,7 +748,7 @@ theorem TypeOffers.replaceVar_inverse_with_future_fields
         fun a left right h _ => (hSeq ⟨a, left, right, h⟩).elim,
         fun a left right _ h _ _ _ => (hSeq ⟨a, left, right, h⟩).elim⟩
 
-/-- Paper: choose the inverse body witness, apply the child IH, then identify each copied field. -/
+/-- A substituted semantic step has a copied body edge with the same offer pair. -/
 theorem offer_recur_copied_forward
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))
@@ -864,7 +864,7 @@ theorem offer_recur_copied_backward
     simpa only [hSpec] using offer_recur_atUnion_backward alphabet name body hWF hBody hBodyMenus hMenus
       edge hEdge hLabel stored removed reference hSpec hRelated
 
-/-- Paper: current matching and this rank's menus determine the full recursion pair. -/
+/-- Body-step correspondence and substituted menus give full recursion-step correspondence. -/
 theorem offerCorrespondence_recur
     (alphabet : PactTypeAlphabet) (name : String) (body : PactType)
     {bound : List String} (hWF : TypeWellFormedIn bound (.recur alphabet name body))

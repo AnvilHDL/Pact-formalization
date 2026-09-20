@@ -6,11 +6,7 @@ noncomputable section
 
 open Classical
 
-/-! ## Re-signing and the approximation menus
-
-Helper Lemma 21 rests on the two equations `c(ρ[A]) = c(ρ)` and
-`FutOff(ρ[A]) = FutOff(ρ) ∩ A`.  The first holds outright, since the
-optimistic completion test no longer reads the alphabet. -/
+/-! ## Completion and menus under re-signing -/
 
 /-- Re-signing rewrites branch bodies only, so a branch list keeps its shape. -/
 lemma reannotateBranches_map (target : PactTypeAlphabet)

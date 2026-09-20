@@ -46,9 +46,7 @@ private theorem childTargetField (index : Nat) (child : PendingAutomatonEdge)
     simpa only [childState, TypeAutomatonState.child.injEq, true_and] using hTarget
   exact hEq ▸ hInner
 
-/-- A visible edge that reads its target menu starts at a `TargetMenuSource`.
-Copied edges inherit this property from their child; recursion also substitutes
-its binder. The remaining cases follow from the constructor's edge fields. -/
+/-- A visible compiled edge reading its target menu represents a `TargetMenuSource`. -/
 private theorem compileTypeFuel_targetMenuSource :
     ∀ fuel ty, typeCompilationFuel ty ≤ fuel →
       ∀ bound, TypeWellFormedIn bound ty →

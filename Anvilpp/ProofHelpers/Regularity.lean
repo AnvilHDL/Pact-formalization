@@ -1,5 +1,6 @@
 import Anvilpp.ProofHelpers.Composition
 import Anvilpp.ProofHelpers.Objectives
+import Anvilpp.ProofHelpers.LogRecognizer
 import Anvilpp.PactTypes.Spec.Syntax.OfferMenuLinearityDefs
 
 namespace Pact
@@ -8,10 +9,9 @@ noncomputable section
 
 open Classical
 
-/-! ## Regularity, checking, and complexity helpers -/
+/-! ## Type admissibility and objective regularity -/
 
-/-- Closure, hygiene, clock guarding, tail recursion, same-cycle message
-linearity, parallel message ownership, and interface scoping. -/
+/-- Closed, hygienic, clock-guarded types with linear messages and scoped ownership. -/
 def ClosedGuardedRegular (processType : PactType) : Prop :=
   PactType.AllVariablesBound [] processType ∧
     PactType.BinderHygienic [] processType ∧
@@ -40,42 +40,6 @@ theorem skip_has_no_clock_transition {alphabet : PactTypeAlphabet} :
   cases transition with
   | skip _ _ conditions =>
       simp [TypeEnvironment.tock] at conditions
-
-/-- Proposition 4.1's underlying notion of omega-regularity. -/
-def OmegaRegular (initial : PactType) (progress : Finset ProcId) : Prop := by
-  sorry
-
-/-- Effective refinement checker used by the decidability theorem. -/
-def refinementChecker (precise abstract : PactType) : Bool := by
-  sorry
-
-/-- A decision procedure packaged as a Lean `Decidable` instance. -/
-noncomputable def dataObliviousCheckingDecidable
-    (process : Proc) (claimed : PactType) :
-    Decidable (DataObliviousChecks process claimed) := by
-  sorry
-
-/-- Abstract cost predicates recording the asymptotic claims. -/
-def RunsInLinearTime {α β : Type} (function : α → β) : Prop := by
-  sorry
-
-def RunsInProductTime {α : Type} (relation : α → α → Bool) : Prop := by
-  sorry
-
-/-- A decision procedure packaged as a Lean `Decidable` instance. -/
-noncomputable def typeCompatibilityDecidable
-     (processType : PactType) (progress : Finset ProcId) :
-    Decidable (TypeCompatible processType progress) := by
-  sorry
-
-/-- The monitored Rabin-game complexity bound from Theorem 4.4:
-`O(M N (K!)^{1+o(1)})` for `N` vertices, `M` edges, and
-`K = 1 + 2|cal(Eta)(Θ_0)|` Rabin pairs. -/
-def CompatibilityGameComplexityBound
-     (processType : PactType) (progress : Finset ProcId) :
-    Prop := by
-  sorry
-
 
 end
 

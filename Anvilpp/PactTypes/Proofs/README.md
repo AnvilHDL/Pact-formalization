@@ -1,24 +1,14 @@
-# Anvilpp.PactTypes.Proofs
+# Type and Compiler Proofs
 
-Everything proved about [`../Spec/`](../Spec/README.md), together with the
-names introduced only to state a proof obligation —
-`CurrentOfferCorrespondence`, `FutureOffersAgree`, `MarkerSourceFor`,
-`RecursionSubstitutionStepForward`/`Backward`, `survivorLeftEdge`, `ShapeEq`,
-`EdgeLocalAt`.
+Proofs about the [type and automaton definitions](../Spec/README.md).
 
-| | Files | Lines | Theorems |
-|---|---:|---:|---:|
-| [`Syntax/`](Syntax/README.md) | 14 | 5,897 | 117 |
-| [`Automata/`](Automata/README.md) | 14 | 6,479 | 171 |
-| [`Correspondence/`](Correspondence/README.md) | 42 | 37,084 | 651 |
+| Directory | Contents |
+|---|---|
+| [Syntax](Syntax/README.md) | Substitution, regularity, completion, and offer laws |
+| [Automata](Automata/README.md) | Compiler structure, fuel stability, and edge properties |
+| [Correspondence](Correspondence/README.md) | Decorated-step correspondence and menu agreement |
 
-The layers are used in that order. `Syntax/` proves facts about types alone —
-substitution, regularity, menus. `Automata/` proves facts about compiled
-fragments alone — fuel irrelevance, edge shape, marker absence.
-`Correspondence/` is where the two meet, ending at
-`correspondence_simultaneous`.
-
-Most of the weight is in the parallel and recursion constructors:
-`Correspondence/Helpers/Parallel.lean` (3,639 lines),
-`Helpers/AlphabetPreservation.lean` (3,359),
-`Simultaneous/Recursion.lean` (2,609).
+The correspondence proof combines syntax and compiler properties through
+`correspondence_simultaneous`. Proof-specific predicates, including
+`FutureOffersAgree`, `MarkerSourceFor`, and `EdgeLocalAt`, live beside
+the proofs that use them.

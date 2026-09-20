@@ -6,8 +6,7 @@ noncomputable section
 
 open Classical
 
-/-- Helper Lemma H21: componentwise refinement lifts through a fixed
-composition. -/
+/-- Componentwise refinement lifts through well-formed compositions with matching component alphabets. -/
 lemma helper_h21_componentwise_product_lifting
     {precise abstract : List PactType} {interfaces : List Interface}
     {preciseComposition abstractComposition : PactType}
@@ -26,12 +25,7 @@ lemma helper_h21_componentwise_product_lifting
     (ResignRegular.of_typeWellFormedIn hPreciseWF)
     (ResignRegular.of_typeWellFormedIn hAbstractWF)
 
-/-! ## Helper Lemma H22: matching histories along refinement
-
-The same recipe as the strategy-matching construction of Helper Lemma H3,
-specialized to the case where both sides range over the same environment
-alphabet, so no concretization step is needed: the precise strategy simply
-copies the abstract strategy's choice at the matched prefix. -/
+/-! ## Matching histories and strategy transfer -/
 
 /-- The abstract residual answering a precise step, chosen by the response
 clause of refinement. -/
@@ -56,8 +50,7 @@ lemma matchingAbstractResidual_spec {precise abstract : PactType}
   rw [matchingAbstractResidual, dif_pos hExists]
   exact hExists.choose_spec
 
-/-- One step of the simultaneous induction: extend the matching abstract
-history by the *same* entry and its chosen residual. -/
+/-- Extend a matching abstract history with the same environment and label and a chosen residual. -/
 noncomputable def matchingAbstractStep {precise abstract : PactType}
     (witness : RefinementWitness precise abstract)
     (state : TypeHistory × PactType)
@@ -82,9 +75,7 @@ lemma matchingAbstractRun_append {precise abstract : PactType}
       matchingAbstractStep witness (matchingAbstractRun witness entries) entry := by
   simp [matchingAbstractRun]
 
-/-- Helper Lemma H22: the matching abstract history is a valid prefix ending at
-a related residual, with the identical environment and label at every
-position. -/
+/-- The matching abstract history is valid and ends at a related residual. -/
 theorem helper_h22_matching_histories_along_refinement {precise abstract : PactType}
     (witness : RefinementWitness precise abstract) :
     ∀ {entries : TypeHistory} {residual : PactType},
@@ -102,7 +93,7 @@ theorem helper_h22_matching_histories_along_refinement {precise abstract : PactT
       rw [matchingAbstractRun_append, matchingAbstractStep]
       exact ⟨hValidAbstract.step hAbstractStep, hRelated'⟩
 
-/-- The matching abstract prefix, packaged. -/
+/-- A matching abstract history together with its validity proof. -/
 noncomputable def matchingAbstractPrefix {precise abstract : PactType}
     (witness : RefinementWitness precise abstract) (history : TypePrefix precise) :
     TypePrefix abstract where
@@ -110,16 +101,13 @@ noncomputable def matchingAbstractPrefix {precise abstract : PactType}
   residual := (matchingAbstractRun witness history.entries).2
   valid := (helper_h22_matching_histories_along_refinement witness history.valid).1
 
-/-- `S_Θ` from `S_Θ'`: copy the abstract strategy's choice at the matched
-prefix. -/
+/-- Choose each environment using the abstract strategy at the matching history. -/
 noncomputable def refiningStrategy {precise abstract : PactType}
     (witness : RefinementWitness precise abstract) (abstractStrategy : TypeStrategy) :
     TypeStrategy :=
   fun entries => abstractStrategy (matchingAbstractRun witness entries).1
 
-/-- Every completed log of the copying strategy is, entry for entry, a completed
-log of the abstract strategy — not merely erasure-equal, since no concretization
-step is involved. -/
+/-- Every completed log of the refining strategy is also a completed log of the abstract strategy. -/
 theorem completedTypeLog_of_refining {precise abstract : PactType}
     (witness : RefinementWitness precise abstract) (abstractStrategy : TypeStrategy)
     {log : TypeLog}
@@ -194,7 +182,7 @@ theorem compatibility_monotone_of_refines {precise abstract : PactType}
   exact ⟨hHonest, hTock, fun hFair => hLive fun bid hBid =>
     hFair bid (hFairIds.symm ▸ hBid)⟩
 
-/-- Helper Lemma H23: refinement is reflexive. -/
+/-- Refinement is reflexive. -/
 lemma helper_h23_refinement_refl (processType : PactType) :
     Refines processType processType := by
   refine ⟨{
@@ -214,7 +202,7 @@ lemma helper_h23_refinement_refl (processType : PactType) :
     subst right
     exact ⟨left', hStep, rfl⟩
 
-/-- Helper Lemma H23: refinement is transitive. -/
+/-- Refinement is transitive. -/
 lemma helper_h23_refinement_trans
     {left middle right : PactType}
     (hLeft : Refines left middle) (hRight : Refines middle right) :

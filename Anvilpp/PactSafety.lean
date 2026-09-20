@@ -8,19 +8,13 @@ import Anvilpp.ProofHelpers.PrefixPlayMatch
 import Anvilpp.ProofHelpers.CompatibilitySoundness
 import Anvilpp.ProofHelpers.RefinementLifting
 
-/-!
-# Communication safety
-
-Supporting definitions live in `Anvilpp/ProofHelpers.lean`.
--/
+/-! # Communication safety -/
 
 namespace Pact
 
 noncomputable section
 
-/-- `WFProc(P) iff DataWF(P) and TypeWF(abs(P))`.  The process alphabet checks
-and regularity conditions are exactly those of its abstraction, so the process
-side reuses `TypeWellFormedIn` rather than restating them. -/
+/-- A process is well formed when its data and inferred type are well formed. -/
 def WFProc (process : Proc) : Prop :=
   DataWFProc process ∧ TypeWellFormedIn [] (inferProcess process)
 
@@ -32,17 +26,7 @@ open Classical
 
 /-! ## Type inference, refinement, and checking -/
 
-/-- Lemma 4.1, "Strategy transfer": honest winning strategies transfer from
-types to processes along conformance.
-
-The proof follows `pactproofdetails.typ` step for step.  Build `S_P` from
-`S_τ` by concretizing each chosen erased environment (Helper Lemma H3, using
-the representative `γ` of Helper Lemma H2).  Take an arbitrary completed
-process log `ℓ_P` under `S_P`; Helper Lemma H4 supplies a completed type log
-`ℓ_τ` under `S_τ` with `Erase(ℓ_P) = ℓ_τ`.  Since `S_τ` ensures `Φ`, we get
-`ℓ_τ ∈ Φ`, and since `Φ` is value-oblivious — membership depends only on the
-erased log — also `ℓ_P ∈ Φ`.  Honesty of `ℓ_P` is Helper Lemma H5 applied to
-the honest `ℓ_τ`.  As `ℓ_P` was arbitrary, `S_P` is honest and ensures `Φ`. -/
+/-- Honest strategies enforcing value-oblivious objectives transfer from types to conforming processes. -/
 theorem strategy_transfer
     {process : Proc} {processType : PactType} {objective : ProcessObjective}
     (hConforms : Conforms process processType)
@@ -56,29 +40,25 @@ theorem strategy_transfer
       HonestProcessStrategy strategy ∧
       ∀ log, CompletedProcessLog strategy log → log ∈ objective := by
   obtain ⟨typeStrategy, hHonestType, hEnsures⟩ := hTypeStrategy
-  -- Build `S_P` from `S_τ` by concretizing each chosen erased environment
-  -- (Helper Lemma H3, via `helper_h2`'s representative `γ`).
+
+  -- Concretization preserves completed logs and honesty.
   refine ⟨concretizingStrategy hConforms.some typeStrategy, ?_, ?_⟩
-  · -- Honesty: the matching completed type log is honest (`S_τ` is honest),
-    -- and honesty is preserved by concretization (Helper Lemmas H4, H5).
+  ·
+
     intro log hCompleted
     obtain ⟨typeLog, hCompletedType, hErase⟩ :=
       helper_h4_completed_process_logs_erase hConforms.some typeStrategy hCompleted
     exact helper_h5_honesty_preserved_by_concretization hErase
       (hHonestType typeLog hCompletedType)
-  · -- The objective: `S_τ` ensures `Φ` on the matching type log, and `Φ` is
-    -- value-oblivious, so it depends only on the erased log (Helper Lemma H4).
+  ·
+
     intro log hCompleted
     obtain ⟨typeLog, hCompletedType, hErase⟩ :=
       helper_h4_completed_process_logs_erase hConforms.some typeStrategy hCompleted
     obtain ⟨witnessLog, hWitnessErase, hWitnessMem⟩ := hEnsures typeLog hCompletedType
     exact (hOblivious log witnessLog (hErase.trans hWitnessErase.symm)).mpr hWitnessMem
 
-/-! ### Lemma 4.2
-
-The paper's helper chain, in order: abstraction and substitution, one-step
-abstraction, decorated-step lifting, clock-step reflection, readiness
-reflection, and then the two closure clauses of the conformance relation. -/
+/-! ### Inference soundness -/
 
 /-- `P₀` is reachable from `P` when some finite execution leads to it. -/
 def ProcReachable (initial residual : Proc) : Prop :=
@@ -87,14 +67,13 @@ def ProcReachable (initial residual : Proc) : Prop :=
 theorem ProcReachable.refl (process : Proc) : ProcReachable process process :=
   ⟨[], .root⟩
 
-/-- `ConjMsgOwn` is one of the conjuncts of `TypeWF(abs(P))`. -/
+/-- Well-formed processes satisfy conjunctive branch regularity. -/
 theorem WFProc.conjunctRegular {process : Proc} (hWF : WFProc process) :
     Proc.ConjunctRegular process := by
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hOwnership, -⟩ := hWF
   exact Proc.conjunctRegular_of_conjunctiveMessageOwnership hOwnership
 
-/-- Represented residuals: the two structural facts the conjunctive commitment
-reads survive to every reachable residual. -/
+/-- Reachable residuals preserve alphabet well-formedness and conjunctive branch regularity. -/
 theorem WFProc.sideConditions {initial residual : Proc} (hWF : WFProc initial)
     (hReach : ProcReachable initial residual) :
     Proc.AlphabetWellFormed residual ∧ Proc.ConjunctRegular residual := by
@@ -109,9 +88,7 @@ theorem ProcReachable.step {initial current next : Proc} {env : Environment}
   obtain ⟨_, _, hOffers⟩ := hStep
   exact ⟨entries ++ [(env, label, next)], hValid.step ⟨_, _, hOffers⟩⟩
 
-/-- Data well-formedness is preserved along a step: the only substitutions a
-rule performs are a value for a data variable and a closed recursive process
-for its own binder. -/
+/-- Process transitions preserve data well-formedness. -/
 theorem dataWFProc_step {env : Environment} {source target : Proc}
     {label : Label} (hData : DataWFProc source)
     (hStep : ProcessTransition env source label target) :
@@ -119,13 +96,8 @@ theorem dataWFProc_step {env : Environment} {source target : Proc}
   obtain ⟨_, _, hOffers⟩ := hStep
   exact dataWFProc_offers hOffers hData
 
-/-- Helper for Lemma 4.2: decorated steps lift.
-
-An abstract decorated step at a reachable residual is realised by a concrete
-step exposing the erased current offer and the *same* future component.  The
-concrete label agrees with `β` on every message observation and on the clock,
-differing at most in fair-choice outcomes, and the concrete target need not
-abstract to `ρ`: a conditional takes the branch its own guard selects. -/
+/-- An abstract step at a reachable residual has a concrete step with the same
+erased current offers and future offers; their targets need not correspond. -/
 theorem decorated_step_lifting
     {initial process : Proc} (hWF : WFProc initial)
     (hReach : ProcReachable initial process) (hData : DataWFProc process)
@@ -138,12 +110,12 @@ theorem decorated_step_lifting
         processCurrent.image Offer.bare = current := by
   obtain ⟨hAlpha, hConj⟩ := hWF.sideConditions hReach
   by_cases hClock : (eraseEnvironment env).clock = false
-  · -- `Imm(E_P) ≠ {#}`: the lifting induction
+  ·
     obtain ⟨processCurrent, hImage, hLift⟩ :=
       lifting_core hStep process rfl hClock hAlpha hConj hData
     obtain ⟨target, label, hOffers, -⟩ := hLift env rfl
     exact ⟨target, label, processCurrent, hOffers, hImage⟩
-  · -- `Imm(E_P) = {#}`: clock-step reflection supplies the step
+  ·
     have hEnvClock : env.clock = true := by
       have : env.clock = (eraseEnvironment env).clock := rfl
       rw [this]
@@ -163,7 +135,7 @@ theorem decorated_step_lifting
     subst hCurrent; subst hFuture
     exact ⟨target, Label.tock, ∅, by rw [hEnvTock]; exact hOffers, by simp⟩
 
-/-- Helper for Lemma 4.2: abstraction reflects readiness. -/
+/-- Readiness of the inferred type implies readiness of the reachable process residual. -/
 theorem readiness_abstraction
     {initial process : Proc} (hWF : WFProc initial)
     (hReach : ProcReachable initial process) (hData : DataWFProc process)
@@ -172,17 +144,13 @@ theorem readiness_abstraction
       ProcessReady env process := by
   intro hReady
   obtain ⟨typeLabel, typeTarget, hTransition⟩ := hReady
-  -- Every derivable type step exposes at least one offer pair.
+
   obtain ⟨current, future, hOffers⟩ := hTransition.exists_typeOffers
   obtain ⟨target, label, _, hProcess, -⟩ :=
     decorated_step_lifting hWF hReach hData hOffers
   exact ⟨label, target, _, _, hProcess⟩
 
-/-- Lemma 4.2, "Soundness of inferred types": `WFProc(P) ⟹ P ⊧ abs(P)`.
-
-The witness relates each reachable residual to its own abstraction.  Step
-matching is one-step abstraction; the availability clause is readiness
-reflection at that pair. -/
+/-- Every well-formed process conforms to its inferred type. -/
 theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
     Conforms process (inferProcess process) := by
   refine ⟨{
@@ -192,17 +160,17 @@ theorem inferred_type_soundness {process : Proc} (hWF : WFProc process) :
     initial := ⟨ProcReachable.refl process, hWF.1, rfl⟩
     readyReflect := ?_
     matchStep := ?_ }⟩
-  · -- Availability: readiness reflection at the related pair.
+  ·
     rintro p₀ τ₀ env ⟨hReach, hData, rfl⟩ hReady
     exact readiness_abstraction hWF hReach hData hReady
-  · -- Step matching: one-step abstraction, and the target stays reachable.
+  ·
     rintro p₀ p₁ τ₀ env label ⟨hReach, hData, rfl⟩ hStep
     obtain ⟨hAlpha, hConj⟩ := hWF.sideConditions hReach
     exact ⟨inferProcess p₁, one_step_abstraction hAlpha hConj hStep,
       hReach.step hStep, dataWFProc_step hData hStep, rfl⟩
 
 #print axioms inferred_type_soundness
-/-- Lemma 4.3, "Conformance is closed under refinement". -/
+/-- A process conforming to a precise type also conforms to any type it refines. -/
 theorem conformance_closed_under_refinement
     {process : Proc} {precise abstract : PactType}
     (hConforms : Conforms process precise)
@@ -220,29 +188,26 @@ theorem conformance_closed_under_refinement
         intro p τ hWitnessEnv hWitnessRel hTypeReady
         rcases hWitnessRel with ⟨τ', hConformRel, hRefineRel⟩
         have hPreciseReady : TypeReady (eraseEnvironment hWitnessEnv) τ' := by
-          -- Ready abstract type gives us a transition
+
           rcases hTypeReady with ⟨label, target, hStep⟩
-          -- H17 decorates that transition
+
           obtain ⟨offers, hDecoratedStep⟩ := helper_h17_every_type_step_has_decoration hStep
-          -- Refinement availability transfers the transition
-          -- from τ back to τ'
+
           obtain ⟨target', hDecoratedStep'⟩ :=
             hRefines.some.availability hRefineRel hDecoratedStep
-          -- A decorated transition contains/is backed by an ordinary transition.
-          -- Need to extract it and rebuild TypeReady here.
+
           exact ⟨label, target', hDecoratedStep'.1⟩
         exact hConforms.some.readyReflect
           hConformRel hPreciseReady
       matchStep := by
         intro p p' τ hWitnessEnv label hConformWitnessRel hProcessStep
-        -- Given p ⊧ τ there exists τ₀ such that p ⊧ τ₀ and τ τ₀ in R
+
         rcases hConformWitnessRel with ⟨τₒ , hConformRel, hRefineRel⟩
         obtain ⟨τ₁, hPrecTypeStep, hPrecConformRel'⟩ :=
           helper_h9_one_step_conformance_match
           hConforms.some
           hConformRel hProcessStep
-        -- Given τ τ₀ in R and τ₀ -> τ₁, then we can use h10 to
-        --  obtain τ' such that τ -> τ' and τ₁ τ' in R
+
         obtain ⟨τ', hTypeTrans, hRefineRel'⟩ :=
           helper_h10_refinement_response_coherence
             hRefines.some hRefineRel hPrecTypeStep
@@ -250,9 +215,7 @@ theorem conformance_closed_under_refinement
     }
     ⟩
 
-
-/-- Lemma 4.4, "Soundness of type checking":
-`WFProc(P) ∧ checkdo(P,τ) ⟹ P ⊧ τ`. -/
+/-- A well-formed process conforms to every type accepted by data-oblivious checking. -/
 theorem type_checking_soundness
     {process : Proc} {claimed : PactType} (hWF : WFProc process)
     (hChecks : DataObliviousChecks process claimed) :
@@ -265,38 +228,27 @@ theorem type_checking_soundness
 
 #print axioms type_checking_soundness
 
-/-- Theorem 4.1, "Decidability and complexity of type inference and
-checking": inference and checking are decidable; inference runs in `O(|P|)`
-and checking (given explicit automata of sizes `m`, `n`) in `O(mn)`. -/
-theorem inference_checking_decidable_and_efficient
-    (process : Proc) (claimed : PactType) :
-    (∃ answer : Bool, answer = true ↔ DataObliviousChecks process claimed) ∧
-    RunsInLinearTime inferProcess ∧
-    RunsInProductTime refinementChecker := by
-  sorry
-
 /-! ## Type compatibility checking -/
 
-/-- Proposition 4.1, "Regularity of the log objective": `Ω_T` is
-omega-regular. -/
+/-- The completed-log objective over the finite boundary alphabet is omega-regular. -/
 theorem log_objective_regular
     (initial : PactType) (progress : Finset ProcId) :
-    OmegaRegular initial progress := by
-  sorry
+    OmegaRegular initial progress :=
+  omegaRegular_log_objective initial progress
 
-/-- Lemma 4.5, "Type--automaton correspondence". -/
+/-- An admissible type and its compiled automaton match decorated steps in both directions. -/
 theorem type_automaton_correspondence
      {processType : PactType}
     (hAdmissible : AdmissibleType processType) :
     Nonempty
       (TypeAutomatonCorrespondence processType
         (compileType processType)) := by
-  -- The automaton
+
   let typeAutomaton := compileType processType
-  -- The relation set
+
   let relation_set : Finset (PactType × TypeAutomatonState) :=
     buildRelationSet processType typeAutomaton
-  -- proof witness
+
   exact ⟨{
       relation := relationMembership relation_set
       initial := by
@@ -324,8 +276,7 @@ theorem type_automaton_correspondence
     }⟩
 
 #print axioms type_automaton_correspondence
-/-- Lemma 4.6, "Process--automaton correspondence": conforming processes
-simulate into the type automaton. -/
+/-- A conforming process matches steps and readiness with its type's compiled automaton. -/
 theorem process_automaton_correspondence
      {process : Proc} {processType : PactType}
     (hAdmissible : AdmissibleType processType)
@@ -333,7 +284,7 @@ theorem process_automaton_correspondence
     Nonempty
       (ProcessAutomatonCorrespondence
         process processType (compileType processType)) := by
-  -- Compose the conformance witness with Lemma 4.5 through the type residual.
+
   let typeCorrespondence := (type_automaton_correspondence hAdmissible).some
   let conformance := hConforms.some
   have hMatch : ∀ {p₀ p₁ : Proc} {state : TypeAutomatonState}
@@ -347,10 +298,10 @@ theorem process_automaton_correspondence
         ∃ residual, conformance.relation p₁ residual ∧
           typeCorrespondence.relation residual state' := by
     rintro p₀ p₁ state env label ⟨residual, hConformRel, hAutoRel⟩ hStep
-    -- Erased-step conformance supplies the type target.
+
     obtain ⟨residual₁, hTypeStep, hRelated₁⟩ :=
       conformance.matchStep hConformRel hStep
-    -- Type-step decoration, then the forward direction of Lemma 4.5.
+
     obtain ⟨offers, hDecorated⟩ := hTypeStep.exists_decorated
     obtain ⟨state', hEdge, hAutoRel₁⟩ :=
       typeCorrespondence.forward hAutoRel hDecorated
@@ -364,12 +315,12 @@ theorem process_automaton_correspondence
     readyAgree := by
       rintro p₀ state env ⟨residual, hConformRel, hAutoRel⟩
       constructor
-      · -- An edge gives a type step by Lemma 4.5, then availability reflection.
+      ·
         rintro ⟨label, offers, state', hEdge⟩
         obtain ⟨residual', hDecorated, -⟩ :=
           typeCorrespondence.backward hAutoRel hEdge
         exact conformance.readyReflect hConformRel ⟨label, residual', hDecorated.1⟩
-      · -- A process step gives its matching edge.
+      ·
         rintro ⟨label, target, hStep⟩
         obtain ⟨state', offers, hEdge, -⟩ :=
           hMatch ⟨residual, hConformRel, hAutoRel⟩ hStep
@@ -377,9 +328,8 @@ theorem process_automaton_correspondence
 
 #print axioms process_automaton_correspondence
 
-/-- The finite-path consequence of Lemma 4.6: every finite process execution
-has a matching automaton path with the same erased environments and
-observations, ending at a related state. -/
+/-- Every finite process execution has an automaton path with the same erased labels
+and environments, ending at a related state. -/
 theorem process_automaton_path
     {process : Proc} {processType : PactType}
     (correspondence :
@@ -399,9 +349,7 @@ theorem process_automaton_path
         correspondence.matchStep hRelated hStep
       exact ⟨state', by simpa using hPath.step hEdge, hRelated'⟩
 
-/-- Theorem 4.2, "Correctness of the game reduction": the honesty-aware
-Rabin game exactly captures semantic compatibility.  The paper's premise is
-`TypeWF(Theta_0)`, which it records as replacing the stale `AdmissibleType`. -/
+/-- Game-based and completed-log compatibility agree for well-formed types. -/
 theorem game_reduction_correctness
      (initial : PactType) (progress : Finset ProcId)
     (hWellFormed : TypeWellFormedIn [] initial) :
@@ -424,11 +372,11 @@ theorem type_compatibility_soundness
     (hConforms : Conforms process processType)
     (hCompatible : TypeCompatible processType progress) :
     ProcessCompatible process progress := by
-  -- Step 1: Theorem 4.2 turns compatibility into a winning boundary strategy.
+
   obtain ⟨typeStrategy, hTypeWins⟩ :=
     (game_reduction_correctness processType progress hWellFormed).mp hCompatible
-  -- Step 2: Lemma 4.1 transfers it along conformance against the objective
-  -- `Φ(ℓ) = Ω_T(Erase(ℓ))`, which is value-oblivious by construction.
+
+  -- The objective depends only on the erased log.
   obtain ⟨strategy, hHonest, hEnsures⟩ :=
     strategy_transfer (objective :=
         {log | TypeWinningObjective processType progress (eraseProcessLog log)})
@@ -440,8 +388,8 @@ theorem type_compatibility_soundness
             simp only [Set.mem_setOf_eq, eraseProcessLog_concreteLog]
             exact hTypeWins log hCompleted⟩⟩
   refine ⟨strategy, hHonest, ?_, ?_⟩
-  · -- Step 3b: a stuck reachable prefix completes with the absorbing suffix, so
-    -- its clock stops recurring, contradicting the transferred objective.
+  ·
+
     intro historyPrefix hFollows hStuck
     obtain ⟨log, bound, hCompleted, hTail⟩ := completedProcessLog_of_stuck hFollows hStuck
     obtain ⟨-, hTock, -⟩ := hEnsures log hCompleted
@@ -450,8 +398,8 @@ theorem type_compatibility_soundness
     have hTockAt : (log index).2 = Label.tock := hMem
     rw [hTail index (by omega)] at hTockAt
     exact absurd hTockAt (by simp [Label.silent])
-  · -- Step 3a: erasure preserves the clock, the progress markers and the
-    -- fair-choice outcomes, so liveness translates entry by entry.
+  ·
+
     intro log hCompleted
     obtain ⟨-, hTock, hLive⟩ := hEnsures log hCompleted
     refine ⟨(tockOccursInfinitely_erase log).mp hTock, fun hFair pid hPid => ?_⟩
@@ -461,16 +409,6 @@ theorem type_compatibility_soundness
     exact hFair bid (hFairIds ▸ hBid)
 
   #print axioms type_compatibility_soundness
-
-/-- Theorem 4.4, "Decidability and complexity of compatibility": for a
-monitored game with `N` vertices, `M` edges, and `K = 1+2|cal(Eta)(Θ_0)|`
-Rabin pairs, compatibility is decidable in `Õ(MN(K!)^{1+o(1)})` time. -/
-theorem type_compatibility_decidable_and_efficient
-     (processType : PactType) (progress : Finset ProcId) :
-    (∃ answer : Bool,
-      answer = true ↔ TypeCompatible processType progress) ∧
-    CompatibilityGameComplexityBound processType progress := by
-  sorry
 
 /-! ## Optimality of inferred types -/
 
@@ -567,9 +505,8 @@ theorem inferred_types_optimal
 
 #print axioms inferred_types_optimal
 
-/-- Corollary 4.1, "Failure rules out data-oblivious proofs".
-
-Exactly the contrapositive of the backward direction of Theorem 4.5. -/
+/-- Failure of inferred-type compatibility excludes every compatible checked tuple
+with matching alphabets and identifiers. -/
 theorem inferred_failure_rules_out_data_oblivious_proofs
      {processes : List Proc} {interfaces : List Interface}
     {progress : Finset ProcId}

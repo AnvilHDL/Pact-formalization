@@ -6,7 +6,7 @@ noncomputable section
 
 open Classical
 
-/-- The two step simulations of Lemma 4.5. -/
+/-- A relation matching decorated type transitions and automaton edges in both directions. -/
 structure TypeAutomatonCorrespondence
     (processType : PactType) (automaton : TypeAutomaton) : Type where
   relation : PactType → TypeAutomatonState → Prop
@@ -45,8 +45,7 @@ def AutoReady (automaton : TypeAutomaton) (env : TypeEnvironment)
     (state : TypeAutomatonState) : Prop :=
   ∃ label offers state', automaton.HasEdge state env label offers state'
 
-/-- The two clauses of Lemma 4.6: step matching and readiness agreement under
-the same environment. -/
+/-- A process-state relation preserving steps and agreeing on readiness under erased environments. -/
 structure ProcessAutomatonCorrespondence
     (process : Proc) (processType : PactType) (automaton : TypeAutomaton) : Type where
   relation : Proc → TypeAutomatonState → Prop

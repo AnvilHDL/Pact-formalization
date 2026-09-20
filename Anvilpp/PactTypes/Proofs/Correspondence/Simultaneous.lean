@@ -4,10 +4,7 @@ import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.MarkerCorrespondence
 import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.Sequence
 import Anvilpp.PactTypes.Proofs.Correspondence.Simultaneous.ParallelMenus
 
-/-!
-The retained same-cycle lemmas, parallel product menus, and the paper's
-simultaneous induction for full offer correspondence and menu agreement.
--/
+/-! Full decorated-step correspondence and menu agreement by constructor induction. -/
 
 namespace Pact
 
@@ -18,7 +15,7 @@ open Pact.NewCorrespondence
 
 open PendingAutomaton
 
-/-- The paper's two helpers, proved together by induction on `typeCompilationFuel`. -/
+/-- Well-formed types satisfy decorated-step correspondence and menu agreement. -/
 theorem correspondence_simultaneous :
     ∀ (bound : List String) (processType : PactType),
       TypeWellFormedIn bound processType →

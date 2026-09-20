@@ -18,8 +18,7 @@ def composeTypes : List PactType → List Interface → Option PactType
       | none => none
   | _, _ => none
 
-/-- Right-associated parallel composition, mirroring `parallelType`: the
-parent alphabet is the two child alphabets with the interface hidden. -/
+/-- Parallel composition with the interface hidden from the parent message alphabet. -/
 def parallelProc (left right : Proc) (interface : Interface) : Proc :=
   .par (PactTypeAlphabet.mergeHidden left.alphabet right.alphabet interface)
     left right interface
