@@ -225,6 +225,28 @@ theorem type_checking_soundness
     simpa using hChecks
   simpa using conformance_closed_under_refinement hPreciseConfirms hRefines
 
+/-- Componentwise checking gives parallel conformance when component alphabets
+agree and the process and claimed type compositions are well formed. -/
+theorem compositional_type_checking_soundness
+    {left right : Proc} {leftType rightType : PactType} {interface : Interface}
+    (hWF : WFProc (parallelProc left right interface))
+    (hClaimedWF : TypeWellFormedIn [] (parallelType leftType rightType interface))
+    (hLeftAlphabet : left.alphabet = leftType.alphabet)
+    (hRightAlphabet : right.alphabet = rightType.alphabet)
+    (hLeftChecks : DataObliviousChecks left leftType)
+    (hRightChecks : DataObliviousChecks right rightType) :
+    Conforms (parallelProc left right interface)
+      (parallelType leftType rightType interface) := by
+  have hAbstraction : inferProcess (parallelProc left right interface) =
+      parallelType (inferProcess left) (inferProcess right) interface := by
+    simp [parallelProc, parallelType, inferProcess]
+  apply conformance_closed_under_refinement (inferred_type_soundness hWF)
+  rw [hAbstraction]
+  exact refines_parallel hLeftChecks hRightChecks
+    (by simpa using hLeftAlphabet) (by simpa using hRightAlphabet)
+    (ResignRegular.of_typeWellFormedIn (hAbstraction ▸ hWF.2))
+    (ResignRegular.of_typeWellFormedIn hClaimedWF)
+
 /-! ## Type compatibility checking -/
 
 /-- The completed-log objective over the finite boundary alphabet is omega-regular. -/

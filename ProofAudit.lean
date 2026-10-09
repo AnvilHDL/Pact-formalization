@@ -6,6 +6,7 @@ import Anvilpp.PactSafety
 #print axioms Pact.inferred_type_soundness
 #print axioms Pact.conformance_closed_under_refinement
 #print axioms Pact.type_checking_soundness
+#print axioms Pact.compositional_type_checking_soundness
 #print axioms Pact.log_objective_regular
 #print axioms Pact.type_automaton_correspondence
 #print axioms Pact.process_automaton_correspondence

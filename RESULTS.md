@@ -13,6 +13,7 @@ full quantified premises. Supporting module indexes cover the remaining lemmas.
 | `inferred_type_soundness` | Every `WFProc` process conforms to its inferred type. |
 | `conformance_closed_under_refinement` | A process conforming to a precise type also conforms to a type it refines. |
 | `type_checking_soundness` | A well-formed process conforms to every type accepted by data-oblivious checking. |
+| `compositional_type_checking_soundness` | Componentwise checking gives conformance of the parallel composition, with matching component alphabets and well-formed process and claimed type compositions. |
 | `strategy_transfer` | Honest type strategies enforcing value-oblivious objectives transfer to conforming processes. |
 
 `WFProc` requires data well-formedness and a well-formed inferred type.
