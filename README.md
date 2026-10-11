@@ -1,9 +1,13 @@
 # Pact Theory
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23301148.svg)](https://doi.org/10.5281/zenodo.23301148)
+
 Lean definitions and proofs for Pact processes, inferred types, constructor
 automata, compatibility, and inferred-type optimality.
 
 > For artifact reviewers, [Updates since submission](Update.md) summarizes the main updates relative to the submitted paper.
+
+This mechanization is part of the POPL 2027 artifact, archived on Zenodo: [10.5281/zenodo.23301148](https://doi.org/10.5281/zenodo.23301148).
 
 ## Results
 
