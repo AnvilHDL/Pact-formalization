@@ -93,10 +93,10 @@ These premises appear in the public statements in
 
 ## Evaluation Scope
 
-The evaluation scope covers semantic correctness, including compositional
+The artifact focuses on semantic correctness, including compositional
 checking soundness, regularity of the log objective, and equivalence between
-game-based and semantic compatibility. Complexity bounds and algorithmic
-decidability claims from the paper remain outside the formalized scope.
+game-based and semantic compatibility. The paper's complexity bounds and
+algorithmic decidability claims are not formalized.
 
 Use the commands in [README.md](README.md) to build the artifact and run
 [ProofAudit.lean](ProofAudit.lean), which checks the axiom dependencies of the
