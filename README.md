@@ -3,13 +3,15 @@
 Lean definitions and proofs for Pact processes, inferred types, constructor
 automata, compatibility, and inferred-type optimality.
 
+> For artifact reviewers, [Updates since submission](Update.md) summarizes the main updates relative to the submitted paper.
+
 ## Results
 
 [PactSafety](Anvilpp/PactSafety.lean) proves inference/checking soundness,
 type-automaton correspondence, process simulation and readiness agreement,
 log-objective regularity, game reduction, compatibility soundness, and
 inferred-type optimality. [Results and proofs](RESULTS.md) lists their
-statements, assumptions, and supporting proof chains.
+precise statements, explicit premises, and supporting proof chains.
 
 Compatibility soundness requires equal process/type fair-choice and progress
 IDs. Optimality also requires equal message alphabets componentwise.
