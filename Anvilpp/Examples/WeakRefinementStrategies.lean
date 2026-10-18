@@ -1,5 +1,5 @@
 import Anvilpp.Examples.WeakRefinementParallel
-import Anvilpp.Examples.WeakRefinementComparison
+import Anvilpp.Examples.WeakRefinementExecutions
 import Anvilpp.ProofHelpers.ObjectiveRegularity
 
 namespace Pact
@@ -220,9 +220,124 @@ theorem completedTypeLog_skipPrefix_tail {source : PactType} {env : TypeEnvironm
       | succ stop => simpa [hTailRoot] using (hBefore 0 (by omega)).1
   exact ⟨Prod.ext hFirstEnv hFirstLabel, hSecondEnv, hCompletedTail⟩
 
-/-- Every admissible honest strategy admits a clock-aligned leading-skip implementation. -/
-theorem honestBlockRefinement_skipPrefix (source : PactType) :
-    HonestBlockRefinement (skipPrefix source) source := by
+/-- With matching initial availability, removing a leading skip preserves completion-aware blocks. -/
+theorem completedTypeExecution_skipPrefix_tail {source : PactType} {env : TypeEnvironment}
+    {strategy : TypeStrategy} {log : TypeLog}
+    (hWF : env.WellFormed source.alphabet) (hClock : env.clock = false)
+    (hAvailable : typeAvailable env = typeAvailable (strategy []))
+    (run : CompletedTypeExecution (skipPrefix source) (skipPrefixStrategy env strategy) log) :
+    ∃ tailRun : CompletedTypeExecution source strategy (fun n => log (n + 1)),
+      (∀ n, (tailRun.prefixAt n).residual = (run.prefixAt (n + 1)).residual) ∧
+      (∀ n, tailRun.current n = run.current (n + 1) ∧
+        tailRun.future n = run.future (n + 1)) ∧
+      Nonempty (CompletionBlockMatch run tailRun) := by
+  have hReady : TypeReady env (skipPrefix source) :=
+    ⟨_, _, skip_prefix_transition_iff.mpr ⟨hWF, hClock, rfl, rfl⟩⟩
+  have hActive : BeforeTypeFailure run.stop 0 := by
+    intro stop hStop
+    by_contra h
+    have : stop = 0 := by omega
+    subst stop
+    exact (run.failure 0 hStop).1 (by simpa [run.root, skipPrefixStrategy] using hReady)
+  have hFirst := run.ordinary 0 hActive
+  have hEnv : (log 0).1 = env := by
+    simpa [run.root, skipPrefixStrategy] using hFirst.1
+  obtain ⟨_, _, hLabel, hTarget⟩ := skip_prefix_transition_iff.mp
+    (show TypeTransition (log 0).1 (skipPrefix source) (log 0).2
+      (run.prefixAt 1).residual from by simpa [run.root] using hFirst.2.2)
+  have hEntries : (run.prefixAt 1).entries = [(env, TypeLabel.silent, source)] := by
+    simpa [run.root, hEnv, hLabel, hTarget] using hFirst.2.1.symm
+  have hNonempty (n : Nat) : (run.prefixAt (n + 1)).entries ≠ [] := by
+    induction n with
+    | zero => simp [hEntries]
+    | succ n ih =>
+        by_cases hBefore : BeforeTypeFailure run.stop (n + 1)
+        · rw [← (run.ordinary (n + 1) hBefore).2.1]
+          simp
+        · simpa [run.prefix_succ_of_failure hBefore] using ih
+  have hShift (n : Nat) :
+      BeforeTypeFailure (run.stop.map (fun k => k - 1)) n ↔
+        BeforeTypeFailure run.stop (n + 1) := by
+    cases hStop : run.stop with
+    | none => simp [BeforeTypeFailure]
+    | some stop =>
+        have hPositive := hActive stop hStop
+        simp [BeforeTypeFailure]
+        omega
+  have hStopShift (n : Nat) (hStop : run.stop.map (fun k => k - 1) = some n) :
+      run.stop = some (n + 1) := by
+    cases hSource : run.stop with
+    | none => simp [hSource] at hStop
+    | some stop =>
+        have hPositive := hActive stop hSource
+        simp only [hSource, Option.map_some, Option.some.injEq] at hStop
+        congr 1
+        omega
+  let tailRun : CompletedTypeExecution source strategy (fun n => log (n + 1)) := {
+    prefixAt := fun n => skipPrefixTail (run.prefixAt (n + 1))
+    stop := run.stop.map (fun k => k - 1)
+    current := fun n => run.current (n + 1)
+    future := fun n => run.future (n + 1)
+    root := by simp [skipPrefixTail, hEntries, hTarget]
+    ordinary := by
+      intro n hn
+      have hStep := run.ordinary (n + 1) ((hShift n).mp hn)
+      refine ⟨?_, ?_, ?_⟩
+      · simpa [skipPrefixStrategy, skipPrefixTail, hNonempty n] using hStep.1
+      · rw [skipPrefixTail_entries _ (hNonempty n),
+          skipPrefixTail_entries _ (hNonempty (n + 1)),
+          skipPrefixTail_residual _ (hNonempty (n + 1)), ← hStep.2.1]
+        cases hEs : (run.prefixAt (n + 1)).entries with
+        | nil => exact (hNonempty n hEs).elim
+        | cons entry entries => rfl
+      · simpa only [skipPrefixTail_residual _ (hNonempty n),
+          skipPrefixTail_residual _ (hNonempty (n + 1))] using hStep.2.2
+    offers := by
+      intro n hn
+      simpa only [skipPrefixTail_residual _ (hNonempty n),
+        skipPrefixTail_residual _ (hNonempty (n + 1))] using
+          run.offers (n + 1) ((hShift n).mp hn)
+    failure := by
+      intro n hn
+      obtain ⟨hStuck, hAt, hAfter⟩ := run.failure (n + 1) (hStopShift n hn)
+      refine ⟨?_, ?_, fun m hm => hAfter (m + 1) (by omega)⟩
+      · simpa [skipPrefixStrategy, skipPrefixTail, hNonempty n] using hStuck
+      · simpa [skipPrefixStrategy, skipPrefixTail, hNonempty n] using hAt
+    frozen := by
+      intro n hn m hm
+      exact congrArg skipPrefixTail (run.frozen (n + 1) (hStopShift n hn)
+        (m + 1) (by omega))
+    noOffers := fun n hn => run.noOffers (n + 1) (fun h => hn ((hShift n).mpr h)) }
+  refine ⟨tailRun, fun n => skipPrefixTail_residual _ (hNonempty n),
+    fun _ => ⟨rfl, rfl⟩, ⟨{
+      toTypeLogClockBlockMatch := TypeLogClockBlockMatch.silentHead hLabel
+      availability := ?_
+      futures := ?_
+      completion := ?_
+      failure := ?_ }⟩⟩
+  · intro block
+    cases block with
+    | zero =>
+        change typeAvailable (log 0).1 = typeAvailable (log 1).1
+        have hSecond := (completedTypeLog_skipPrefix_tail hWF hClock run.completed).2.1
+        rw [hEnv, hSecond]
+        exact hAvailable
+    | succ block => rfl
+  · intro block
+    change run.future (block + 2 - 1) = run.future (block + 1 - 1 + 1)
+    simp
+  · intro block
+    change run.Finished (block + 2) ↔ tailRun.Finished (block + 1)
+    simp only [CompletedTypeExecution.Finished, tailRun,
+      skipPrefixTail_residual _ (hNonempty (block + 1))]
+  · intro block
+    change BeforeTypeFailure run.stop (block + 2) ↔
+      BeforeTypeFailure (run.stop.map (fun k => k - 1)) (block + 1)
+    exact (hShift (block + 1)).symm
+
+/-- A leading skip is absorbed by a finite block with matching completion and failure. -/
+theorem completionBlockRefinement_skipPrefix (source : PactType) :
+    CompletionBlockRefinement (skipPrefix source) source := by
   refine ⟨rfl, by simp [skipPrefix, typeFairIds],
     by simp [skipPrefix, PactType.ProgressIds], ?_⟩
   intro strategy hAdmissible hHonest
@@ -246,11 +361,15 @@ theorem honestBlockRefinement_skipPrefix (source : PactType) :
         rw [hFirst, hSecond, TypeEnvironment.honestyRemainder_silent]
         exact Finset.subset_of_eq (Finset.union_comm _ _)
     | succ index => exact hHonest _ hTail index
-  · intro log hCompleted
-    obtain ⟨hFirst, _, hTail⟩ :=
-      completedTypeLog_skipPrefix_tail hFirstWF rfl hCompleted
-    exact ⟨fun n => log (n + 1), hTail,
-      ⟨TypeLogClockBlockMatch.silentHead (congrArg Prod.snd hFirst)⟩⟩
+  · intro log run
+    obtain ⟨tailRun, _, _, hMatch⟩ :=
+      completedTypeExecution_skipPrefix_tail hFirstWF rfl rfl run
+    exact ⟨fun n => log (n + 1), tailRun, hMatch⟩
+
+/-- Every admissible honest strategy admits a clock-aligned leading-skip implementation. -/
+theorem honestBlockRefinement_skipPrefix (source : PactType) :
+    HonestBlockRefinement (skipPrefix source) source :=
+  (completionBlockRefinement_skipPrefix source).toHonestBlockRefinement
 
 private theorem objective_of_tail {initial : PactType} {progress : Finset ProcId}
     {log : TypeLog} (hBoundary : (log 0).2.isTock ∨
