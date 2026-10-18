@@ -146,7 +146,7 @@ private lemma edgeLocal_xoffer (alphabet : PactTypeAlphabet)
       (typeNeed_image_subset_actions (PactTypeAlphabet.environment_wellFormed hLocal).2.2.2)
   · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
     obtain ⟨environment, -, rfl⟩ := hResolved
-    exact ⟨by simp, by simp [FutureSpec.AlphabetLocal]⟩
+    exact ⟨Finset.inter_subset_right, by simp [FutureSpec.AlphabetLocal]⟩
 
 private lemma edgeLocal_offer (alphabet : PactTypeAlphabet)
     (elseType : PactType) (branches : List (BareMessage × PactType))
@@ -909,7 +909,7 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
             refine Exists.intro
               { source := TypeAutomatonState.root, environment := env,
                 label := AutomatonConstructionLabel.visible TypeLabel.silent,
-                current := (∅ : Finset BareMessage),
+                current := typeBranchActions branches ∩ alphabet.actions,
                 future := FutureSpec.at TypeAutomatonState.root
                   (typeBranchActions branches),
                 target := childState 0 (compileTypeFuel
@@ -1078,7 +1078,8 @@ theorem currentOfferCorrespondence_xoffer (alphabet : PactTypeAlphabet)
         have hLabelEq : label = TypeLabel.silent := by
           have h := hPLabel; simp at h; exact h.symm
         subst hLabelEq
-        have hCurrentEq : current = ∅ := hPCurrent.symm
+        have hCurrentEq : current = typeBranchActions branches ∩ alphabet.actions :=
+          hPCurrent.symm
         subst hCurrentEq
         refine ⟨elseType, typeFutureOffers (.xoffer alphabet elseType branches) \
           typeBranchActions branches, ?_, ?_⟩

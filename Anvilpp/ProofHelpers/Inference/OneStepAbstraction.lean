@@ -284,7 +284,7 @@ theorem erasure_preserves_offers
           (hasNeed_recv_iff env msg).2 ⟨value, hPrem.2.2.1⟩,
           (typeResolved_iff env branches).2 hPrem.2.2.2⟩
   | xoffer_else env alphabet elseProcess branches hPrem =>
-      rw [inferProcess, eraseLabel_silent, image_bare_empty,
+      rw [inferProcess, eraseLabel_silent, projectCurrent_image, branchOfferSet_image,
         procFutureOffers_inferProcess, inferProcess,
         ← typeBranchActions_inferBranches]
       exact TypeOffers.xoffer_else _ _ _ _

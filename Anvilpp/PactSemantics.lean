@@ -558,7 +558,7 @@ inductive Offers :
       env.WellFormed alphabet ∧ env.clock = false ∧
         NoImmediateBranch env branches ∧ Resolved env branches →
       Offers env (Proc.xoffer alphabet elseProcess branches) Label.silent
-        elseProcess ∅
+        elseProcess (projectCurrent alphabet (branchOfferSet branches))
         (procFutureOffers (Proc.xoffer alphabet elseProcess branches) \
           branchActions branches)
   | xoffer_wait (env : Environment) (alphabet : PactTypeAlphabet)

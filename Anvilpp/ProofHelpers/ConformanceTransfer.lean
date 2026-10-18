@@ -239,10 +239,7 @@ theorem helper_h4_completed_process_logs_erase
     show (eraseEnvironment (processLog m).1, eraseLabel (processLog m).2) = _
     rw [hTail m hm, hEmptyEnv, hSilent]
 
-/-- Helper Lemma H5 — "Honesty is preserved
-by concretization".  Erasure keeps clock observations, copies the future menu
-unchanged, and preserves availability (`Avail(γ(e)) = Avail(e)`), so each
-honesty clause transfers index by index. -/
+/-- Erasure preserves availability, consumed boundary actions, and honesty. -/
 lemma helper_h5_honesty_preserved_by_concretization
     {processLog : ProcessLog} {typeLog : TypeLog}
     (hErase : eraseProcessLog processLog = typeLog)
@@ -261,13 +258,12 @@ lemma helper_h5_honesty_preserved_by_concretization
         simp [eraseLabel, TypeLabel.isTock] at hTock
     | tock => trivial
   · right
-    show (processLog (index + 1)).1.available ⊆ (processLog index).1.future
+    show (processLog (index + 1)).1.available ⊆
+      (processLog index).1.honestyRemainder (processLog index).2
     have hAvailEq : typeAvailable (eraseEnvironment (processLog (index + 1)).1) =
         (processLog (index + 1)).1.available := by
       simp [typeAvailable, eraseEnvironment, Environment.available]
-    have hFutureEq : (eraseEnvironment (processLog index).1).future =
-        (processLog index).1.future := rfl
-    rw [← hAvailEq, ← hFutureEq]
+    rw [← hAvailEq]
     exact hAvail
 
 /-- Helper Lemma H9: one-step conformance match. -/

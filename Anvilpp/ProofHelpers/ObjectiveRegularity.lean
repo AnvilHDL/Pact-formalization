@@ -20,7 +20,7 @@ instance objectiveDisjunctFintype (initial : PactType) : Fintype (ObjectiveDisju
 abbrev LogRoundState (req : Finset TypeMark) :=
   {pending : Finset TypeMark // pending ∈ req.powerset} × Bool × Bool
 
-/-- Honest-prefix status, previous future memory, and the finite acceptance monitors. -/
+/-- Honest-prefix status, retained availability, and finite acceptance monitors. -/
 structure FiniteLogMonitorState (Memory Disjunct : Type) (req : Disjunct → Finset TypeMark) where
   valid : Bool
   memory : Option Memory
@@ -36,8 +36,8 @@ instance finiteLogMonitorStateFintype (Memory Disjunct : Type) [Fintype Memory]
 
 abbrev LogMonitorState (initial : PactType) (progress : Finset ProcId) :=
   FiniteLogMonitorState
-    {future : Finset BareMessage //
-      future ∈ initial.alphabet.localEnvironments.image TypeEnvironment.future}
+    {allowed : Finset BareMessage //
+      allowed ∈ initial.alphabet.localEnvironmentActions.powerset}
     (ObjectiveDisjunct initial) (ObjectiveDisjunct.req progress)
 
 /-- Initial honesty memory and one outstanding request set per Rabin pair. -/
@@ -54,8 +54,12 @@ def logMonitorStep {initial : PactType} {progress : Finset ProcId}
     | some allowed => typeAvailable letter.val.1 ⊆ allowed.val)
   memory := match letter.val.2 with
     | .tock => none
-    | .actions _ => some ⟨letter.val.1.future,
-        Finset.mem_image.mpr ⟨letter.val.1, (Finset.mem_product.mp letter.property).1, rfl⟩⟩
+    | .actions _ => some ⟨letter.val.1.honestyRemainder letter.val.2, by
+        apply Finset.mem_powerset.mpr
+        have hWF := PactTypeAlphabet.environment_wellFormed
+          (Finset.mem_product.mp letter.property).1
+        exact (letter.val.1.honestyRemainder_subset letter.val.2).trans
+          (Finset.union_subset hWF.2.2.1 hWF.2.2.2)⟩
   rounds := fun disjunct =>
     let next := monitorAdvance (disjunct.req progress) (state.rounds disjunct).1.val
       (typeLabelMarks letter.val.2)
@@ -100,7 +104,8 @@ lemma valid_next_iff (n : ℕ) :
     (run progress word (n + 2)).valid = true ↔
       (run progress word (n + 1)).valid = true ∧
         ((word n).val.2.isTock ∨
-          typeAvailable (word (n + 1)).val.1 ⊆ (word n).val.1.future) := by
+          typeAvailable (word (n + 1)).val.1 ⊆
+            (word n).val.1.honestyRemainder (word n).val.2) := by
   change (_ && decide _) = true ↔ _
   rw [Bool.and_eq_true, decide_eq_true_eq]
   apply and_congr_right

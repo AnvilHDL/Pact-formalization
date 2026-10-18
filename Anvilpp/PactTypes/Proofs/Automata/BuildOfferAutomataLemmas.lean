@@ -343,7 +343,7 @@ theorem buildExclusiveOfferAutomaton_root_edge_cases
             ((environment.future.image typeNeed) ∩
               typeBranchActions branches) ∧
           edge.target = TypeAutomatonState.root) ∨
-      (edge.current = ∅ ∧
+      (edge.current = typeBranchActions branches ∩ alphabet.actions ∧
         edge.future = .at TypeAutomatonState.root
           (typeBranchActions branches) ∧
         edge.target = childState 0 elseAutomaton.initial) := by
@@ -418,7 +418,7 @@ theorem buildExclusiveOfferAutomaton_root_current_subset
     exact Finset.Subset.trans Finset.inter_subset_left
       (typeNeed_image_subset_actions (PactTypeAlphabet.environment_wellFormed hLocal).2.2.2)
   · obtain ⟨env, _, rfl⟩ := hDefault
-    exact Finset.empty_subset _
+    exact Finset.inter_subset_right
 
 /-- An exclusive root exposes exactly the declared branch heads. -/
 theorem buildExclusiveOfferAutomaton_offersAt_root
@@ -463,7 +463,7 @@ theorem buildExclusiveOfferAutomaton_offersAt_root
       · rw [hCurrent] at hIn
         exact (Finset.mem_inter.mp hIn).2
       · rw [hCurrent] at hIn
-        exact absurd hIn (Finset.notMem_empty _)
+        exact (Finset.mem_inter.mp hIn).1
   · intro action hAction
     obtain ⟨hAction, hDeclaredAction⟩ := Finset.mem_inter.mp hAction
     rw [typeBranchActions, List.mem_toFinset, List.mem_map] at hAction
@@ -589,7 +589,7 @@ theorem buildExclusiveOfferAutomaton_entries_subset_menuStep_root
     refine ⟨{ source := TypeAutomatonState.root
               environment := TypeEnvironment.empty
               label := .visible TypeLabel.silent
-              current := ∅
+              current := typeBranchActions branches ∩ alphabet.actions
               future := .at TypeAutomatonState.root (typeBranchActions branches)
               target := childState 0 elseAutomaton.initial },
       ⟨?_, rfl⟩, ?_⟩

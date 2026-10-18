@@ -304,8 +304,7 @@ theorem strategy_ready {progress : Finset ProcId} {strategy : TypeStrategy}
   rw [spliceLog_silent_of_stuck hStuck hGe] at hTockAt
   exact absurd hTockAt (by simp [TypeLabel.silent])
 
-/-- A winning strategy is honest on the prefixes it generates: after a non-clock
-step it cannot offer anything it had not already promised. -/
+/-- A winning strategy retains only promises and unconsumed offers after a non-clock step. -/
 theorem strategy_honest {progress : Finset ProcId} {strategy : TypeStrategy}
     (hWins : ∀ log, CompletedTypeLog initial strategy log →
       TypeWinningObjective initial progress log)
@@ -316,7 +315,7 @@ theorem strategy_honest {progress : Finset ProcId} {strategy : TypeStrategy}
     (hNotTock : ¬ label.isTock) :
     typeAvailable
         (strategy (history.entries ++ [(strategy history.entries, label, next)])) ⊆
-      (strategy history.entries).future := by
+      (strategy history.entries).honestyRemainder label := by
   obtain ⟨bound, headPrefix, headLog, hRoot, hLast, hSteps⟩ := follows_head hFollows
   obtain ⟨headPrefix', headLog', hRoot', hLast', hLogAt, hSteps'⟩ :=
     extend_head hRoot hLast hSteps hStep

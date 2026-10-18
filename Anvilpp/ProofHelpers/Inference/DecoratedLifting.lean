@@ -436,7 +436,8 @@ theorem lifting_core :
   | xoffer_else typeEnv alphabet elseType branches hPrem =>
       intro process hShape hClock hAlpha hConj hData
       obtain ⟨elseProcess, procBranches, rfl, rfl, rfl⟩ := inferProcess_eq_xoffer hShape
-      refine ⟨∅, by simp, ?_⟩
+      refine ⟨projectCurrent alphabet (branchOfferSet procBranches), ?_, ?_⟩
+      · rw [projectCurrent_image, branchOfferSet_image, typeBranchActions_inferBranches]
       intro env hErase
       have hFuture :
           procFutureOffers (Proc.xoffer alphabet elseProcess procBranches) \

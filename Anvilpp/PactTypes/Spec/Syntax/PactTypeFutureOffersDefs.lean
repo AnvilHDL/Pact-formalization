@@ -168,7 +168,7 @@ mutual
         env.WellFormed alphabet ∧ env.clock = false ∧
           TypeNoImmediateBranch env branches ∧ TypeResolved env branches →
         TypeOffers env (.xoffer alphabet elseType branches) TypeLabel.silent
-          elseType ∅
+          elseType (typeBranchActions branches ∩ alphabet.actions)
           (typeFutureOffers (.xoffer alphabet elseType branches) \
             typeBranchActions branches)
     | xoffer_wait (env : TypeEnvironment) (alphabet : PactTypeAlphabet)

@@ -1,6 +1,7 @@
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.List.Forall2
 import Anvilpp.PactSafetyStructures
+import Anvilpp.ProofHelpers.Honesty
 import Anvilpp.PactTypes.Proofs.Correspondence.TypeAutoRelCore
 import Anvilpp.PactTypes.Proofs.Correspondence.CompileWFHelpers
 
@@ -76,12 +77,11 @@ def CompletedProcessLog {initial : Proc}
         log stop = (strategy (prefixAt stop), Label.silent) ∧
         ∀ m, stop < m → log m = (Environment.empty, Label.silent))
 
-/-- `Honest(ℓ)`: an environment cannot introduce a new action after
-withdrawing it during the same cycle. -/
+/-- Between clocks, an environment retains only promises and unconsumed immediate offers. -/
 def HonestProcessLog (log : ProcessLog) : Prop :=
   ∀ index,
     (log index).2.isTock ∨
-    (log (index + 1)).1.available ⊆ (log index).1.future
+    (log (index + 1)).1.available ⊆ (log index).1.honestyRemainder (log index).2
 
 def HonestProcessStrategy {initial : Proc}
     (strategy : ProcessStrategy initial) : Prop :=

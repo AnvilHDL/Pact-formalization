@@ -8,22 +8,22 @@ open Classical
 
 /-! Honesty-aware compatibility games and their Rabin acceptance monitors. -/
 
-/-- `H_I = {star} ∪ {E_F | (E_C,E_F) ∈ cal(Env)_I}`. -/
+/-- A clock reset or the boundary actions still allowed in the current cycle. -/
 inductive HonestyMemory : Type where
   | star : HonestyMemory
   | future : Finset BareMessage → HonestyMemory
   deriving DecidableEq
 
-/-- `Adm(F,e)`. -/
+/-- The environment introduces no action outside the remembered availability. -/
 def HonestyMemory.Admissible : HonestyMemory → TypeEnvironment → Prop
   | .star, _ => True
   | .future allowed, env => typeAvailable env ⊆ allowed
 
-/-- `Next(e,α)`. -/
+/-- Clock resets the memory; other steps retain promises and unconsumed immediate offers. -/
 def honestyNext (env : TypeEnvironment) (label : TypeLabel) : HonestyMemory :=
   match label with
   | .tock => .star
-  | .actions _ => .future env.future
+  | .actions _ => .future (env.honestyRemainder label)
 
 /-- A resolved product edge under a fixed compiled automaton: `q →^α_e q'`. -/
 def compiledTypeEdge (automaton : TypeAutomaton) (state : TypeAutomatonState)

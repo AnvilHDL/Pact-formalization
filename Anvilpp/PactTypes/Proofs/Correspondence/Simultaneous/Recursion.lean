@@ -1705,7 +1705,7 @@ theorem TypeOffers.replaceVar_tail (name : String)
             (target.replaceVar name replacement)
             (PactType.replaceBranches branches name replacement)) \
               typeBranchActions (PactType.replaceBranches branches name replacement), ?_⟩
-          simpa [PactType.replaceVar] using
+          simpa only [PactType.replaceVar, PactType.typeBranchActions_replaceBranches] using
             TypeOffers.xoffer_else env alphabet
               (PactType.replaceVar target name replacement)
               (PactType.replaceBranches branches name replacement) hConds'
@@ -2064,6 +2064,7 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
                 (TypeResolved_replaceBranches env branches name replacement).mp
                   hConds.2.2.2⟩, rfl⟩
       | xoffer_else _ _ _ _ hConds =>
+          rw [PactType.typeBranchActions_replaceBranches]
           exact ⟨elseType, _,
             TypeOffers.xoffer_else env alphabet elseType branches
               ⟨hConds.1, hConds.2.1,

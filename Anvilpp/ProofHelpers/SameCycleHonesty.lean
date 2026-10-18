@@ -10,11 +10,10 @@ open Classical
 def TypeLogNoClockBetween (log : TypeLog) (i j : Nat) : Prop :=
   ∀ k, i ≤ k → k < j → ¬ (log k).2.isTock
 
-/-- The future component is one half of the available set. -/
-lemma future_subset_typeAvailable (env : TypeEnvironment) :
-    env.future ⊆ typeAvailable env := by
-  intro msg hMem
-  simp [typeAvailable, hMem]
+/-- The honesty remainder contains only previously available actions. -/
+lemma honestyRemainder_subset_typeAvailable (env : TypeEnvironment) (label : TypeLabel) :
+    env.honestyRemainder label ⊆ typeAvailable env :=
+  env.honestyRemainder_subset label
 
 /-- Helper Lemma H11: same-cycle characterization of honesty. -/
 lemma helper_h11_same_cycle_honesty (log : TypeLog) :
@@ -22,7 +21,7 @@ lemma helper_h11_same_cycle_honesty (log : TypeLog) :
       ∀ i j,
         i < j →
         TypeLogNoClockBetween log i j →
-        typeAvailable (log j).1 ⊆ (log i).1.future := by
+        typeAvailable (log j).1 ⊆ (log i).1.honestyRemainder (log i).2 := by
   constructor
   · intro hHonest i j hLess hNoClock
     induction j with
@@ -32,13 +31,16 @@ lemma helper_h11_same_cycle_honesty (log : TypeLog) :
         · have hInner : TypeLogNoClockBetween log i j := by
             intro k hLow hHigh
             exact hNoClock k hLow (Nat.lt_succ_of_lt hHigh)
-          have hPrefix : typeAvailable (log j).1 ⊆ (log i).1.future :=
+          have hPrefix : typeAvailable (log j).1 ⊆
+              (log i).1.honestyRemainder (log i).2 :=
             ih hLt hInner
-          have hStep : typeAvailable (log (j + 1)).1 ⊆ (log j).1.future := by
+          have hStep : typeAvailable (log (j + 1)).1 ⊆
+              (log j).1.honestyRemainder (log j).2 := by
             rcases hHonest j with hTock | hSub
             · exact absurd hTock (hNoClock j (Nat.le_of_lt hLt) (Nat.lt_succ_self j))
             · exact hSub
-          exact hStep.trans ((future_subset_typeAvailable (log j).1).trans hPrefix)
+          exact hStep.trans
+            ((honestyRemainder_subset_typeAvailable (log j).1 (log j).2).trans hPrefix)
         · subst hEq
           rcases hHonest i with hTock | hSub
           · exact absurd hTock (hNoClock i (Nat.le_refl i) (Nat.lt_succ_self i))
@@ -50,6 +52,21 @@ lemma helper_h11_same_cycle_honesty (log : TypeLog) :
       intro k hLow hHigh
       have : k = index := Nat.le_antisymm (Nat.lt_succ_iff.mp hHigh) hLow
       exact this ▸ hTock
+
+/-- A consumed immediate action cannot be offered again before the next clock. -/
+theorem HonestTypeLog.consumed_not_available_before_clock
+    {log : TypeLog} (hHonest : HonestTypeLog log)
+    {i j : Nat} {alphabet : PactTypeAlphabet} {action : BareMessage}
+    (hWF : (log i).1.WellFormed alphabet)
+    (hImmediate : action ∈ (log i).1.immediate)
+    (hConsumed : action ∈ (log i).2.usedEnvironmentActions)
+    (hLt : i < j) (hNoClock : TypeLogNoClockBetween log i j) :
+    action ∉ typeAvailable (log j).1 := by
+  intro hAvailable
+  have hRemaining := (helper_h11_same_cycle_honesty log).mp hHonest
+    i j hLt hNoClock hAvailable
+  exact ((TypeEnvironment.mem_honestyRemainder_of_immediate hWF hImmediate).mp
+    hRemaining) hConsumed
 
 end
 

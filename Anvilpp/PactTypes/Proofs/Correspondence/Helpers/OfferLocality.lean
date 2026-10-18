@@ -387,8 +387,11 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
     · intro a ha
       simpa only [PactType.MessageIds] using
         typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1
-  | xoffer_else =>
-    exact ⟨by simp, fun a ha => typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1⟩
+  | xoffer_else env alphabet elseType branches hEnv =>
+    refine ⟨?_, fun a ha => typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1⟩
+    intro a ha
+    simpa only [PactType.MessageIds] using Finset.mem_union_right elseType.MessageIds
+      (branchHeads_messageIds branches a (Finset.mem_inter.mp ha).1)
   | xoffer_wait env alphabet elseType branches hEnv =>
     simp only [PactType.MessageIds]
     constructor
@@ -485,8 +488,12 @@ theorem TypeOffers.offers_disjoint {env : TypeEnvironment} {rho rho' : PactType}
   | action_wait | seq | seq_fuse | xoffer_wait | offer_else | offer_wait =>
     intro _; exact Finset.sdiff_disjoint.symm
   | choice_left | choice_right | fair_left | fair_right | cycle | cycle_wait
-  | skip | progress | recur | seq_tock | seq_fuse_tock | xoffer_else | offer_some
+  | skip | progress | recur | seq_tock | seq_fuse_tock | offer_some
   | par_fuse_tock => simp
+  | xoffer_else =>
+    intro _
+    exact Finset.disjoint_left.mpr fun _ ha hf =>
+      (Finset.mem_sdiff.mp hf).2 (Finset.mem_inter.mp ha).1
   | xoffer_branch env alphabet elseType branches action processType hEnv =>
     intro _
     apply Finset.disjoint_left.mpr

@@ -71,7 +71,7 @@ def typeAvailable (env : TypeEnvironment) : Finset BareMessage :=
 def HonestTypeLog (log : TypeLog) : Prop :=
   ∀ index,
     (log index).2.isTock ∨
-    typeAvailable (log (index + 1)).1 ⊆ (log index).1.future
+    typeAvailable (log (index + 1)).1 ⊆ (log index).1.honestyRemainder (log index).2
 
 def HonestTypeStrategy (initial : PactType) (strategy : TypeStrategy) : Prop :=
   ∀ log, CompletedTypeLog initial strategy log → HonestTypeLog log

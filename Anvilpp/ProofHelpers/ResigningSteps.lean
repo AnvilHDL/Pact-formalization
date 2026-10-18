@@ -414,7 +414,7 @@ theorem TypeOffers.offers_subset_alphabet
       exact mem_actions_of_hasNeed hPrem.1 hPrem.2.2.1
   | xoffer_else env alphabet elseType branches hPrem =>
       intro hRegular
-      exact ⟨Finset.empty_subset _, (Finset.sdiff_subset).trans
+      exact ⟨Finset.inter_subset_right, (Finset.sdiff_subset).trans
         (typeFutureOffers_subset_alphabet _ hRegular.alphabetWellFormed)⟩
   | xoffer_wait env alphabet elseType branches hPrem =>
       intro hRegular
@@ -1239,6 +1239,7 @@ theorem typeOffers_reannotate_forward
       exact hRule
   | xoffer_else env alphabet elseType branches hPrem =>
       intro restrict hRegular hSub hEnv
+      have hSubA : restrict.actions ⊆ alphabet.actions := hSub
       have hRule := TypeOffers.xoffer_else env restrict
         (elseType.reannotate restrict)
         (branches.map fun branch => (branch.1, branch.2.reannotate restrict))
@@ -1247,7 +1248,7 @@ theorem typeOffers_reannotate_forward
             exact hPrem.2.2.1, by
             simp only [TypeResolved, typeBranchNeeds_map]; exact hPrem.2.2.2⟩
       rw [typeBranchActions_map] at hRule
-      rw [Finset.empty_inter, sdiff_inter_right,
+      rw [inter_inter_of_subset hSubA, sdiff_inter_right,
         futureOffers_restrict hRegular.alphabetWellFormed hSub,
         PactType.reannotate, PactType.reannotateBranches_map]
       exact hRule
@@ -1975,7 +1976,7 @@ theorem typeOffers_reannotate_backward :
                   PactType.reannotate, PactType.reannotateBranches_map,
                   typeBranchActions_map]
           | xoffer_else _ _ _ _ hPrem =>
-              refine ⟨elseType, ∅,
+              refine ⟨elseType, typeBranchActions branches ∩ alphabet.actions,
                 typeFutureOffers (.xoffer alphabet elseType branches) \
                   typeBranchActions branches,
                 TypeOffers.xoffer_else env alphabet elseType branches
@@ -1985,7 +1986,8 @@ theorem typeOffers_reannotate_backward :
                       simp only [TypeResolved, typeBranchNeeds_map] at hPrem
                       exact hPrem.2.2.2⟩,
                 rfl, ?_, ?_⟩
-              · rw [Finset.empty_inter]
+              · rw [typeBranchActions_map, inter_inter_of_subset (show
+                  restrict.actions ⊆ alphabet.actions from hSub)]
               · rw [sdiff_inter_right,
                   futureOffers_restrict hRegular.alphabetWellFormed hSub,
                   PactType.reannotate, PactType.reannotateBranches_map,

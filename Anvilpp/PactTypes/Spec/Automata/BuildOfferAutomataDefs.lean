@@ -50,7 +50,7 @@ From the root there are three kinds of edges:
 
 * `branchEdges`: fire an immediately enabled and resolved branch;
 * `waitEdges`: remain at the root while a branch may still arrive this cycle;
-* `elseEdges`: select the else continuation once no branch can still arrive.
+* `elseEdges`: advertise declared heads and select the resolved default.
 
 Admissible environments determine enabling and resolution; undeclared heads
 do not prevent waiting or selecting the default.
@@ -108,7 +108,7 @@ def buildExclusiveOfferAutomaton
       { source := TypeAutomatonState.root
         environment := environment
         label := .visible TypeLabel.silent
-        current := ∅
+        current := actions ∩ alphabet.actions
         future := .at TypeAutomatonState.root actions
         target := childState 0 elseAutomaton.initial }
   let completes := childCompletes 0 elseAutomaton ∪
