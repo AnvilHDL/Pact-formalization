@@ -1,4 +1,4 @@
-import Anvilpp.ProofHelpers.WeakRefinementEnvironments
+import Anvilpp.Examples.WeakRefinementEnvironments
 import Anvilpp.PactTypes.Proofs.Syntax.TypeTransitionSystemLemmas
 import Anvilpp.ProofHelpers.Inference.DecoratedLifting
 

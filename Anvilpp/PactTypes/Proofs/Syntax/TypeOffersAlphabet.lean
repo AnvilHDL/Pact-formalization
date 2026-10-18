@@ -64,11 +64,7 @@ theorem TypeOffers.preserves_alphabet
       simpa [PactType.alphabet] using hSource.2.1
   | xoffer_wait => simp [PactType.alphabet]
   | offer_some env alphabet elseType branches enabled conditions =>
-      have hSelected :
-          (parallelTypeBranchesSelecting alphabet enabled branches).alphabet =
-            alphabet :=
-        parallelTypeBranchesSelecting_alphabet_eq_of_mem conditions.2.1
-      simpa [PactType.alphabet] using hSelected
+      exact parallelTypeBranchesFiring_alphabet alphabet enabled branches
   | offer_else =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.1

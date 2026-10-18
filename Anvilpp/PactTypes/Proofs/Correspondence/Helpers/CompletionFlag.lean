@@ -57,6 +57,52 @@ private theorem selected_canCompleteDeclared_before
   | nil => simp at hSelected
   | cons head rest => exact hWithin (head :: rest) hSelected hComplete
 
+private theorem firing_canCompleteDeclared_before
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hSelection : selected ∈ conjunctiveSelections branches.length)
+    (hNormal : ∀ b ∈ branches, b.2.reannotate alphabet = b.2)
+    (hComplete : (parallelTypeBranchesFiring alphabet selected branches).CanCompleteDeclared = true) :
+    PactType.BranchCanCompleteDeclared branches = true := by
+  have hFrom : ∀ list : List (BareMessage × PactType), ∀ index offset branch,
+      list[offset]? = some branch → index + offset ∈ selected →
+      (parallelTypeBranchesFiringFrom alphabet selected index list).CanCompleteDeclared = true →
+      (branch.2.reannotate alphabet).CanCompleteDeclared = true := by
+    intro list
+    induction list with
+    | nil => intro index offset branch hGet; simp at hGet
+    | cons head rest ih =>
+        intro index offset branch hGet hSelected hComplete
+        cases offset with
+        | zero =>
+            simp only [List.getElem?_cons_zero, Option.some.injEq] at hGet
+            subst branch
+            simp only [Nat.add_zero] at hSelected
+            cases rest with
+            | nil =>
+                simpa only [parallelTypeBranchesFiringFrom, if_pos hSelected] using hComplete
+            | cons next rest =>
+                simp only [parallelTypeBranchesFiringFrom, if_pos hSelected] at hComplete
+                rw [PactType.canCompleteDeclared_eq] at hComplete
+                exact (Bool.and_eq_true_iff.mp hComplete).1
+        | succ offset =>
+            cases rest with
+            | nil => simp at hGet
+            | cons next rest =>
+                simp only [List.getElem?_cons_succ] at hGet
+                simp only [parallelTypeBranchesFiringFrom] at hComplete
+                rw [PactType.canCompleteDeclared_eq] at hComplete
+                exact ih (index + 1) offset branch hGet
+                  (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hSelected)
+                  (Bool.and_eq_true_iff.mp hComplete).2
+  obtain ⟨hNonempty, hBound⟩ := (mem_conjunctiveSelections _ _).mp hSelection
+  obtain ⟨index, hIndex⟩ := hNonempty
+  have hLt := Finset.mem_range.mp (hBound hIndex)
+  have hBranch := hFrom branches 0 index branches[index] (by simp)
+    (by simpa using hIndex) hComplete
+  rw [hNormal _ (List.getElem_mem hLt)] at hBranch
+  exact branchCanCompleteDeclared_of_mem (List.getElem_mem hLt) hBranch
+
 /-- Non-clock steps propagate optimistic completion backwards. -/
 theorem TypeTransition.canCompleteDeclared_backward
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
@@ -107,9 +153,10 @@ theorem TypeTransition.canCompleteDeclared_backward
       rw [PactType.reannotateOfferBranches_map] at hNormal
       rw [PactType.canCompleteDeclared_eq]
       simp only [Bool.or_eq_true]
-      exact Or.inr (branchCanCompleteDeclared_of_mem hEnv.2.1
-        (selected_canCompleteDeclared_before alphabet selected branches hEnv.2.1
-          (reannotate_branches_fixed_of_mem alphabet branches hNormal.2 selected hEnv.2.1) hComplete))
+      exact Or.inr (firing_canCompleteDeclared_before alphabet selected branches
+        (hEnv.2.2 ▸ typeEnabledBranches_mem_selections env branches
+          (hEnv.2.2.symm ▸ hEnv.2.1))
+        (reannotate_branches_fixed_of_mem alphabet branches hNormal.2) hComplete)
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _ hEnv ihLeft ihRight =>
       have hClocks := typeLabel_sync_not_isTock interface leftLabel rightLabel hEnv.2.2.2

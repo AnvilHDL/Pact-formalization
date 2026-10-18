@@ -8,6 +8,7 @@
 | `ErasureSideConditions` | Erasure of enabling, synchronization, and environment premises |
 | `AlphabetInvariant` | Alphabet and erasure invariants |
 | `ConjunctiveCommitment` | Abstraction of generated conjunctive branch products |
+| `ConjunctiveConsumption` | Enabled-index, batch-label, residual, and menu erasure; joint payload witnesses |
 | `OneStepAbstraction` | Every process step erases to an inferred-type step |
 | `DataPreservation`, `ConjunctPreservation` | Data and conjunctive invariants of reachable processes |
 | `LiftingPrelude` | Evaluation and inferred-constructor inversion |

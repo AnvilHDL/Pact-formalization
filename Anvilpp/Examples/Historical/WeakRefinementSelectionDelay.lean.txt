@@ -1,0 +1,344 @@
+-- Historical source for the retired silent conjunctive-offer rule.
+import Anvilpp.Examples.WeakRefinementOfferDelay
+
+namespace Pact.WeakRefinement.SelectionDelay
+
+noncomputable section
+
+open Classical
+
+def aAlphabet : PactTypeAlphabet := ⟨{("d", .send)}⟩
+def bAlphabet : PactTypeAlphabet := ⟨{("d", .recv), ("c", .send), ("b", .send)}⟩
+def cAlphabet : PactTypeAlphabet := ⟨{("d", .recv), ("c", .send), ("b", .recv)}⟩
+def dAlphabet : PactTypeAlphabet := ⟨{("d", .recv), ("c", .recv)}⟩
+def bcAlphabet : PactTypeAlphabet := ⟨{("d", .recv), ("c", .send)}⟩
+def rightAlphabet : PactTypeAlphabet := ⟨{("d", .recv)}⟩
+
+def sender : PactType := .message aAlphabet "d" .send
+def optionalB : PactType :=
+  .xoffer bAlphabet (.skip bAlphabet) [(("b", .send), .skip bAlphabet)]
+def exclusive : PactType :=
+  .xoffer cAlphabet (.skip cAlphabet)
+    [(("b", .recv), .skip cAlphabet), (("c", .send), .skip cAlphabet)]
+def branches : List (BareMessage × PactType) :=
+  [(("c", .recv), .skip dAlphabet), (("d", .recv), .skip dAlphabet)]
+def conjunctive : PactType := .offer dAlphabet (.skip dAlphabet) branches
+def selectedC : PactType :=
+  parallelTypeBranchesSelecting dAlphabet (("c", .recv), .skip dAlphabet) branches
+def selectedD : PactType :=
+  parallelTypeBranchesSelecting dAlphabet (("d", .recv), .skip dAlphabet) branches
+
+def network (a b c d : PactType) : PactType :=
+  .par .empty a (.par rightAlphabet (.par bcAlphabet b c {"b"}) d {"c"}) {"d"}
+
+def original : PactType := network sender optionalB (skipPrefix exclusive) conjunctive
+def delayed : PactType := network (skipPrefix sender) optionalB (skipPrefix exclusive) conjunctive
+def original1 : PactType := network sender optionalB exclusive selectedD
+def delayed1 : PactType := network sender optionalB exclusive conjunctive
+def delayed2 : PactType := network sender optionalB exclusive selectedC
+
+private theorem alphabets :
+    aAlphabet.WellFormed ∧ bAlphabet.WellFormed ∧ cAlphabet.WellFormed ∧
+      dAlphabet.WellFormed ∧ bcAlphabet.WellFormed ∧ rightAlphabet.WellFormed ∧
+      PactTypeAlphabet.ParallelCompatible bcAlphabet bAlphabet cAlphabet {"b"} ∧
+      PactTypeAlphabet.ParallelCompatible rightAlphabet bcAlphabet dAlphabet {"c"} ∧
+      PactTypeAlphabet.ParallelCompatible .empty aAlphabet rightAlphabet {"d"} := by
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩,
+    ⟨?_, ?_, ?_, ?_⟩, ⟨?_, ?_, ?_, ?_⟩⟩ <;>
+    simp [PactTypeAlphabet.WellFormed, PactTypeAlphabet.OnePolarity,
+      aAlphabet, bAlphabet, cAlphabet, dAlphabet, bcAlphabet, rightAlphabet,
+      PactTypeAlphabet.ComplementaryOn, PactTypeAlphabet.hideInterface,
+      PactTypeAlphabet.empty, Finset.filter_insert, Finset.filter_singleton]
+
+/-- The two networks satisfy ownership, alphabet, and branch-menu separation. -/
+theorem wellFormed : TypeWellFormedIn [] original ∧ TypeWellFormedIn [] delayed := by
+  have hAlphabets := alphabets
+  simp_all [TypeWellFormedIn, original, delayed, network, sender, optionalB,
+    exclusive, conjunctive, branches, skipPrefix,
+    PactType.AlphabetWellFormed, PactType.BranchesAlphabetWellFormed,
+    PactType.OfferBranchesWellFormed, PactType.alphabet,
+    PactType.AllVariablesBound, PactType.AllBranchVariablesBound,
+    PactType.BinderHygienic, PactType.BinderHygienicBranches,
+    PactType.TailClosed, PactType.TailOccurrences, PactType.TailBranchOccurrences,
+    PactType.ClockGuarded, PactType.ClockGuardedBranches,
+    PactType.TailRecursive, PactType.TailRecursiveBranches,
+    PactType.SameCycleMessageLinear, PactType.SameCycleMessageLinearBranches,
+    PactType.PrefixMessageIds, PactType.BranchPrefixMessageIds, PactType.SuffixMessageIds,
+    PactType.ProgressLinear, PactType.ProgressLinearBranches, PactType.ProgressIds,
+    PactType.BranchProgressIds, PactType.FairChoiceLinear, PactType.FairChoiceLinearBranches,
+    PactType.FairChoiceIds, PactType.BranchFairChoiceIds,
+    PactType.ParallelMessageOwnership, PactType.ParallelMessageOwnershipBodies,
+    PactType.MessageIds, PactType.BranchMessageIds,
+    PactType.ParallelProgressOwnership, PactType.ParallelProgressOwnershipBranches,
+    PactType.ParallelFairChoiceOwnership, PactType.ParallelFairChoiceOwnershipBranches,
+    PactType.InterfaceScoped, PactType.InterfaceScopedBranches,
+    PactType.InterfaceAlphabetScoped, PactType.InterfaceAlphabetScopedBranches,
+    PactType.ParallelInterfaces, PactType.ParallelBranchInterfaces,
+    PactType.ConjunctiveMessageOwnership, PactType.ConjunctiveMessageOwnershipBranches,
+    PactType.ConjunctiveMessageOwnershipBodies,
+    OfferMenuLinear, OfferMenuLinearBranches, BranchHeadsAbsentFromMenu,
+    typeFutureOffers, typeFutureOffersFuel,
+    PactTypeAlphabet.messageIds, aAlphabet, bAlphabet, cAlphabet, dAlphabet,
+    bcAlphabet, rightAlphabet, PactTypeAlphabet.WellFormed,
+    PactTypeAlphabet.OnePolarity, PactTypeAlphabet.empty]
+
+private def env (current future : Finset BareMessage) : TypeEnvironment :=
+  ⟨current, future, false⟩
+
+local macro "offer_simp" : tactic =>
+  `(tactic| simp [env, TypeEnvironment.empty, TypeEnvironment.WellFormed,
+    TypeEnvironment.hasNeed, TypeResolved, TypeNoImmediateBranch, TypeBranchEnabled,
+    typeBranchNeeds, typeNeed, typeBranchActions, typeWaitingOffers,
+    typeFutureOffers_sequence, typeFutureOffers_recur, typeFutureOffers_xoffer,
+    typeFutureOffers_offer, typeFutureOffers_parallel, typeFutureOffers_message,
+    typeFutureOffers_tock, typeFutureOffers_skip, MessageDir.invert,
+    hideTypeOffers, restrictTypeOffers, sequenceRightMenu,
+    TypeLabel.Sync, TypeLabel.sends, TypeLabel.recvs, TypeLabel.messageIdsWith,
+    TypeLabel.isTock, TypeLabel.silent, TypeLabel.message, TypeLabel.combine,
+    TypeLabel.synced, TypeLabel.isRawSyncedMessage,
+    Finset.filter_insert, Finset.filter_singleton, Finset.insert_subset_iff,
+    Finset.insert_sdiff_of_notMem, Finset.insert_sdiff_of_mem, Finset.pair_comm,
+    Finset.insert_comm,
+    Finset.sdiff_eq_self_of_disjoint, Finset.disjoint_singleton_left,
+    PactType.alphabet, PactType.reannotate, PactType.reannotateBranches,
+    parallelTypeBranchesSelecting, parallelTypeBranchesSelectingWithin,
+    parallelTypeBranchesWithin, selectedTypeBranchAt, singletonTypeXOfferAt,
+    selectedC, selectedD, branches, sender, optionalB, exclusive, conjunctive,
+    skipPrefix, aAlphabet, bAlphabet, cAlphabet, dAlphabet, bcAlphabet, rightAlphabet,
+    PactTypeAlphabet.empty])
+
+private theorem localEnv {outer sibling localEnv : TypeEnvironment}
+    {interface : Interface} {source : PactType} {current future : Finset BareMessage}
+    (hOuter : outer.clock = false) (hSibling : sibling.clock = false)
+    (hLocal : localEnv.clock = false)
+    (hCurrent : localEnv.immediate = outer.immediate ∪ restrictTypeOffers interface current)
+    (hFuture : localEnv.future =
+      (outer.future ∪ restrictTypeOffers interface future) \ localEnv.immediate) :
+    LocalTypeOfferEnvironment outer interface source sibling current future localEnv :=
+  .ordinary _ _ _ _ _ _ _ hOuter hSibling hLocal hCurrent hFuture
+
+private theorem product {outer leftEnv rightEnv : TypeEnvironment} {interface : Interface}
+    {alphabet : PactTypeAlphabet} {left left' right right' : PactType}
+    {leftLabel rightLabel : TypeLabel} {lc lf rc rf : Finset BareMessage}
+    (hLeft : TypeOffers leftEnv left leftLabel left' lc lf)
+    (hRight : TypeOffers rightEnv right rightLabel right' rc rf)
+    (hL : left ≠ .skip left.alphabet) (hR : right ≠ .skip right.alphabet)
+    (hTarget : ¬ (left' = .skip left'.alphabet ∧ right' = .skip right'.alphabet))
+    (hLocalL : LocalTypeOfferEnvironment outer interface left rightEnv rc rf leftEnv)
+    (hLocalR : LocalTypeOfferEnvironment outer interface right leftEnv lc lf rightEnv)
+    (hWF : outer.WellFormed alphabet) (hSync : TypeLabel.Sync interface leftLabel rightLabel) :
+    TypeOffers outer (.par alphabet left right interface)
+      (TypeLabel.combine interface leftLabel rightLabel) (.par alphabet left' right' interface)
+      (hideTypeOffers interface (lc ∪ rc))
+      (if TypeLabel.combine interface leftLabel rightLabel = .tock then ∅
+        else hideTypeOffers interface (lf ∪ rf)) :=
+  .par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hL hR hLeft hRight hTarget hLocalL hLocalR ⟨hWF, hSync⟩
+
+local macro "compose " left:ident right:ident : tactic =>
+  `(tactic|
+    convert product $left $right ?_ ?_ ?_ ?_ ?_ ?_ ?_ using 1 <;>
+      first | (apply localEnv rfl rfl rfl <;> offer_simp) | offer_simp)
+
+/-- The undelayed sender forces the conjunction to select d before the exclusive offer opens. -/
+theorem original_first : TypeOffers .empty original .silent original1 ∅ ∅ := by
+  have hA : TypeOffers (env ∅ {("d", .recv)}) sender .silent sender {("d", .send)} ∅ := by
+    convert TypeOffers.action_wait _ aAlphabet "d" .send ?_ using 1
+    offer_simp
+  have hB : TypeOffers (env {("d", .send)} {("c", .recv), ("b", .recv)})
+      optionalB .silent optionalB {("b", .send)} ∅ := by
+    convert TypeOffers.xoffer_wait _ bAlphabet (.skip bAlphabet)
+      [(("b", .send), .skip bAlphabet)] ?_ using 1
+    offer_simp
+  have hC : TypeOffers (env {("d", .send), ("b", .send)} {("c", .recv)})
+      (skipPrefix exclusive) .silent exclusive ∅ {("b", .recv), ("c", .send)} := by
+    apply skipPrefix_offers_iff.mpr
+    offer_simp
+  have hD : TypeOffers (env {("d", .send)} {("c", .send)})
+      conjunctive .silent selectedD ∅ {("c", .recv), ("d", .recv)} := by
+    convert TypeOffers.offer_some _ dAlphabet (.skip dAlphabet) branches
+      (("d", .recv), .skip dAlphabet) ?_ using 1 <;> offer_simp
+  have hBC : TypeOffers (env {("d", .send)} {("c", .recv)})
+      (.par bcAlphabet optionalB (skipPrefix exclusive) {"b"}) .silent
+      (.par bcAlphabet optionalB exclusive {"b"}) ∅ {("c", .send)} := by compose hB hC
+  have hR : TypeOffers (env {("d", .send)} ∅)
+      (.par rightAlphabet (.par bcAlphabet optionalB (skipPrefix exclusive) {"b"})
+        conjunctive {"c"}) .silent
+      (.par rightAlphabet (.par bcAlphabet optionalB exclusive {"b"}) selectedD {"c"})
+      ∅ {("d", .recv)} := by compose hBC hD
+  unfold original original1 network
+  compose hA hR
+
+/-- With the sender delayed, neither conjunctive head is enabled in the first round. -/
+theorem delayed_first : TypeOffers .empty delayed .silent delayed1 ∅ ∅ := by
+  have hA : TypeOffers (env {("d", .recv)} ∅)
+      (skipPrefix sender) .silent sender ∅ {("d", .send)} := by
+    apply skipPrefix_offers_iff.mpr
+    offer_simp
+  have hB : TypeOffers (env {("c", .recv)} {("d", .send), ("b", .recv)})
+      optionalB .silent optionalB {("b", .send)} ∅ := by
+    convert TypeOffers.xoffer_wait _ bAlphabet (.skip bAlphabet)
+      [(("b", .send), .skip bAlphabet)] ?_ using 1
+    offer_simp
+  have hC : TypeOffers (env {("c", .recv), ("b", .send)} {("d", .send)})
+      (skipPrefix exclusive) .silent exclusive ∅ {("b", .recv), ("c", .send)} := by
+    apply skipPrefix_offers_iff.mpr
+    offer_simp
+  have hD : TypeOffers (env ∅ {("d", .send), ("c", .send)})
+      conjunctive .silent conjunctive {("c", .recv), ("d", .recv)} ∅ := by
+    convert TypeOffers.offer_wait _ dAlphabet (.skip dAlphabet) branches
+      ?_ using 1
+    offer_simp
+  have hBC : TypeOffers (env {("c", .recv)} {("d", .send)})
+      (.par bcAlphabet optionalB (skipPrefix exclusive) {"b"}) .silent
+      (.par bcAlphabet optionalB exclusive {"b"}) ∅ {("c", .send)} := by compose hB hC
+  have hR : TypeOffers (env ∅ {("d", .send)})
+      (.par rightAlphabet (.par bcAlphabet optionalB (skipPrefix exclusive) {"b"})
+        conjunctive {"c"}) .silent
+      (.par rightAlphabet (.par bcAlphabet optionalB exclusive {"b"}) conjunctive {"c"})
+      {("d", .recv)} ∅ := by compose hBC hD
+  unfold delayed delayed1 network
+  compose hA hR
+
+/-- The exposed exclusive offer can advertise c while awaiting the conjunction's commitment. -/
+theorem delayed_second : TypeOffers .empty delayed1 .silent delayed2 ∅ ∅ := by
+  have hA : TypeOffers (env ∅ {("d", .recv)}) sender .silent sender {("d", .send)} ∅ := by
+    convert TypeOffers.action_wait _ aAlphabet "d" .send ?_ using 1
+    offer_simp
+  have hB : TypeOffers (env {("d", .send)} {("c", .recv), ("b", .recv)})
+      optionalB .silent optionalB {("b", .send)} ∅ := by
+    convert TypeOffers.xoffer_wait _ bAlphabet (.skip bAlphabet)
+      [(("b", .send), .skip bAlphabet)] ?_ using 1
+    offer_simp
+  have hC : TypeOffers (env {("d", .send), ("b", .send)} {("c", .recv)})
+      exclusive .silent exclusive {("c", .send)} {("b", .recv)} := by
+    convert TypeOffers.xoffer_wait _ cAlphabet (.skip cAlphabet)
+      [(("b", .recv), .skip cAlphabet), (("c", .send), .skip cAlphabet)]
+      ?_ using 1
+    offer_simp
+  have hD : TypeOffers (env {("d", .send), ("c", .send)} ∅)
+      conjunctive .silent selectedC ∅ {("c", .recv), ("d", .recv)} := by
+    convert TypeOffers.offer_some _ dAlphabet (.skip dAlphabet) branches
+      (("c", .recv), .skip dAlphabet) ?_ using 1 <;> offer_simp
+  have hBC : TypeOffers (env {("d", .send)} {("c", .recv)})
+      (.par bcAlphabet optionalB exclusive {"b"}) .silent
+      (.par bcAlphabet optionalB exclusive {"b"}) {("c", .send)} ∅ := by compose hB hC
+  have hR : TypeOffers (env {("d", .send)} ∅)
+      (.par rightAlphabet (.par bcAlphabet optionalB exclusive {"b"}) conjunctive {"c"})
+      .silent (.par rightAlphabet (.par bcAlphabet optionalB exclusive {"b"}) selectedC {"c"})
+      ∅ {("d", .recv)} := by compose hBC hD
+  unfold delayed1 delayed2 network
+  compose hA hR
+
+def remainingC : PactType :=
+  .par dAlphabet (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet))
+    (.skip dAlphabet) ∅
+
+@[simp] private theorem remainingC_not_skip (alphabet : PactTypeAlphabet) :
+    remainingC ≠ .skip alphabet := by
+  simp [remainingC]
+
+def stranded : PactType :=
+  .par .empty (.skip aAlphabet)
+    (.par rightAlphabet (.skip bcAlphabet) remainingC {"c"}) {"d"}
+
+/-- Choosing b after the c commitment leaves its mandatory c prefix unconsumed. -/
+theorem delayed_third :
+    TypeOffers .empty delayed2 (.actions {.resolved "b", .resolved "d"}) stranded ∅ ∅ := by
+  have hA : TypeOffers (env {("d", .recv)} ∅) sender
+      (TypeLabel.message "d" .send) (.skip aAlphabet) {("d", .send)} ∅ := by
+    convert TypeOffers.action _ aAlphabet "d" .send ?_ using 1
+    offer_simp
+  have hB : TypeOffers (env {("d", .send), ("c", .recv), ("b", .recv)} ∅)
+      optionalB (TypeLabel.message "b" .send) (.skip bAlphabet) {("b", .send)} ∅ := by
+    convert TypeOffers.xoffer_branch _ bAlphabet (.skip bAlphabet)
+      [(("b", .send), .skip bAlphabet)] ("b", .send) (.skip bAlphabet)
+      ?_ using 1
+    offer_simp
+  have hC : TypeOffers (env {("d", .send), ("c", .recv), ("b", .send)} ∅)
+      exclusive (TypeLabel.message "b" .recv) (.skip cAlphabet) {("b", .recv)} ∅ := by
+    convert TypeOffers.xoffer_branch _ cAlphabet (.skip cAlphabet)
+      [(("b", .recv), .skip cAlphabet), (("c", .send), .skip cAlphabet)]
+      ("b", .recv) (.skip cAlphabet) ?_ using 1
+    offer_simp
+  have hMandatory : TypeOffers (env {("d", .send)} ∅)
+      (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet)) .silent
+      (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet)) {("c", .recv)} ∅ := by
+    have hHead := TypeOffers.action_wait (env {("d", .send)} ∅)
+      dAlphabet "c" .recv (by offer_simp)
+    convert TypeOffers.seq _ dAlphabet _ _ (.skip dAlphabet) _ _ _ hHead
+      (by simp) (by simp [TypeLabel.silent]) using 1
+    offer_simp
+  have hOptional : TypeOffers (env {("d", .send)} ∅)
+      (singletonTypeXOfferAt dAlphabet (("d", .recv), .skip dAlphabet))
+      (TypeLabel.message "d" .recv) (.skip dAlphabet) {("d", .recv)} ∅ := by
+    convert TypeOffers.xoffer_branch _ dAlphabet (.skip dAlphabet)
+      [(("d", .recv), .skip dAlphabet)] ("d", .recv) (.skip dAlphabet)
+      ?_ using 1 <;> offer_simp
+  have hD : TypeOffers (env {("d", .send)} ∅) selectedC
+      (TypeLabel.message "d" .recv) remainingC {("c", .recv), ("d", .recv)} ∅ := by
+    unfold remainingC
+    compose hMandatory hOptional
+  have hBC : TypeOffers (env {("d", .send), ("c", .recv)} ∅)
+      (.par bcAlphabet optionalB exclusive {"b"}) (.actions {.resolved "b"})
+      (.skip bcAlphabet) ∅ ∅ := by
+    convert TypeOffers.par_fuse _ _ _ {"b"} bcAlphabet _ _ _ _ _ _ _ _ hB hC
+      ?_ ?_ ?_ ?_ using 1 <;>
+      first | (apply localEnv rfl rfl rfl <;> offer_simp) | offer_simp
+    all_goals (ext action; simp [or_comm, or_left_comm])
+  have hR : TypeOffers (env {("d", .send)} ∅)
+      (.par rightAlphabet (.par bcAlphabet optionalB exclusive {"b"}) selectedC {"c"})
+      (.actions {.resolved "b", .message "d" .recv})
+      (.par rightAlphabet (.skip bcAlphabet) remainingC {"c"}) {("d", .recv)} ∅ := by
+    compose hBC hD
+  unfold delayed2 network stranded
+  compose hA hR
+
+def blocked : PactType :=
+  .seq .empty (.message .empty "c" .recv) (.skip .empty)
+
+/-- Removing the completed components leaves only the unavailable c prefix. -/
+theorem stranded_next : TypeOffers .empty stranded .silent blocked ∅ ∅ := by
+  have hHead := TypeOffers.action_wait TypeEnvironment.empty dAlphabet "c" .recv (by offer_simp)
+  have hMandatory : TypeOffers .empty
+      (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet)) .silent
+      (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet)) {("c", .recv)} ∅ := by
+    convert TypeOffers.seq _ dAlphabet _ _ (.skip dAlphabet) _ _ _ hHead
+      (by simp) (by simp [TypeLabel.silent]) using 1
+    offer_simp
+  have hSkipD := TypeOffers.skip TypeEnvironment.empty dAlphabet (by offer_simp)
+  have hD : TypeOffers .empty remainingC .silent
+      (.seq dAlphabet (.message dAlphabet "c" .recv) (.skip dAlphabet)) {("c", .recv)} ∅ := by
+    convert TypeOffers.right_complete .empty _ _ ∅ dAlphabet _ _ _ _ _ _ _ _
+      rfl (by simp) hSkipD hMandatory (by simp) ?_ ?_ ?_ ?_ using 1 <;>
+      first | (apply localEnv rfl rfl rfl <;> offer_simp) | offer_simp
+  have hSkipBC := TypeOffers.skip (env {("c", .recv)} ∅) bcAlphabet (by offer_simp)
+  have hR : TypeOffers .empty (.par rightAlphabet (.skip bcAlphabet) remainingC {"c"}) .silent
+      (.seq rightAlphabet (.message rightAlphabet "c" .recv) (.skip rightAlphabet)) ∅ ∅ := by
+    convert TypeOffers.left_complete .empty _ _ {"c"} rightAlphabet _ _ _ _ _ _ _ _
+      rfl (remainingC_not_skip _) hSkipBC hD (by simp) ?_ ?_ ?_ ?_ using 1 <;>
+      first | (apply localEnv rfl rfl rfl <;> offer_simp) | offer_simp
+  have hSkipA := TypeOffers.skip TypeEnvironment.empty aAlphabet (by offer_simp)
+  unfold stranded blocked
+  convert TypeOffers.left_complete .empty _ _ {"d"} .empty _ _ _ _ _ _ _ _
+    rfl (by simp) hSkipA hR (by simp) ?_ ?_ ?_ ?_ using 1 <;>
+    first | (apply localEnv rfl rfl rfl <;> offer_simp) | offer_simp
+
+/-- The unavailable c prefix can wait silently without consuming its continuation. -/
+theorem blocked_wait : TypeOffers .empty blocked .silent blocked ∅ ∅ := by
+  have hHead := TypeOffers.action_wait TypeEnvironment.empty PactTypeAlphabet.empty
+    "c" .recv (by offer_simp)
+  unfold blocked
+  convert TypeOffers.seq _ .empty _ _ (.skip .empty) _ _ _ hHead
+    (by simp) (by simp [TypeLabel.silent]) using 1
+  offer_simp
+
+/-- The unmatched prefix cannot cross a clock boundary. -/
+theorem blocked_no_clock : ¬ TypeReady .tock blocked := by
+  rintro ⟨label, target, hStep⟩
+  unfold blocked at hStep
+  cases hStep <;> casesm TypeTransition _ (.message _ _ _) _ _ <;>
+    simp_all [TypeEnvironment.hasNeed, TypeEnvironment.tock]
+
+end
+
+end Pact.WeakRefinement.SelectionDelay

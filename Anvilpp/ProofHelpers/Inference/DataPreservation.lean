@@ -733,6 +733,52 @@ theorem dataWFProc_parallelProcessBranchesSelecting
       exact allVariablesBound_parallelProcessBranchesSelectingWithin _ hBound
         (branchBound_of_mem hBound hMem)
 
+/-- Consuming a head preserves closure after substituting its received value. -/
+theorem allVariablesBound_consumedProcessBranchAt
+    {procVars dataVars : List String} {alphabet : PactTypeAlphabet}
+    {branch : ChoiceBranch} (value : Bool)
+    (hBound : BranchBound procVars dataVars branch) :
+    Proc.AllVariablesBound procVars dataVars
+      (consumedProcessBranchAt alphabet branch value) := by
+  cases branch with
+  | send msg expr process =>
+      exact Proc.allVariablesBound_reannotate hBound.2
+  | recv msg name process =>
+      exact Proc.allVariablesBound_reannotate
+        (Proc.allVariablesBound_procExprReplace hBound)
+
+/-- An optional branch retains the variable bindings of its original head. -/
+theorem allVariablesBound_optionalProcessBranchAt
+    {procVars dataVars : List String} {alphabet : PactTypeAlphabet}
+    {branch : ChoiceBranch} (hBound : BranchBound procVars dataVars branch) :
+    Proc.AllVariablesBound procVars dataVars
+      (optionalProcessBranchAt alphabet branch) := by
+  simpa only [optionalProcessBranchAt, ChoiceBranch.toXOffer, Proc.reannotate] using
+    (Proc.allVariablesBound_reannotate (alphabet := alphabet)
+      (allVariablesBound_toXOffer (alphabet := alphabet) hBound))
+
+/-- Every factor of an atomic conjunctive residual is closed. -/
+theorem allVariablesBound_parallelProcessBranchesFiringFrom
+    {procVars dataVars : List String} (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (values : Nat → Bool) (branches : List ChoiceBranch)
+    (hBound : Proc.AllBranchVariablesBound procVars dataVars branches) :
+    ∀ index, Proc.AllVariablesBound procVars dataVars
+      (parallelProcessBranchesFiringFrom alphabet selected values index branches) := by
+  induction branches with
+  | nil => intro index; trivial
+  | cons head rest ih =>
+      rw [allBranchVariablesBound_cons] at hBound
+      intro index
+      have hHead : Proc.AllVariablesBound procVars dataVars
+          (if index ∈ selected then consumedProcessBranchAt alphabet head (values index)
+           else optionalProcessBranchAt alphabet head) := by
+        split
+        · exact allVariablesBound_consumedProcessBranchAt _ hBound.1
+        · exact allVariablesBound_optionalProcessBranchAt hBound.1
+      cases rest with
+      | nil => exact hHead
+      | cons second tail => exact ⟨hHead, ih hBound.2 (index + 1)⟩
+
 /-! ## Data preservation along a step -/
 
 /-- `DataWF(P)` and `E ⊢ P →^α P'` imply `DataWF(P')`. -/
@@ -791,9 +837,9 @@ theorem dataWFProc_offers {env : Environment} {source target : Proc}
   | xoffer_else _ alphabet elseProcess branches _ =>
       exact ((dataWFProc_xoffer_iff alphabet elseProcess branches).1 hData).1
   | xoffer_wait _ _ _ _ _ => exact hData
-  | offer_some _ alphabet elseProcess branches _ hPrem =>
-      exact dataWFProc_parallelProcessBranchesSelecting
-        ((dataWFProc_offer_iff alphabet elseProcess branches).1 hData).2 hPrem.2.1
+  | offer_some _ alphabet elseProcess branches selected values _ =>
+      exact allVariablesBound_parallelProcessBranchesFiringFrom alphabet selected values
+        branches ((dataWFProc_offer_iff alphabet elseProcess branches).1 hData).2 0
   | offer_else _ alphabet elseProcess branches _ =>
       exact ((dataWFProc_offer_iff alphabet elseProcess branches).1 hData).1
   | offer_wait _ _ _ _ _ => exact hData

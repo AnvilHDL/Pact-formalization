@@ -18,7 +18,8 @@ theorem mem_foldl_union_iff
       simp only [Finset.mem_union, List.mem_cons]
       aesop
 
-private theorem childPendingEdges_futureTargetsInStates
+/-- Tagging child edges preserves closure of their future references. -/
+theorem childPendingEdges_futureTargetsInStates
     (index : Nat) (fragment : AutomatonFragment)
     (hTargets : fragment.FutureTargetsInStates) :
     ∀ edge ∈ childPendingEdges index fragment, ∀ target,
@@ -45,7 +46,8 @@ private theorem childPendingEdges_futureTargetsInStates
         (by simp [hSpec, FutureSpec.referenced])
       simp [childStates, childState, hChildTarget]
 
-private theorem childPendingEdges_clockEdgesAreTock
+/-- Tagging child edges preserves their clock labels and empty clock currents. -/
+theorem childPendingEdges_clockEdgesAreTock
     (index : Nat) (fragment : AutomatonFragment)
     (hClockEdges : fragment.ClockEdgesAreTock) :
     ∀ edge ∈ childPendingEdges index fragment,
@@ -57,8 +59,9 @@ private theorem childPendingEdges_clockEdgesAreTock
   rcases hEdge with ⟨childEdge, hChildEdge, rfl⟩
   exact hClockEdges childEdge hChildEdge hClock
 
-private theorem indexedFragment_clockEdgesAreTock
-    (automata : List (BareMessage × AutomatonFragment))
+/-- Indexed copies preserve the clock-edge invariant. -/
+theorem indexedFragment_clockEdgesAreTock {Key : Type}
+    (automata : List (Key × AutomatonFragment))
     (hClockEdges : ∀ entry ∈ automata, entry.2.ClockEdgesAreTock) :
     ∀ edge ∈ indexedFragmentEdges automata,
       edge.environment.clock = true →
@@ -75,8 +78,9 @@ private theorem indexedFragment_clockEdgesAreTock
     exact childPendingEdges_clockEdgesAreTock (indexed.2 + 1) indexed.1.2
       (hClockEdges indexed.1 hEntry) edge hChildEdge hClock
 
-private theorem indexedFragment_futureTargetsInStates
-    (automata : List (BareMessage × AutomatonFragment))
+/-- Indexed copies retain every declared target of a future reference. -/
+theorem indexedFragment_futureTargetsInStates {Key : Type}
+    (automata : List (Key × AutomatonFragment))
     (hTargets : ∀ entry ∈ automata, entry.2.FutureTargetsInStates) :
     ∀ edge ∈ indexedFragmentEdges automata, ∀ target,
       edge.future.referenced = some target →
@@ -517,8 +521,8 @@ def exclusiveOfferEntries (elseAutomaton : AutomatonFragment)
 
 /-- The entry states of a compiled conjunctive offer: the copied default entry
 and one copied entry per selected conjunction. -/
-def conjunctiveOfferEntries (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
+def conjunctiveOfferEntries {Key : Type} (elseAutomaton : AutomatonFragment)
+    (selectedConjunctions : List (Key × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   insert (childState 0 elseAutomaton.initial)
     (selectedConjunctions.zipIdx.map fun indexed =>

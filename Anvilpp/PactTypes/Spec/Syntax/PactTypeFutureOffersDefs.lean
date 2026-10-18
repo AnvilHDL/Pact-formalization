@@ -182,12 +182,15 @@ mutual
     | offer_some (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType))
-        (enabled : BareMessage × PactType) :
-        env.WellFormed alphabet ∧ enabled ∈ branches ∧ TypeBranchEnabled env enabled →
-        TypeOffers env (.offer alphabet elseType branches) TypeLabel.silent
-          (parallelTypeBranchesSelecting alphabet enabled branches) ∅
-          (typeFutureOffers
-            (parallelTypeBranchesSelecting alphabet enabled branches))
+        (enabled : Finset Nat) :
+        env.WellFormed alphabet ∧ enabled.Nonempty ∧
+          typeEnabledBranches env branches = enabled →
+        TypeOffers env (.offer alphabet elseType branches)
+          (typeBranchBatchLabel branches enabled)
+          (parallelTypeBranchesFiring alphabet enabled branches)
+          (typeBranchActions branches ∩ alphabet.actions)
+          (typeFutureOffers (parallelTypeBranchesFiring alphabet enabled branches) \
+            (typeBranchActions branches ∩ alphabet.actions))
     | offer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
         (elseType : PactType)
         (branches : List (BareMessage × PactType)) :

@@ -22,6 +22,18 @@ def TypeBranchEnabled (env : TypeEnvironment)
     (branch : BareMessage × PactType) : Prop :=
   typeNeed branch.1 ∈ env.immediate
 
+/-- Indices of all immediately enabled branch heads. -/
+def typeEnabledBranches (env : TypeEnvironment)
+    (branches : List (BareMessage × PactType)) : Finset Nat :=
+  branchIndices (TypeBranchEnabled env) branches
+
+/-- The joint message label of the consumed conjunctive heads. -/
+def typeBranchBatchLabel (branches : List (BareMessage × PactType))
+    (selected : Finset Nat) : TypeLabel := by
+  classical
+  exact .actions ((branches.zipIdx.filter fun entry => entry.2 ∈ selected).map
+    fun entry => TypeObservation.message entry.1.1.1 entry.1.1.2).toFinset
+
 
 namespace PactType
 
@@ -69,8 +81,7 @@ namespace PactType
             reannotateBranches alphabet rest
     termination_by branches => sizeOf branches
 
-    /-- Conjunctive-offer branches run concurrently, so each carries the part of
-    the alphabet no other branch claims. -/
+    /-- Re-sign every conjunctive continuation by the enclosing alphabet. -/
     def reannotateOfferBranches (alphabet : PactTypeAlphabet)
         (seen : Finset BareMessage) :
         List (BareMessage × PactType) → List (BareMessage × PactType)
@@ -139,6 +150,24 @@ def parallelTypeBranchesSelecting (alphabet : PactTypeAlphabet)
   | [] => .skip PactTypeAlphabet.empty
   | branch :: rest =>
       parallelTypeBranchesSelectingWithin alphabet selected (branch :: rest)
+
+/-- Build the right-associated residual without a trailing `skip`. -/
+def parallelTypeBranchesFiringFrom (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) : Nat → List (BareMessage × PactType) → PactType
+  | _, [] => .skip alphabet
+  | index, [branch] =>
+      if index ∈ selected then branch.2.reannotate alphabet
+      else singletonTypeXOfferAt alphabet branch
+  | index, branch :: next :: rest =>
+      .par alphabet
+        (if index ∈ selected then branch.2.reannotate alphabet
+         else singletonTypeXOfferAt alphabet branch)
+        (parallelTypeBranchesFiringFrom alphabet selected (index + 1) (next :: rest)) ∅
+
+/-- The residual after consuming exactly the selected conjunctive heads. -/
+def parallelTypeBranchesFiring (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType)) : PactType :=
+  parallelTypeBranchesFiringFrom alphabet selected 0 branches
 
 /-- Actions appearing at the heads of an offer's branches. -/
 def typeBranchActions

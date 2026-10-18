@@ -1,4 +1,5 @@
-import Anvilpp.ProofHelpers.WeakRefinementStrategies
+-- Historical source for the retired silent conjunctive-offer rule.
+import Anvilpp.Examples.WeakRefinementStrategies
 
 namespace Pact.WeakRefinement.OfferDelay
 

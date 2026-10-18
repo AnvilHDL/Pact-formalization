@@ -93,23 +93,23 @@ theorem compileTypeMenuLinksFuel_succ_stable :
       | offer a other branches =>
           have hElse : typeCompilationFuel other ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
-          have hItems : ∀ item : BareMessage × PactType,
+          have hItems : ∀ item : Finset Nat,
               compileTypeMenuLinksFuel (fuel + 1)
-                  (parallelTypeBranchesSelecting a item branches) =
+                  (parallelTypeBranchesFiring a item branches) =
                 compileTypeMenuLinksFuel fuel
-                  (parallelTypeBranchesSelecting a item branches) := by
+                  (parallelTypeBranchesFiring a item branches) := by
             intro item
             apply ih
-            rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            have hBound := typeCompilationFuel_parallelTypeBranchesFiring a item branches
             simp [typeCompilationFuel] at hFuel
             omega
-          have hCompiled : ∀ item : BareMessage × PactType,
-              compileTypeFuel (fuel + 1) (parallelTypeBranchesSelecting a item branches) =
-                compileTypeFuel fuel (parallelTypeBranchesSelecting a item branches) := by
+          have hCompiled : ∀ item : Finset Nat,
+              compileTypeFuel (fuel + 1) (parallelTypeBranchesFiring a item branches) =
+                compileTypeFuel fuel (parallelTypeBranchesFiring a item branches) := by
             intro item
-            have hItemFuel : typeCompilationFuel (parallelTypeBranchesSelecting a item branches) ≤
+            have hItemFuel : typeCompilationFuel (parallelTypeBranchesFiring a item branches) ≤
                 fuel := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+              have hBound := typeCompilationFuel_parallelTypeBranchesFiring a item branches
               simp [typeCompilationFuel] at hFuel
               omega
             exact compileTypeFuel_eq_of_sufficient _ (Nat.le.step hItemFuel) hItemFuel
@@ -272,30 +272,30 @@ theorem compileTypeMenuLinksFuel_targets_mem :
               rcases hElseLink with ⟨entry, hEntry, rfl⟩ | rfl
               · exact Finset.mem_image.mpr ⟨entry.2, ih other hElse hDisjoint.1 entry hEntry, rfl⟩
               · exact Finset.mem_image.mpr ⟨_, compileTypeFuel_initial_mem fuel other hElse, rfl⟩
-            simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton,
               finishAutomatonFragment, Finset.mem_union]
             exact Or.inl (Or.inr ht)
           · have hItemFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting a item.1 branches) ≤ fuel := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+                (parallelTypeBranchesFiring a item.1 branches) ≤ fuel := by
+              have hBound := typeCompilationFuel_parallelTypeBranchesFiring a item.1 branches
               simp [typeCompilationFuel] at hFuel
               omega
             have ht : link.2 ∈ childStates (item.2 + 1)
-                (compileTypeFuel fuel (parallelTypeBranchesSelecting a item.1 branches)) := by
+                (compileTypeFuel fuel (parallelTypeBranchesFiring a item.1 branches)) := by
               rcases hBranchLink with ⟨entry, hEntry, rfl⟩ | rfl
               · exact Finset.mem_image.mpr ⟨entry.2,
-                  ih (parallelTypeBranchesSelecting a item.1 branches) hItemFuel
-                    (parallelTypeBranchesSelecting_offerBranchesDisjoint item.1 branches
+                  ih (parallelTypeBranchesFiring a item.1 branches) hItemFuel
+                    (parallelTypeBranchesFiring_offerBranchesDisjoint item.1 branches
                       (fun item hItem => offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hItem))
                     entry hEntry, rfl⟩
               · exact Finset.mem_image.mpr ⟨_, compileTypeFuel_initial_mem fuel _ hItemFuel, rfl⟩
-            simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+            simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton,
               finishAutomatonFragment, Finset.mem_union]
             right
             rw [indexedFragmentStates, mem_foldl_union_iff]
             right
-            refine ⟨((item.1.1, compileTypeFuel fuel
-              (parallelTypeBranchesSelecting a item.1 branches)), item.2), ?_, ?_⟩
+            refine ⟨((item.1, compileTypeFuel fuel
+              (parallelTypeBranchesFiring a item.1 branches)), item.2), ?_, ?_⟩
             · rw [List.zipIdx_map]
               exact List.mem_map.mpr ⟨item, hItem, rfl⟩
             · exact ht
@@ -431,8 +431,8 @@ theorem menuDependencyTargets_indexed_root_links {α : Type}
               childState (entry.2 + 1) (compileTypeFuel fuel entry.1.2).initial).toFinset
       | fuel + 1, .offer alphabet other branches =>
           insert (childState 0 (compileTypeFuel fuel other).initial)
-            (branches.zipIdx.map fun entry => childState (entry.2 + 1)
-              (compileTypeFuel fuel (parallelTypeBranchesSelecting alphabet entry.1 branches)).initial).toFinset
+            ((conjunctiveSelections branches.length).toList.zipIdx.map fun entry => childState (entry.2 + 1)
+              (compileTypeFuel fuel (parallelTypeBranchesFiring alphabet entry.1 branches)).initial).toFinset
       | _, _ => ∅ := by
   cases fuel with
   | zero => simp [compileTypeMenuLinksFuel]
@@ -631,14 +631,14 @@ theorem menuDependencyTargets_offer_else
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [childState]
-  rw [menuDependencyTargets_indexed_root_links branches
+  rw [menuDependencyTargets_indexed_root_links (conjunctiveSelections branches.length).toList
     (fun entry => compileTypeMenuLinksFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches))
+      (parallelTypeBranchesFiring alphabet entry branches))
     (fun entry => (compileTypeFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches)).initial)]
-  rw [menuDependencyTargets_indexed_zero branches (fun entry =>
+      (parallelTypeBranchesFiring alphabet entry branches)).initial)]
+  rw [menuDependencyTargets_indexed_zero (conjunctiveSelections branches.length).toList (fun entry =>
     compileTypeMenuLinksFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches)), menuDependencyTargets_child]
+      (parallelTypeBranchesFiring alphabet entry branches)), menuDependencyTargets_child]
   simp only [↓reduceIte]
   rw [compileTypeMenuLinksFuel_eq_of_sufficient other (le_max_left _ _) le_rfl]
 
@@ -646,35 +646,35 @@ theorem menuDependencyTargets_offer_else
 theorem menuDependencyTargets_offer_branch
     (alphabet : PactTypeAlphabet) (other : PactType)
     (branches : List (BareMessage × PactType))
-    (index : Nat) (action : BareMessage) (branchType : PactType)
-    (hBranch : branches[index]? = some (action, branchType))
+    (index : Nat) (selected : Finset Nat)
+    (hBranch : (conjunctiveSelections branches.length).toList[index]? = some selected)
     (source : TypeAutomatonState) :
     menuDependencyTargets
       (compileTypeMenuLinksFuel (typeCompilationFuel (.offer alphabet other branches))
         (.offer alphabet other branches)) (.child (index + 1) source) =
       (menuDependencyTargets
-        (compileTypeMenuLinksFuel (typeCompilationFuel (parallelTypeBranchesSelecting alphabet (action, branchType) branches)) (parallelTypeBranchesSelecting alphabet (action, branchType) branches))
+        (compileTypeMenuLinksFuel (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches)) (parallelTypeBranchesFiring alphabet selected branches))
         source).image (.child (index + 1)) := by
   have hFuel : typeCompilationFuel (.offer alphabet other branches) =
       max (typeCompilationFuel other) (conjunctiveCompilationFuel branches) + 1 := by
     simp only [typeCompilationFuel]; omega
   rw [hFuel, compileTypeMenuLinksFuel]
   simp only [childState]
-  rw [menuDependencyTargets_indexed_root_links branches
+  rw [menuDependencyTargets_indexed_root_links (conjunctiveSelections branches.length).toList
     (fun entry => compileTypeMenuLinksFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches))
+      (parallelTypeBranchesFiring alphabet entry branches))
     (fun entry => (compileTypeFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches)).initial)]
-  rw [menuDependencyTargets_indexed branches (fun entry =>
+      (parallelTypeBranchesFiring alphabet entry branches)).initial)]
+  rw [menuDependencyTargets_indexed (conjunctiveSelections branches.length).toList (fun entry =>
     compileTypeMenuLinksFuel (max (typeCompilationFuel other) (conjunctiveCompilationFuel branches))
-      (parallelTypeBranchesSelecting alphabet entry branches)) _ index (action, branchType) hBranch]
+      (parallelTypeBranchesFiring alphabet entry branches)) _ index selected hBranch]
   simp only [menuDependencyTargets_child, if_neg (show (0 : Nat) ≠ index + 1 by omega),
     Finset.empty_union]
-  have hChildFuel : typeCompilationFuel (parallelTypeBranchesSelecting alphabet (action, branchType) branches) ≤
+  have hChildFuel : typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) ≤
       max (typeCompilationFuel other) (conjunctiveCompilationFuel branches) := by
-    rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-    exact le_max_right _ _
-  rw [compileTypeMenuLinksFuel_eq_of_sufficient (parallelTypeBranchesSelecting alphabet (action, branchType) branches) hChildFuel le_rfl]
+    exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
+      (le_max_right _ _)
+  rw [compileTypeMenuLinksFuel_eq_of_sufficient (parallelTypeBranchesFiring alphabet selected branches) hChildFuel le_rfl]
 
 @[simp] theorem compileTypeMenuLinksFuel_final (fuel : Nat) (ty : PactType) :
     menuDependencyTargets (compileTypeMenuLinksFuel fuel ty) .final = ∅ := by
@@ -865,18 +865,18 @@ theorem compileTypeMenuLinksFuel_accepting :
                 ih _ q hqAccept]
               simp
       | offer alphabet other branches =>
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton,
             finishAutomatonFragment, Finset.mem_union] at hAccepting
           rw [compileTypeMenuLinksFuel]
           rcases hAccepting with hElse | hBranch
           · obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hElse
             simp only [childState]
-            rw [menuDependencyTargets_indexed_root_links branches
-              (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesSelecting alphabet item branches))
-              (fun item => (compileTypeFuel fuel (parallelTypeBranchesSelecting alphabet item branches)).initial)]
-            rw [menuDependencyTargets_indexed_zero branches
+            rw [menuDependencyTargets_indexed_root_links (conjunctiveSelections branches.length).toList
+              (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesFiring alphabet item branches))
+              (fun item => (compileTypeFuel fuel (parallelTypeBranchesFiring alphabet item branches)).initial)]
+            rw [menuDependencyTargets_indexed_zero (conjunctiveSelections branches.length).toList
               (fun item => compileTypeMenuLinksFuel fuel
-                (parallelTypeBranchesSelecting alphabet item branches)), menuDependencyTargets_child]
+                (parallelTypeBranchesFiring alphabet item branches)), menuDependencyTargets_child]
             simp only [↓reduceIte]
             rw [ih other q hq]
             simp
@@ -888,11 +888,11 @@ theorem compileTypeMenuLinksFuel_accepting :
               obtain ⟨q, hqAccept, rfl⟩ := Finset.mem_image.mp hq
               have hGet := List.mem_zipIdx_iff_getElem?.mp hItem
               simp only [childState, Prod.map, id] at hqAccept ⊢
-              rw [menuDependencyTargets_indexed_root_links branches
-                (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesSelecting alphabet item branches))
-                (fun item => (compileTypeFuel fuel (parallelTypeBranchesSelecting alphabet item branches)).initial)]
-              rw [menuDependencyTargets_indexed branches
-                (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesSelecting alphabet item branches))
+              rw [menuDependencyTargets_indexed_root_links (conjunctiveSelections branches.length).toList
+                (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesFiring alphabet item branches))
+                (fun item => (compileTypeFuel fuel (parallelTypeBranchesFiring alphabet item branches)).initial)]
+              rw [menuDependencyTargets_indexed (conjunctiveSelections branches.length).toList
+                (fun item => compileTypeMenuLinksFuel fuel (parallelTypeBranchesFiring alphabet item branches))
                 _ item.2 item.1 hGet q, menuDependencyTargets_child]
               rw [if_neg (show (0 : Nat) ≠ item.2 + 1 by omega),
                 ih _ q hqAccept]

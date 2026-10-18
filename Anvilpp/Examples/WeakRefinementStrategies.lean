@@ -1,5 +1,5 @@
-import Anvilpp.ProofHelpers.WeakRefinementParallel
-import Anvilpp.ProofHelpers.WeakRefinementComparison
+import Anvilpp.Examples.WeakRefinementParallel
+import Anvilpp.Examples.WeakRefinementComparison
 import Anvilpp.ProofHelpers.ObjectiveRegularity
 
 namespace Pact

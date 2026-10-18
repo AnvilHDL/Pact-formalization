@@ -261,6 +261,33 @@ theorem parallelTypeBranchesSelecting_offerBranchesDisjoint
       exact parallelTypeBranchesSelectingWithin_offerBranchesDisjoint _ selected
         (branch :: rest) hBranches
 
+/-- Atomic residuals introduce only singleton offers and empty-interface products. -/
+theorem parallelTypeBranchesFiringFrom_offerBranchesDisjoint
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hBranches : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint) :
+    ∀ index, (parallelTypeBranchesFiringFrom alphabet selected index branches).OfferBranchesDisjoint := by
+  induction branches with
+  | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.OfferBranchesDisjoint]
+  | cons head rest ih =>
+      intro index
+      have hHead : (if index ∈ selected then head.2.reannotate alphabet
+          else singletonTypeXOfferAt alphabet head).OfferBranchesDisjoint := by
+        split
+        · exact reannotate_offerBranchesDisjoint head.2 alphabet (hBranches head (by simp))
+        · exact singletonTypeXOfferAt_offerBranchesDisjoint alphabet head (hBranches head (by simp))
+      cases rest with
+      | nil => exact hHead
+      | cons next rest =>
+          rw [parallelTypeBranchesFiringFrom, PactType.OfferBranchesDisjoint]
+          exact ⟨hHead, ih (fun b hb => hBranches b (List.mem_cons_of_mem _ hb)) (index + 1)⟩
+
+theorem parallelTypeBranchesFiring_offerBranchesDisjoint
+    (selected : Finset Nat) (branches : List (BareMessage × PactType))
+    (hBranches : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint) :
+    (parallelTypeBranchesFiring alphabet selected branches).OfferBranchesDisjoint :=
+  parallelTypeBranchesFiringFrom_offerBranchesDisjoint alphabet selected branches hBranches 0
+
 /-- Branch bodies of an offer whose branches are disjoint inherit the
 property. -/
 theorem offerBranchesDisjoint_of_mem
@@ -320,11 +347,11 @@ theorem shapeEq_zero (first second : PactType) :
 
 /-! ### Congruence of the constructor builders in the compiled shape -/
 
-theorem indexedFragmentStates_congr :
-    ∀ (first second : List (BareMessage × AutomatonFragment)),
+theorem indexedFragmentStates_congr {Key : Type} :
+    ∀ (first second : List (Key × AutomatonFragment)),
       List.Forall₂ (fun x y => x.2.states = y.2.states) first second →
       indexedFragmentStates first = indexedFragmentStates second := by
-  have general : ∀ (first second : List (BareMessage × AutomatonFragment)),
+  have general : ∀ (first second : List (Key × AutomatonFragment)),
       List.Forall₂ (fun x y => x.2.states = y.2.states) first second →
       ∀ (index : Nat) (acc : Finset TypeAutomatonState),
         (first.zipIdx index).foldl (fun states indexed =>
@@ -342,11 +369,11 @@ theorem indexedFragmentStates_congr :
   intro first second hRel
   exact general first second hRel 0 ∅
 
-theorem indexedFragmentAccepting_congr :
-    ∀ (first second : List (BareMessage × AutomatonFragment)),
+theorem indexedFragmentAccepting_congr {Key : Type} :
+    ∀ (first second : List (Key × AutomatonFragment)),
       List.Forall₂ (fun x y => x.2.accepting = y.2.accepting) first second →
       indexedFragmentAccepting first = indexedFragmentAccepting second := by
-  have general : ∀ (first second : List (BareMessage × AutomatonFragment)),
+  have general : ∀ (first second : List (Key × AutomatonFragment)),
       List.Forall₂ (fun x y => x.2.accepting = y.2.accepting) first second →
       ∀ (index : Nat) (acc : Finset TypeAutomatonState),
         (first.zipIdx index).foldl (fun states indexed =>
@@ -447,24 +474,24 @@ theorem buildExclusiveOfferAutomaton_shapeEq
         indexedFragmentAccepting_congr firstAutomata secondAutomata
           (hAutomata.imp fun _ _ h => h.2.2)]⟩
 
-theorem buildSelectedConjunctiveOfferAutomaton_shapeEq
+theorem buildAtomicConjunctiveOfferAutomaton_shapeEq
     (firstAlphabet secondAlphabet : PactTypeAlphabet)
     (firstBranches secondBranches : List (BareMessage × PactType))
     (firstElse secondElse : AutomatonFragment)
-    (firstAutomata secondAutomata : List (BareMessage × AutomatonFragment))
+    (firstAutomata secondAutomata : List (Finset Nat × AutomatonFragment))
     (hElse : ShapeEq firstElse secondElse)
     (hAutomata : List.Forall₂ (fun x y => ShapeEq x.2 y.2)
       firstAutomata secondAutomata) :
     ShapeEq
-      (buildSelectedConjunctiveOfferAutomaton firstAlphabet firstBranches
+      (buildAtomicConjunctiveOfferAutomaton firstAlphabet firstBranches
         firstElse firstAutomata)
-      (buildSelectedConjunctiveOfferAutomaton secondAlphabet secondBranches
+      (buildAtomicConjunctiveOfferAutomaton secondAlphabet secondBranches
         secondElse secondAutomata) :=
-  ⟨by simp only [buildSelectedConjunctiveOfferAutomaton,
+  ⟨by simp only [buildAtomicConjunctiveOfferAutomaton,
         finishAutomatonFragment, childStates, hElse.1,
         indexedFragmentStates_congr firstAutomata secondAutomata
           (hAutomata.imp fun _ _ h => h.1)], rfl,
-   by simp only [buildSelectedConjunctiveOfferAutomaton,
+   by simp only [buildAtomicConjunctiveOfferAutomaton,
         finishAutomatonFragment, childAccepting, hElse.2.2,
         indexedFragmentAccepting_congr firstAutomata secondAutomata
           (hAutomata.imp fun _ _ h => h.2.2)]⟩
@@ -540,13 +567,14 @@ theorem shapeEq_offer (fuel : Nat) (a1 a2 : PactTypeAlphabet)
     (e1 e2 : PactType) (bs1 bs2 : List (BareMessage × PactType))
     (hElse : ShapeEq (compileTypeFuel fuel e1) (compileTypeFuel fuel e2))
     (hBranches : List.Forall₂ (fun s1 s2 =>
-      ShapeEq (compileTypeFuel fuel (parallelTypeBranchesSelecting a1 s1 bs1))
-        (compileTypeFuel fuel (parallelTypeBranchesSelecting a2 s2 bs2)))
-      bs1 bs2) :
+      ShapeEq (compileTypeFuel fuel (parallelTypeBranchesFiring a1 s1 bs1))
+        (compileTypeFuel fuel (parallelTypeBranchesFiring a2 s2 bs2)))
+      (conjunctiveSelections bs1.length).toList
+      (conjunctiveSelections bs2.length).toList) :
     ShapeEq (compileTypeFuel (fuel + 1) (.offer a1 e1 bs1))
       (compileTypeFuel (fuel + 1) (.offer a2 e2 bs2)) := by
   simp only [compileTypeFuel]
-  exact buildSelectedConjunctiveOfferAutomaton_shapeEq _ _ _ _ _ _ _ _ hElse
+  exact buildAtomicConjunctiveOfferAutomaton_shapeEq _ _ _ _ _ _ _ _ hElse
     (forall₂_map_map (fun _ _ h => h) hBranches)
 
 /-! ### Atoms ignore their alphabet in the compiled shape -/
@@ -804,6 +832,49 @@ theorem shapeEq_parallelTypeBranchesSelectingWithin :
                   (ih f hSmaller hTailPairwise hTailDisjoint source _ _ selected
                     hInTail)
 
+/-- Subset-indexed residual copies retain their shape under reannotation. -/
+theorem shapeEq_parallelTypeBranchesFiringFrom
+    (branches : List (BareMessage × PactType)) (fuel : Nat)
+    (hStable : ∀ m, m ≤ fuel → ∀ t : PactType, t.OfferBranchesDisjoint →
+      ∀ alpha, ShapeEq (compileTypeFuel m (t.reannotate alpha)) (compileTypeFuel m t))
+    (hDisjoint : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint)
+    (source : BareMessage × PactType → PactTypeAlphabet)
+    (a1 a2 : PactTypeAlphabet) (selected : Finset Nat) (index : Nat) :
+    ShapeEq
+      (compileTypeFuel fuel (parallelTypeBranchesFiringFrom a1 selected index
+        (branches.map fun branch => (branch.1, branch.2.reannotate (source branch)))))
+      (compileTypeFuel fuel (parallelTypeBranchesFiringFrom a2 selected index branches)) := by
+  induction branches generalizing fuel index with
+  | nil =>
+      simp only [List.map_nil, parallelTypeBranchesFiringFrom]
+      exact shapeEq_skip fuel a1 a2
+  | cons head rest ih =>
+      have hHead := hDisjoint head (by simp)
+      have hFactor : ∀ m, m ≤ fuel → ShapeEq
+          (compileTypeFuel m (if index ∈ selected then
+            (head.2.reannotate (source head)).reannotate a1
+            else singletonTypeXOfferAt a1 (head.1, head.2.reannotate (source head))))
+          (compileTypeFuel m (if index ∈ selected then head.2.reannotate a2
+            else singletonTypeXOfferAt a2 head)) := by
+        intro m hm
+        split
+        · exact shapeEq_double_reannotate fuel hStable m hm head.2 hHead (source head) a1 a2
+        · exact shapeEq_singletonTypeXOfferAt_stable m
+            (fun k hk => hStable k (le_trans hk hm)) head.1 head.2 hHead (source head) a1 a2
+      cases rest with
+      | nil =>
+          simpa only [List.map_cons, List.map_nil, parallelTypeBranchesFiringFrom] using
+            hFactor fuel le_rfl
+      | cons next rest =>
+          cases fuel with
+          | zero => exact shapeEq_zero _ _
+          | succ f =>
+              simp only [List.map_cons, parallelTypeBranchesFiringFrom]
+              exact shapeEq_par f _ _ _ _ _ _ ∅ (hFactor f (Nat.le_succ _))
+                (ih f (fun m hm => hStable m (Nat.le_succ_of_le hm))
+                  (fun branch hMem => hDisjoint branch (List.mem_cons_of_mem _ hMem))
+                  (index + 1))
+
 theorem forall₂_map_left_of_mem {α β : Type} {R : β → α → Prop} {l : List α}
     {f : α → β} (h : ∀ x ∈ l, R (f x) x) : List.Forall₂ R (l.map f) l := by
   induction l with
@@ -899,19 +970,13 @@ theorem compileTypeFuel_shapeEq_reannotate (fuel : Nat) :
                   (hPairwise.imp heads_ne_of_branchDeclarationsDisjoint)]
               refine shapeEq_offer f _ _ _ _ _ _
                 (hStable f le_rfl elseType hElse alphabet) ?_
-              cases branches with
-              | nil => simp
-              | cons head tail =>
-                  refine forall₂_map_left_of_mem fun branch hBranch => ?_
-                  simp only [List.map_cons, parallelTypeBranchesSelecting]
-                  exact shapeEq_parallelTypeBranchesSelectingWithin
-                    (head :: tail) f hStable
-                    (hPairwise.imp heads_ne_of_branchDeclarationsDisjoint)
-                    (fun item hItem =>
-                      offerBranchesDisjoint_of_mem_branch hBranches hItem)
-                    (fun item => offerBranchAlphabet alphabet ∅ (head :: tail)
-                      item.1)
-                    alphabet a branch hBranch
+              rw [List.length_map]
+              apply List.forall₂_same.mpr
+              intro selected _
+              exact shapeEq_parallelTypeBranchesFiringFrom branches f hStable
+                (fun item hItem => offerBranchesDisjoint_of_mem_branch hBranches hItem)
+                (fun item => offerBranchAlphabet alphabet ∅ branches item.1)
+                alphabet a selected 0
 
 end CompiledShape
 

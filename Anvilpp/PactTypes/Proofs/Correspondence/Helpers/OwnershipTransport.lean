@@ -80,6 +80,56 @@ theorem PactType.reannotate_messageActions (alphabet : PactTypeAlphabet)
       PactType.MessageActions processType :=
   (PactType.reannotate_ownership_data alphabet processType).2.1
 
+/-- Consumption can remove message heads, but preserves progress and fair identifiers. -/
+theorem parallelTypeBranchesFiringFrom_ownership (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType)) :
+    ∀ index,
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).MessageIds ⊆
+          PactType.BranchMessageIds branches ∧
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).MessageActions ⊆
+          PactType.BranchMessageActions branches ∧
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).ProgressIds =
+          PactType.BranchProgressIds branches ∧
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).FairChoiceIds =
+          PactType.BranchFairChoiceIds branches := by
+  induction branches with
+  | nil =>
+      intro index
+      simp [parallelTypeBranchesFiringFrom, PactType.MessageIds, PactType.MessageActions,
+        PactType.ProgressIds, PactType.FairChoiceIds, PactType.BranchMessageIds,
+        PactType.BranchMessageActions, PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro index
+      have hFactor :
+          (if index ∈ selected then body.reannotate alphabet
+           else singletonTypeXOfferAt alphabet (action, body)).MessageIds ⊆
+            {action.1} ∪ body.MessageIds ∧
+          (if index ∈ selected then body.reannotate alphabet
+           else singletonTypeXOfferAt alphabet (action, body)).MessageActions ⊆
+            {action} ∪ body.MessageActions ∧
+          (if index ∈ selected then body.reannotate alphabet
+           else singletonTypeXOfferAt alphabet (action, body)).ProgressIds = body.ProgressIds ∧
+          (if index ∈ selected then body.reannotate alphabet
+           else singletonTypeXOfferAt alphabet (action, body)).FairChoiceIds = body.FairChoiceIds := by
+        split <;> simp [singletonTypeXOfferAt, PactType.MessageIds, PactType.MessageActions,
+          PactType.ProgressIds, PactType.FairChoiceIds, PactType.BranchMessageIds,
+          PactType.BranchMessageActions, PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+      cases rest with
+      | nil =>
+          simpa only [parallelTypeBranchesFiringFrom, PactType.BranchMessageIds,
+            PactType.BranchMessageActions, PactType.BranchProgressIds,
+            PactType.BranchFairChoiceIds, Finset.union_empty] using hFactor
+      | cons next rest =>
+          simp only [parallelTypeBranchesFiringFrom, PactType.MessageIds, PactType.MessageActions,
+            PactType.ProgressIds, PactType.FairChoiceIds, PactType.BranchMessageIds,
+            PactType.BranchMessageActions, PactType.BranchProgressIds, PactType.BranchFairChoiceIds]
+          obtain ⟨hIds, hActions, hProgress, hFair⟩ := ih (index + 1)
+          exact ⟨Finset.union_subset_union hFactor.1 hIds,
+            Finset.union_subset_union hFactor.2.1 hActions,
+            congrArg₂ (fun x y => x ∪ y) hFactor.2.2.1 hProgress,
+            congrArg₂ (fun x y => x ∪ y) hFactor.2.2.2 hFair⟩
+
 theorem parallelTypeBranchesSelecting_parallelInterfaces
     (alphabet : PactTypeAlphabet) (selected : BareMessage × PactType)
     (branches : List (BareMessage × PactType)) :
@@ -606,15 +656,18 @@ theorem relationMembership_ownership_subset :
               mi.trans Finset.subset_union_left,
               pi.trans Finset.subset_union_left⟩
           · have hGF : typeCompilationFuel
-                (parallelTypeBranchesSelecting a selected bs) < n := by
-              rw [← hFuel, typeCompilationFuel_parallelTypeBranchesSelecting]
-              simp only [typeCompilationFuel]; omega
+                (parallelTypeBranchesFiring a selected bs) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer a e selected bs
             obtain ⟨m, p, f, mi, pi⟩ := ih _ hGF
-              (parallelTypeBranchesSelecting a selected bs) rfl residual q hChild
+              (parallelTypeBranchesFiring a selected bs) rfl residual q hChild
             obtain ⟨gI, gm, gp, gf⟩ :=
-              parallelTypeBranchesSelecting_ownership a selected bs
-            rw [gm] at m; rw [gp] at p; rw [gf] at f; rw [gI] at mi
-            rw [parallelTypeBranchesSelecting_parallelInterfaces] at pi
+              parallelTypeBranchesFiringFrom_ownership a selected bs 0
+            simp only [parallelTypeBranchesFiring] at m p f mi pi
+            rw [gp] at p; rw [gf] at f
+            have m := m.trans gm
+            have mi := mi.trans gI
+            rw [parallelTypeBranchesFiringFrom_parallelInterfaces] at pi
             simp only [PactType.MessageActions, PactType.ProgressIds,
               PactType.FairChoiceIds, PactType.MessageIds,
               PactType.ParallelInterfaces]

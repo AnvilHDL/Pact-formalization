@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.Spec.Syntax.TypeTransitionSystemDefs
+import Anvilpp.PactTypes.Proofs.Syntax.ConjunctiveResiduals
 
 namespace Pact
 
@@ -169,11 +170,7 @@ theorem TypeTransition.preserves_alphabet
   | xoffer_wait env alphabet elseType branches conditions =>
       simp [PactType.alphabet]
   | offer_some env alphabet elseType branches enabled conditions =>
-      have hSelected :
-          (parallelTypeBranchesSelecting alphabet enabled branches).alphabet =
-            alphabet :=
-        parallelTypeBranchesSelecting_alphabet_eq_of_mem conditions.2.1
-      simpa [PactType.alphabet] using hSelected
+      exact parallelTypeBranchesFiring_alphabet alphabet enabled branches
   | offer_else env alphabet elseType branches conditions =>
       simp only [PactType.AlphabetWellFormed] at hSource
       simpa [PactType.alphabet] using hSource.2.1

@@ -180,5 +180,54 @@ theorem parallelTypeBranchesSelecting_offerMenuLinear
   | nil => simp [parallelTypeBranchesSelecting, OfferMenuLinear]
   | cons head tail => exact hSelecting _ (fun _ hMem => hMem)
 
+/-- Generated singleton offers inherit the head exclusion of the written offer. -/
+theorem parallelTypeBranchesFiring_offerMenuLinear
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hWF : ∀ branch ∈ branches, branch.2.AlphabetWellFormed)
+    (hAlphabet : ∀ branch ∈ branches, branch.2.alphabet = alphabet)
+    (hLinear : ∀ branch ∈ branches, OfferMenuLinear branch.2)
+    (hHeads : ∀ branch ∈ branches, BranchHeadsAbsentFromMenu branches branch.2) :
+    OfferMenuLinear (parallelTypeBranchesFiring alphabet selected branches) := by
+  have hFixed : ∀ branch ∈ branches, branch.2.reannotate alphabet = branch.2 := by
+    intro branch hBranch
+    rw [← hAlphabet branch hBranch]
+    exact PactType.reannotate_own_alphabet branch.2 (hWF branch hBranch)
+  have hSingleton : ∀ branch ∈ branches,
+      OfferMenuLinear (singletonTypeXOfferAt alphabet branch) := by
+    intro branch hBranch
+    simp only [singletonTypeXOfferAt, hFixed branch hBranch, OfferMenuLinear,
+      OfferMenuLinearBranches]
+    refine ⟨?_, ?_, trivial, hLinear branch hBranch, trivial⟩
+    · simp [BranchHeadsAbsentFromMenu, typeFutureOffers, typeFutureOffersFuel]
+    · intro candidate hCandidate
+      have hEq : candidate = branch := by simpa using hCandidate
+      subst candidate
+      intro head hHead action hAction
+      have hEq : head = branch := by simpa using hHead
+      subst head
+      exact hHeads branch hBranch branch hBranch action hAction
+  have hFrom : ∀ list : List (BareMessage × PactType),
+      (∀ branch ∈ list, branch ∈ branches) → ∀ index,
+      OfferMenuLinear (parallelTypeBranchesFiringFrom alphabet selected index list) := by
+    intro list
+    induction list with
+    | nil => intro _ index; simp [parallelTypeBranchesFiringFrom, OfferMenuLinear]
+    | cons head tail ih =>
+        intro hSub index
+        have hFactor : OfferMenuLinear
+            (if index ∈ selected then head.2.reannotate alphabet
+              else singletonTypeXOfferAt alphabet head) := by
+          split_ifs
+          · rw [hFixed head (hSub head (by simp))]
+            exact hLinear head (hSub head (by simp))
+          · exact hSingleton head (hSub head (by simp))
+        cases tail with
+        | nil => exact hFactor
+        | cons next rest =>
+            rw [parallelTypeBranchesFiringFrom, OfferMenuLinear]
+            exact ⟨hFactor, ih (fun b hb => hSub b (by simp [hb])) (index + 1)⟩
+  exact hFrom branches (fun _ h => h) 0
+
 end
 end Pact

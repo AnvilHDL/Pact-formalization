@@ -27,7 +27,7 @@ theorem childPendingEdges_noMarkerFor
 
 /-- The indexed branch edges of an offer keep their branch labels. -/
 theorem indexedFragmentEdges_noMarkerFor
-    (automata : List (BareMessage × AutomatonFragment)) (name : String)
+    {Key : Type} (automata : List (Key × AutomatonFragment)) (name : String)
     (hChildren : ∀ entry ∈ automata, entry.2.NoMarkerFor name) :
     ∀ edge ∈ indexedFragmentEdges automata,
       edge.label ≠ AutomatonConstructionLabel.variable name := by
@@ -104,18 +104,18 @@ theorem buildExclusiveOfferAutomaton_noMarkerFor
     obtain ⟨environment, -, rfl⟩ := hElseRoot
     simp
 
-theorem buildSelectedConjunctiveOfferAutomaton_noMarkerFor
+theorem buildAtomicConjunctiveOfferAutomaton_noMarkerFor
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment))
     (name : String)
     (hElse : elseAutomaton.NoMarkerFor name)
     (hBranches : ∀ entry ∈ selectedConjunctions, entry.2.NoMarkerFor name) :
-    (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+    (buildAtomicConjunctiveOfferAutomaton alphabet branches elseAutomaton
       selectedConjunctions).NoMarkerFor name := by
   classical
   intro edge hEdge
-  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+  simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with (((hElseEdge | hBranchEdge) | hFire) | hWait) | hElseRoot
   · exact childPendingEdges_noMarkerFor 0 elseAutomaton name hElse edge hElseEdge
@@ -365,13 +365,13 @@ theorem compileTypeFuel_noMarkerFor (name : String) :
                 · exact hHead
                 · exact ihRest hRest branch hTail'
           rw [compileTypeFuel.eq_def]
-          refine buildSelectedConjunctiveOfferAutomaton_noMarkerFor alphabet
+          refine buildAtomicConjunctiveOfferAutomaton_noMarkerFor alphabet
             branches _ _ name (ih elseType hElse) ?_
           intro entry hEntry
           simp only [List.mem_map] at hEntry
           obtain ⟨selected, hSelected, rfl⟩ := hEntry
-          exact ih _ (parallelTypeBranchesSelecting_tailOccurrences name alphabet
-            selected branches False hEach (hEach selected hSelected))
+          exact ih _ (parallelTypeBranchesFiring_tailOccurrences name alphabet
+            selected branches False hEach)
 
 /-- A fragment with no marker at all is vacuously inert. -/
 theorem AutomatonFragment.MarkerOffersInert.of_noMarkerFor
@@ -407,7 +407,7 @@ theorem childPendingEdges_markerOffersInert
       simp [hSpec, childFutureSpec] at hOffers
 
 theorem indexedFragmentEdges_markerOffersInert
-    (automata : List (BareMessage × AutomatonFragment)) (name : String)
+    {Key : Type} (automata : List (Key × AutomatonFragment)) (name : String)
     (hChildren : ∀ entry ∈ automata, entry.2.MarkerOffersInert name) :
     ∀ edge ∈ indexedFragmentEdges automata,
       edge.label = AutomatonConstructionLabel.variable name →
@@ -519,18 +519,18 @@ theorem buildRecursionAutomaton_markerOffersInert
         | atUnion offers target removed =>
             simp [hSpec, childFutureSpec] at hOffers
 
-theorem buildSelectedConjunctiveOfferAutomaton_markerOffersInert
+theorem buildAtomicConjunctiveOfferAutomaton_markerOffersInert
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment))
     (name : String)
     (hElse : elseAutomaton.MarkerOffersInert name)
     (hBranches : ∀ entry ∈ selectedConjunctions, entry.2.MarkerOffersInert name) :
-    (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+    (buildAtomicConjunctiveOfferAutomaton alphabet branches elseAutomaton
       selectedConjunctions).MarkerOffersInert name := by
   classical
   intro edge hEdge
-  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+  simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with (((hElseEdge | hBranchEdge) | hFire) | hWait) | hElseRoot
   · exact childPendingEdges_markerOffersInert 0 elseAutomaton name hElse edge
@@ -655,15 +655,15 @@ theorem compileTypeFuel_markerOffersInert (name : String) :
                 · exact hHead
                 · exact ihRest hRest branch hTail'
           rw [compileTypeFuel.eq_def]
-          refine buildSelectedConjunctiveOfferAutomaton_markerOffersInert
+          refine buildAtomicConjunctiveOfferAutomaton_markerOffersInert
             alphabet branches _ _ name (ih elseType hElse) ?_
           intro entry hEntry
           simp only [List.mem_map] at hEntry
           obtain ⟨selected, hSelected, rfl⟩ := hEntry
           refine AutomatonFragment.MarkerOffersInert.of_noMarkerFor
             (compileTypeFuel_noMarkerFor name fuel _ ?_)
-          exact parallelTypeBranchesSelecting_tailOccurrences name alphabet
-            selected branches False hEach (hEach selected hSelected)
+          exact parallelTypeBranchesFiring_tailOccurrences name alphabet
+            selected branches False hEach
 
 /-! ### Marker sources travel with the child tag -/
 
@@ -765,8 +765,8 @@ theorem buildChoiceAutomaton_markerSource_root
     rcases hEq with rfl | rfl <;> simp at hLabel
 
 theorem indexedFragmentEdges_markerSource
-    (automata : List (BareMessage × AutomatonFragment)) (name : String)
-    (i : Nat) (entry : BareMessage × AutomatonFragment)
+    {Key : Type} (automata : List (Key × AutomatonFragment)) (name : String)
+    (i : Nat) (entry : Key × AutomatonFragment)
     (hEntry : automata[i]? = some entry) (q : TypeAutomatonState) :
     (∃ edge ∈ indexedFragmentEdges automata,
         edge.source = childState (i + 1) q ∧
@@ -970,18 +970,18 @@ theorem buildExclusiveOfferAutomaton_markerSource_root
     obtain ⟨environment, -, rfl⟩ := hElseRoot
     simp at hLabel
 
-theorem buildSelectedConjunctiveOfferAutomaton_markerSource_child0
+theorem buildAtomicConjunctiveOfferAutomaton_markerSource_child0
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment)) (name : String)
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment)) (name : String)
     (q : TypeAutomatonState) :
-    MarkerSource (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+    MarkerSource (buildAtomicConjunctiveOfferAutomaton alphabet branches elseAutomaton
         selectedConjunctions) name (childState 0 q) ↔
       MarkerSource elseAutomaton name q := by
   classical
   constructor
   · rintro ⟨edge, hEdge, hSource, hLabel⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
       Finset.mem_union] at hEdge
     rcases hEdge with (((hElse | hBranch) | hFire) | hWait) | hElseRoot
     · exact (childPendingEdges_markerSource 0 elseAutomaton name q).mp
@@ -1012,22 +1012,22 @@ theorem buildSelectedConjunctiveOfferAutomaton_markerSource_child0
     obtain ⟨edge, hEdge, hSource, hLabel⟩ :=
       (childPendingEdges_markerSource 0 elseAutomaton name q).mpr hChild
     refine ⟨edge, ?_, hSource, hLabel⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, Finset.mem_union]
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment, Finset.mem_union]
     exact Or.inl (Or.inl (Or.inl (Or.inl hEdge)))
 
-theorem buildSelectedConjunctiveOfferAutomaton_markerSource_branch
+theorem buildAtomicConjunctiveOfferAutomaton_markerSource_branch
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment)) (name : String)
-    (i : Nat) (entry : BareMessage × AutomatonFragment)
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment)) (name : String)
+    (i : Nat) (entry : Finset Nat × AutomatonFragment)
     (hEntry : selectedConjunctions[i]? = some entry) (q : TypeAutomatonState) :
-    MarkerSource (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+    MarkerSource (buildAtomicConjunctiveOfferAutomaton alphabet branches elseAutomaton
         selectedConjunctions) name (childState (i + 1) q) ↔
       MarkerSource entry.2 name q := by
   classical
   constructor
   · rintro ⟨edge, hEdge, hSource, hLabel⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
       Finset.mem_union] at hEdge
     rcases hEdge with (((hElse | hBranch) | hFire) | hWait) | hElseRoot
     · exfalso
@@ -1056,18 +1056,18 @@ theorem buildSelectedConjunctiveOfferAutomaton_markerSource_branch
       (indexedFragmentEdges_markerSource selectedConjunctions name i entry hEntry q).mpr
         hChild
     refine ⟨edge, ?_, hSource, hLabel⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment, Finset.mem_union]
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment, Finset.mem_union]
     exact Or.inl (Or.inl (Or.inl (Or.inr hEdge)))
 
-theorem buildSelectedConjunctiveOfferAutomaton_markerSource_root
+theorem buildAtomicConjunctiveOfferAutomaton_markerSource_root
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment)) (name : String) :
-    ¬ MarkerSource (buildSelectedConjunctiveOfferAutomaton alphabet branches elseAutomaton
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment)) (name : String) :
+    ¬ MarkerSource (buildAtomicConjunctiveOfferAutomaton alphabet branches elseAutomaton
       selectedConjunctions) name TypeAutomatonState.root := by
   classical
   rintro ⟨edge, hEdge, hSource, hLabel⟩
-  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+  simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with (((hElse | hBranch) | hFire) | hWait) | hElseRoot
   · simp only [childPendingEdges, Finset.mem_image] at hElse

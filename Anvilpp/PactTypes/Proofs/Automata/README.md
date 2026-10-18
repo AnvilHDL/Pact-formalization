@@ -11,6 +11,7 @@
 | `BuildChoiceAutomatonLemmas` | Root and child edge characterizations |
 | `BuildSequenceAutomatonLemmas` | Accepting redirection and copied-edge membership |
 | `BuildOfferAutomataLemmas` | Offer-root and indexed-branch edge membership |
+| `AtomicConjunctiveOffer` | Exact batch firing, root menus, copied targets, and clock exclusion |
 | `BuildParallelAutomatonLemmas` | Product shape, clock edges, and target closure |
 | `BuildRecursionAutomatonLemmas` | Header, body, and recursive backedge membership |
 | `SyncEdgesLemmas` | Synchronized edge and local-environment properties |

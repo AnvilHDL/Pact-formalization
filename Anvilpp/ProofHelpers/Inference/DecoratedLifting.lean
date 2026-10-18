@@ -56,7 +56,7 @@ theorem TypeOffers.label_ne_tock {env : TypeEnvironment} {source target : PactTy
   | xoffer_branch _ _ _ _ _ _ _ => simp [TypeLabel.message]
   | xoffer_else _ _ _ _ _ => simp [TypeLabel.silent]
   | xoffer_wait _ _ _ _ _ => simp [TypeLabel.silent]
-  | offer_some _ _ _ _ _ _ => simp [TypeLabel.silent]
+  | offer_some => simp [typeBranchBatchLabel]
   | offer_else _ _ _ _ _ => simp [TypeLabel.silent]
   | offer_wait _ _ _ _ _ => simp [TypeLabel.silent]
   | par _ _ _ interface _ _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _
@@ -487,27 +487,25 @@ theorem lifting_core :
   | offer_some typeEnv alphabet elseType branches enabled hPrem =>
       intro process hShape hClock hAlpha hConj hData
       obtain ⟨elseProcess, procBranches, rfl, rfl, rfl⟩ := inferProcess_eq_offer hShape
-      obtain ⟨branch, hMem, hEq⟩ := exists_branch_of_mem_inferBranches hPrem.2.1
-      rw [Proc.AlphabetWellFormed] at hAlpha
-      rw [Proc.ConjunctRegular] at hConj
-      have hCommit := inferProcess_parallelProcessBranchesSelecting
-        hAlpha.2.2.2 hConj.1 hMem
-      refine ⟨∅, by simp, ?_⟩
-      intro env hErase
-      have hFuture :
-          procFutureOffers
-              (parallelProcessBranchesSelecting alphabet branch procBranches) =
-            typeFutureOffers
-              (parallelTypeBranchesSelecting alphabet enabled
-                (inferBranches procBranches)) := by
-        rw [procFutureOffers_inferProcess, hCommit, hEq]
-      rw [← hFuture]
-      exact ⟨_, Label.silent,
-        Offers.offer_some env alphabet elseProcess procBranches branch
-          ⟨wellFormed_of_erase hErase hPrem.1, hMem,
-            (typeBranchEnabled_iff env branch).1
-              (by rw [hErase, hEq]; exact hPrem.2.2)⟩,
-        labelAgree_silent⟩
+      refine ⟨projectCurrent alphabet (branchOfferSet procBranches), ?_, ?_⟩
+      · rw [projectCurrent_image, branchOfferSet_image, typeBranchActions_inferBranches]
+      · intro env hErase
+        have hEnabled : processEnabledBranches env procBranches = enabled := by
+          rw [← typeEnabledBranches_inferBranches, hErase]
+          exact hPrem.2.2
+        obtain ⟨values, hValues⟩ := conjunctiveValues_exist env procBranches (by
+          intro msg expr body hMem
+          have hBranch := branchBound_of_mem
+            ((dataWFProc_offer_iff alphabet elseProcess procBranches).1 hData).2 hMem
+          exact exprEval_of_closed expr hBranch.1)
+        have hStep := Offers.offer_some env alphabet elseProcess procBranches enabled values
+          ⟨wellFormed_of_erase hErase hPrem.1, hPrem.2.1, hEnabled, by
+            simpa only [hEnabled] using hValues⟩
+        rw [procFutureOffers_parallelProcessBranchesFiring,
+          ← typeBranchActions_inferBranches] at hStep
+        refine ⟨_, _, hStep, ?_⟩
+        rw [← eraseLabel_processBranchBatchLabel]
+        exact labelAgree_eraseLabel _
   | offer_else typeEnv alphabet elseType branches hPrem =>
       intro process hShape hClock hAlpha hConj hData
       obtain ⟨elseProcess, procBranches, rfl, rfl, rfl⟩ := inferProcess_eq_offer hShape
@@ -983,7 +981,7 @@ theorem TypeOffers.clock_shape :
   | offer_some _ _ _ _ enabled hPrem =>
       intro hEnv
       rw [hEnv] at hPrem
-      exact absurd hPrem.2.2 (by simp [TypeBranchEnabled, TypeEnvironment.tock])
+      exact hPrem.2.1.ne_empty (hPrem.2.2.symm.trans (typeEnabledBranches_tock _)) |>.elim
   | par _ _ _ interface _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hLocalLeft hLocalRight _
       ihLeft ihRight =>
       intro hEnv
@@ -1121,7 +1119,7 @@ theorem clock_step_reflection :
   | offer_some _ _ _ _ _ hPrem =>
       intro hEnv _ _ _
       rw [hEnv] at hPrem
-      exact absurd hPrem.2.2 (by simp [TypeBranchEnabled, TypeEnvironment.tock])
+      exact hPrem.2.1.ne_empty (hPrem.2.2.symm.trans (typeEnabledBranches_tock _)) |>.elim
   | cycle _ alphabet hPrem =>
       intro hEnv process hShape _
       rw [inferProcess_eq_tock hShape]

@@ -706,6 +706,70 @@ theorem parallelTypeBranchesSelectingWithin_map_reannotate
             rw [if_neg (fun h => hSel (hSelIff.mp h)), if_neg hSel, hHead,
               hRest]
 
+/-- Re-signing an atomic residual re-signs each selected continuation and optional branch. -/
+theorem reannotate_parallelTypeBranchesFiringFrom
+    (source target : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hWF : ∀ b ∈ branches, b.2.AlphabetWellFormed)
+    (hWF' : ∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) :
+    ∀ index, (parallelTypeBranchesFiringFrom source selected index branches).reannotate target =
+      parallelTypeBranchesFiringFrom target selected index branches := by
+  induction branches with
+  | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.reannotate]
+  | cons head rest ih =>
+      intro index
+      have hFactor :
+          (if index ∈ selected then head.2.reannotate source
+            else singletonTypeXOfferAt source head).reannotate target =
+          (if index ∈ selected then head.2.reannotate target
+            else singletonTypeXOfferAt target head) := by
+        split_ifs
+        · exact PactType.reannotate_reannotate head.2 source target
+            (hWF head (by simp)) (hWF' head (by simp))
+        · exact reannotate_singletonTypeXOfferAt source target head
+            (hWF head (by simp)) (hWF' head (by simp))
+      cases rest with
+      | nil => exact hFactor
+      | cons next tail =>
+          rw [parallelTypeBranchesFiringFrom, PactType.reannotate,
+            PactTypeAlphabet.projectParallel_empty, PactTypeAlphabet.projectParallel_empty,
+            hFactor, ih (fun b hb => hWF b (by simp [hb]))
+              (fun b hb => hWF' b (by simp [hb]))]
+          rfl
+
+/-- Re-signing the branch list first leaves the atomic residual unchanged. -/
+theorem parallelTypeBranchesFiringFrom_map_reannotate
+    (alphabet source : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hWF : ∀ b ∈ branches, b.2.AlphabetWellFormed)
+    (hWF' : ∀ b ∈ branches, (b.2.reannotate source).AlphabetWellFormed) :
+    ∀ index, parallelTypeBranchesFiringFrom alphabet selected index
+        (branches.map fun b => (b.1, b.2.reannotate source)) =
+      parallelTypeBranchesFiringFrom alphabet selected index branches := by
+  induction branches with
+  | nil => intro index; rfl
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro index
+      have hBody := PactType.reannotate_reannotate body source alphabet
+        (hWF (action, body) (by simp)) (hWF' (action, body) (by simp))
+      have hFactor :
+          (if index ∈ selected then (body.reannotate source).reannotate alphabet
+            else singletonTypeXOfferAt alphabet (action, body.reannotate source)) =
+          (if index ∈ selected then body.reannotate alphabet
+            else singletonTypeXOfferAt alphabet (action, body)) := by
+        split_ifs
+        · exact hBody
+        · simp only [singletonTypeXOfferAt, hBody]
+      cases rest with
+      | nil => simpa only [List.map_cons, List.map_nil, parallelTypeBranchesFiringFrom] using hFactor
+      | cons next tail =>
+          simp only [List.map_cons, parallelTypeBranchesFiringFrom]
+          rw [hFactor]
+          congr 1
+          exact ih (fun b hb => hWF b (by simp [hb]))
+            (fun b hb => hWF' b (by simp [hb])) (index + 1)
+
 /-- Interface scoping passes to every branch of an offer. -/
 theorem interfaceScoped_of_mem_branches
     {branches : List (BareMessage × PactType)}
@@ -942,8 +1006,8 @@ new alphabet. -/
 theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
     (hElse : ExactSurvivorTransport elseType)
-    (hProduct : ∀ selected ∈ branches,
-      ExactSurvivorTransport (parallelTypeBranchesSelecting a selected branches)) :
+    (hProduct : ∀ selected ∈ conjunctiveSelections branches.length,
+      ExactSurvivorTransport (parallelTypeBranchesFiring a selected branches)) :
     ExactSurvivorTransport (.offer a elseType branches) := by
   intro bound hWF target hTargetWF hAvoid rho q hRelated
   obtain ⟨hWFE, hWFB⟩ := typeWellFormedIn_offer hWF
@@ -973,8 +1037,6 @@ theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
     · intro act hAct hIn
       exact (hAvoid act hAct).2
         (parallelInterfaces_subset_branches branches b hb hIn)
-  have hPairHeads : List.Pairwise (fun x y => x.1 ≠ y.1) branches :=
-    branchHeadsPairwise_of_conjunctive hCOwn.2
   rcases relationMembership_offer_cases a elseType branches hRelated with
     hRoot | ⟨q', hState, hChild⟩ |
     ⟨i, selected, q', hGet, hState, hChild⟩
@@ -995,42 +1057,32 @@ theorem survivorTransport_offer (a : PactTypeAlphabet) (elseType : PactType)
         (PactType.reannotateOfferBranches target ∅ branches) hMem
   · simp only at hState hChild
     subst hState
-    have hMemSelected : selected ∈ branches :=
-      List.mem_iff_getElem?.mpr ⟨i, hGet⟩
+    have hMemSelected : selected ∈ conjunctiveSelections branches.length :=
+      Finset.mem_toList.mp (List.mem_of_getElem? hGet)
     have hAvoidProduct : ∀ act ∈ target.actions,
         act.1 ∉ PactType.ParallelInterfaces
-          (parallelTypeBranchesSelecting a selected branches) := by
+          (parallelTypeBranchesFiring a selected branches) := by
       intro act hAct hIn
       exact (hAvoid act hAct).2 (by
-        cases branches with
-        | nil => cases hMemSelected
-        | cons head tail =>
-            rw [parallelTypeBranchesSelecting,
-              parallelTypeBranchesSelectingWithin_parallelInterfaces] at hIn
-            exact hIn)
+        simpa only [parallelTypeBranchesFiring,
+          parallelTypeBranchesFiringFrom_parallelInterfaces] using hIn)
     obtain ⟨theta, hMem, hEq⟩ := hProduct selected hMemSelected bound
       (hWFB selected hMemSelected) target hTargetWF hAvoidProduct rho q' hChild
     refine ⟨theta, ?_, hEq⟩
-    have hGet' : (PactType.reannotateOfferBranches target ∅ branches)[i]? =
-        some (selected.1, selected.2.reannotate target) := by
-      rw [reannotateOfferBranches_eq_map', List.getElem?_map, hGet]
-      rfl
+    have hGet' :
+        (conjunctiveSelections
+          (PactType.reannotateOfferBranches target ∅ branches).length).toList[i]? =
+        some selected := by
+      simpa only [reannotateOfferBranches_eq_map', List.length_map] using hGet
     have hProductEq :
-        parallelTypeBranchesSelecting target
-            (selected.1, selected.2.reannotate target)
+        parallelTypeBranchesFiring target selected
             (PactType.reannotateOfferBranches target ∅ branches) =
-          (parallelTypeBranchesSelecting a selected branches).reannotate
-            target := by
+          (parallelTypeBranchesFiring a selected branches).reannotate target := by
       rw [reannotateOfferBranches_eq_map']
-      cases branches with
-      | nil => cases hMemSelected
-      | cons head tail =>
-          rw [reannotate_parallelTypeBranchesSelecting a target selected head
-            tail hBodyWF hBodyWF']
-          simp only [parallelTypeBranchesSelecting, List.map_cons]
-          exact parallelTypeBranchesSelectingWithin_map_reannotate target target
-            selected (head :: tail) hBodyWF hBodyWFTarget hPairHeads
-            hMemSelected
+      simp only [parallelTypeBranchesFiring]
+      rw [reannotate_parallelTypeBranchesFiringFrom a target selected branches hBodyWF hBodyWF']
+      exact parallelTypeBranchesFiringFrom_map_reannotate target target selected branches
+        hBodyWF hBodyWFTarget 0
     rw [← hProductEq] at hMem
     simpa only [PactType.reannotate] using
       relationMembership_offer_selected target (elseType.reannotate target)
@@ -1409,24 +1461,21 @@ theorem relationMembership_interfaceScoped :
             exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
               residual q hScoped.1 hTailRec.1 hElseRelated
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
             have hSelectedFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-              simp only [typeCompilationFuel]
-              omega
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
             exact ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
+                (parallelTypeBranchesFiring alphabet selected branches))
               hSelectedFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) rfl
+              (parallelTypeBranchesFiring alphabet selected branches) rfl
               residual q
-              (parallelTypeBranchesSelecting_interfaceScoped alphabet selected
+              (parallelTypeBranchesFiring_interfaceScoped alphabet selected
                 branches hScoped.2)
-              (parallelTypeBranchesSelecting_tailRecursive alphabet selected
+              (parallelTypeBranchesFiring_tailRecursive alphabet selected
                 branches
                 (fun branch hBranch =>
-                  tailRecursive_of_mem_branches hTailRec.2 hBranch)
-                (tailRecursive_of_mem_branches hTailRec.2 hMember))
+                  tailRecursive_of_mem_branches hTailRec.2 hBranch))
               hSelectedRelated
 
 /-- The residual facts used by recursion survivor transport, assembled from
@@ -1781,15 +1830,9 @@ theorem relationMembership_alphabet_eq_of_wellFormed :
             exact (ih (typeCompilationFuel elseType) hElseFuel elseType rfl
               residual q hWF.2.2.1 hElseRelated).trans hWF.2.1
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
-            cases branches with
-            | nil => cases hMember
-            | cons branch rest =>
-                exact (reannotate_relation_alphabet
-                    (typeCompilationFuel
-                      (parallelTypeBranchesSelecting alphabet selected
-                        (branch :: rest)))).2
-                  alphabet selected branch rest residual q hSelectedRelated
+            exact (reannotate_relation_alphabet
+                (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))).2
+              alphabet selected branches residual q hSelectedRelated
 
 
 /-- Lift a pair of child relation states into the product clause. -/
@@ -2045,9 +2088,7 @@ theorem survivorTransport_exact_all
           refine survivorTransport_offer alphabet elseType branches
             (ih _ ?_ elseType rfl) (fun selected hSelected => ih _ ?_ _ rfl)
           · simp only [typeCompilationFuel]; omega
-          · rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-            simp only [typeCompilationFuel]
-            omega
+          · exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
 
 
 /-- The paper's live-equivalent survivor witness follows from exact transport

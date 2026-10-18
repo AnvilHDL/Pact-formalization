@@ -423,11 +423,11 @@ theorem TypeOffers.offers_subset_alphabet
       exact (Finset.inter_subset_left).trans (future_image_subset hPrem.1)
   | offer_some env alphabet elseType branches enabled hPrem =>
       intro hRegular
-      refine ⟨Finset.empty_subset _, ?_⟩
-      rw [typeFutureOffers_parallelTypeBranchesSelecting alphabet enabled branches
-        (fun b hb => (hRegular.offer_branch hb).2)
-        (fun b hb => (hRegular.offer_branch hb).1.alphabetWellFormed)]
-      exact Finset.inter_subset_right
+      refine ⟨Finset.inter_subset_right, Finset.sdiff_subset.trans ?_⟩
+      have hFuture := typeFutureOffers_subset_alphabet _
+        (firingOffer_alphabetWellFormed alphabet elseType branches enabled
+          hRegular.alphabetWellFormed)
+      simpa only [parallelTypeBranchesFiring_alphabet] using hFuture
   | offer_else env alphabet elseType branches hPrem =>
       intro hRegular
       have hA := hRegular.alphabetWellFormed
@@ -723,15 +723,11 @@ theorem TypeOffers.preserves_scoping
   | offer_some env alphabet elseType branches enabled hPrem =>
       intro hScoped _
       simp only [PactType.InterfaceScoped] at hScoped
-      refine ⟨parallelTypeBranchesSelecting_interfaceScoped alphabet enabled
+      refine ⟨parallelTypeBranchesFiring_interfaceScoped alphabet enabled
         branches hScoped.2, ?_⟩
-      cases branches with
-      | nil => cases hPrem.2.1
-      | cons head tail =>
-          rw [parallelTypeBranchesSelecting,
-            parallelTypeBranchesSelectingWithin_parallelInterfaces,
-            PactType.ParallelInterfaces]
-          exact Finset.subset_union_right
+      rw [parallelTypeBranchesFiring, parallelTypeBranchesFiringFrom_parallelInterfaces,
+        PactType.ParallelInterfaces]
+      exact Finset.subset_union_right
   | par outer leftEnv rightEnv interface alphabet left left' right right'
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftNotSkip hRightNotSkip hLeft hRight hNotBothSkip hLocalLeft hLocalRight
@@ -965,6 +961,43 @@ lemma typeBranchNeeds_map (restrict : PactTypeAlphabet)
         (branches.map fun branch => (branch.1, branch.2.reannotate restrict)) =
       typeBranchNeeds branches := by
   simp [typeBranchNeeds, List.map_map, Function.comp_def]
+
+/-- Re-signing changes neither the enabled indices nor their communication label. -/
+lemma typeEnabledBranches_map (env : TypeEnvironment) (restrict : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType)) :
+    typeEnabledBranches env
+        (branches.map fun b => (b.1, b.2.reannotate restrict)) =
+      typeEnabledBranches env branches := by
+  simp only [typeEnabledBranches, branchIndices_map, TypeBranchEnabled]
+  rfl
+
+lemma typeBranchBatchLabel_map (restrict : PactTypeAlphabet)
+    (branches : List (BareMessage × PactType)) (selected : Finset Nat) :
+    typeBranchBatchLabel (branches.map fun b => (b.1, b.2.reannotate restrict)) selected =
+      typeBranchBatchLabel branches selected := by
+  simp [typeBranchBatchLabel, List.zipIdx_map, List.filter_map, List.map_map, Function.comp_def]
+
+/-- Restricting an offer commutes with constructing its atomic residual. -/
+lemma firing_reannotate {alphabet : PactTypeAlphabet} {elseType : PactType}
+    {branches : List (BareMessage × PactType)}
+    (hRegular : ResignRegular (.offer alphabet elseType branches))
+    (restrict : PactTypeAlphabet) (hSub : restrict.actions ⊆ alphabet.actions)
+    (selected : Finset Nat) :
+    (parallelTypeBranchesFiring alphabet selected branches).reannotate restrict =
+      parallelTypeBranchesFiring restrict selected
+        (branches.map fun b => (b.1, b.2.reannotate restrict)) := by
+  have hWF : ∀ b ∈ branches, b.2.AlphabetWellFormed :=
+    fun b hb => (hRegular.offer_branch hb).1.alphabetWellFormed
+  have hWFAlpha : ∀ b ∈ branches, (b.2.reannotate alphabet).AlphabetWellFormed :=
+    fun b hb => ((hRegular.offer_branch hb).1.reannotate
+      (by rw [(hRegular.offer_branch hb).2])).alphabetWellFormed
+  have hWFRestrict : ∀ b ∈ branches, (b.2.reannotate restrict).AlphabetWellFormed :=
+    fun b hb => ((hRegular.offer_branch hb).1.reannotate
+      (by rw [(hRegular.offer_branch hb).2]; exact hSub)).alphabetWellFormed
+  simp only [parallelTypeBranchesFiring]
+  rw [reannotate_parallelTypeBranchesFiringFrom alphabet restrict selected branches hWF hWFAlpha]
+  exact (parallelTypeBranchesFiringFrom_map_reannotate restrict restrict selected branches
+    hWF hWFRestrict 0).symm
 
 /-- Intersection distributes over the offer menu fold. -/
 lemma foldl_menu_restrict (restrict : PactTypeAlphabet) :
@@ -1304,65 +1337,20 @@ theorem typeOffers_reannotate_forward
   | offer_some env alphabet elseType branches enabled hPrem =>
       intro restrict hRegular hSub hEnv
       have hSubA : restrict.actions ⊆ alphabet.actions := hSub
-      have hAlphaEq : ∀ b ∈ branches, b.2.alphabet = alphabet :=
-        fun b hb => (hRegular.offer_branch hb).2
-      have hWF : ∀ b ∈ branches, b.2.AlphabetWellFormed :=
-        fun b hb => (hRegular.offer_branch hb).1.alphabetWellFormed
-      have hSubBranch : ∀ b ∈ branches, restrict.actions ⊆ b.2.alphabet.actions :=
-        fun b hb => by rw [hAlphaEq b hb]; exact hSubA
-      have hWFRestrict : ∀ b ∈ branches, (b.2.reannotate restrict).AlphabetWellFormed :=
-        fun b hb => ((hRegular.offer_branch hb).1.reannotate
-          (hSubBranch b hb)).alphabetWellFormed
-      have hWFAlpha : ∀ b ∈ branches, (b.2.reannotate alphabet).AlphabetWellFormed :=
-        fun b hb => ((hRegular.offer_branch hb).1.reannotate
-          (by rw [hAlphaEq b hb])).alphabetWellFormed
-      have hMenu : ∀ b ∈ branches,
-          typeFutureOffers (b.2.reannotate restrict) =
-            typeFutureOffers b.2 ∩ restrict.actions :=
-        fun b hb => typeFutureOffers_reannotate b.2 restrict (hWF b hb)
-          (hSubBranch b hb)
-      cases branches with
-      | nil => cases hPrem.2.1
-      | cons head tail =>
-          have hMapped : ∀ b ∈ ((head :: tail).map fun branch =>
-              (branch.1, branch.2.reannotate restrict)), b.2.alphabet = restrict := by
-            intro b hb
-            obtain ⟨source, -, rfl⟩ := List.mem_map.mp hb
-            exact PactType.reannotate_alphabet restrict source.2
-          have hMappedWF : ∀ b ∈ ((head :: tail).map fun branch =>
-              (branch.1, branch.2.reannotate restrict)), b.2.AlphabetWellFormed := by
-            intro b hb
-            obtain ⟨source, hSource, rfl⟩ := List.mem_map.mp hb
-            exact hWFRestrict source hSource
-          have hTargetEq :
-              (parallelTypeBranchesSelecting alphabet enabled
-                  (head :: tail)).reannotate restrict =
-                parallelTypeBranchesSelecting restrict
-                  (enabled.1, enabled.2.reannotate restrict)
-                  ((head :: tail).map fun branch =>
-                    (branch.1, branch.2.reannotate restrict)) := by
-            rw [reannotate_parallelTypeBranchesSelecting alphabet restrict enabled
-              head tail hWF hWFAlpha]
-            have hMapEq := parallelTypeBranchesSelectingWithin_map_reannotate
-              restrict restrict enabled (head :: tail) hWF hWFRestrict
-              hRegular.offer_heads_pairwise hPrem.2.1
-            simp only [List.map_cons] at hMapEq
-            simp only [List.map_cons, parallelTypeBranchesSelecting]
-            exact hMapEq.symm
-          have hRule := TypeOffers.offer_some env restrict
-            (elseType.reannotate restrict)
-            ((head :: tail).map fun branch => (branch.1, branch.2.reannotate restrict))
-            (enabled.1, enabled.2.reannotate restrict)
-            ⟨hEnv, List.mem_map_of_mem hPrem.2.1, hPrem.2.2⟩
-          rw [typeFutureOffers_parallelTypeBranchesSelecting restrict _ _ hMapped
-            hMappedWF] at hRule
-          rw [Finset.empty_inter, hTargetEq,
-            typeFutureOffers_parallelTypeBranchesSelecting alphabet enabled
-              (head :: tail) hAlphaEq hWF,
-            inter_inter_of_subset hSubA,
-            ← foldl_menu_restrict restrict (head :: tail) ∅ ∅ hMenu rfl,
-            PactType.reannotate, PactType.reannotateOfferBranches_map]
-          exact hRule
+      have hTargetEq := firing_reannotate hRegular restrict hSubA enabled
+      have hResidualWF := firingOffer_alphabetWellFormed alphabet elseType branches enabled
+        hRegular.alphabetWellFormed
+      have hResidualSub : restrict.actions ⊆
+          (parallelTypeBranchesFiring alphabet enabled branches).alphabet.actions := by
+        simpa only [parallelTypeBranchesFiring_alphabet] using hSubA
+      have hRule := TypeOffers.offer_some env restrict (elseType.reannotate restrict)
+        (branches.map fun branch => (branch.1, branch.2.reannotate restrict)) enabled
+        ⟨hEnv, hPrem.2.1, by rw [typeEnabledBranches_map]; exact hPrem.2.2⟩
+      rw [typeBranchBatchLabel_map, typeBranchActions_map] at hRule
+      rw [inter_inter_of_subset hSubA, sdiff_inter_of_subset hSubA,
+        futureOffers_restrict hResidualWF hResidualSub, hTargetEq,
+        PactType.reannotate, PactType.reannotateOfferBranches_map]
+      exact hRule
   | par outer leftEnv rightEnv interface alphabet left left' right right'
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftNotSkip hRightNotSkip hLeft hRight hNotBothSkip hLocalLeft hLocalRight
@@ -2027,73 +2015,24 @@ theorem typeOffers_reannotate_backward :
           rw [PactType.reannotate, PactType.reannotateOfferBranches_map] at hOffers
           cases hOffers with
           | offer_some _ _ _ _ enabled hPrem =>
-              obtain ⟨branch, hMem, hEq⟩ := List.mem_map.mp hPrem.2.1
-              have hNonempty : branches ≠ [] := by
-                intro h; rw [h] at hMem; cases hMem
-              obtain ⟨head, tail, rfl⟩ := List.exists_cons_of_ne_nil hNonempty
-              have hAlphaEq : ∀ b ∈ head :: tail, b.2.alphabet = alphabet :=
-                fun b hb => (hRegular.offer_branch hb).2
-              have hWF : ∀ b ∈ head :: tail, b.2.AlphabetWellFormed :=
-                fun b hb => (hRegular.offer_branch hb).1.alphabetWellFormed
-              have hSubBranch : ∀ b ∈ head :: tail,
-                  restrict.actions ⊆ b.2.alphabet.actions :=
-                fun b hb => by rw [hAlphaEq b hb]; exact hSubA
-              have hWFRestrict : ∀ b ∈ head :: tail,
-                  (b.2.reannotate restrict).AlphabetWellFormed :=
-                fun b hb => ((hRegular.offer_branch hb).1.reannotate
-                  (hSubBranch b hb)).alphabetWellFormed
-              have hWFAlpha : ∀ b ∈ head :: tail,
-                  (b.2.reannotate alphabet).AlphabetWellFormed :=
-                fun b hb => ((hRegular.offer_branch hb).1.reannotate
-                  (by rw [hAlphaEq b hb])).alphabetWellFormed
-              have hMenu : ∀ b ∈ head :: tail,
-                  typeFutureOffers (b.2.reannotate restrict) =
-                    typeFutureOffers b.2 ∩ restrict.actions :=
-                fun b hb => typeFutureOffers_reannotate b.2 restrict (hWF b hb)
-                  (hSubBranch b hb)
-              have hMapped : ∀ b ∈ ((head :: tail).map fun branch =>
-                  (branch.1, branch.2.reannotate restrict)),
-                  b.2.alphabet = restrict := by
-                intro b hb
-                obtain ⟨source, -, rfl⟩ := List.mem_map.mp hb
-                exact PactType.reannotate_alphabet restrict source.2
-              have hMappedWF : ∀ b ∈ ((head :: tail).map fun branch =>
-                  (branch.1, branch.2.reannotate restrict)),
-                  b.2.AlphabetWellFormed := by
-                intro b hb
-                obtain ⟨source, hSource, rfl⟩ := List.mem_map.mp hb
-                exact hWFRestrict source hSource
-              have hTargetEq :
-                  (parallelTypeBranchesSelecting alphabet branch
-                      (head :: tail)).reannotate restrict =
-                    parallelTypeBranchesSelecting restrict
-                      (branch.1, branch.2.reannotate restrict)
-                      ((head :: tail).map fun b =>
-                        (b.1, b.2.reannotate restrict)) := by
-                rw [reannotate_parallelTypeBranchesSelecting alphabet restrict branch
-                  head tail hWF hWFAlpha]
-                have hMapEq := parallelTypeBranchesSelectingWithin_map_reannotate
-                  restrict restrict branch (head :: tail) hWF hWFRestrict
-                  hRegular.offer_heads_pairwise hMem
-                simp only [List.map_cons] at hMapEq
-                simp only [List.map_cons, parallelTypeBranchesSelecting]
-                exact hMapEq.symm
-              refine ⟨parallelTypeBranchesSelecting alphabet branch (head :: tail), ∅,
-                typeFutureOffers (parallelTypeBranchesSelecting alphabet branch
-                  (head :: tail)),
-                TypeOffers.offer_some env alphabet elseType (head :: tail) branch
-                  ⟨hEnvA, hMem, by
-                      show typeNeed branch.1 ∈ env.immediate
-                      rw [congrArg Prod.fst hEq]; exact hPrem.2.2⟩, ?_, ?_, ?_⟩
-              · rw [hTargetEq, ← hEq]
-              · rw [Finset.empty_inter]
-              · rw [hEq] at hTargetEq
-                rw [typeFutureOffers_parallelTypeBranchesSelecting restrict _ _
-                    hMapped hMappedWF,
-                  typeFutureOffers_parallelTypeBranchesSelecting alphabet branch
-                    (head :: tail) hAlphaEq hWF,
-                  inter_inter_of_subset hSubA,
-                  ← foldl_menu_restrict restrict (head :: tail) ∅ ∅ hMenu rfl]
+              have hEnabled : typeEnabledBranches env branches = enabled := by
+                simpa only [typeEnabledBranches_map] using hPrem.2.2
+              have hTargetEq := firing_reannotate hRegular restrict hSubA enabled
+              have hResidualWF := firingOffer_alphabetWellFormed alphabet elseType branches enabled
+                hRegular.alphabetWellFormed
+              have hResidualSub : restrict.actions ⊆
+                  (parallelTypeBranchesFiring alphabet enabled branches).alphabet.actions := by
+                simpa only [parallelTypeBranchesFiring_alphabet] using hSubA
+              refine ⟨parallelTypeBranchesFiring alphabet enabled branches,
+                typeBranchActions branches ∩ alphabet.actions,
+                typeFutureOffers (parallelTypeBranchesFiring alphabet enabled branches) \
+                  (typeBranchActions branches ∩ alphabet.actions), ?_, hTargetEq.symm, ?_, ?_⟩
+              · rw [typeBranchBatchLabel_map]
+                exact TypeOffers.offer_some env alphabet elseType branches enabled
+                  ⟨hEnvA, hPrem.2.1, hEnabled⟩
+              · rw [typeBranchActions_map, inter_inter_of_subset hSubA]
+              · rw [typeBranchActions_map, sdiff_inter_of_subset hSubA,
+                  futureOffers_restrict hResidualWF hResidualSub, hTargetEq]
           | offer_else _ _ _ _ hPrem =>
               refine ⟨elseType, typeBranchActions branches ∩ alphabet.actions,
                 typeFutureOffers elseType \
@@ -2887,15 +2826,13 @@ theorem TypeOffers.preserves_regularity
           (Finset.mem_union_right _ hIn)
       have hBranchTR : ∀ branch ∈ branches, branch.2.TailRecursive :=
         fun branch hb => tailRecursive_of_mem_branches hT.2 hb
-      exact ⟨committedOffer_alphabetWellFormed alphabet elseType branches enabled
-          hRegular.alphabetWellFormed hRegular.interfaceScoped
-          hRegular.interfaceAlphabetScoped hPrem.2.1,
-        parallelTypeBranchesSelecting_interfaceAlphabetScoped alphabet enabled
+      exact ⟨firingOffer_alphabetWellFormed alphabet elseType branches enabled
+          hRegular.alphabetWellFormed,
+        parallelTypeBranchesFiring_interfaceAlphabetScoped alphabet enabled
           branches hAS.2.2 hAvoid,
-        parallelTypeBranchesSelecting_tailRecursive alphabet enabled branches
-          hBranchTR (hBranchTR enabled hPrem.2.1),
-        parallelTypeBranchesSelecting_conjunctiveMessageOwnership alphabet enabled
-          branches hC.2⟩
+        parallelTypeBranchesFiring_tailRecursive alphabet enabled branches hBranchTR,
+        parallelTypeBranchesFiringFrom_conjunctiveMessageOwnership alphabet enabled
+          branches hC.2 0⟩
   | par outer leftEnv rightEnv interface alphabet left left' right right'
       leftLabel rightLabel leftCurrent leftFuture rightCurrent rightFuture
       hLeftNotSkip hRightNotSkip hLeft hRight hNotBothSkip hLocalLeft hLocalRight

@@ -1,3 +1,4 @@
+import Anvilpp.PactTypes.Proofs.Automata.AtomicConjunctiveOffer
 import Anvilpp.PactTypes.Proofs.Automata.MenuDependenciesLemmas
 import Anvilpp.PactTypes.Proofs.Automata.BuildParallelAutomatonLemmas
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.MenuMetadata
@@ -21,7 +22,7 @@ private theorem childPendingEdges_edgeTargetsInStates
     hTargets childEdge hChildEdge]
 
 private theorem indexedFragment_edgeTargetsInStates
-    (automata : List (BareMessage × AutomatonFragment))
+    {Key : Type} (automata : List (Key × AutomatonFragment))
     (hTargets : ∀ entry ∈ automata, entry.2.EdgeTargetsInStates) :
     ∀ edge ∈ indexedFragmentEdges automata,
       edge.target ∈ indexedFragmentStates automata := by
@@ -273,30 +274,30 @@ private theorem buildExclusiveOfferAutomaton_edgeTargetsInStates
     simp [buildExclusiveOfferAutomaton, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
-private theorem buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
+private theorem buildAtomicConjunctiveOfferAutomaton_edgeTargetsInStates
      (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment))
     (hElseTargets : elseAutomaton.EdgeTargetsInStates)
     (hConjunctionTargets : ∀ entry ∈ selectedConjunctions,
       entry.2.EdgeTargetsInStates)
     (hElseInitial : elseAutomaton.initial ∈ elseAutomaton.states)
     (hConjunctionInitial : ∀ entry ∈ selectedConjunctions,
       entry.2.initial ∈ entry.2.states) :
-    (buildSelectedConjunctiveOfferAutomaton alphabet branches
+    (buildAtomicConjunctiveOfferAutomaton alphabet branches
       elseAutomaton selectedConjunctions).EdgeTargetsInStates := by
   intro edge hEdge
-  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+  simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
     Finset.mem_union] at hEdge
   rcases hEdge with ((((hElse | hConjunction) | hEnabled) | hWait) | hResolved)
   · have hTarget := childPendingEdges_edgeTargetsInStates 0 elseAutomaton
       hElseTargets edge hElse
-    simp [buildSelectedConjunctiveOfferAutomaton,
+    simp [buildAtomicConjunctiveOfferAutomaton,
       finishAutomatonFragment, hTarget]
   · have hTarget := indexedFragment_edgeTargetsInStates
       selectedConjunctions hConjunctionTargets edge hConjunction
-    simp [buildSelectedConjunctiveOfferAutomaton,
+    simp [buildAtomicConjunctiveOfferAutomaton,
       finishAutomatonFragment, hTarget]
   · rw [mem_foldl_union_iff] at hEnabled
     rcases hEnabled with hEmpty | ⟨indexed, hIndexed, hNewEdge⟩
@@ -314,14 +315,14 @@ private theorem buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
         exact Or.inr ⟨indexed, hIndexed, by
           simp [childStates, childState,
             hConjunctionInitial indexed.1 hEntry]⟩
-      simp [buildSelectedConjunctiveOfferAutomaton,
+      simp [buildAtomicConjunctiveOfferAutomaton,
         finishAutomatonFragment, hIndexedState]
   · simp only [Finset.mem_image, Finset.mem_filter] at hWait
     obtain ⟨environment, _, rfl⟩ := hWait
-    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment]
+    simp [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment]
   · simp only [Finset.mem_image, Finset.mem_filter] at hResolved
     obtain ⟨environment, _, rfl⟩ := hResolved
-    simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    simp [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
       childStates, childState, hElseInitial]
 
 /-- Every edge emitted by a sufficiently fuelled compilation targets a state
@@ -503,24 +504,24 @@ theorem compileTypeFuel_edgeTargetsInStates  :
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hSelected : ∀ selected ∈ branches,
+          have hSelected : ∀ selected ∈ (conjunctiveSelections branches.length).toList,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
+                (parallelTypeBranchesFiring alphabet selected branches) fuel := by
             intro selected hSelected
-            simp only [TypeCompilationFuelSufficient,
-              typeCompilationFuel_parallelTypeBranchesSelecting]
+            unfold TypeCompilationFuelSufficient
+            have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
-          apply buildSelectedConjunctiveOfferAutomaton_edgeTargetsInStates
+          apply buildAtomicConjunctiveOfferAutomaton_edgeTargetsInStates
           · exact ih elseType hElse hDisjoint.1
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
-            exact ih (parallelTypeBranchesSelecting alphabet original branches)
+            exact ih (parallelTypeBranchesFiring alphabet original branches)
               (hSelected original hOriginal)
-              (parallelTypeBranchesSelecting_offerBranchesDisjoint original
+              (parallelTypeBranchesFiring_offerBranchesDisjoint original
                 branches fun item hItem =>
                   offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hItem)
           · exact compileTypeFuel_initial_mem fuel elseType hElse
@@ -528,7 +529,7 @@ theorem compileTypeFuel_edgeTargetsInStates  :
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
             exact compileTypeFuel_initial_mem fuel
-              (parallelTypeBranchesSelecting alphabet original branches)
+              (parallelTypeBranchesFiring alphabet original branches)
               (hSelected original hOriginal)
 
 /-- In a clock environment only the clock itself can fire, with no offers.
@@ -722,21 +723,21 @@ theorem compileTypeFuel_clockEdgesAreTock  :
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hSelected : ∀ selected ∈ branches,
+          have hSelected : ∀ selected ∈ (conjunctiveSelections branches.length).toList,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
+                (parallelTypeBranchesFiring alphabet selected branches) fuel := by
             intro selected hSelected
-            simp only [TypeCompilationFuelSufficient,
-              typeCompilationFuel_parallelTypeBranchesSelecting]
+            unfold TypeCompilationFuelSufficient
+            have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
           rw [compileTypeFuel.eq_def]
-          apply buildSelectedConjunctiveOfferAutomaton_clockEdgesAreTock
+          apply buildAtomicConjunctiveOfferAutomaton_clockEdgesAreTock
           · exact ih elseType hElse
           · intro entry hEntry
             simp only [List.mem_map] at hEntry
             obtain ⟨original, hOriginal, rfl⟩ := hEntry
-            exact ih (parallelTypeBranchesSelecting alphabet original branches)
+            exact ih (parallelTypeBranchesFiring alphabet original branches)
               (hSelected original hOriginal)
 
 theorem compileTypeFuel_futureTargetsInStates  :
@@ -937,31 +938,31 @@ theorem compileTypeFuel_futureTargetsInStates  :
           have hElse : TypeCompilationFuelSufficient elseType fuel := by
             simp [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel ⊢
             omega
-          have hSelected : ∀ selected ∈ branches,
+          have hSelected : ∀ selected ∈ (conjunctiveSelections branches.length).toList,
               TypeCompilationFuelSufficient
-                (parallelTypeBranchesSelecting alphabet selected branches) fuel := by
+                (parallelTypeBranchesFiring alphabet selected branches) fuel := by
             intro selected hSelected
-            simp only [TypeCompilationFuelSufficient,
-              typeCompilationFuel_parallelTypeBranchesSelecting]
+            unfold TypeCompilationFuelSufficient
+            have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
             simp only [TypeCompilationFuelSufficient, typeCompilationFuel] at hFuel
             omega
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           rw [compileTypeFuel.eq_def]
           have hResult :=
-            buildSelectedConjunctiveOfferAutomaton_futureTargetsInStates
+            buildAtomicConjunctiveOfferAutomaton_futureTargetsInStates
               alphabet branches
               (compileTypeFuel fuel elseType)
-              (branches.map fun selected =>
-                (selected.1, compileTypeFuel fuel
-                  (parallelTypeBranchesSelecting alphabet selected branches)))
+              ((conjunctiveSelections branches.length).toList.map fun selected =>
+                (selected, compileTypeFuel fuel
+                  (parallelTypeBranchesFiring alphabet selected branches)))
               (ih elseType hElse hDisjoint.1)
               (by
                 intro entry hEntry
                 simp only [List.mem_map] at hEntry
                 obtain ⟨original, hOriginal, rfl⟩ := hEntry
-                exact ih (parallelTypeBranchesSelecting alphabet original branches)
+                exact ih (parallelTypeBranchesFiring alphabet original branches)
                   (hSelected original hOriginal)
-                  (parallelTypeBranchesSelecting_offerBranchesDisjoint original
+                  (parallelTypeBranchesFiring_offerBranchesDisjoint original
                     branches fun item hItem =>
                       offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hItem))
               (compileTypeFuel_initial_mem fuel elseType hElse)
@@ -970,7 +971,7 @@ theorem compileTypeFuel_futureTargetsInStates  :
                 simp only [List.mem_map] at hEntry
                 obtain ⟨original, hOriginal, rfl⟩ := hEntry
                 exact compileTypeFuel_initial_mem fuel
-                  (parallelTypeBranchesSelecting alphabet original branches)
+                  (parallelTypeBranchesFiring alphabet original branches)
                   (hSelected original hOriginal))
           simpa [compileTypeFuel] using hResult
 
@@ -1147,7 +1148,7 @@ private theorem stateProductInfoFuel_succ_stable :
                       simp [typeCompilationFuel] at hFuel ⊢
                       omega
           | _ => rfl
-      | offer _ elseType branches =>
+      | offer alphabet elseType branches =>
           cases state with
           | child index q =>
               cases index with
@@ -1158,11 +1159,11 @@ private theorem stateProductInfoFuel_succ_stable :
                   omega
               | succ i =>
                   simp only [stateProductInfoFuel]
-                  cases hSelected : branches[i]? with
+                  cases hSelected : (conjunctiveSelections branches.length).toList[i]? with
                   | none => rfl
                   | some selected =>
                       apply ih
-                      rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+                      have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
                       simp [typeCompilationFuel] at hFuel ⊢
                       omega
           | _ => rfl
@@ -1406,15 +1407,15 @@ theorem stateProductInfoFuel_component_fuel_lt :
                   constructor <;> omega
               | succ i =>
                   simp only [stateProductInfoFuel] at hInfo
-                  cases hSelected : branches[i]? with
+                  cases hSelected : (conjunctiveSelections branches.length).toList[i]? with
                   | none => simp [hSelected] at hInfo
                   | some selected =>
                       obtain ⟨hLeft, hRight⟩ :=
-                        ih (parallelTypeBranchesSelecting alphabet selected branches) state
+                        ih (parallelTypeBranchesFiring alphabet selected branches) state
                           interface componentLeft componentRight q1 q2
                           (by
                             unfold TypeCompilationFuelSufficient
-                            rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+                            have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
                             simp [TypeCompilationFuelSufficient, typeCompilationFuel]
                               at hFuel ⊢
                             omega)

@@ -213,6 +213,36 @@ def NoImmediateBranch (env : Environment) (branches : List ChoiceBranch) : Prop 
 def BranchEnabled (env : Environment) (branch : ChoiceBranch) : Prop :=
   ChoiceBranch.need branch ∈ env.bareImmediate
 
+/-- Indices of branches satisfying a predicate. -/
+def branchIndices {α : Type} (predicate : α → Prop) (branches : List α) :
+    Finset Nat := by
+  classical
+  exact ((branches.zipIdx.filter fun entry => predicate entry.1).map Prod.snd).toFinset
+
+/-- All nonempty subsets of the branch indices, independently of their alphabets. -/
+def conjunctiveSelections (branchCount : Nat) : Finset (Finset Nat) :=
+  (Finset.range branchCount).powerset.erase ∅
+
+/-- Every head enabled by the immediate environment is consumed together. -/
+def processEnabledBranches (env : Environment) (branches : List ChoiceBranch) :
+    Finset Nat :=
+  branchIndices (BranchEnabled env) branches
+
+/-- The payload and complementary offer needed to consume a branch head. -/
+def BranchCommunication (env : Environment) (branch : ChoiceBranch) (value : Bool) :
+    Prop :=
+  match branch with
+  | .send msg expr _ => env.hasRecv msg ∧ Semantics.ExprEval expr value
+  | .recv msg _ _ => env.hasSend msg value
+
+/-- The joint label of the consumed branch heads. -/
+def processBranchBatchLabel (branches : List ChoiceBranch) (selected : Finset Nat)
+    (values : Nat → Bool) : Label := by
+  classical
+  exact .actions ((branches.zipIdx.filter fun entry => entry.2 ∈ selected).map
+    fun entry => Observation.message entry.1.getMessageId entry.1.getDir
+      (values entry.2)).toFinset
+
 /-- Every branch head is declared by the written alphabet. -/
 def BranchesDeclared (alphabet : PactTypeAlphabet)
     (branches : List ChoiceBranch) : Prop :=
@@ -293,6 +323,35 @@ def parallelProcessBranchesSelecting (alphabet : PactTypeAlphabet)
   | [] => Proc.skip PactTypeAlphabet.empty
   | branch :: rest =>
       parallelProcessBranchesSelectingWithin alphabet selected (branch :: rest)
+
+/-- A consumed head leaves its continuation, with the received value substituted. -/
+def consumedProcessBranchAt (alphabet : PactTypeAlphabet) (branch : ChoiceBranch)
+    (value : Bool) : Proc :=
+  (match branch with
+   | .send _ _ process => process
+   | .recv _ name process => Semantics.procExprReplace process name value).reannotate alphabet
+
+/-- An unconsumed head remains optional under the enclosing alphabet. -/
+def optionalProcessBranchAt (alphabet : PactTypeAlphabet) (branch : ChoiceBranch) : Proc :=
+  .xoffer alphabet (.skip alphabet) (Proc.reannotateBranches alphabet [branch])
+
+/-- Build the right-associated residual without a trailing `skip`. -/
+def parallelProcessBranchesFiringFrom (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (values : Nat → Bool) : Nat → List ChoiceBranch → Proc
+  | _, [] => .skip alphabet
+  | index, [branch] =>
+      if index ∈ selected then consumedProcessBranchAt alphabet branch (values index)
+      else optionalProcessBranchAt alphabet branch
+  | index, branch :: next :: rest =>
+      .par alphabet
+        (if index ∈ selected then consumedProcessBranchAt alphabet branch (values index)
+         else optionalProcessBranchAt alphabet branch)
+        (parallelProcessBranchesFiringFrom alphabet selected values (index + 1) (next :: rest)) ∅
+
+/-- The residual after consuming exactly the selected conjunctive heads. -/
+def parallelProcessBranchesFiring (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (values : Nat → Bool) (branches : List ChoiceBranch) : Proc :=
+  parallelProcessBranchesFiringFrom alphabet selected values 0 branches
 
 /-! ## Optimistic completion
 
@@ -571,12 +630,17 @@ inductive Offers :
           waitingOffers env branches)
   | offer_some (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch)
-      (enabled : ChoiceBranch) :
-      env.WellFormed alphabet ∧ enabled ∈ branches ∧ BranchEnabled env enabled →
-      Offers env (Proc.offer alphabet elseProcess branches) Label.silent
-        (parallelProcessBranchesSelecting alphabet enabled branches) ∅
-        (procFutureOffers
-          (parallelProcessBranchesSelecting alphabet enabled branches))
+      (enabled : Finset Nat) (values : Nat → Bool) :
+      env.WellFormed alphabet ∧ enabled.Nonempty ∧
+        processEnabledBranches env branches = enabled ∧
+        (∀ entry ∈ branches.zipIdx, entry.2 ∈ enabled →
+          BranchCommunication env entry.1 (values entry.2)) →
+      Offers env (Proc.offer alphabet elseProcess branches)
+        (processBranchBatchLabel branches enabled values)
+        (parallelProcessBranchesFiring alphabet enabled values branches)
+        (projectCurrent alphabet (branchOfferSet branches))
+        (procFutureOffers (parallelProcessBranchesFiring alphabet enabled values branches) \
+          (branchActions branches ∩ alphabet.actions))
   | offer_else (env : Environment) (alphabet : PactTypeAlphabet)
       (elseProcess : Proc) (branches : List ChoiceBranch) :
       env.WellFormed alphabet ∧ env.clock = false ∧

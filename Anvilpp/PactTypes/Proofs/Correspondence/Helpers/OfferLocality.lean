@@ -265,11 +265,11 @@ theorem relationMembership_parallelMessageOwnership :
       · cases hRoot; exact hOwn
       · exact ih _ hEF elseType rfl residual q hElseWF hElse
       · have hSF : typeCompilationFuel
-            (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-          simp only [typeCompilationFuel]; omega
-        exact ih _ hSF (parallelTypeBranchesSelecting alphabet selected branches) rfl
-          residual q (hSelectedWF _ (List.mem_of_getElem? hGet)) hSelected
+            (parallelTypeBranchesFiring alphabet selected branches) < n := by
+          rw [← hFuel]
+          exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
+        exact ih _ hSF (parallelTypeBranchesFiring alphabet selected branches) rfl
+          residual q (hSelectedWF _ (Finset.mem_toList.mp (List.mem_of_getElem? hGet))) hSelected
 
 /-- An optimistic menu mentions only names present in the source syntax. -/
 theorem typeFutureOffersFuel_messageIds (fuel : Nat) (rho : PactType) :
@@ -359,12 +359,15 @@ theorem TypeOffers.offers_messageIds {env : TypeEnvironment} {rho rho' : PactTyp
       (typeFutureOffers_messageIds _ a ha)
     simpa [PactType.MessageIds] using hm
   | offer_some env alphabet elseType branches enabled hEnv =>
-    refine ⟨by simp, ?_⟩
-    intro a ha
-    have hm := typeFutureOffers_messageIds _ a ha
-    rw [(parallelTypeBranchesSelecting_ownership alphabet enabled branches).1] at hm
-    simpa only [PactType.MessageIds] using
-      (Finset.mem_union_right elseType.MessageIds hm)
+    simp only [PactType.MessageIds]
+    constructor
+    · intro a ha
+      exact Finset.mem_union_right _
+        (branchHeads_messageIds branches a (Finset.mem_inter.mp ha).1)
+    · intro a ha
+      have hm := typeFutureOffers_messageIds _ a (Finset.mem_sdiff.mp ha).1
+      exact Finset.mem_union_right _
+        ((parallelTypeBranchesFiringFrom_ownership alphabet enabled branches 0).1 hm)
   | action => simp [PactType.MessageIds, typeFutureOffers, typeFutureOffersFuel]
   | action_wait =>
     constructor
@@ -485,10 +488,10 @@ theorem TypeOffers.offers_disjoint {env : TypeEnvironment} {rho rho' : PactType}
     rho.ParallelMessageOwnership → Disjoint current future := by
   induction h using TypeOffers.rec with
   | action => simp [typeFutureOffers, typeFutureOffersFuel]
-  | action_wait | seq | seq_fuse | xoffer_wait | offer_else | offer_wait =>
+  | action_wait | seq | seq_fuse | xoffer_wait | offer_else | offer_wait | offer_some =>
     intro _; exact Finset.sdiff_disjoint.symm
   | choice_left | choice_right | fair_left | fair_right | cycle | cycle_wait
-  | skip | progress | recur | seq_tock | seq_fuse_tock | offer_some
+  | skip | progress | recur | seq_tock | seq_fuse_tock
   | par_fuse_tock => simp
   | xoffer_else =>
     intro _

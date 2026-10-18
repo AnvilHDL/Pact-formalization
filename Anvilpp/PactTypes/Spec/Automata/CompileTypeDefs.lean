@@ -1,4 +1,5 @@
 import Anvilpp.PactTypes.Proofs.Automata.BuildOfferAutomataLemmas
+import Anvilpp.PactTypes.Spec.Automata.BuildAtomicConjunctiveOffer
 import Anvilpp.PactTypes.Spec.Automata.MenuDependencies
 import Mathlib.Data.Finset.Prod
 
@@ -105,10 +106,10 @@ def stateProductInfoFuel : Nat → PactType → TypeAutomatonState →
       | .offer _ elseType _, .child 0 q =>
           stateProductInfoFuel fuel elseType q
       | .offer alphabet _ branches, .child (i + 1) q =>
-          match branches[i]? with
+          match (conjunctiveSelections branches.length).toList[i]? with
           | some selected =>
               stateProductInfoFuel fuel
-                (parallelTypeBranchesSelecting alphabet selected branches) q
+                (parallelTypeBranchesFiring alphabet selected branches) q
           | none => none
       | _, _ => none
 
@@ -312,16 +313,13 @@ def compileTypeFuel :
           exact buildExclusiveOfferAutomaton
             alphabet branches elseAutomaton branchAutomata
 
-      -- conjunctive offer: compile its singleton-offer parallel product first.
+      -- Conjunctive offers consume exactly the enabled subset of heads.
       | .offer alphabet elseType branches =>
           let elseAutomaton :=
             compileTypeFuel fuel elseType
-          let selectedConjunctions := branches.map fun selected =>
-            (selected.1,
-              compileTypeFuel
-               
-                fuel (parallelTypeBranchesSelecting alphabet selected branches))
-          exact buildSelectedConjunctiveOfferAutomaton
+          let selectedConjunctions := (conjunctiveSelections branches.length).toList.map fun selected =>
+            (selected, compileTypeFuel fuel (parallelTypeBranchesFiring alphabet selected branches))
+          exact buildAtomicConjunctiveOfferAutomaton
             alphabet branches elseAutomaton selectedConjunctions
 
 termination_by fuel _processType => (fuel, 0)
@@ -412,10 +410,10 @@ def buildRelationSetCoreFuel :
             ((buildRelationSetCoreFuel fuel
                 elseType).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-              branches.zipIdx.foldl (fun acc indexed =>
+              (conjunctiveSelections branches.length).toList.zipIdx.foldl (fun acc indexed =>
                 acc ∪ (buildRelationSetCoreFuel
                     fuel
-                    (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
+                    (parallelTypeBranchesFiring alphabet indexed.1 branches)).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
 termination_by fuel _processType => (fuel, 0)
@@ -475,13 +473,13 @@ def compileTypeMenuLinksFuel :
             (copy 0 (compileTypeMenuLinksFuel fuel elseType) ∪
               {(TypeAutomatonState.root, childState 0 (compileTypeFuel fuel elseType).initial)})
       | .offer alphabet elseType branches =>
-          exact branches.zipIdx.foldl (fun links indexed =>
+          exact (conjunctiveSelections branches.length).toList.zipIdx.foldl (fun links indexed =>
             links ∪ copy (indexed.2 + 1)
               (compileTypeMenuLinksFuel fuel
-                (parallelTypeBranchesSelecting alphabet indexed.1 branches)) ∪
+                (parallelTypeBranchesFiring alphabet indexed.1 branches)) ∪
               {(TypeAutomatonState.root, childState (indexed.2 + 1)
                 (compileTypeFuel fuel
-                  (parallelTypeBranchesSelecting alphabet indexed.1 branches)).initial)})
+                  (parallelTypeBranchesFiring alphabet indexed.1 branches)).initial)})
             (copy 0 (compileTypeMenuLinksFuel fuel elseType) ∪
               {(TypeAutomatonState.root, childState 0 (compileTypeFuel fuel elseType).initial)})
       | _ => exact ∅
@@ -542,10 +540,9 @@ recover, purely from a state's shape and the originating `PactType`, which
 `q₁`/`q₂`'s own future menus natively.
 
 Fuel-bounded throughout, matching `compileTypeFuel`'s own convention: a
-conjunctive `.offer`'s generated `parallelTypeBranchesSelecting` type is not
-structurally smaller than the `.offer` node itself (it duplicates every
-branch into a `.par` chain), so plain structural recursion on `PactType` does
-not terminate here the way it does for every other constructor.
+conjunctive `.offer` compiles `parallelTypeBranchesFiring` for each nonempty
+index subset. These generated products need not be structurally smaller
+than the source, but have strictly smaller compilation fuel.
 -/
 
 /-- All same-cycle offers reachable from `state` in `processType`'s own

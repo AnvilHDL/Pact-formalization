@@ -220,7 +220,8 @@ private theorem compileTypeFuel_sequenceFieldRepresented :
         simp at hFuture
     | xoffer a other branches | offer a other branches =>
       have hElse : typeCompilationFuel other ≤ fuel := by simp [typeCompilationFuel] at hFuel; omega
-      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildSelectedConjunctiveOfferAutomaton,
+      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildAtomicConjunctiveOfferAutomaton,
+        conjunctiveFiringEdges,
         finishAutomatonFragment, Finset.mem_union] at hEdge
       rcases hEdge with (((hElseEdge | hIndexed) | hBranch) | hWait) | hDefault
       · exact hCopy other 0 hElse (by
@@ -232,14 +233,12 @@ private theorem compileTypeFuel_sequenceFieldRepresented :
         rcases hIndexed with hEmpty | ⟨item, hItem, hCopyEdge⟩
         · simp at hEmpty
         · obtain ⟨entry, hEntry, rfl⟩ := List.mem_map.mp hItem
-          have hMember : entry.1 ∈ branches := by
-            obtain ⟨hBound, hValue⟩ := List.mem_zipIdx' hEntry
-            simp [hValue, List.getElem_mem hBound]
           apply hCopy _ (entry.2 + 1) ?_ ?_ hCopyEdge
           · first
-            | have := typeCompilationFuel_le_typeBranchCompilationFuel branches entry.1 hMember
+            | have := typeCompilationFuel_le_typeBranchCompilationFuel branches entry.1
+                (List.fst_mem_of_mem_zipIdx hEntry)
               simp [typeCompilationFuel] at hFuel; omega
-            | rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            | have := typeCompilationFuel_parallelTypeBranchesFiring a entry.1 branches
               simp [typeCompilationFuel] at hFuel; omega
           · intro rho q hRelated
             simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,

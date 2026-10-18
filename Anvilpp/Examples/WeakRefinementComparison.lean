@@ -1,4 +1,4 @@
-import Anvilpp.ProofHelpers.WeakRefinementLogs
+import Anvilpp.Examples.WeakRefinementLogs
 import Anvilpp.ProofHelpers.PrefixPlayMatch
 
 namespace Pact

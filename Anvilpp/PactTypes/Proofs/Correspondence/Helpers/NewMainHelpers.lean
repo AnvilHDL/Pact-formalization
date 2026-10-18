@@ -357,29 +357,29 @@ theorem accepting_of_skip_residual
             max (typeCompilationFuel elseType)
               (conjunctiveCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
-        let selectedConjunctions := List.map (fun selected => (selected.1,
+        let selectedConjunctions := List.map (fun selected => (selected,
           compileTypeFuel
             (typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches))
-            (parallelTypeBranchesSelecting alphabet selected branches))) branches
+              (parallelTypeBranchesFiring alphabet selected branches))
+            (parallelTypeBranchesFiring alphabet selected branches))) (conjunctiveSelections branches.length).toList
         have hMapEq :
-            List.map (fun selected => (selected.1,
+            List.map (fun selected => (selected,
               compileTypeFuel
                 (max (typeCompilationFuel elseType)
                   (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-                branches = selectedConjunctions := by
+                (parallelTypeBranchesFiring alphabet selected branches)))
+                (conjunctiveSelections branches.length).toList = selectedConjunctions := by
           dsimp [selectedConjunctions]
           apply List.map_congr_left
           intro selected hSelected
           rw [compileTypeFuel_eq_of_sufficient
-            (parallelTypeBranchesSelecting alphabet selected branches) ?_ le_rfl]
+            (parallelTypeBranchesFiring alphabet selected branches) ?_ le_rfl]
           show typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) ≤
+              (parallelTypeBranchesFiring alphabet selected branches) ≤
             max (typeCompilationFuel elseType)
               (conjunctiveCompilationFuel branches)
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-          exact le_max_right _ _
+          exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
+            (le_max_right _ _)
         have hAcceptEq :
             (compileType (.offer alphabet elseType branches)).accepting =
             childAccepting 0
@@ -389,19 +389,19 @@ theorem accepting_of_skip_residual
             (typeCompilationFuel (.offer alphabet elseType branches))
             (.offer alphabet elseType branches)).accepting = _
           rw [hFuelEq, compileTypeFuel.eq_def]
-          show (buildSelectedConjunctiveOfferAutomaton alphabet branches
+          show (buildAtomicConjunctiveOfferAutomaton alphabet branches
             (compileTypeFuel
               (max (typeCompilationFuel elseType)
                 (conjunctiveCompilationFuel branches)) elseType)
-            (List.map (fun selected => (selected.1,
+            (List.map (fun selected => (selected,
               compileTypeFuel
                 (max (typeCompilationFuel elseType)
                   (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-              branches)).accepting = _
+                (parallelTypeBranchesFiring alphabet selected branches)))
+              (conjunctiveSelections branches.length).toList)).accepting = _
           rw [compileTypeFuel_eq_of_sufficient elseType (le_max_left _ _) le_rfl,
             hMapEq]
-          simp [buildSelectedConjunctiveOfferAutomaton,
+          simp [buildAtomicConjunctiveOfferAutomaton,
             finishAutomatonFragment, selectedConjunctions]
         rcases relationMembership_offer_cases alphabet elseType branches
             hRelated with hRoot | ⟨q, hState, hChild⟩ |
@@ -417,19 +417,18 @@ theorem accepting_of_skip_residual
         · have hState' : state = TypeAutomatonState.child (i + 1) q := hState
           have hq := ih
             (typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches))
-            (by rw [← hSize, hFuelEq,
-                  typeCompilationFuel_parallelTypeBranchesSelecting]; omega)
-            (parallelTypeBranchesSelecting alphabet selected branches)
+              (parallelTypeBranchesFiring alphabet selected branches))
+            (by rw [← hSize]; exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches)
+            (parallelTypeBranchesFiring alphabet selected branches)
             hChild rfl
           rw [hAcceptEq, hState']
           refine Finset.mem_union_right _ ?_
           rw [indexedFragmentAccepting, mem_foldl_union_iff]
-          refine Or.inr ⟨((selected.1,
+          refine Or.inr ⟨((selected,
             compileTypeFuel
               (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              (parallelTypeBranchesSelecting alphabet selected branches)), i),
+                (parallelTypeBranchesFiring alphabet selected branches))
+              (parallelTypeBranchesFiring alphabet selected branches)), i),
             ?_, ?_⟩
           · rw [List.mk_mem_zipIdx_iff_getElem?]
             simp [selectedConjunctions, List.getElem?_map, hGet]
@@ -804,45 +803,45 @@ theorem markerSource_iff_var_residual
                 (conjunctiveCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
         have hMapEq :
-            List.map (fun selected => (selected.1,
+            List.map (fun selected => (selected,
               compileTypeFuel (max (typeCompilationFuel elseType)
                 (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-                branches =
-              List.map (fun selected => (selected.1,
+                (parallelTypeBranchesFiring alphabet selected branches)))
+                (conjunctiveSelections branches.length).toList =
+              List.map (fun selected => (selected,
                 compileTypeFuel (typeCompilationFuel
-                  (parallelTypeBranchesSelecting alphabet selected branches))
-                  (parallelTypeBranchesSelecting alphabet selected branches)))
-                branches := by
+                  (parallelTypeBranchesFiring alphabet selected branches))
+                  (parallelTypeBranchesFiring alphabet selected branches)))
+                (conjunctiveSelections branches.length).toList := by
           apply List.map_congr_left
           intro selected hSelected
           rw [compileTypeFuel_eq_of_sufficient
-            (parallelTypeBranchesSelecting alphabet selected branches) ?_ le_rfl]
+            (parallelTypeBranchesFiring alphabet selected branches) ?_ le_rfl]
           show typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) ≤
+              (parallelTypeBranchesFiring alphabet selected branches) ≤
             max (typeCompilationFuel elseType)
               (conjunctiveCompilationFuel branches)
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-          exact le_max_right _ _
+          exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
+            (le_max_right _ _)
         have hCompileEq :
             compileTypeFuel (typeCompilationFuel (.offer alphabet elseType
                 branches)) (.offer alphabet elseType branches) =
-              buildSelectedConjunctiveOfferAutomaton alphabet branches
+              buildAtomicConjunctiveOfferAutomaton alphabet branches
                 (compileTypeFuel (typeCompilationFuel elseType) elseType)
-                (List.map (fun selected => (selected.1,
+                (List.map (fun selected => (selected,
                   compileTypeFuel (typeCompilationFuel
-                    (parallelTypeBranchesSelecting alphabet selected branches))
-                    (parallelTypeBranchesSelecting alphabet selected branches)))
-                  branches) := by
+                    (parallelTypeBranchesFiring alphabet selected branches))
+                    (parallelTypeBranchesFiring alphabet selected branches)))
+                  (conjunctiveSelections branches.length).toList) := by
           rw [hFuelEq, compileTypeFuel.eq_def]
-          show buildSelectedConjunctiveOfferAutomaton alphabet branches
+          show buildAtomicConjunctiveOfferAutomaton alphabet branches
             (compileTypeFuel (max (typeCompilationFuel elseType)
               (conjunctiveCompilationFuel branches)) elseType)
-            (List.map (fun selected => (selected.1,
+            (List.map (fun selected => (selected,
               compileTypeFuel (max (typeCompilationFuel elseType)
                 (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-              branches) = _
+                (parallelTypeBranchesFiring alphabet selected branches)))
+              (conjunctiveSelections branches.length).toList) = _
           rw [compileTypeFuel_eq_of_sufficient elseType (le_max_left _ _) le_rfl,
             hMapEq]
         rw [PactType.TailOccurrences] at hTail
@@ -862,39 +861,38 @@ theorem markerSource_iff_var_residual
           constructor
           · intro hMarker
             exact absurd hMarker
-              (buildSelectedConjunctiveOfferAutomaton_markerSource_root
+              (buildAtomicConjunctiveOfferAutomaton_markerSource_root
                 _ _ _ _ _)
           · rintro ⟨a, hEq⟩; rw [hResidual] at hEq; simp at hEq
         · have hStateEq : state = TypeAutomatonState.child 0 q := hState
           subst hStateEq
           rw [hCompileEq,
             show TypeAutomatonState.child 0 q = childState 0 q from rfl,
-            buildSelectedConjunctiveOfferAutomaton_markerSource_child0]
+            buildAtomicConjunctiveOfferAutomaton_markerSource_child0]
           exact ih (typeCompilationFuel elseType) (by rw [hFuelEq]; omega)
             elseType hElse hChild rfl
         · have hStateEq : state = TypeAutomatonState.child (i + 1) q := hState
-          have hSelectedMem : selected ∈ branches := List.mem_of_getElem? hGet
           have hAbsentChild : PactType.TailOccurrences name False
-              (parallelTypeBranchesSelecting alphabet selected branches) :=
-            parallelTypeBranchesSelecting_tailOccurrences name alphabet selected
-              branches False hEach (hEach selected hSelectedMem)
+              (parallelTypeBranchesFiring alphabet selected branches) :=
+            parallelTypeBranchesFiring_tailOccurrences name alphabet selected
+              branches False hEach
           have hEntry :
-              (List.map (fun sel => (sel.1,
+              (List.map (fun sel => (sel,
                 compileTypeFuel (typeCompilationFuel
-                  (parallelTypeBranchesSelecting alphabet sel branches))
-                  (parallelTypeBranchesSelecting alphabet sel branches)))
-                branches)[i]? =
-                some (selected.1,
+                  (parallelTypeBranchesFiring alphabet sel branches))
+                  (parallelTypeBranchesFiring alphabet sel branches)))
+                (conjunctiveSelections branches.length).toList)[i]? =
+                some (selected,
                   compileTypeFuel (typeCompilationFuel
-                    (parallelTypeBranchesSelecting alphabet selected branches))
-                    (parallelTypeBranchesSelecting alphabet selected
+                    (parallelTypeBranchesFiring alphabet selected branches))
+                    (parallelTypeBranchesFiring alphabet selected
                       branches)) := by
             simp [List.getElem?_map, hGet]
           subst hStateEq
           rw [hCompileEq,
             show TypeAutomatonState.child (i + 1) q = childState (i + 1) q
               from rfl,
-            buildSelectedConjunctiveOfferAutomaton_markerSource_branch alphabet
+            buildAtomicConjunctiveOfferAutomaton_markerSource_branch alphabet
               branches _ _ name i _ hEntry q]
           constructor
           · intro hMarker
@@ -902,9 +900,8 @@ theorem markerSource_iff_var_residual
           · rintro ⟨a, hEq⟩
             refine absurd ?_ (atomic _ q hAbsentChild)
             exact (ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              (by rw [hFuelEq, typeCompilationFuel_parallelTypeBranchesSelecting];
-                  omega)
+                (parallelTypeBranchesFiring alphabet selected branches))
+              (typeCompilationFuel_firing_lt_offer alphabet elseType selected branches)
               _ (PactType.tailOccurrences_mono name False.elim _ hAbsentChild)
               hChild rfl).mpr ⟨a, hEq⟩
     | recur alphabet binder body =>

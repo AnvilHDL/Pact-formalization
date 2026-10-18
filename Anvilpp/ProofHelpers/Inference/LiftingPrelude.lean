@@ -171,7 +171,7 @@ theorem Offers.label_ne_tock {env : Environment} {source target : Proc}
   | xoffer_recv _ _ _ _ _ _ _ _ _ => simp [Label.message]
   | xoffer_else _ _ _ _ _ => simp [Label.silent]
   | xoffer_wait _ _ _ _ _ => simp [Label.silent]
-  | offer_some _ _ _ _ _ _ => simp [Label.silent]
+  | offer_some => simp [processBranchBatchLabel]
   | offer_else _ _ _ _ _ => simp [Label.silent]
   | offer_wait _ _ _ _ _ => simp [Label.silent]
   | par outer _ _ interface _ _ _ _ _ leftLabel rightLabel _ _ _ _ _ _ _ _ _

@@ -29,7 +29,7 @@ private theorem endpointMenuReferences_child (index : Nat) (fragment : Automaton
     · exact ⟨hClock, Or.inr (congrArg (childState index) hTarget)⟩
 
 private theorem endpointMenuReferences_indexed
-    (fragments : List (BareMessage × AutomatonFragment))
+    {Key : Type} (fragments : List (Key × AutomatonFragment))
     (hFragments : ∀ entry ∈ fragments, EndpointMenuReferences entry.2)
     (edge : PendingAutomatonEdge) (hEdge : edge ∈ indexedFragmentEdges fragments)
     (reference : TypeAutomatonState) (removed : Finset BareMessage)
@@ -146,7 +146,7 @@ private theorem compileTypeFuel_endpointMenuReferences :
         obtain ⟨env, _, rfl⟩ := hDone
         simp at hField
     | xoffer a other branches | offer a other branches =>
-      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildSelectedConjunctiveOfferAutomaton,
+      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
         finishAutomatonFragment, Finset.mem_union] at hEdge
       rcases hEdge with (((hElse | hIndexed) | hBranch) | hWait) | hDefault
       · exact endpointMenuReferences_child 0 _ (ih other) edge hElse reference removed hField
@@ -158,7 +158,7 @@ private theorem compileTypeFuel_endpointMenuReferences :
         rcases hBranch with hEmpty | ⟨entry, _, hNew⟩
         · simp at hEmpty
         · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hNew
-          simp_all [AutomatonConstructionLabel.semantic, TypeLabel.message, TypeLabel.silent]
+          simp_all [AutomatonConstructionLabel.semantic, TypeLabel.message, typeBranchBatchLabel]
       · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hWait
         simp_all [AutomatonConstructionLabel.semantic, TypeLabel.silent]
       · obtain ⟨env, _, rfl⟩ := Finset.mem_image.mp hDefault
@@ -202,7 +202,7 @@ private theorem targetMenuRemoval_childEdges (index : Nat) (fragment : Automaton
   obtain ⟨inner, hInner, rfl⟩ := Finset.mem_image.mp hEdge
   exact targetMenuRemoval_child index inner hSubset (h inner hInner)
 
-private theorem targetMenuRemoval_indexed (fragments : List (BareMessage × AutomatonFragment))
+private theorem targetMenuRemoval_indexed {Key : Type} (fragments : List (Key × AutomatonFragment))
     {parent : Finset TypeAutomatonState}
     (hSubset : indexedFragmentAccepting fragments ⊆ parent)
     (h : ∀ entry ∈ fragments, ∀ edge ∈ entry.2.edges, TargetMenuRemoval entry.2.accepting edge)
@@ -330,10 +330,10 @@ private theorem compileTypeFuel_targetMenuRemoval :
         simp at hField
     | xoffer a other branches | offer a other branches =>
       simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
-        buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+        buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
         Finset.mem_union] at hEdge
       simp only [compileTypeFuel, buildExclusiveOfferAutomaton,
-        buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment]
+        buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment]
       rcases hEdge with (((hElse | hIndexed) | hBranch) | hWait) | hDefault
       · exact targetMenuRemoval_childEdges 0 _ Finset.subset_union_left (ih other) edge hElse
       · refine targetMenuRemoval_indexed _ Finset.subset_union_right ?_ edge hIndexed

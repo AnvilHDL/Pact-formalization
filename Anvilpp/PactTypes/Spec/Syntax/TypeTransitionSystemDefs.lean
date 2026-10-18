@@ -150,14 +150,14 @@ inductive TypeTransition : TypeEnvironment → PactType → TypeLabel → PactTy
   | offer_some (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (elseType : PactType)
       (branches : List (BareMessage × PactType))
-      (enabled : BareMessage × PactType) :
+      (enabled : Finset Nat) :
       env.WellFormed alphabet ∧
-      enabled ∈ branches ∧
-      TypeBranchEnabled env enabled →
+      enabled.Nonempty ∧
+      typeEnabledBranches env branches = enabled →
       --
       TypeTransition env (.offer alphabet elseType branches)
-      TypeLabel.silent
-      (parallelTypeBranchesSelecting alphabet enabled branches)
+      (typeBranchBatchLabel branches enabled)
+      (parallelTypeBranchesFiring alphabet enabled branches)
   | offer_else (env : TypeEnvironment) (alphabet : PactTypeAlphabet)
       (elseType : PactType)
       (branches : List (BareMessage × PactType)) :

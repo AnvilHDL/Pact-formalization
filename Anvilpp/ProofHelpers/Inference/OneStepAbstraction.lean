@@ -1,6 +1,7 @@
 import Anvilpp.PactTypes.Proofs.Syntax.TypeTransitionSystemLemmas
 import Anvilpp.ProofHelpers.Inference.ConjunctiveCommitment
 import Anvilpp.ProofHelpers.Inference.DataPreservation
+import Anvilpp.ProofHelpers.Inference.ConjunctiveConsumption
 
 /-!
 # One-step abstraction
@@ -298,17 +299,14 @@ theorem erasure_preserves_offers
       exact TypeOffers.xoffer_wait _ _ _ _
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
           fun h => hPrem.2.1 ((typeResolved_iff env branches).1 h), hPrem.2.2⟩
-  | offer_some env alphabet elseProcess branches enabled hPrem =>
-      rw [Proc.AlphabetWellFormed] at hAlpha
-      rw [Proc.ConjunctRegular] at hConj
-      have hCommit := inferProcess_parallelProcessBranchesSelecting
-        hAlpha.2.2.2 hConj.1 hPrem.2.1
-      rw [inferProcess, eraseLabel_silent, image_bare_empty,
-        procFutureOffers_inferProcess, hCommit]
-      exact TypeOffers.offer_some _ _ _ _ (inferBranch enabled)
+  | offer_some env alphabet elseProcess branches enabled values hPrem =>
+      rw [inferProcess, eraseLabel_processBranchBatchLabel,
+        inferProcess_parallelProcessBranchesFiring, projectCurrent_image,
+        branchOfferSet_image, procFutureOffers_parallelProcessBranchesFiring,
+        ← typeBranchActions_inferBranches]
+      exact TypeOffers.offer_some _ _ _ _ enabled
         ⟨(environment_wellFormed_iff env alphabet).1 hPrem.1,
-          inferBranch_mem hPrem.2.1,
-          (typeBranchEnabled_iff env enabled).2 hPrem.2.2⟩
+          hPrem.2.1, (typeEnabledBranches_inferBranches env branches).trans hPrem.2.2.1⟩
   | offer_else env alphabet elseProcess branches hPrem =>
       rw [inferProcess, eraseLabel_silent, projectCurrent_image, branchOfferSet_image,
         procFutureOffers_inferProcess, ← typeBranchActions_inferBranches]

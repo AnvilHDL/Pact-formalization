@@ -177,13 +177,13 @@ lemma relationMembership_xoffer_cases
       hGet, rfl, hBranchRelated⟩)
 
 /-- Characterizes a public conjunctive-offer edge leaving a tagged else-child state as a copy of the else automaton's own outgoing edge. -/
-theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
+theorem buildAtomicConjunctiveOfferAutomaton_outgoing_else
      (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment))
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildSelectedConjunctiveOfferAutomaton alphabet
+    let offer := buildAtomicConjunctiveOfferAutomaton alphabet
       branches elseAutomaton selectedConjunctions
     edge ∈ offer.edges ∧ edge.source = .child 0 state ↔
       ∃ childEdge ∈ elseAutomaton.edges,
@@ -191,7 +191,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
   classical
   constructor
   · rintro ⟨hEdge, hSource⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
       childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
     rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
     · rcases hElse with ⟨childEdge, hChildEdge, hEdgeEq⟩
@@ -223,23 +223,23 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_else
       simp at hSource
   · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
     constructor
-    · simp only [buildSelectedConjunctiveOfferAutomaton,
+    · simp only [buildAtomicConjunctiveOfferAutomaton,
         finishAutomatonFragment, childPendingEdges, Finset.mem_union,
         Finset.mem_image]
       exact Or.inl (Or.inl (Or.inl (Or.inl
         ⟨childEdge, hChildEdge, rfl⟩)))
     · simp [childPendingEdge, childState, hChildSource]
 
-/-- Characterizes a public conjunctive-offer edge leaving a tagged branch-`i`-child state as a copy of that branch's generated commit type's own outgoing edge. -/
-theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
+/-- An edge leaving subset copy `i` is a tagged edge of that subset's residual automaton. -/
+theorem buildAtomicConjunctiveOfferAutomaton_outgoing_branch
      (alphabet : PactTypeAlphabet)
     (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment))
-    (i : Nat) (action : BareMessage) (automaton : AutomatonFragment)
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment))
+    (i : Nat) (action : Finset Nat) (automaton : AutomatonFragment)
     (hBranch : selectedConjunctions[i]? = some (action, automaton))
     (state : TypeAutomatonState) (edge : PendingAutomatonEdge) :
-    let offer := buildSelectedConjunctiveOfferAutomaton alphabet
+    let offer := buildAtomicConjunctiveOfferAutomaton alphabet
       branches elseAutomaton selectedConjunctions
     edge ∈ offer.edges ∧ edge.source = .child (i + 1) state ↔
       ∃ childEdge ∈ automaton.edges,
@@ -247,7 +247,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
   classical
   constructor
   · rintro ⟨hEdge, hSource⟩
-    simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+    simp only [buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges, finishAutomatonFragment,
       childPendingEdges, Finset.mem_union, Finset.mem_image] at hEdge
     rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) | hResolved)
     · rcases hElse with ⟨childEdge, _hChildEdge, hEdgeEq⟩
@@ -292,7 +292,7 @@ theorem buildSelectedConjunctiveOfferAutomaton_outgoing_branch
       simp at hSource
   · rintro ⟨childEdge, hChildEdge, hChildSource, rfl⟩
     constructor
-    · simp only [buildSelectedConjunctiveOfferAutomaton,
+    · simp only [buildAtomicConjunctiveOfferAutomaton,
         finishAutomatonFragment, childPendingEdges, Finset.mem_union,
         Finset.mem_image]
       refine Or.inl (Or.inl (Or.inl (Or.inr ?_)))
@@ -309,11 +309,11 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton alphabet branches
+        buildAtomicConjunctiveOfferAutomaton alphabet branches
           (compileTypeFuel (typeCompilationFuel elseType) elseType)
-          (branches.map fun selected => (selected.1, compileTypeFuel
-            (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-            (parallelTypeBranchesSelecting alphabet selected branches))))
+          ((conjunctiveSelections branches.length).toList.map fun selected => (selected, compileTypeFuel
+            (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+            (parallelTypeBranchesFiring alphabet selected branches))))
     (hElseAlphabet : elseType.alphabet = whole.alphabet)
     (hFuel : typeCompilationFuel elseType + 1 ≤ typeCompilationFuel whole)
     (hDisjoint : elseType.OfferBranchesDisjoint)
@@ -334,12 +334,12 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
   classical
   let elseFragment :=
     compileTypeFuel (typeCompilationFuel elseType) elseType
-  let selectedConjunctions := branches.map fun selected =>
-    (selected.1, compileTypeFuel
-      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-      (parallelTypeBranchesSelecting alphabet selected branches))
+  let selectedConjunctions := (conjunctiveSelections branches.length).toList.map fun selected =>
+    (selected, compileTypeFuel
+      (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+      (parallelTypeBranchesFiring alphabet selected branches))
   let parentFragment :=
-    buildSelectedConjunctiveOfferAutomaton alphabet branches
+    buildAtomicConjunctiveOfferAutomaton alphabet branches
       elseFragment selectedConjunctions
   have hCard : elseFragment.states.card ≤ parentFragment.states.card := by
     have hTaggedCard :
@@ -352,7 +352,7 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     rw [← hTaggedCard]
     apply Finset.card_le_card
     intro tagged hTagged
-    simp only [parentFragment, buildSelectedConjunctiveOfferAutomaton,
+    simp only [parentFragment, buildAtomicConjunctiveOfferAutomaton,
       finishAutomatonFragment, Finset.mem_union]
     exact Or.inl (Or.inr hTagged)
   unfold computeFutureOf
@@ -362,66 +362,66 @@ theorem computeFutureOf_selectedConjunctiveOffer_else
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient elseType) hDisjoint hElseAlphabet hFuel
     hProductInfo
-    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_else
+    (fun q edge => buildAtomicConjunctiveOfferAutomaton_outgoing_else
       alphabet branches elseFragment selectedConjunctions q edge)
     hCard state (by simpa [elseFragment] using hState) hMenuReferences
 
-/-- Proves a `.child (i+1)`-tagged state's future menu, in a compiled conjunctive offer, agrees with branch `i`'s generated commit type's own. -/
+/-- A state's menu in subset copy `i` equals its menu in the residual automaton. -/
 theorem computeFutureOf_selectedConjunctiveOffer_branch
      {alphabet : PactTypeAlphabet}
     (elseType : PactType)
     (branches : List (BareMessage × PactType)) (whole : PactType)
     (hWhole :
       compileTypeFuel (typeCompilationFuel whole) whole =
-        buildSelectedConjunctiveOfferAutomaton alphabet branches
+        buildAtomicConjunctiveOfferAutomaton alphabet branches
           (compileTypeFuel (typeCompilationFuel elseType) elseType)
-          (branches.map fun selected => (selected.1, compileTypeFuel
-            (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-            (parallelTypeBranchesSelecting alphabet selected branches))))
-    (i : Nat) (selected : BareMessage × PactType)
-    (hSelected : branches[i]? = some selected)
-    (hFuel : typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) +
+          ((conjunctiveSelections branches.length).toList.map fun selected => (selected, compileTypeFuel
+            (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+            (parallelTypeBranchesFiring alphabet selected branches))))
+    (i : Nat) (selected : Finset Nat)
+    (hSelected : (conjunctiveSelections branches.length).toList[i]? = some selected)
+    (hFuel : typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) +
       1 ≤ typeCompilationFuel whole)
     (hBranchAlphabet :
-      (parallelTypeBranchesSelecting alphabet selected branches).alphabet =
+      (parallelTypeBranchesFiring alphabet selected branches).alphabet =
         whole.alphabet)
     (hDisjoint : ∀ branch ∈ branches, branch.2.OfferBranchesDisjoint)
     (hProductInfo : ∀ visited,
       stateProductInfo whole (.child (i + 1) visited) =
-        stateProductInfo (parallelTypeBranchesSelecting alphabet selected branches)
+        stateProductInfo (parallelTypeBranchesFiring alphabet selected branches)
           visited)
     (state : TypeAutomatonState)
     (hState : state ∈ (compileTypeFuel
-      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-      (parallelTypeBranchesSelecting alphabet selected branches)).states)
+      (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+      (parallelTypeBranchesFiring alphabet selected branches)).states)
     (hMenuReferences : ∀ source,
       menuDependencyTargets (compileTypeMenuLinksFuel (typeCompilationFuel whole) whole)
           (.child (i + 1) source) =
         (menuDependencyTargets (compileTypeMenuLinksFuel
-          (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-          (parallelTypeBranchesSelecting alphabet selected branches)) source).image
+          (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+          (parallelTypeBranchesFiring alphabet selected branches)) source).image
           (.child (i + 1)) := by
       intro source
       apply menuDependencyTargets_offer_branch
       assumption) :
     computeFutureOf whole (.child (i + 1) state) =
-      computeFutureOf (parallelTypeBranchesSelecting alphabet selected branches)
+      computeFutureOf (parallelTypeBranchesFiring alphabet selected branches)
         state := by
   classical
   let elseFragment :=
     compileTypeFuel (typeCompilationFuel elseType) elseType
-  let selectedConjunctions := branches.map fun branch =>
-    (branch.1, compileTypeFuel
-      (typeCompilationFuel (parallelTypeBranchesSelecting alphabet branch branches))
-      (parallelTypeBranchesSelecting alphabet branch branches))
-  let branchType := parallelTypeBranchesSelecting alphabet selected branches
+  let selectedConjunctions := (conjunctiveSelections branches.length).toList.map fun branch =>
+    (branch, compileTypeFuel
+      (typeCompilationFuel (parallelTypeBranchesFiring alphabet branch branches))
+      (parallelTypeBranchesFiring alphabet branch branches))
+  let branchType := parallelTypeBranchesFiring alphabet selected branches
   let branchFragment :=
     compileTypeFuel (typeCompilationFuel branchType) branchType
   let parentFragment :=
-    buildSelectedConjunctiveOfferAutomaton alphabet branches
+    buildAtomicConjunctiveOfferAutomaton alphabet branches
       elseFragment selectedConjunctions
   have hBranchFragment :
-      selectedConjunctions[i]? = some (selected.1, branchFragment) := by
+      selectedConjunctions[i]? = some (selected, branchFragment) := by
     simp [selectedConjunctions, branchFragment, branchType, List.getElem?_map,
       hSelected]
   have hCard : branchFragment.states.card ≤ parentFragment.states.card := by
@@ -438,9 +438,9 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     intro tagged hTagged
     have hIndexed : tagged ∈ indexedFragmentStates selectedConjunctions := by
       rw [indexedFragmentStates, mem_foldl_union_iff]
-      exact Or.inr ⟨((selected.1, branchFragment), i),
+      exact Or.inr ⟨((selected, branchFragment), i),
         List.mk_mem_zipIdx_iff_getElem?.mpr hBranchFragment, hTagged⟩
-    simp only [parentFragment, buildSelectedConjunctiveOfferAutomaton,
+    simp only [parentFragment, buildAtomicConjunctiveOfferAutomaton,
       finishAutomatonFragment, Finset.mem_union]
     exact Or.inr hIndexed
   unfold computeFutureOf
@@ -449,14 +449,14 @@ theorem computeFutureOf_selectedConjunctiveOffer_branch
     parentFragment branchFragment (i + 1) hWhole rfl
     (typeCompilationFuel_sufficient whole)
     (typeCompilationFuel_sufficient branchType)
-    (parallelTypeBranchesSelecting_offerBranchesDisjoint selected branches
+    (parallelTypeBranchesFiring_offerBranchesDisjoint selected branches
       hDisjoint) hBranchAlphabet hFuel hProductInfo
-    (fun q edge => buildSelectedConjunctiveOfferAutomaton_outgoing_branch
-      alphabet branches elseFragment selectedConjunctions i selected.1
+    (fun q edge => buildAtomicConjunctiveOfferAutomaton_outgoing_branch
+      alphabet branches elseFragment selectedConjunctions i selected
       branchFragment hBranchFragment q edge)
     hCard state (by simpa [branchFragment] using hState) hMenuReferences
 
-/-- Defines the related-state shape for a compiled conjunctive offer: the root represents the whole offer, a tagged child represents a residual of `τ0` or a generated branch commit. -/
+/-- Offer states represent the source, a default residual, or a subset residual. -/
 def offerRelationShape
      (alphabet : PactTypeAlphabet)
     (elseType : PactType)
@@ -468,12 +468,12 @@ def offerRelationShape
         (buildRelationSet elseType (compileType elseType))
         entry.1 q) ∨
     (∃ i selected q,
-      branches[i]? = some selected ∧
+      (conjunctiveSelections branches.length).toList[i]? = some selected ∧
       entry.2 = .child (i + 1) q ∧
       relationMembership
-        (buildRelationSet (parallelTypeBranchesSelecting alphabet selected branches)
+        (buildRelationSet (parallelTypeBranchesFiring alphabet selected branches)
           (compileType
-            (parallelTypeBranchesSelecting alphabet selected branches)))
+            (parallelTypeBranchesFiring alphabet selected branches)))
         entry.1 q)
 
 lemma relationMembership_offer_root
@@ -526,12 +526,12 @@ lemma relationMembership_offer_selected
      (alphabet : PactTypeAlphabet)
     (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    {index : Nat} {selected : BareMessage × PactType} {residual : PactType}
+    {index : Nat} {selected : Finset Nat} {residual : PactType}
     {state : TypeAutomatonState}
-    (hGet : branches[index]? = some selected)
+    (hGet : (conjunctiveSelections branches.length).toList[index]? = some selected)
     (hRelated : relationMembership
-      (buildRelationSet (parallelTypeBranchesSelecting alphabet selected branches)
-        (compileType (parallelTypeBranchesSelecting alphabet selected branches)))
+      (buildRelationSet (parallelTypeBranchesFiring alphabet selected branches)
+        (compileType (parallelTypeBranchesFiring alphabet selected branches)))
       residual state) :
     relationMembership
       (buildRelationSet (.offer alphabet elseType branches)
@@ -542,10 +542,10 @@ lemma relationMembership_offer_selected
     simp only [typeCompilationFuel]
     omega
   have hSelectedFuel :
-      typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) ≤
+      typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) ≤
         max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) := by
-    rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-    exact le_max_right _ _
+    exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
+      (le_max_right _ _)
   show (residual, .child (index + 1) state) ∈
     buildRelationSetCoreFuel
       (typeCompilationFuel (.offer alphabet elseType branches)) (.offer alphabet elseType branches)
@@ -559,7 +559,7 @@ lemma relationMembership_offer_selected
   apply Finset.mem_image.mpr
   refine ⟨(residual, state), ?_, rfl⟩
   rw [buildRelationSetCoreFuel_eq_of_sufficient
-    (parallelTypeBranchesSelecting alphabet selected branches) hSelectedFuel le_rfl]
+    (parallelTypeBranchesFiring alphabet selected branches) hSelectedFuel le_rfl]
   exact hRelated
 
 set_option maxHeartbeats 4000000 in
@@ -608,23 +608,23 @@ lemma relationMembership_offer_cases
     have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hItem
     have hSelectedFuel :
         typeCompilationFuel
-            (parallelTypeBranchesSelecting alphabet item.1 branches) ≤
+            (parallelTypeBranchesFiring alphabet item.1 branches) ≤
           max (typeCompilationFuel elseType)
             (conjunctiveCompilationFuel branches) := by
-      rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-      exact le_max_right _ _
+      exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet item.1 branches)
+        (le_max_right _ _)
     have hSelectedRelated : relationMembership
-        (buildRelationSet (parallelTypeBranchesSelecting alphabet item.1 branches)
+        (buildRelationSet (parallelTypeBranchesFiring alphabet item.1 branches)
           (compileType
-            (parallelTypeBranchesSelecting alphabet item.1 branches)))
+            (parallelTypeBranchesFiring alphabet item.1 branches)))
         entry.1 entry.2 := by
       show (entry.1, entry.2) ∈
         buildRelationSetCoreFuel
           (typeCompilationFuel
-            (parallelTypeBranchesSelecting alphabet item.1 branches))
-          (parallelTypeBranchesSelecting alphabet item.1 branches)
+            (parallelTypeBranchesFiring alphabet item.1 branches))
+          (parallelTypeBranchesFiring alphabet item.1 branches)
       rw [← buildRelationSetCoreFuel_eq_of_sufficient
-        (parallelTypeBranchesSelecting alphabet item.1 branches)
+        (parallelTypeBranchesFiring alphabet item.1 branches)
         hSelectedFuel le_rfl]
       exact hEntry
     exact Or.inr (Or.inr ⟨item.2, item.1, entry.2,

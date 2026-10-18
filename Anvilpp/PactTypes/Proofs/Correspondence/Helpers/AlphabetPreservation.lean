@@ -4,6 +4,7 @@ import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.Parallel
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.RecursionFoundations
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.Offers
 import Anvilpp.PactTypes.Proofs.Correspondence.Helpers.Variables
+import Anvilpp.PactTypes.Proofs.Syntax.ConjunctiveResidualRegularity
 
 namespace Pact
 
@@ -1139,12 +1140,12 @@ theorem reannotate_relation_alphabet :
           (residual, state) ∈
             buildRelationSetCoreFuel fuel (source.reannotate target) →
           residual.alphabet = target) ∧
-      (∀ (target : PactTypeAlphabet) (selected branch : BareMessage × PactType)
-          (rest : List (BareMessage × PactType)) (residual : PactType)
+      (∀ (target : PactTypeAlphabet) (selected : Finset Nat)
+          (branches : List (BareMessage × PactType)) (residual : PactType)
           (state : TypeAutomatonState),
           (residual, state) ∈
             buildRelationSetCoreFuel fuel
-              (parallelTypeBranchesSelecting target selected (branch :: rest)) →
+              (parallelTypeBranchesFiring target selected branches) →
           residual.alphabet = target) := by
   intro fuel
   induction fuel with
@@ -1154,13 +1155,11 @@ theorem reannotate_relation_alphabet :
         simp only [buildRelationSetCoreFuel, Finset.mem_singleton] at hMem
         injection hMem with hResidual _
         rw [hResidual, PactType.reannotate_alphabet]
-      · intro target selected branch rest residual state hMem
+      · intro target selected branches residual state hMem
         simp only [buildRelationSetCoreFuel, Finset.mem_singleton] at hMem
         injection hMem with hResidual _
         rw [hResidual]
-        simp only [parallelTypeBranchesSelecting]
-        exact parallelTypeBranchesSelectingWithin_alphabet target selected
-          (branch :: rest)
+        exact parallelTypeBranchesFiring_alphabet target selected branches
   | succ fuel ih =>
       -- A rebuilt parallel node carries the signature outright, and both
       -- survivor families are relations of children re-signed to it.
@@ -1214,8 +1213,11 @@ theorem reannotate_relation_alphabet :
         rw [hMap, List.getElem?_map, Option.map_eq_some_iff] at hGet
         obtain ⟨item, _, hEq⟩ := hGet
         exact ⟨item.2, by rw [← hEq]⟩
-      refine ⟨?_, ?_⟩
-      · intro target source residual state hMem
+      have hResigned : ∀ (target : PactTypeAlphabet) (source residual : PactType)
+          (state : TypeAutomatonState),
+          (residual, state) ∈ buildRelationSetCoreFuel (fuel + 1) (source.reannotate target) →
+          residual.alphabet = target := by
+        intro target source residual state hMem
         cases source with
         | skip a =>
             simp only [PactType.reannotate, buildRelationSetCoreFuel,
@@ -1354,62 +1356,27 @@ theorem reannotate_relation_alphabet :
               · rcases Finset.mem_image.mp hImage with ⟨entry, hEntry, hEq⟩
                 injection hEq with hResidual _
                 rw [← hResidual]
-                cases hOffer : PactType.reannotateOfferBranches target ∅
-                    branches with
-                | nil =>
-                    rw [hOffer] at hIndexed
-                    simp at hIndexed
-                | cons head tail =>
-                    rw [hOffer] at hEntry
-                    exact ih.2 target indexed.1 head tail entry.1 entry.2 hEntry
-      · intro target selected branch rest residual state hMem
-        simp only [parallelTypeBranchesSelecting] at hMem
-        cases rest with
-        | cons next tail =>
-            simp only [parallelTypeBranchesSelectingWithin] at hMem
-            by_cases hSelected : branch = selected
-            · rw [if_pos hSelected] at hMem
-              exact hPar target _ _ _ residual state hMem
-            · rw [if_neg hSelected] at hMem
-              exact hPar target _ _ _ residual state hMem
-        | nil =>
-            simp only [parallelTypeBranchesSelectingWithin] at hMem
-            by_cases hSelected : branch = selected
-            · rw [if_pos hSelected] at hMem
-              simp only [selectedTypeBranchAt, buildRelationSetCoreFuel] at hMem
-              rcases Finset.mem_union.mp hMem with hLeft | hRight
-              · rcases Finset.mem_image.mp hLeft with ⟨entry, _, hEq⟩
-                injection hEq with hResidual _
-                rw [← hResidual]
-                simp only [PactType.alphabet]
-              · rcases Finset.mem_image.mp hRight with ⟨entry, hEntry, hEq⟩
-                injection hEq with hResidual _
-                rw [← hResidual]
-                exact ih.1 target branch.2 entry.1 entry.2 hEntry
-            · rw [if_neg hSelected] at hMem
-              simp only [singletonTypeXOfferAt,
-                buildRelationSetCoreFuel] at hMem
-              rcases Finset.mem_insert.mp hMem with hRoot | hRest
-              · injection hRoot with hResidual _
-                rw [hResidual]
-                simp only [PactType.alphabet]
-              rcases Finset.mem_union.mp hRest with hElse | hBranch
-              · rcases Finset.mem_image.mp hElse with ⟨entry, hEntry, hEq⟩
-                injection hEq with hResidual _
-                rw [← hResidual]
-                exact ih.1 target (.skip target) entry.1 entry.2
-                  (by simpa only [PactType.reannotate] using hEntry)
-              · rw [mem_foldl_union_iff] at hBranch
-                rcases hBranch with hEmpty | ⟨indexed, hIndexed, hImage⟩
-                · simp at hEmpty
-                · rcases Finset.mem_image.mp hImage with ⟨entry, hEntry, hEq⟩
-                  injection hEq with hResidual _
-                  rw [← hResidual]
-                  have hIndexedEq : indexed =
-                      ((branch.1, branch.2.reannotate target), 0) := by
-                    simpa using hIndexed
-                  rw [hIndexedEq] at hEntry
-                  exact ih.1 target branch.2 entry.1 entry.2 hEntry
+                exact ih.2 target indexed.1 _ entry.1 entry.2 hEntry
+      refine ⟨hResigned, ?_⟩
+      intro target selected branches residual state hMem
+      cases branches with
+      | nil =>
+          simp only [parallelTypeBranchesFiring, parallelTypeBranchesFiringFrom,
+            buildRelationSetCoreFuel, Finset.mem_singleton] at hMem
+          injection hMem with hResidual _
+          rw [hResidual]
+          rfl
+      | cons branch rest =>
+          cases rest with
+          | cons next tail =>
+              exact hPar target _ _ ∅ residual state hMem
+          | nil =>
+              simp only [parallelTypeBranchesFiring, parallelTypeBranchesFiringFrom] at hMem
+              split at hMem
+              · exact hResigned target branch.2 residual state hMem
+              · exact hResigned target (.xoffer target (.skip target) [branch])
+                  residual state (by cases branch; simpa only [PactType.reannotate,
+                    PactType.reannotateBranches, singletonTypeXOfferAt] using hMem)
 
 /-- Every residual represented by a compiled state retains the fixed alphabet
 of the source type.  The proof follows the structural relation clauses; the
@@ -1580,15 +1547,9 @@ theorem relationMembership_alphabet_eq
             exact (ih (typeCompilationFuel elseType) hElseFuel elseType rfl
               residual q hCoherent.2.1 hElseRelated).trans hCoherent.1
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
-            cases branches with
-            | nil => cases hMember
-            | cons branch rest =>
-                exact (reannotate_relation_alphabet
-                    (typeCompilationFuel
-                      (parallelTypeBranchesSelecting alphabet selected
-                        (branch :: rest)))).2
-                  alphabet selected branch rest residual q hSelectedRelated
+            exact (reannotate_relation_alphabet
+              (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))).2
+              alphabet selected branches residual q hSelectedRelated
 
 /-- Substituting an alphabet-matching replacement for a variable occurring only
 in tail position preserves alphabet well-formedness: below a `.par`, where the
@@ -1979,14 +1940,14 @@ theorem relationMembership_binderFreshFor :
               residual q bound hFields.1 hElseRelated
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
             have hSelectedFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-              simp only [typeCompilationFuel]; omega
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
             exact ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              hSelectedFuel (parallelTypeBranchesSelecting alphabet selected branches)
+                (parallelTypeBranchesFiring alphabet selected branches))
+              hSelectedFuel (parallelTypeBranchesFiring alphabet selected branches)
               rfl residual q bound
-              (parallelTypeBranchesSelecting_binderFreshFor bound alphabet
+              (parallelTypeBranchesFiring_binderFreshFor bound alphabet
                 selected branches
                 (fun branch hBranch =>
                   hMemBranches branches branch hFields.2 hBranch))
@@ -2217,25 +2178,23 @@ theorem relationMembership_tailOccurrences  :
             exact ih (typeCompilationFuel elseType) hElseFuel elseType rfl
               residual q name tail hTailRec.1 hFields.1 hElseRelated
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
             have hBranchFalse : ∀ branch ∈ branches,
                 branch.2.TailOccurrences name False := fun _ hBranch =>
               PactType.tailOccurrences_of_mem_branches name False hFields.2
                 hBranch
             have hSelectedFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-              simp only [typeCompilationFuel]; omega
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
             exact ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              hSelectedFuel (parallelTypeBranchesSelecting alphabet selected branches)
+                (parallelTypeBranchesFiring alphabet selected branches))
+              hSelectedFuel (parallelTypeBranchesFiring alphabet selected branches)
               rfl residual q name tail
-              (parallelTypeBranchesSelecting_tailRecursive alphabet selected branches
+              (parallelTypeBranchesFiring_tailRecursive alphabet selected branches
                 (fun branch hBranch =>
-                  tailRecursive_of_mem_branches hTailRec.2 hBranch)
-                (tailRecursive_of_mem_branches hTailRec.2 hMember))
-              (parallelTypeBranchesSelecting_tailOccurrences name alphabet selected
-                branches tail hBranchFalse (hBranchFalse selected hMember))
+                  tailRecursive_of_mem_branches hTailRec.2 hBranch))
+              (parallelTypeBranchesFiring_tailOccurrences name alphabet selected
+                branches tail hBranchFalse)
               hSelectedRelated
 
 /-- Every residual represented by a compiled state is itself tail-recursive.
@@ -2490,29 +2449,25 @@ theorem relationMembership_tailRecursive  :
               residual q hTailRec.1 (fun other => (hFieldsClosed other).1)
               hElseRelated
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
             have hSelectedFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-              simp only [typeCompilationFuel]; omega
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
             exact ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
+                (parallelTypeBranchesFiring alphabet selected branches))
               hSelectedFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) rfl
+              (parallelTypeBranchesFiring alphabet selected branches) rfl
               residual q
-              (parallelTypeBranchesSelecting_tailRecursive alphabet selected
+              (parallelTypeBranchesFiring_tailRecursive alphabet selected
                 branches
                 (fun branch hBranch =>
-                  tailRecursive_of_mem_branches hTailRec.2 hBranch)
-                (tailRecursive_of_mem_branches hTailRec.2 hMember))
+                  tailRecursive_of_mem_branches hTailRec.2 hBranch))
               (fun other =>
-                parallelTypeBranchesSelecting_tailOccurrences other alphabet
+                parallelTypeBranchesFiring_tailOccurrences other alphabet
                   selected branches True
                   (fun branch hBranch =>
                     PactType.tailOccurrences_of_mem_branches other False
-                      (hFieldsClosed other).2 hBranch)
-                  (PactType.tailOccurrences_of_mem_branches other False
-                    (hFieldsClosed other).2 hMember))
+                      (hFieldsClosed other).2 hBranch))
               hSelectedRelated
 
 /-- A node whose two components carry the enclosing alphabet and synchronise on
@@ -2676,35 +2631,80 @@ theorem committedOffer_alphabetWellFormed
           selected (branch :: rest) alphabet hOfferWF.1 hOfferWF.2.2.2
           hScoped.2 hAvoid
 
+/-- Every subset residual of alphabet-well-formed branches is alphabet well formed. -/
+theorem parallelTypeBranchesFiringFrom_alphabetWellFormed (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (index : Nat) (branches : List (BareMessage × PactType))
+    (hAlpha : alphabet.WellFormed)
+    (hBranches : ∀ branch ∈ branches,
+      branch.2.alphabet = alphabet ∧ branch.2.AlphabetWellFormed) :
+    (parallelTypeBranchesFiringFrom alphabet selected index branches).AlphabetWellFormed := by
+  induction branches generalizing index with
+  | nil => simpa [parallelTypeBranchesFiringFrom, PactType.AlphabetWellFormed] using hAlpha
+  | cons branch rest ih =>
+      obtain ⟨hAlphabet, hWF⟩ := hBranches branch (by simp)
+      have hOwn : branch.2.reannotate alphabet = branch.2 := by
+        rw [← hAlphabet, PactType.reannotate_own_alphabet _ hWF]
+      have hFactor :
+          (if index ∈ selected then branch.2.reannotate alphabet
+           else singletonTypeXOfferAt alphabet branch).AlphabetWellFormed := by
+        split
+        · rwa [hOwn]
+        · simp only [singletonTypeXOfferAt, hOwn, PactType.AlphabetWellFormed,
+            PactType.BranchesAlphabetWellFormed, PactType.alphabet]
+          exact ⟨hAlpha, trivial, hAlpha, hAlphabet, hWF, trivial⟩
+      have hFactorAlphabet :
+          (if index ∈ selected then branch.2.reannotate alphabet
+           else singletonTypeXOfferAt alphabet branch).alphabet = alphabet := by
+        split
+        · exact PactType.reannotate_alphabet _ _
+        · rfl
+      cases rest with
+      | nil => exact hFactor
+      | cons next rest =>
+          rw [parallelTypeBranchesFiringFrom, PactType.AlphabetWellFormed]
+          refine ⟨hAlpha, ?_, hFactor, ih (index + 1) (fun b hb => hBranches b (by simp [hb]))⟩
+          rw [hFactorAlphabet, parallelTypeBranchesFiringFrom_alphabet]
+          exact PactTypeAlphabet.parallelCompatible_self_empty alphabet
+
+/-- Atomic consumption preserves the enclosing offer's alphabet well-formedness. -/
+theorem firingOffer_alphabetWellFormed (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (branches : List (BareMessage × PactType)) (selected : Finset Nat)
+    (hWF : (PactType.offer alphabet elseType branches).AlphabetWellFormed) :
+    (parallelTypeBranchesFiring alphabet selected branches).AlphabetWellFormed := by
+  rw [PactType.AlphabetWellFormed] at hWF
+  exact parallelTypeBranchesFiringFrom_alphabetWellFormed alphabet selected 0 branches hWF.1
+    (offerBranchesWF_mem branches hWF.2.2.2)
+
 /-- The offer-commit obligation of `relationMembership_alphabetWellFormed`,
 carrying the interface scoping the generated product needs. -/
 def CommittedOfferAlphabetWellFormed : Prop :=
   ∀ (alphabet : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (selected : BareMessage × PactType),
+    (selected : Finset Nat),
     (PactType.offer alphabet elseType branches).AlphabetWellFormed →
     (PactType.offer alphabet elseType branches).InterfaceScoped →
     (PactType.offer alphabet elseType branches).InterfaceAlphabetScoped →
-    selected ∈ branches →
-    (parallelTypeBranchesSelecting alphabet selected branches).AlphabetWellFormed
+    selected ∈ conjunctiveSelections branches.length →
+    (parallelTypeBranchesFiring alphabet selected branches).AlphabetWellFormed
 
 /-- The offer-commit obligation is discharged by the branch-product
 well-formedness theorem. -/
 theorem committedOfferAlphabetWellFormed_holds :
     CommittedOfferAlphabetWellFormed :=
-  committedOffer_alphabetWellFormed
+  fun alphabet elseType branches selected hWF _ _ _ =>
+    firingOffer_alphabetWellFormed alphabet elseType branches selected hWF
 
 /-- The offer-commit obligation for the two interface-scoping clauses needed
 when the generated product is used as a recursive source. -/
 def CommittedOfferScoping : Prop :=
   ∀ (alphabet : PactTypeAlphabet) (elseType : PactType)
     (branches : List (BareMessage × PactType))
-    (selected : BareMessage × PactType),
+    (selected : Finset Nat),
     (PactType.offer alphabet elseType branches).InterfaceScoped →
     (PactType.offer alphabet elseType branches).InterfaceAlphabetScoped →
-    selected ∈ branches →
-    (parallelTypeBranchesSelecting alphabet selected branches).InterfaceScoped ∧
-      (parallelTypeBranchesSelecting alphabet selected branches).InterfaceAlphabetScoped
+    selected ∈ conjunctiveSelections branches.length →
+    (parallelTypeBranchesFiring alphabet selected branches).InterfaceScoped ∧
+      (parallelTypeBranchesFiring alphabet selected branches).InterfaceAlphabetScoped
 
 /-- Every residual represented by a compiled state is alphabet-well-formed
 whenever the source type is.  Tail recursion is needed because a recursion
@@ -3036,28 +3036,27 @@ theorem relationMembership_alphabetWellFormed
               residual q hWF.2.2.1 hScoped.1 hAlphaScoped.2.1 hTailRec.1
               hDisjoint.1 hElseRelated
           · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
-            have hMember : selected ∈ branches := List.mem_of_getElem? hGet
+            have hMember : selected ∈ conjunctiveSelections branches.length :=
+              Finset.mem_toList.mp (List.mem_of_getElem? hGet)
             have hSelectedFuel : typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-              simp only [typeCompilationFuel]
-              omega
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
+              rw [← hFuel]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
             have hGeneratedScoped := hCommittedScoped alphabet elseType branches
               selected hOfferScoped hOfferAlphaScoped hMember
             exact ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
+                (parallelTypeBranchesFiring alphabet selected branches))
               hSelectedFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) rfl
+              (parallelTypeBranchesFiring alphabet selected branches) rfl
               residual q
               (hCommitted alphabet elseType branches selected hOfferWF
                 hOfferScoped hOfferAlphaScoped hMember)
               hGeneratedScoped.1 hGeneratedScoped.2
-              (parallelTypeBranchesSelecting_tailRecursive alphabet selected
+              (parallelTypeBranchesFiring_tailRecursive alphabet selected
                 branches
                 (fun branch hBranch =>
-                  tailRecursive_of_mem_branches hTailRec.2 hBranch)
-                (tailRecursive_of_mem_branches hTailRec.2 hMember))
-              (parallelTypeBranchesSelecting_offerBranchesDisjoint selected
+                  tailRecursive_of_mem_branches hTailRec.2 hBranch))
+              (parallelTypeBranchesFiring_offerBranchesDisjoint selected
                 branches
                 (fun branch hBranch =>
                   offerBranchesDisjoint_of_mem (action := branch.1)
@@ -3335,6 +3334,105 @@ theorem parallelTypeBranchesSelecting_interfaceAlphabetScoped
   | cons head rest =>
       exact hWithin (head :: rest) (Finset.Subset.refl _) hScoped
 
+/-- Consuming a conjunctive head changes no interface in its continuation. -/
+theorem parallelTypeBranchesFiringFrom_parallelInterfaces (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType)) :
+    ∀ index, PactType.ParallelInterfaces
+      (parallelTypeBranchesFiringFrom alphabet selected index branches) =
+        PactType.ParallelBranchInterfaces branches := by
+  induction branches with
+  | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.ParallelInterfaces,
+      PactType.ParallelBranchInterfaces]
+  | cons head rest ih =>
+      rcases head with ⟨action, body⟩
+      intro index
+      cases rest with
+      | nil =>
+          simp only [parallelTypeBranchesFiringFrom]
+          split <;> simp [singletonTypeXOfferAt, PactType.ParallelInterfaces,
+            PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces]
+      | cons next rest =>
+          simp only [parallelTypeBranchesFiringFrom, PactType.ParallelInterfaces, ih]
+          split <;> simp [singletonTypeXOfferAt, PactType.ParallelInterfaces,
+            PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces]
+
+/-- Empty-interface residual products preserve interface scope. -/
+theorem parallelTypeBranchesFiring_interfaceScoped (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType))
+    (hScoped : PactType.InterfaceScopedBranches branches) :
+    (parallelTypeBranchesFiring alphabet selected branches).InterfaceScoped := by
+  have hFrom : ∀ index, (parallelTypeBranchesFiringFrom alphabet selected index branches).InterfaceScoped := by
+    induction branches with
+    | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.InterfaceScoped]
+    | cons head rest ih =>
+        rcases head with ⟨action, body⟩
+        simp only [PactType.InterfaceScopedBranches] at hScoped
+        intro index
+        have hBody := PactType.reannotate_interfaceScoped body alphabet hScoped.1
+        have hFactor : (if index ∈ selected then body.reannotate alphabet
+            else singletonTypeXOfferAt alphabet (action, body)).InterfaceScoped := by
+          split
+          · exact hBody
+          · simpa [singletonTypeXOfferAt, PactType.InterfaceScoped,
+              PactType.InterfaceScopedBranches] using hBody
+        cases rest with
+        | nil => exact hFactor
+        | cons next rest =>
+            rw [parallelTypeBranchesFiringFrom, PactType.InterfaceScoped]
+            exact ⟨by simp, hFactor, ih hScoped.2 (index + 1)⟩
+  exact hFrom 0
+
+/-- Every residual annotation avoids the interfaces below it. -/
+theorem parallelTypeBranchesFiring_interfaceAlphabetScoped (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType))
+    (hScoped : PactType.InterfaceAlphabetScopedBranches branches)
+    (hAvoid : ∀ action ∈ alphabet.actions,
+      action.1 ∉ PactType.ParallelBranchInterfaces branches) :
+    (parallelTypeBranchesFiring alphabet selected branches).InterfaceAlphabetScoped := by
+  have hFrom : ∀ index,
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).InterfaceAlphabetScoped := by
+    induction branches with
+    | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.InterfaceAlphabetScoped]
+    | cons head rest ih =>
+        rcases head with ⟨action, body⟩
+        simp only [PactType.InterfaceAlphabetScopedBranches] at hScoped
+        simp only [PactType.ParallelBranchInterfaces] at hAvoid
+        have hBodyAvoid : ∀ a ∈ alphabet.actions, a.1 ∉ PactType.ParallelInterfaces body :=
+          fun a ha hIn => hAvoid a ha (Finset.mem_union_left _ hIn)
+        have hRestAvoid : ∀ a ∈ alphabet.actions, a.1 ∉ PactType.ParallelBranchInterfaces rest :=
+          fun a ha hIn => hAvoid a ha (Finset.mem_union_right _ hIn)
+        have hDisj : Disjoint alphabet.messageIds (PactType.ParallelInterfaces body) := by
+          apply Finset.disjoint_left.mpr
+          intro msg hMsg hIn
+          obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hMsg
+          exact hBodyAvoid a ha hIn
+        have hBody := PactType.reannotate_interfaceAlphabetScoped body alphabet hScoped.1 hBodyAvoid
+        intro index
+        have hFactor : (if index ∈ selected then body.reannotate alphabet
+            else singletonTypeXOfferAt alphabet (action, body)).InterfaceAlphabetScoped := by
+          split
+          · exact hBody
+          · simpa [singletonTypeXOfferAt, PactType.InterfaceAlphabetScoped,
+              PactType.InterfaceAlphabetScopedBranches, PactType.ParallelInterfaces,
+              PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces] using
+              And.intro hDisj hBody
+        have hInterfaces : PactType.ParallelInterfaces
+            (if index ∈ selected then body.reannotate alphabet
+             else singletonTypeXOfferAt alphabet (action, body)) = PactType.ParallelInterfaces body := by
+          split <;> simp [singletonTypeXOfferAt, PactType.ParallelInterfaces,
+            PactType.ParallelBranchInterfaces, PactType.reannotate_parallelInterfaces]
+        cases rest with
+        | nil => exact hFactor
+        | cons next rest =>
+            rw [parallelTypeBranchesFiringFrom, PactType.InterfaceAlphabetScoped]
+            refine ⟨?_, hFactor, ih hScoped.2 hRestAvoid (index + 1)⟩
+            simp only [hInterfaces, parallelTypeBranchesFiringFrom_parallelInterfaces]
+            apply Finset.disjoint_left.mpr
+            intro msg hMsg hIn
+            obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hMsg
+            exact hAvoid a ha (by simpa using hIn)
+  exact hFrom 0
+
 /-- The generated committed-offer product satisfies both interface-scoping
 obligations required by the relation induction. -/
 theorem committedOfferScoping_holds : CommittedOfferScoping := by
@@ -3343,9 +3441,9 @@ theorem committedOfferScoping_holds : CommittedOfferScoping := by
     PactType.InterfaceAlphabetScoped.avoids hAlphaScoped
   simp only [PactType.InterfaceScoped] at hScoped
   simp only [PactType.InterfaceAlphabetScoped] at hAlphaScoped
-  refine ⟨parallelTypeBranchesSelecting_interfaceScoped alphabet selected
+  refine ⟨parallelTypeBranchesFiring_interfaceScoped alphabet selected
       branches hScoped.2,
-    parallelTypeBranchesSelecting_interfaceAlphabetScoped alphabet selected
+    parallelTypeBranchesFiring_interfaceAlphabetScoped alphabet selected
       branches hAlphaScoped.2.2 ?_⟩
   intro action hAction hIn
   exact hAvoidAll action hAction (by

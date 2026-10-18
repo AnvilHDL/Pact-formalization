@@ -745,25 +745,25 @@ theorem relationMembership_of_accepting
         have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
             max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
-        let selectedConjunctions := List.map (fun selected => (selected.1,
+        let selectedConjunctions := List.map (fun selected => (selected,
           compileTypeFuel
-            (typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches))
-            (parallelTypeBranchesSelecting alphabet selected branches))) branches
+            (typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches))
+            (parallelTypeBranchesFiring alphabet selected branches))) (conjunctiveSelections branches.length).toList
         have hMapEq :
-            List.map (fun selected => (selected.1,
+            List.map (fun selected => (selected,
               compileTypeFuel
                 (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches))) branches =
+                (parallelTypeBranchesFiring alphabet selected branches))) (conjunctiveSelections branches.length).toList =
               selectedConjunctions := by
           dsimp [selectedConjunctions]
           apply List.map_congr_left
           intro selected hSelected
           rw [compileTypeFuel_eq_of_sufficient
-            (parallelTypeBranchesSelecting alphabet selected branches) ?_ le_rfl]
-          show typeCompilationFuel (parallelTypeBranchesSelecting alphabet selected branches) ≤
+            (parallelTypeBranchesFiring alphabet selected branches) ?_ le_rfl]
+          show typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) ≤
             max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-          exact le_max_right _ _
+          exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
+            (le_max_right _ _)
         have hAcceptEq :
             (compileType (.offer alphabet elseType branches)).accepting =
             childAccepting 0 (compileTypeFuel
@@ -774,17 +774,17 @@ theorem relationMembership_of_accepting
             (.offer alphabet elseType branches)).accepting = _
           rw [hFuelEq]
           rw [compileTypeFuel.eq_def]
-          show (buildSelectedConjunctiveOfferAutomaton alphabet branches
+          show (buildAtomicConjunctiveOfferAutomaton alphabet branches
             (compileTypeFuel
               (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
               elseType)
-            (List.map (fun selected => (selected.1,
+            (List.map (fun selected => (selected,
               compileTypeFuel
                 (max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches))) branches)).accepting = _
+                (parallelTypeBranchesFiring alphabet selected branches))) (conjunctiveSelections branches.length).toList)).accepting = _
           rw [compileTypeFuel_eq_of_sufficient elseType
             (le_max_left _ _) le_rfl, hMapEq]
-          simp [buildSelectedConjunctiveOfferAutomaton,
+          simp [buildAtomicConjunctiveOfferAutomaton,
             finishAutomatonFragment, selectedConjunctions]
         rw [hAcceptEq] at hAccept
         simp only [childAccepting, indexedFragmentAccepting, Finset.mem_union,
@@ -815,17 +815,16 @@ theorem relationMembership_of_accepting
             dsimp [selectedConjunctions] at hIndexedMem
             rw [List.getElem?_map, Option.map_eq_some_iff] at hIndexedMem
             rcases hIndexedMem with
-              ⟨⟨branchAction, branchType⟩, hGet, hMappedEq⟩
+              ⟨selected, hGet, hMappedEq⟩
             simp only [Prod.mk.injEq] at hMappedEq
             rcases hMappedEq with ⟨hActionEq, hAutomatonEq⟩
-            subst branchAction
+            subst selected
             let selectedType :=
-              parallelTypeBranchesSelecting alphabet (action, branchType) branches
+              parallelTypeBranchesFiring alphabet action branches
             have hSelectedSize : typeCompilationFuel selectedType < n := by
               dsimp [selectedType]
-              rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hSize]
-              simp only [typeCompilationFuel]
-              omega
+              rw [← hSize]
+              exact typeCompilationFuel_firing_lt_offer alphabet elseType action branches
             rw [← hAutomatonEq] at hStateMem
             simp only [Finset.mem_image] at hStateMem
             rcases hStateMem with ⟨q, hq, hEq⟩
@@ -842,7 +841,7 @@ theorem relationMembership_of_accepting
               Finset.mem_union, Finset.mem_image]
             refine Or.inr (Or.inr ?_)
             rw [mem_foldl_union_iff]
-            refine Or.inr ⟨((action, branchType), index), ?_, ?_⟩
+            refine Or.inr ⟨(action, index), ?_, ?_⟩
             · rw [List.mk_mem_zipIdx_iff_getElem?]
               exact hGet
             · simp only [Finset.mem_image]
@@ -852,8 +851,8 @@ theorem relationMembership_of_accepting
               · show typeCompilationFuel selectedType ≤
                   max (typeCompilationFuel elseType) (conjunctiveCompilationFuel branches)
                 dsimp [selectedType]
-                rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-                exact le_max_right _ _
+                exact le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet action branches)
+                  (le_max_right _ _)
 
 /-- The right survivor region is the compiled re-signed right component tagged
 by `survivor 1`, so a state the re-signed component's own relation pairs with a

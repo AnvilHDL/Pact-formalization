@@ -454,6 +454,36 @@ theorem conjunctRegular_parallelProcessBranchesSelecting
       rw [parallelProcessBranchesSelecting]
       exact conjunctRegular_parallelProcessBranchesSelectingWithin _ hRegular
 
+/-- Atomic consumption preserves regularity in each residual factor. -/
+theorem conjunctRegular_parallelProcessBranchesFiringFrom
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat) (values : Nat → Bool)
+    (branches : List ChoiceBranch) (hRegular : Proc.ConjunctRegularBranches branches) :
+    ∀ index, Proc.ConjunctRegular
+      (parallelProcessBranchesFiringFrom alphabet selected values index branches) := by
+  induction branches with
+  | nil => intro index; simp [parallelProcessBranchesFiringFrom, Proc.ConjunctRegular]
+  | cons head rest ih =>
+      rw [Proc.ConjunctRegularBranches] at hRegular
+      intro index
+      have hHead : Proc.ConjunctRegular
+          (if index ∈ selected then consumedProcessBranchAt alphabet head (values index)
+           else optionalProcessBranchAt alphabet head) := by
+        split
+        · cases head with
+          | send msg expr process =>
+              exact Proc.conjunctRegular_reannotate hRegular.1
+          | recv msg name process =>
+              exact Proc.conjunctRegular_reannotate
+                (Proc.conjunctRegular_procExprReplace hRegular.1)
+        · simpa only [optionalProcessBranchAt, ChoiceBranch.toXOffer, Proc.reannotate] using
+            (Proc.conjunctRegular_reannotate (alphabet := alphabet)
+              (conjunctRegular_toXOffer (alphabet := alphabet) hRegular.1))
+      cases rest with
+      | nil => exact hHead
+      | cons next rest =>
+          rw [parallelProcessBranchesFiringFrom, Proc.ConjunctRegular]
+          exact ⟨hHead, ih hRegular.2 (index + 1)⟩
+
 /-! ## Along a step -/
 
 theorem conjunctRegular_skip (alphabet : PactTypeAlphabet) :
@@ -512,9 +542,10 @@ theorem conjunctRegular_offers {env : Environment} {source target : Proc}
       rw [Proc.ConjunctRegular] at hRegular
       exact hRegular.1
   | xoffer_wait _ _ _ _ _ => exact hRegular
-  | offer_some _ _ _ _ _ _ =>
+  | offer_some _ alphabet _ branches selected values _ =>
       rw [Proc.ConjunctRegular] at hRegular
-      exact conjunctRegular_parallelProcessBranchesSelecting hRegular.2.2
+      exact conjunctRegular_parallelProcessBranchesFiringFrom
+        alphabet selected values branches hRegular.2.2 0
   | offer_else _ _ _ _ _ =>
       rw [Proc.ConjunctRegular] at hRegular
       exact hRegular.2.1

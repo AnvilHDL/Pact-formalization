@@ -276,18 +276,17 @@ theorem correspondence_simultaneous :
           rw [← hFuel]; simp only [typeCompilationFuel]; omega
         have hGeneratedFuel : ∀ selected,
             typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches) < n := by
+                (parallelTypeBranchesFiring alphabet selected branches) < n := by
           intro selected
-          rw [← hFuel, typeCompilationFuel_parallelTypeBranchesSelecting]
-          simp only [typeCompilationFuel]
-          omega
+          rw [← hFuel]
+          exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
         obtain ⟨hElseWF, hSelectedWF⟩ := typeWellFormedIn_offer hWF
         have hElse := ih _ hElseFuel bound elseType rfl hElseWF
-        have hSelected : ∀ selected ∈ branches,
+        have hSelected : ∀ selected ∈ conjunctiveSelections branches.length,
             TypeAutomatonStepCorrespondence
-                (parallelTypeBranchesSelecting alphabet selected branches) ∧
+                (parallelTypeBranchesFiring alphabet selected branches) ∧
               FutureOffersAgree
-                (parallelTypeBranchesSelecting alphabet selected branches) :=
+                (parallelTypeBranchesFiring alphabet selected branches) :=
           fun selected hMem =>
             ih _ (hGeneratedFuel selected) bound _ rfl (hSelectedWF selected hMem)
         have hMenus : FutureOffersAgree (.offer alphabet elseType branches) := by
@@ -297,17 +296,16 @@ theorem correspondence_simultaneous :
               have h := hWF.1
               simp only [PactType.AlphabetWellFormed] at h
               exact h.2.1)
-            (fun selected hMem =>
-              parallelTypeBranchesSelecting_alphabet_eq_of_mem hMem)
-            ?_ hElse.2 (fun selected hMem => (hSelected selected hMem).2)
-          -- Paper: every selected product has the projected branch menu.
-          intro selected hMem
-          have h := hWF.1
-          simp only [PactType.AlphabetWellFormed] at h
-          exact typeFutureOffers_parallelTypeBranchesSelecting alphabet selected
-            branches
-            (fun b hb => (offerBranchesWellFormed_of_mem h.2.2.2 hb).1)
-            (fun b hb => (offerBranchesWellFormed_of_mem h.2.2.2 hb).2)
+            (fun selected _ => parallelTypeBranchesFiring_alphabet alphabet selected branches)
+            ?_ ?_ hElse.2 (fun selected hMem => (hSelected selected hMem).2)
+          · intro branch hMem
+            have h := hWF.1
+            simp only [PactType.AlphabetWellFormed] at h
+            exact (offerBranchesWellFormed_of_mem h.2.2.2 hMem).1
+          · intro branch hMem
+            have h := hWF.1
+            simp only [PactType.AlphabetWellFormed] at h
+            exact (offerBranchesWellFormed_of_mem h.2.2.2 hMem).2
         refine ⟨?_, hMenus⟩
         refine offerCorrespondence_offer alphabet elseType branches
             (offerBranchesDisjoint_of_wellFormedIn hElseWF)
@@ -318,8 +316,7 @@ theorem correspondence_simultaneous :
             ?_
             (fun selected hMem =>
               offerBranchesDisjoint_of_wellFormedIn (hSelectedWF selected hMem))
-            (fun selected hMem => by
-              rw [parallelTypeBranchesSelecting_alphabet_eq_of_mem hMem]; rfl)
+            (fun selected _ => parallelTypeBranchesFiring_alphabet alphabet selected branches)
             hMenus hElse.1 (fun selected hMem => (hSelected selected hMem).1)
         · intro branch hMem
           have hWholeDisjoint :=

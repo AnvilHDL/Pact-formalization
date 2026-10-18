@@ -183,8 +183,8 @@ private theorem compileTypeFuel_targetMenuSource :
       have hElse : typeCompilationFuel other ≤ fuel := by simp [typeCompilationFuel] at hFuel; omega
       have hElseWF : TypeWellFormedIn bound other := by
         first | exact (typeWellFormedIn_xoffer hWF).1 | exact (typeWellFormedIn_offer hWF).1
-      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildSelectedConjunctiveOfferAutomaton,
-        finishAutomatonFragment, Finset.mem_union] at hEdge
+      simp only [compileTypeFuel, buildExclusiveOfferAutomaton, buildAtomicConjunctiveOfferAutomaton,
+        conjunctiveFiringEdges, finishAutomatonFragment, Finset.mem_union] at hEdge
       rcases hEdge with (((hElseEdge | hIndexed) | hBranch) | hWait) | hDefault
       · apply hChild other 0 bound hElse hElseWF hElseEdge
         intro q hRho
@@ -196,23 +196,24 @@ private theorem compileTypeFuel_targetMenuSource :
         · simp at hEmpty
         · obtain ⟨entry, hEntry, rfl⟩ := List.mem_map.mp hItem
           have hGet := List.mk_mem_zipIdx_iff_getElem?.mp hEntry
-          have hMember : entry.1 ∈ branches := List.mem_of_getElem? hGet
+          have hMember := List.mem_of_getElem? hGet
           refine hChild _ (entry.2 + 1) bound ?_ ?_ hCopyEdge ?_
           · first
             | have := typeCompilationFuel_le_typeBranchCompilationFuel branches entry.1 hMember
               simp [typeCompilationFuel] at hFuel; omega
-            | rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            | have := typeCompilationFuel_parallelTypeBranchesFiring a entry.1 branches
               simp [typeCompilationFuel] at hFuel; omega
           · first
             | exact (typeWellFormedIn_xoffer hWF).2 entry.1 hMember
-            | exact (typeWellFormedIn_offer hWF).2 entry.1 hMember
+            | exact (typeWellFormedIn_offer hWF).2 entry.1 (Finset.mem_toList.mp hMember)
           · intro q hRho
             -- Specialize the existing relation cases to this branch's index.
-            rcases entry with ⟨⟨⟨msg, dir⟩, branch⟩, index⟩
             first
-            | simpa [xofferRelationShape, hGet] using
+            | rcases entry with ⟨⟨⟨msg, dir⟩, branch⟩, index⟩
+              simpa [xofferRelationShape, hGet] using
                 relationMembership_xoffer_cases a other branches hRho
-            | simpa [offerRelationShape, hGet] using
+            | rcases entry with ⟨selected, index⟩
+              simpa [offerRelationShape, hGet] using
                 relationMembership_offer_cases a other branches hRho
       · rw [mem_foldl_union_iff] at hBranch
         rcases hBranch with hEmpty | ⟨entry, _, hNew⟩

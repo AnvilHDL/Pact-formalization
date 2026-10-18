@@ -75,6 +75,39 @@ theorem parallelTypeBranchesSelecting_reannotate_self
   | nil => simp at hMem
   | cons head rest => exact hWithin (head :: rest)
 
+/-- An atomic offer residual is fixed by re-signing with its own alphabet. -/
+theorem parallelTypeBranchesFiring_reannotate_self
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType)) :
+    (parallelTypeBranchesFiring alphabet selected branches).reannotate alphabet =
+      parallelTypeBranchesFiring alphabet selected branches := by
+  have hFrom : ∀ index,
+      (parallelTypeBranchesFiringFrom alphabet selected index branches).reannotate alphabet =
+        parallelTypeBranchesFiringFrom alphabet selected index branches := by
+    induction branches with
+    | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.reannotate]
+    | cons head rest ih =>
+        intro index
+        have hFactor :
+            (if index ∈ selected then head.2.reannotate alphabet
+              else singletonTypeXOfferAt alphabet head).reannotate alphabet =
+            (if index ∈ selected then head.2.reannotate alphabet
+              else singletonTypeXOfferAt alphabet head) := by
+          split_ifs
+          · exact PactType.reannotate_idem _ _
+          · simp [singletonTypeXOfferAt, PactType.reannotate,
+              PactType.reannotateBranches_cons, PactType.reannotateBranches_nil,
+              PactType.reannotate_idem]
+        cases rest with
+        | nil => exact hFactor
+        | cons next tail =>
+            have hProject (child : PactTypeAlphabet) :
+                PactTypeAlphabet.projectParallel alphabet child ∅ = alphabet := by
+              simp [PactTypeAlphabet.projectParallel]
+            rw [parallelTypeBranchesFiringFrom, PactType.reannotate,
+              hProject, hProject, hFactor, ih]
+  exact hFrom 0
+
 /-- A step preserves the fixed-point property of re-signing by the node alphabet. -/
 theorem TypeTransition.preserves_reannotate_self
     {env : TypeEnvironment} {source target : PactType} {label : TypeLabel}
@@ -119,7 +152,7 @@ theorem TypeTransition.preserves_reannotate_self
       exact hNormal.1
   | xoffer_wait | offer_wait => exact hNormal
   | offer_some env alphabet other branches selected hEnv =>
-      exact parallelTypeBranchesSelecting_reannotate_self alphabet selected branches hEnv.2.1
+      exact parallelTypeBranchesFiring_reannotate_self alphabet selected branches
   | par outer leftEnv rightEnv interface alphabet left left' right right' leftLabel rightLabel
       leftCurrent leftFuture rightCurrent rightFuture _ _ _ _ _ _ _ hEnv ihLeft ihRight =>
       change (PactType.par alphabet left right interface).reannotate alphabet = _ at hNormal

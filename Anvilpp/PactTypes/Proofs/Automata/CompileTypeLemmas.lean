@@ -159,6 +159,44 @@ theorem typeCompilationFuel_reannotate
             ih (sizeOf elseType) hElse alphabet elseType rfl,
             hConjOffer branches hBranches alphabet ∅]
 
+/-- Consuming heads cannot increase the compilation budget of the optional product. -/
+theorem typeCompilationFuel_parallelTypeBranchesFiringFrom (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (index : Nat) (branches : List (BareMessage × PactType)) :
+    typeCompilationFuel (parallelTypeBranchesFiringFrom alphabet selected index branches) ≤
+      conjunctiveCompilationFuel branches := by
+  induction branches generalizing index with
+  | nil => simp [parallelTypeBranchesFiringFrom, typeCompilationFuel, conjunctiveCompilationFuel]
+  | cons branch rest ih =>
+      rcases branch with ⟨action, body⟩
+      cases rest with
+      | nil =>
+          by_cases hSelected : index ∈ selected <;>
+            simp [parallelTypeBranchesFiringFrom, hSelected, singletonTypeXOfferAt,
+              typeCompilationFuel, typeBranchCompilationFuel, conjunctiveCompilationFuel,
+              typeCompilationFuel_reannotate]
+          omega
+      | cons next rest =>
+          have hRest := ih (index + 1)
+          by_cases hSelected : index ∈ selected <;>
+            simp only [parallelTypeBranchesFiringFrom, hSelected, if_true, if_false,
+              singletonTypeXOfferAt, typeCompilationFuel, typeBranchCompilationFuel,
+              conjunctiveCompilationFuel, typeCompilationFuel_reannotate] <;> omega
+
+theorem typeCompilationFuel_parallelTypeBranchesFiring (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType)) :
+    typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) ≤
+      conjunctiveCompilationFuel branches :=
+  typeCompilationFuel_parallelTypeBranchesFiringFrom alphabet selected 0 branches
+
+/-- Every generated residual lies below its enclosing offer in the compilation induction. -/
+theorem typeCompilationFuel_firing_lt_offer (alphabet : PactTypeAlphabet)
+    (elseType : PactType) (selected : Finset Nat) (branches : List (BareMessage × PactType)) :
+    typeCompilationFuel (parallelTypeBranchesFiring alphabet selected branches) <
+      typeCompilationFuel (.offer alphabet elseType branches) := by
+  have hBound := typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches
+  simp only [typeCompilationFuel]
+  omega
+
 theorem typeCompilationFuel_parallelTypeBranchesWithin
     (alphabet : PactTypeAlphabet) : ∀ branches,
     typeCompilationFuel (parallelTypeBranchesWithin alphabet branches) =
@@ -419,25 +457,25 @@ private theorem compileTypeFuel_succ_stable :
                 omega
           exact hMap branches hBranches
       | offer alphabet elseType branches =>
-          change buildSelectedConjunctiveOfferAutomaton alphabet
+          change buildAtomicConjunctiveOfferAutomaton alphabet
               branches
               (compileTypeFuel
                 (fuel + 1) elseType)
-              (branches.map fun selected =>
-                (selected.1,
+              ((conjunctiveSelections branches.length).toList.map fun selected =>
+                (selected,
                   compileTypeFuel
                    
                     (fuel + 1)
-                    (parallelTypeBranchesSelecting alphabet selected
+                    (parallelTypeBranchesFiring alphabet selected
                       branches))) =
-            buildSelectedConjunctiveOfferAutomaton alphabet branches
+            buildAtomicConjunctiveOfferAutomaton alphabet branches
               (compileTypeFuel fuel elseType)
-              (branches.map fun selected =>
-                (selected.1,
+              ((conjunctiveSelections branches.length).toList.map fun selected =>
+                (selected,
                   compileTypeFuel
                    
                     fuel
-                    (parallelTypeBranchesSelecting alphabet selected
+                    (parallelTypeBranchesFiring alphabet selected
                       branches)))
           have hElse : typeCompilationFuel elseType ≤ fuel := by
             simp [typeCompilationFuel] at hFuel
@@ -448,7 +486,7 @@ private theorem compileTypeFuel_succ_stable :
           intro selected hSelected
           congr 1
           apply ih
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+          apply le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches)
           simp [typeCompilationFuel] at hFuel
           omega
 
@@ -584,7 +622,7 @@ theorem compileTypeFuel_initial_mem  :
           simp [compileTypeFuel, buildExclusiveOfferAutomaton,
             finishAutomatonFragment]
       | offer alphabet elseType branches =>
-          simp [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment]
 
 /-- The initial state exposed by the public compiler belongs to its state set. -/
@@ -653,7 +691,7 @@ theorem parallelFutureSpec_explicit
 
 /-- The indexed family of branch copies keeps the invariant. -/
 theorem indexedFragmentEdges_storedMenusEmpty
-    (automata : List (BareMessage × AutomatonFragment))
+    {Key : Type} (automata : List (Key × AutomatonFragment))
     (hAll : ∀ entry ∈ automata, entry.2.StoredMenusEmpty)
     (edge : PendingAutomatonEdge)
     (hEdge : edge ∈ indexedFragmentEdges automata)
@@ -841,7 +879,7 @@ theorem compileTypeFuel_storedMenusEmpty :
             simp at hOffers
       | offer alphabet elseType branches =>
           intro edge hEdge offers hOffers
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment, Finset.mem_union] at hEdge
           rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) |
             hElseRoot)
@@ -903,7 +941,7 @@ theorem childPendingEdges_futureTargets (index : Nat)
     (hChild childEdge hChildEdge inner removed hInner)
 
 theorem indexedFragmentEdges_futureTargets
-    (automata : List (BareMessage × AutomatonFragment))
+    {Key : Type} (automata : List (Key × AutomatonFragment))
     (hAll : ∀ entry ∈ automata, entry.2.FutureTargetsAreEdgeTargets)
     (edge : PendingAutomatonEdge)
     (hEdge : edge ∈ indexedFragmentEdges automata)
@@ -1128,7 +1166,7 @@ theorem compileTypeFuel_futureTargetsAreEdgeTargets :
             simp at hFuture ⊢; exact hFuture.1.symm
       | offer alphabet elseType branches =>
           intro edge hEdge target removed hFuture
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment, Finset.mem_union] at hEdge
           rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) |
             hElseRoot)
@@ -1196,7 +1234,7 @@ theorem childState_mem_childAccepting_iff (i j : Nat) (f : AutomatonFragment)
     exact ⟨q, hq, rfl⟩
 
 theorem indexedFragmentEdges_acceptingInert
-    (automata : List (BareMessage × AutomatonFragment))
+    {Key : Type} (automata : List (Key × AutomatonFragment))
     (hAll : ∀ entry ∈ automata, entry.2.AcceptingInert)
     (edge : PendingAutomatonEdge)
     (hEdge : edge ∈ indexedFragmentEdges automata)
@@ -1537,7 +1575,7 @@ theorem compileTypeFuel_acceptingInert :
               · simp [childAccepting, childState] at hMem
       | offer alphabet elseType branches =>
           intro edge hEdge hSource
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment, Finset.mem_union] at hEdge hSource ⊢
           rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) |
             hElseRoot)
@@ -1557,9 +1595,9 @@ theorem compileTypeFuel_acceptingInert :
               (ih elseType) edge hElse hSrc
             exact ⟨hC, Or.inl hT, hL⟩
           · have hSrc : edge.source ∈ indexedFragmentAccepting
-                (branches.map fun selected =>
-                  (selected.1, compileTypeFuel fuel
-                    (parallelTypeBranchesSelecting alphabet selected branches))) := by
+                ((conjunctiveSelections branches.length).toList.map fun selected =>
+                  (selected, compileTypeFuel fuel
+                    (parallelTypeBranchesFiring alphabet selected branches))) := by
               rcases hSource with h0 | h1
               · exfalso
                 rw [indexedFragmentEdges, mem_foldl_union_iff] at hIndexed
@@ -1573,9 +1611,9 @@ theorem compileTypeFuel_acceptingInert :
             refine ⟨?_, ?_, ?_⟩ <;>
               [skip; skip; skip]
             all_goals (
-              have hAll : ∀ entry ∈ (branches.map fun selected =>
-                  (selected.1, compileTypeFuel fuel
-                    (parallelTypeBranchesSelecting alphabet selected branches))),
+              have hAll : ∀ entry ∈ ((conjunctiveSelections branches.length).toList.map fun selected =>
+                  (selected, compileTypeFuel fuel
+                    (parallelTypeBranchesFiring alphabet selected branches))),
                   entry.2.AcceptingInert := by
                 intro entry hEntry
                 simp only [List.mem_map] at hEntry
@@ -1701,7 +1739,7 @@ theorem compileTypeFuel_accepting_stateProductInfoFuel_none :
               rw [← hEq] at hq
               exact ih branch.2 q hq
       | offer alphabet elseType branches =>
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment, Finset.mem_union] at hState
           rcases hState with hElse | hIndexed
           · simp only [childAccepting, Finset.mem_image] at hElse
@@ -1713,9 +1751,9 @@ theorem compileTypeFuel_accepting_stateProductInfoFuel_none :
             · simp at hEmpty
             · simp only [childAccepting, Finset.mem_image] at hAcc
               obtain ⟨q, hq, rfl⟩ := hAcc
-              have hGet : (branches.map fun selected =>
-                  (selected.1, compileTypeFuel fuel
-                    (parallelTypeBranchesSelecting alphabet selected
+              have hGet : ((conjunctiveSelections branches.length).toList.map fun selected =>
+                  (selected, compileTypeFuel fuel
+                    (parallelTypeBranchesFiring alphabet selected
                       branches)))[indexed.2]? = some indexed.1 :=
                 List.mk_mem_zipIdx_iff_getElem?.mp (by simpa using hMem)
               rw [List.getElem?_map] at hGet
@@ -1751,7 +1789,7 @@ theorem childPendingEdges_explicitOnlyAtAccepting (index : Nat)
       (childFutureSpec_explicit index childEdge.future offers hFuture)⟩
 
 theorem indexedFragmentEdges_explicitOnlyAtAccepting
-    (automata : List (BareMessage × AutomatonFragment))
+    {Key : Type} (automata : List (Key × AutomatonFragment))
     (hAll : ∀ entry ∈ automata, entry.2.ExplicitOnlyAtAccepting)
     (edge : PendingAutomatonEdge)
     (hEdge : edge ∈ indexedFragmentEdges automata)
@@ -1986,7 +2024,7 @@ theorem compileTypeFuel_explicitOnlyAtAccepting :
             simp at hFuture
       | offer alphabet elseType branches =>
           intro edge hEdge hTock offers hFuture
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton, conjunctiveFiringEdges,
             finishAutomatonFragment, Finset.mem_union] at hEdge ⊢
           rcases hEdge with ((((hElse | hIndexed) | hEnabled) | hWait) |
             hElseRoot)

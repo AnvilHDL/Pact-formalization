@@ -146,6 +146,42 @@ private theorem completionAfter_reannotate (ty : PactType) :
       rw [ih _ (by rw [← hSize]; simp; omega) other rfl alphabet subs,
         hBranches bs (by rw [← hSize]; simp; omega)]
 
+/-- Completion of a batch residual implies completion of every consumed continuation. -/
+private theorem completionAfter_firingFrom (alphabet : PactTypeAlphabet)
+    (selected : Finset Nat) (branches : List (BareMessage × PactType))
+    (subs : List (String × PactType)) :
+    ∀ index offset branch, branches[offset]? = some branch → index + offset ∈ selected →
+      completionAfter subs (parallelTypeBranchesFiringFrom alphabet selected index branches) = true →
+      completionAfter subs branch.2 = true := by
+  induction branches with
+  | nil => intro index offset branch hGet; simp at hGet
+  | cons head rest ih =>
+      intro index offset branch hGet hSelected hComplete
+      cases offset with
+      | zero =>
+          simp only [List.getElem?_cons_zero, Option.some.injEq] at hGet
+          subst branch
+          simp only [Nat.add_zero] at hSelected
+          have hHead : completionAfter subs (head.2.reannotate alphabet) = true := by
+            cases rest with
+            | nil =>
+                simpa only [parallelTypeBranchesFiringFrom, if_pos hSelected] using hComplete
+            | cons next rest =>
+                simp only [parallelTypeBranchesFiringFrom, if_pos hSelected] at hComplete
+                rw [completionAfter_eq] at hComplete
+                exact (Bool.and_eq_true_iff.mp hComplete).1
+          rwa [completionAfter_reannotate] at hHead
+      | succ offset =>
+          cases rest with
+          | nil => simp at hGet
+          | cons next rest =>
+              simp only [List.getElem?_cons_succ] at hGet
+              simp only [parallelTypeBranchesFiringFrom] at hComplete
+              rw [completionAfter_eq] at hComplete
+              exact ih (index + 1) offset branch hGet
+                (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hSelected)
+                (Bool.and_eq_true_iff.mp hComplete).2
+
 private theorem completionAfter_selected (alphabet : PactTypeAlphabet)
     (selected : BareMessage × PactType) (branches : List (BareMessage × PactType))
     (hSelected : selected ∈ branches) (subs : List (String × PactType))
@@ -411,12 +447,11 @@ private theorem menuLinks_completion_transport :
             · intro subs h
               rw [completionAfter_eq]
               simp only [h, Bool.true_or]
-          · have hMember : item.1 ∈ branches := by
-              obtain ⟨hBound, hValue⟩ := List.mem_zipIdx' hItem
-              simp [hValue, List.getElem_mem hBound]
+          · have hSelection := (mem_conjunctiveSelections branches.length item.1).mp
+              (Finset.mem_toList.mp (List.fst_mem_of_mem_zipIdx hItem))
             rcases hItemLink with ⟨entry, hEntry, rfl⟩ | rfl
-            · specialize ih (parallelTypeBranchesSelecting a item.1 branches) (by
-                  rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            · specialize ih (parallelTypeBranchesFiring a item.1 branches) (by
+                  have hBound := typeCompilationFuel_parallelTypeBranchesFiring a item.1 branches
                   simp [typeCompilationFuel] at hFuel; omega) entry hEntry
               obtain ⟨rho, theta, hRho, hTheta, hComplete⟩ := ih
               refine ⟨rho, theta, ?_, ?_, hComplete⟩
@@ -426,23 +461,27 @@ private theorem menuLinks_completion_transport :
               · simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
                   mem_foldl_union_iff, Finset.mem_image]
                 exact Or.inr (Or.inr (Or.inr ⟨item, hItem, (theta, entry.2), hTheta, rfl⟩))
-            · have hSelectedFuel : typeCompilationFuel (parallelTypeBranchesSelecting a item.1 branches) ≤ fuel := by
-                rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            · have hSelectedFuel : typeCompilationFuel (parallelTypeBranchesFiring a item.1 branches) ≤ fuel := by
+                have hBound := typeCompilationFuel_parallelTypeBranchesFiring a item.1 branches
                 simp [typeCompilationFuel] at hFuel; omega
-              refine ⟨.offer a other branches, parallelTypeBranchesSelecting a item.1 branches, ?_, ?_, ?_⟩
+              refine ⟨.offer a other branches, parallelTypeBranchesFiring a item.1 branches, ?_, ?_, ?_⟩
               · rw [buildRelationSetCoreFuel]; exact Finset.mem_insert_self _ _
               · simp only [buildRelationSetCoreFuel, Finset.mem_insert, Finset.mem_union,
                   mem_foldl_union_iff, Finset.mem_image]
                 exact Or.inr (Or.inr (Or.inr ⟨item, hItem,
-                  (parallelTypeBranchesSelecting a item.1 branches,
-                    (compileTypeFuel fuel (parallelTypeBranchesSelecting a item.1 branches)).initial),
+                  (parallelTypeBranchesFiring a item.1 branches,
+                    (compileTypeFuel fuel (parallelTypeBranchesFiring a item.1 branches)).initial),
                   buildRelationSetCoreFuel_initial_mem fuel _ hSelectedFuel, rfl⟩))
               · intro subs h
-                have hSelected : completionAfter subs item.1.2 = true := by
-                  first | exact h | exact completionAfter_selected a item.1 branches hMember subs h
+                obtain ⟨index, hIndex⟩ := hSelection.1
+                have hBound := Finset.mem_range.mp (hSelection.2 hIndex)
+                have hGet : branches[index]? = some branches[index] := by simp [hBound]
+                have hSelected := completionAfter_firingFrom a item.1 branches subs 0 index
+                  branches[index] hGet (by simpa using hIndex) h
                 rw [completionAfter_eq]
                 simp only [Bool.or_eq_true]
-                exact Or.inr (List.any_eq_true.mpr ⟨item.1, hMember, hSelected⟩)
+                exact Or.inr (List.any_eq_true.mpr
+                  ⟨branches[index], List.getElem_mem hBound, hSelected⟩)
 
 /-- Every optimistic link has related endpoints and propagates completion backwards. -/
 theorem compileTypeMenuLinksFuel_completion_transport

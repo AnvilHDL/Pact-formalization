@@ -565,10 +565,10 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
       MarkerSource (compileTypeFuel (typeCompilationFuel (.offer a elseType branches))
         (.offer a elseType branches)) name r) ↔ menuReachesVar name rho = true := by
   let whole : PactType := .offer a elseType branches
-  let selectedAutomata := branches.map fun selected =>
-    (selected.1, compileTypeFuel
-      (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-      (parallelTypeBranchesSelecting a selected branches))
+  let selectedAutomata := (conjunctiveSelections branches.length).toList.map fun selected =>
+    (selected, compileTypeFuel
+      (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+      (parallelTypeBranchesFiring a selected branches))
   have hCompile := compileTypeFuel_offer_eq a elseType branches
   obtain ⟨hElseWF, hSelectedWF⟩ := typeWellFormedIn_offer hWF
   have hWholeTail := hWF.2.2.2.1 name
@@ -578,15 +578,15 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
     tailBranchOccurrences_forall name False branches hWholeTail.2
   have hWholeDisjoint := offerBranchesDisjoint_of_wellFormedIn hWF
   have hElseDisjoint := offerBranchesDisjoint_of_wellFormedIn hElseWF
-  have hSelectedDisjoint : ∀ selected ∈ branches,
-      (parallelTypeBranchesSelecting a selected branches).OfferBranchesDisjoint := by
+  have hSelectedDisjoint : ∀ selected ∈ conjunctiveSelections branches.length,
+      (parallelTypeBranchesFiring a selected branches).OfferBranchesDisjoint := by
     intro selected hSelected
     exact offerBranchesDisjoint_of_wellFormedIn (hSelectedWF selected hSelected)
-  have hSelectedTail : ∀ selected ∈ branches,
-      (parallelTypeBranchesSelecting a selected branches).TailOccurrences name False := by
+  have hSelectedTail : ∀ selected ∈ conjunctiveSelections branches.length,
+      (parallelTypeBranchesFiring a selected branches).TailOccurrences name False := by
     intro selected hSelected
-    exact parallelTypeBranchesSelecting_tailOccurrences name a selected branches False
-      hBranchTail (hBranchTail selected hSelected)
+    exact parallelTypeBranchesFiring_tailOccurrences name a selected branches False
+      hBranchTail
   have hCopyElse : ∀ state
       (hState : state ∈ (compileTypeFuel (typeCompilationFuel elseType) elseType).states),
       (∃ r ∈ (compiledMenuGraphFuel (typeCompilationFuel whole) whole).futureReachable
@@ -599,57 +599,55 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
     apply compiledMenuMarkerPath_child whole elseType 0 name hElseDisjoint
     · rw [show whole = .offer a elseType branches by rfl, hCompile]
       intro tagged hTagged
-      simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+      simp only [buildAtomicConjunctiveOfferAutomaton, finishAutomatonFragment,
         Finset.mem_union]
       exact Or.inl (Or.inr hTagged)
     · intro source edge
       rw [show whole = .offer a elseType branches by rfl, hCompile]
-      exact buildSelectedConjunctiveOfferAutomaton_outgoing_else
+      exact buildAtomicConjunctiveOfferAutomaton_outgoing_else
         a branches _ _ source edge
     · intro source
       exact menuDependencyTargets_offer_else a elseType branches source
     · exact hState
   have hCopySelected : ∀ index selected
-      (hGet : branches[index]? = some selected) state
+      (hGet : (conjunctiveSelections branches.length).toList[index]? = some selected) state
       (hState : state ∈ (compileTypeFuel
-        (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-        (parallelTypeBranchesSelecting a selected branches)).states),
+        (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+        (parallelTypeBranchesFiring a selected branches)).states),
       (∃ r ∈ (compiledMenuGraphFuel (typeCompilationFuel whole) whole).futureReachable
           (.child (index + 1) state),
         MarkerSource (compileTypeFuel (typeCompilationFuel whole) whole) name r) ↔
       ∃ r ∈ (compiledMenuGraphFuel
-          (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-          (parallelTypeBranchesSelecting a selected branches)).futureReachable state,
+          (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+          (parallelTypeBranchesFiring a selected branches)).futureReachable state,
         MarkerSource (compileTypeFuel
-          (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-          (parallelTypeBranchesSelecting a selected branches)) name r := by
+          (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+          (parallelTypeBranchesFiring a selected branches)) name r := by
     intro index selected hGet state hState
     have hAutomatonGet : selectedAutomata[index]? = some
-        (selected.1, compileTypeFuel
-          (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-          (parallelTypeBranchesSelecting a selected branches)) := by
+        (selected, compileTypeFuel
+          (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+          (parallelTypeBranchesFiring a selected branches)) := by
       simp [selectedAutomata, List.getElem?_map, hGet]
     apply compiledMenuMarkerPath_child whole
-      (parallelTypeBranchesSelecting a selected branches) (index + 1) name
-      (hSelectedDisjoint selected (List.mem_of_getElem? hGet))
+      (parallelTypeBranchesFiring a selected branches) (index + 1) name
+      (hSelectedDisjoint selected (Finset.mem_toList.mp (List.mem_of_getElem? hGet)))
     · rw [show whole = .offer a elseType branches by rfl, hCompile]
       intro tagged hTagged
-      simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+      simp only [buildAtomicConjunctiveOfferAutomaton, finishAutomatonFragment,
         Finset.mem_union]
       apply Or.inr
       rw [indexedFragmentStates, mem_foldl_union_iff]
-      exact Or.inr ⟨((selected.1, compileTypeFuel
-          (typeCompilationFuel (parallelTypeBranchesSelecting a selected branches))
-          (parallelTypeBranchesSelecting a selected branches)), index),
+      exact Or.inr ⟨((selected, compileTypeFuel
+          (typeCompilationFuel (parallelTypeBranchesFiring a selected branches))
+          (parallelTypeBranchesFiring a selected branches)), index),
         List.mk_mem_zipIdx_iff_getElem?.mpr hAutomatonGet, hTagged⟩
     · intro source edge
       rw [show whole = .offer a elseType branches by rfl, hCompile]
-      exact buildSelectedConjunctiveOfferAutomaton_outgoing_branch a branches _ _
-        index selected.1 _ hAutomatonGet source edge
+      exact buildAtomicConjunctiveOfferAutomaton_outgoing_branch a branches _ _
+        index selected _ hAutomatonGet source edge
     · intro source
-      rcases selected with ⟨action, branchType⟩
-      exact menuDependencyTargets_offer_branch a elseType branches index action
-        branchType hGet source
+      exact menuDependencyTargets_offer_branch a elseType branches index selected hGet source
     · exact hState
   rcases relationMembership_offer_cases a elseType branches hRelated with
     hRoot | ⟨state, hState, hChild⟩ |
@@ -659,22 +657,20 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
     subst hStateEq
     rw [menuReachesVar_offer name a elseType branches
       (hElseWF.2.2.2.1 name) hWholeTail.2]
-    have hHeads : selectedAutomata.map Prod.fst = branches.map Prod.fst := by
-      simp [selectedAutomata, List.map_map]
     have hRootPath := compiledMenuMarkerPath_root whole name
       (conjunctiveOfferEntries
         (compileTypeFuel (typeCompilationFuel elseType) elseType) selectedAutomata)
       hWholeDisjoint
       (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-          simp [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment])
+          simp [buildAtomicConjunctiveOfferAutomaton, finishAutomatonFragment])
       (by rw [show whole = .offer a elseType branches by rfl, hCompile]
-          exact buildSelectedConjunctiveOfferAutomaton_markerSource_root
+          exact buildAtomicConjunctiveOfferAutomaton_markerSource_root
             a branches _ _ name)
       (by
         rw [show whole = .offer a elseType branches by rfl, menuDependencyTargets_offer_root]
         refine Finset.union_subset ?_ (Finset.subset_insert _ _)
         rw [hCompile]
-        exact buildSelectedConjunctiveOfferAutomaton_menuStep_root_subset a branches _ _)
+        exact buildAtomicConjunctiveOfferAutomaton_menuStep_root_subset a branches _ _)
       (by
         rw [show whole = .offer a elseType branches by rfl, menuDependencyTargets_offer_root]
         exact Finset.subset_union_right)
@@ -693,17 +689,17 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
         simp only [selectedAutomata, List.getElem?_map,
           Option.map_eq_some_iff] at hGetAuto
         obtain ⟨selected, hGet, rfl⟩ := hGetAuto
-        have hMem : selected ∈ branches := List.mem_of_getElem? hGet
+        have hMem := Finset.mem_toList.mp (List.mem_of_getElem? hGet)
         have hSelectedPath := (hCopySelected index selected hGet _
           (compileTypeFuel_initial_mem _
-            (parallelTypeBranchesSelecting a selected branches) le_rfl)).mp
+            (parallelTypeBranchesFiring a selected branches) le_rfl)).mp
           ⟨reached, hReach, hMarker⟩
         have hNoPath := compiledMenuMarkerPath_of_absent
-          (parallelTypeBranchesSelecting a selected branches) name
+          (parallelTypeBranchesFiring a selected branches) name
           (hSelectedWF selected hMem).2.2.2.2.2.1
           (hSelectedTail selected hMem)
           (buildRelationSet_initial
-            (parallelTypeBranchesSelecting a selected branches) _ rfl)
+            (parallelTypeBranchesFiring a selected branches) _ rfl)
         have hFalse := hNoPath.mp hSelectedPath
         rw [menuReachesVar_of_absent name _ (hSelectedTail selected hMem)] at hFalse
         cases hFalse
@@ -718,14 +714,14 @@ theorem compiledMenuMarkerPath_offer (a : PactTypeAlphabet) (elseType : PactType
     exact (hCopyElse state (relationMembership_state_mem elseType rho state
       hElseDisjoint hChild)).trans (hElse hChild)
   · subst hState
-    have hMem : selected ∈ branches := List.mem_of_getElem? hGet
+    have hMem := Finset.mem_toList.mp (List.mem_of_getElem? hGet)
     have hSelectedWF' := hSelectedWF selected hMem
     exact (hCopySelected index selected hGet state
       (relationMembership_state_mem
-        (parallelTypeBranchesSelecting a selected branches) rho state
+        (parallelTypeBranchesFiring a selected branches) rho state
         (hSelectedDisjoint selected hMem) hChild)).trans
       (compiledMenuMarkerPath_of_absent
-        (parallelTypeBranchesSelecting a selected branches) name
+        (parallelTypeBranchesFiring a selected branches) name
         hSelectedWF'.2.2.2.2.2.1 (hSelectedTail selected hMem) hChild)
 
 end

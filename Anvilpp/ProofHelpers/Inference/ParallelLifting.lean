@@ -128,9 +128,8 @@ theorem Offers.preserves_alphabet {env : Environment} {source target : Proc}
       exact (Proc.branchesAlphabetWellFormed_of_mem hWF.2.2.2 hPrem.2.1).1
   | xoffer_else _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
   | xoffer_wait _ _ _ _ _ => rfl
-  | offer_some _ alphabet _ branches enabled hPrem =>
-      exact alphabet_parallelProcessBranchesSelecting alphabet enabled
-        (by rintro rfl; exact absurd hPrem.2.1 (by simp))
+  | offer_some _ alphabet _ branches enabled values _ =>
+      exact parallelProcessBranchesFiring_alphabet alphabet enabled values branches
   | offer_else _ _ _ _ _ => rw [Proc.AlphabetWellFormed] at hWF; exact hWF.2.1
   | offer_wait _ _ _ _ _ => rfl
   | par _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ => rfl

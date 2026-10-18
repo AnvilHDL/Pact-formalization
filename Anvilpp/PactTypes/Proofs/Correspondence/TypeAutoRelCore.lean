@@ -97,10 +97,10 @@ def buildRelationSetCoreFuel :
             ((buildRelationSetCoreFuel fuel
                 elseType).image
                 (fun entry => (entry.1, TypeAutomatonState.child 0 entry.2)) ∪
-              branches.zipIdx.foldl (fun acc indexed =>
+              (conjunctiveSelections branches.length).toList.zipIdx.foldl (fun acc indexed =>
                 acc ∪ (buildRelationSetCoreFuel
                     fuel
-                    (parallelTypeBranchesSelecting alphabet indexed.1 branches)).image
+                    (parallelTypeBranchesFiring alphabet indexed.1 branches)).image
                   (fun entry => (entry.1, TypeAutomatonState.child (indexed.2 + 1) entry.2)))
                 ∅)
 -/
@@ -161,7 +161,7 @@ theorem buildRelationSetCoreFuel_initial_mem  :
             Finset.mem_insert]
           exact Or.inl trivial
       | offer alphabet elseType branches =>
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton,
             finishAutomatonFragment, buildRelationSetCoreFuel,
             Finset.mem_insert]
           exact Or.inl trivial
@@ -490,10 +490,10 @@ theorem buildRelationSetCoreFuel_functional  :
               have ha'' : (a'.1, a.2) ∈
                   buildRelationSetCoreFuel
                     fuel
-                    (parallelTypeBranchesSelecting alphabet item.1 branches) :=
+                    (parallelTypeBranchesFiring alphabet item.1 branches) :=
                 hItemEq ▸ hStateEq ▸ ha'
               rw [ih
-                (parallelTypeBranchesSelecting alphabet item.1 branches) ha ha'']
+                (parallelTypeBranchesFiring alphabet item.1 branches) ha ha'']
 
 /-- The public-fuel relation is functional: each compiled state relates to at
 most one residual. Unconditional — no fuel-sufficiency side condition needed,
@@ -749,11 +749,11 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
       | offer alphabet elseType branches =>
           have hElse : typeCompilationFuel elseType ≤ fuel := by
             simp [typeCompilationFuel] at hFuel; omega
-          have hBranchesFuel : ∀ item : BareMessage × PactType,
+          have hBranchesFuel : ∀ item : Finset Nat,
               typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet item branches) ≤ fuel := by
+                (parallelTypeBranchesFiring alphabet item branches) ≤ fuel := by
             intro item
-            rw [typeCompilationFuel_parallelTypeBranchesSelecting]
+            apply le_trans (typeCompilationFuel_parallelTypeBranchesFiring alphabet item branches)
             simp [typeCompilationFuel] at hFuel; omega
           apply Finset.ext
           intro entry
@@ -767,7 +767,7 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
             · have ha' : a ∈ buildRelationSetCoreFuel
                   fuel
-                  (parallelTypeBranchesSelecting alphabet item.1 branches) :=
+                  (parallelTypeBranchesFiring alphabet item.1 branches) :=
                 ih _ (hBranchesFuel item.1) ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
           · rintro (h | ⟨a, ha, h⟩ | ⟨item, hItem, a, ha, hEq⟩)
@@ -777,7 +777,7 @@ private theorem buildRelationSetCoreFuel_succ_stable  :
               exact Or.inr (Or.inl ⟨a, ha', h⟩)
             · have ha' : a ∈ buildRelationSetCoreFuel
                   (fuel + 1)
-                  (parallelTypeBranchesSelecting alphabet item.1 branches) :=
+                  (parallelTypeBranchesFiring alphabet item.1 branches) :=
                 (ih _ (hBranchesFuel item.1)).symm ▸ ha
               exact Or.inr (Or.inr ⟨item, hItem, a, ha', hEq⟩)
 

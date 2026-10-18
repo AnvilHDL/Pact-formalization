@@ -836,6 +836,41 @@ theorem singletonTypeXOfferAt_clockGuarded
   exact ⟨trivial, PactType.reannotate_clockGuarded branch.2 alphabet hBranch,
     trivial⟩
 
+/-- Atomic residuals retain the tail restrictions of every branch body. -/
+theorem parallelTypeBranchesFiringFrom_tailOccurrences (name : String)
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType))
+    (hBranches : ∀ branch ∈ branches, branch.2.TailOccurrences name False) :
+    ∀ index tail, (parallelTypeBranchesFiringFrom alphabet selected index branches).TailOccurrences
+      name tail := by
+  induction branches with
+  | nil => intro index tail; simp [parallelTypeBranchesFiringFrom, PactType.TailOccurrences]
+  | cons head rest ih =>
+      intro index tail
+      have hHead : ∀ flag, (if index ∈ selected then head.2.reannotate alphabet
+          else singletonTypeXOfferAt alphabet head).TailOccurrences name flag := by
+        intro flag
+        split
+        · exact PactType.reannotate_tailOccurrences name head.2 alphabet flag
+            (PactType.tailOccurrences_mono name False.elim head.2
+              (hBranches head (by simp)))
+        · exact singletonTypeXOfferAt_tailOccurrences name alphabet head flag
+            (hBranches head (by simp))
+      cases rest with
+      | nil => exact hHead tail
+      | cons second rest =>
+          rw [parallelTypeBranchesFiringFrom, PactType.TailOccurrences]
+          exact ⟨hHead False,
+            ih (fun branch hMem => hBranches branch (List.mem_cons_of_mem _ hMem))
+              (index + 1) False⟩
+
+theorem parallelTypeBranchesFiring_tailOccurrences (name : String)
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType)) (tail : Prop)
+    (hBranches : ∀ branch ∈ branches, branch.2.TailOccurrences name False) :
+    (parallelTypeBranchesFiring alphabet selected branches).TailOccurrences name tail :=
+  parallelTypeBranchesFiringFrom_tailOccurrences name alphabet selected branches hBranches 0 tail
+
 /-- The selected branch's commit form inherits its body's tail properties. -/
 theorem selectedTypeBranchAt_tailOccurrences (name : String)
     (alphabet : PactTypeAlphabet) (branch : BareMessage × PactType)

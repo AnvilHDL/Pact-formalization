@@ -634,6 +634,37 @@ theorem parallelTypeBranchesSelecting_allVariablesBound
         parallelTypeBranchesSelectingWithin_allVariablesBound alphabet selected
           (branch :: rest) hBranches
 
+/-- Atomic residuals preserve the variables bound in every continuation. -/
+theorem parallelTypeBranchesFiring_allVariablesBound
+    (alphabet : PactTypeAlphabet) (selected : Finset Nat)
+    (branches : List (BareMessage × PactType)) {bound : List String}
+    (hBound : ∀ branch ∈ branches, PactType.AllVariablesBound bound branch.2) :
+    PactType.AllVariablesBound bound (parallelTypeBranchesFiring alphabet selected branches) := by
+  have hFrom : ∀ index, PactType.AllVariablesBound bound
+      (parallelTypeBranchesFiringFrom alphabet selected index branches) := by
+    induction branches with
+    | nil => intro index; simp [parallelTypeBranchesFiringFrom, PactType.AllVariablesBound]
+    | cons head rest ih =>
+        intro index
+        have hBody := PactType.reannotate_allVariablesBound bound head.2 alphabet
+          (hBound head (by simp))
+        have hFactor : PactType.AllVariablesBound bound
+            (if index ∈ selected then head.2.reannotate alphabet
+              else singletonTypeXOfferAt alphabet head) := by
+          split_ifs
+          · exact hBody
+          · rcases head with ⟨action, body⟩
+            simp only [singletonTypeXOfferAt, PactType.AllVariablesBound,
+              PactType.AllBranchVariablesBound]
+            exact ⟨trivial, hBody, trivial⟩
+        cases rest with
+        | nil => exact hFactor
+        | cons next tail =>
+            rw [parallelTypeBranchesFiringFrom, PactType.AllVariablesBound]
+            exact ⟨hFactor, ih (fun b hb => hBound b (by simp [hb])) (index + 1)⟩
+  exact hFrom 0
+
+
 /-- Closure is preserved by the compiler relation.  The recursion relation is
 the only constructor that changes syntax: it substitutes the binder by the
 recursive type, and `allVariablesBound_replaceVar_drop` removes that binder
@@ -848,17 +879,17 @@ theorem relationMembership_allVariablesBound :
         · rcases hSelected with ⟨i, selected, q, hGet, _, hSelectedRelated⟩
           have hSelectedFuel :
               typeCompilationFuel
-                  (parallelTypeBranchesSelecting alphabet selected branches) < n := by
-            rw [typeCompilationFuel_parallelTypeBranchesSelecting, ← hFuel]
-            simp only [typeCompilationFuel]; omega
+                  (parallelTypeBranchesFiring alphabet selected branches) < n := by
+            rw [← hFuel]
+            exact typeCompilationFuel_firing_lt_offer alphabet elseType selected branches
           have hSelectedBound : PactType.AllVariablesBound bound
-              (parallelTypeBranchesSelecting alphabet selected branches) :=
-            parallelTypeBranchesSelecting_allVariablesBound alphabet selected
+              (parallelTypeBranchesFiring alphabet selected branches) :=
+            parallelTypeBranchesFiring_allVariablesBound alphabet selected
               branches (fun branch hBranch =>
                 hMemBranches branches branch hFields.2 hBranch)
           exact ih (typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches))
-            hSelectedFuel (parallelTypeBranchesSelecting alphabet selected branches)
+              (parallelTypeBranchesFiring alphabet selected branches))
+            hSelectedFuel (parallelTypeBranchesFiring alphabet selected branches)
             rfl residual q bound hSelectedBound hSelectedRelated
 
 /-- A marker edge for `name` carrying a prescribed environment: the
@@ -963,12 +994,12 @@ theorem indexedFragmentEdges_subset_xoffer
 theorem childPendingEdges_subset_conjunctive_else
     (alphabet : PactTypeAlphabet) (branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (selectedConjunctions : List (BareMessage × AutomatonFragment)) :
+    (selectedConjunctions : List (Finset Nat × AutomatonFragment)) :
     ∀ edge ∈ childPendingEdges 0 elseAutomaton,
-      edge ∈ (buildSelectedConjunctiveOfferAutomaton alphabet branches
+      edge ∈ (buildAtomicConjunctiveOfferAutomaton alphabet branches
         elseAutomaton selectedConjunctions).edges := by
   intro edge hEdge
-  simp only [buildSelectedConjunctiveOfferAutomaton, finishAutomatonFragment,
+  simp only [buildAtomicConjunctiveOfferAutomaton, finishAutomatonFragment,
     Finset.mem_union]
   exact Or.inl (Or.inl (Or.inl (Or.inl hEdge)))
 
@@ -1172,39 +1203,7 @@ theorem markerSourceFor_of_var_residual
               max (typeCompilationFuel elseType)
                 (typeBranchCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
-        have hMapEq :
-            List.map (fun branch => (branch.1,
-              compileTypeFuel (max (typeCompilationFuel elseType)
-                (typeBranchCompilationFuel branches)) branch.2)) branches =
-              List.map (fun branch => (branch.1,
-                compileTypeFuel (typeCompilationFuel branch.2) branch.2))
-                branches := by
-          apply List.map_congr_left
-          intro branch hMem
-          have hLeBranch : typeCompilationFuel branch.2 ≤
-              typeBranchCompilationFuel branches :=
-            typeCompilationFuel_le_typeBranchCompilationFuel branches branch hMem
-          rw [compileTypeFuel_eq_of_sufficient branch.2
-            (le_trans hLeBranch (le_max_right _ _)) le_rfl]
-        have hCompileEq :
-            compileTypeFuel (typeCompilationFuel
-                (PactType.xoffer alphabet elseType branches))
-                (PactType.xoffer alphabet elseType branches) =
-              buildExclusiveOfferAutomaton alphabet branches
-                (compileTypeFuel (typeCompilationFuel elseType) elseType)
-                (List.map (fun branch => (branch.1,
-                  compileTypeFuel (typeCompilationFuel branch.2) branch.2))
-                  branches) := by
-          rw [hFuelEq, compileTypeFuel.eq_def]
-          show buildExclusiveOfferAutomaton alphabet branches
-            (compileTypeFuel (max (typeCompilationFuel elseType)
-              (typeBranchCompilationFuel branches)) elseType)
-            (List.map (fun branch => (branch.1,
-              compileTypeFuel (max (typeCompilationFuel elseType)
-                (typeBranchCompilationFuel branches)) branch.2))
-              branches) = _
-          rw [compileTypeFuel_eq_of_sufficient elseType (le_max_left _ _) le_rfl,
-            hMapEq]
+        have hCompileEq := compileTypeFuel_xoffer_eq alphabet elseType branches
         rw [PactType.TailOccurrences] at hTail
         obtain ⟨hElse, hBranches⟩ := hTail
         have hEach : ∀ branch ∈ branches,
@@ -1250,49 +1249,7 @@ theorem markerSourceFor_of_var_residual
               max (typeCompilationFuel elseType)
                 (conjunctiveCompilationFuel branches) + 1 := by
           simp only [typeCompilationFuel]; omega
-        have hMapEq :
-            List.map (fun selected => (selected.1,
-              compileTypeFuel (max (typeCompilationFuel elseType)
-                (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-                branches =
-              List.map (fun selected => (selected.1,
-                compileTypeFuel (typeCompilationFuel
-                  (parallelTypeBranchesSelecting alphabet selected branches))
-                  (parallelTypeBranchesSelecting alphabet selected branches)))
-                branches := by
-          apply List.map_congr_left
-          intro selected hSelected
-          rw [compileTypeFuel_eq_of_sufficient
-            (parallelTypeBranchesSelecting alphabet selected branches) ?_ le_rfl]
-          show typeCompilationFuel
-              (parallelTypeBranchesSelecting alphabet selected branches) ≤
-            max (typeCompilationFuel elseType)
-              (conjunctiveCompilationFuel branches)
-          rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-          exact le_max_right _ _
-        have hCompileEq :
-            compileTypeFuel (typeCompilationFuel
-                (PactType.offer alphabet elseType branches))
-                (PactType.offer alphabet elseType branches) =
-              buildSelectedConjunctiveOfferAutomaton alphabet branches
-                (compileTypeFuel (typeCompilationFuel elseType) elseType)
-                (List.map (fun selected => (selected.1,
-                  compileTypeFuel (typeCompilationFuel
-                    (parallelTypeBranchesSelecting alphabet selected branches))
-                    (parallelTypeBranchesSelecting alphabet selected branches)))
-                  branches) := by
-          rw [hFuelEq, compileTypeFuel.eq_def]
-          show buildSelectedConjunctiveOfferAutomaton alphabet branches
-            (compileTypeFuel (max (typeCompilationFuel elseType)
-              (conjunctiveCompilationFuel branches)) elseType)
-            (List.map (fun selected => (selected.1,
-              compileTypeFuel (max (typeCompilationFuel elseType)
-                (conjunctiveCompilationFuel branches))
-                (parallelTypeBranchesSelecting alphabet selected branches)))
-              branches) = _
-          rw [compileTypeFuel_eq_of_sufficient elseType (le_max_left _ _) le_rfl,
-            hMapEq]
+        have hCompileEq := compileTypeFuel_offer_eq alphabet elseType branches
         rw [PactType.TailOccurrences] at hTail
         obtain ⟨hElse, hBranches⟩ := hTail
         have hEach : ∀ branch ∈ branches,
@@ -1309,17 +1266,15 @@ theorem markerSourceFor_of_var_residual
             (ih (typeCompilationFuel elseType) (by rw [hFuelEq]; omega)
               elseType hElse hChild rfl)
         · exfalso
-          have hSelectedMem : selected ∈ branches := List.mem_of_getElem? hGet
           have hAbsentChild : PactType.TailOccurrences name False
-              (parallelTypeBranchesSelecting alphabet selected branches) :=
-            parallelTypeBranchesSelecting_tailOccurrences name alphabet selected
-              branches False hEach (hEach selected hSelectedMem)
+              (parallelTypeBranchesFiring alphabet selected branches) :=
+            parallelTypeBranchesFiring_tailOccurrences name alphabet selected
+              branches False hEach
           refine absurd ?_ (atomic _ q hAbsentChild)
           exact MarkerSourceFor.markerSource
             (ih (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              (by rw [hFuelEq, typeCompilationFuel_parallelTypeBranchesSelecting];
-                  omega)
+                (parallelTypeBranchesFiring alphabet selected branches))
+              (typeCompilationFuel_firing_lt_offer alphabet elseType selected branches)
               _ (PactType.tailOccurrences_mono name False.elim _ hAbsentChild)
               hChild rfl)
     | recur alphabet binder body =>
@@ -1451,13 +1406,11 @@ theorem TypeOffers.preserves_tailOccurrences :
           exact hTail
       | offer_some env alphabet elseType branches enabled hConds =>
           simp only [PactType.TailOccurrences] at hTail
-          exact parallelTypeBranchesSelecting_tailOccurrences tracked alphabet
+          exact parallelTypeBranchesFiring_tailOccurrences tracked alphabet
             enabled branches tail
             (fun branch hBranch =>
               PactType.tailOccurrences_of_mem_branches tracked False hTail.2
                 hBranch)
-            (PactType.tailOccurrences_of_mem_branches tracked False hTail.2
-              hConds.2.1)
       | offer_else env alphabet elseType branches hConds =>
           simp only [PactType.TailOccurrences] at hTail
           exact hTail.1
@@ -1737,15 +1690,15 @@ theorem TypeOffers.replaceVar_tail (name : String)
           have hBranchFalse : ∀ branch ∈ branches,
               branch.2.TailOccurrences name False := fun branch hBranch =>
             PactType.tailOccurrences_of_mem_branches name False hTail.2 hBranch
-          have hTargetTail := parallelTypeBranchesSelecting_tailOccurrences
+          have hTargetTail := parallelTypeBranchesFiring_tailOccurrences
             name alphabet enabled branches False hBranchFalse
-            (hBranchFalse enabled hConds.2.1)
           have hTargetInert :=
             PactType.replaceVar_eq_self_of_tailOccurrences_false name
-              replacement (parallelTypeBranchesSelecting alphabet enabled branches)
+              replacement (parallelTypeBranchesFiring alphabet enabled branches)
               hTargetTail
           refine ⟨typeFutureOffers
-              (parallelTypeBranchesSelecting alphabet enabled branches), ?_⟩
+              (parallelTypeBranchesFiring alphabet enabled branches) \
+                (typeBranchActions branches ∩ alphabet.actions), ?_⟩
           simpa [PactType.replaceVar, hBranchesInert, hTargetInert] using
             TypeOffers.offer_some env alphabet _ branches enabled hConds
       | offer_else env alphabet elseType branches hConds =>
@@ -2100,12 +2053,12 @@ theorem TypeOffers.replaceVar_tail_inv (name : String)
           have hBranchFalse : ∀ branch ∈ branches,
               branch.2.TailOccurrences name False := fun branch hBranch =>
             PactType.tailOccurrences_of_mem_branches name False hTail.2 hBranch
-          have hTargetTail := parallelTypeBranchesSelecting_tailOccurrences
+          have hTargetTail := parallelTypeBranchesFiring_tailOccurrences
             name alphabet enabled branches False hBranchFalse
-            (hBranchFalse enabled hConds.2.1)
-          refine ⟨parallelTypeBranchesSelecting alphabet enabled branches,
+          refine ⟨parallelTypeBranchesFiring alphabet enabled branches,
             typeFutureOffers
-              (parallelTypeBranchesSelecting alphabet enabled branches),
+              (parallelTypeBranchesFiring alphabet enabled branches) \
+                (typeBranchActions branches ∩ alphabet.actions),
             TypeOffers.offer_some env alphabet elseType branches enabled hConds, ?_⟩
           exact (PactType.replaceVar_eq_self_of_tailOccurrences_false name
             replacement _ hTargetTail).symm

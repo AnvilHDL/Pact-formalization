@@ -1002,7 +1002,7 @@ theorem buildRelationSetCoreFuel_state_mem :
           simp only [PactType.OfferBranchesDisjoint] at hDisjoint
           simp only [buildRelationSetCoreFuel, Finset.mem_insert,
             Finset.mem_union, Finset.mem_image] at hMem
-          simp only [compileTypeFuel, buildSelectedConjunctiveOfferAutomaton,
+          simp only [compileTypeFuel, buildAtomicConjunctiveOfferAutomaton,
             finishAutomatonFragment, Finset.mem_union]
           rcases hMem with hRoot | hElse | hIndexed
           · injection hRoot with hResidual hState
@@ -1022,15 +1022,15 @@ theorem buildRelationSetCoreFuel_state_mem :
               subst hState
               refine Or.inr ?_
               rw [indexedFragmentStates, mem_foldl_union_iff]
-              refine Or.inr ⟨((indexed.1.1, compileTypeFuel fuel
-                (parallelTypeBranchesSelecting alphabet indexed.1 branches)),
+              refine Or.inr ⟨((indexed.1, compileTypeFuel fuel
+                (parallelTypeBranchesFiring alphabet indexed.1 branches)),
                 indexed.2), ?_, ?_⟩
               · rw [List.zipIdx_map]
                 exact List.mem_map_of_mem hIndexedMem
               · refine Finset.mem_image_of_mem _
-                  (ih (parallelTypeBranchesSelecting alphabet indexed.1 branches)
+                  (ih (parallelTypeBranchesFiring alphabet indexed.1 branches)
                     ?_ entry.1 entry.2 hEntry)
-                exact parallelTypeBranchesSelecting_offerBranchesDisjoint
+                exact parallelTypeBranchesFiring_offerBranchesDisjoint
                   indexed.1 branches (fun branch hBranch =>
                     offerBranchesDisjoint_of_mem_branch hDisjoint.2.2 hBranch)
 
@@ -1812,14 +1812,14 @@ theorem compileTypeFuel_offer_eq (alphabet : PactTypeAlphabet)
     (elseType : PactType) (branches : List (BareMessage × PactType)) :
     compileTypeFuel (typeCompilationFuel (.offer alphabet elseType branches))
         (.offer alphabet elseType branches) =
-      buildSelectedConjunctiveOfferAutomaton alphabet branches
+      buildAtomicConjunctiveOfferAutomaton alphabet branches
         (compileTypeFuel (typeCompilationFuel elseType) elseType)
-        (branches.map fun selected =>
-          (selected.1,
+        ((conjunctiveSelections branches.length).toList.map fun selected =>
+          (selected,
             compileTypeFuel
               (typeCompilationFuel
-                (parallelTypeBranchesSelecting alphabet selected branches))
-              (parallelTypeBranchesSelecting alphabet selected branches))) := by
+                (parallelTypeBranchesFiring alphabet selected branches))
+              (parallelTypeBranchesFiring alphabet selected branches))) := by
   have hFuelEq : typeCompilationFuel (.offer alphabet elseType branches) =
       max (typeCompilationFuel elseType)
         (conjunctiveCompilationFuel branches) + 1 := by
@@ -1832,11 +1832,11 @@ theorem compileTypeFuel_offer_eq (alphabet : PactTypeAlphabet)
   · refine List.map_congr_left ?_
     intro selected hSelected
     have hFuel : typeCompilationFuel
-        (parallelTypeBranchesSelecting alphabet selected branches) ≤
+        (parallelTypeBranchesFiring alphabet selected branches) ≤
         max (typeCompilationFuel elseType)
           (conjunctiveCompilationFuel branches) := by
-      rw [typeCompilationFuel_parallelTypeBranchesSelecting]
-      omega
+      exact (typeCompilationFuel_parallelTypeBranchesFiring alphabet selected branches).trans
+        (Nat.le_max_right _ _)
     rw [compileTypeFuel_eq_of_sufficient _ hFuel (Nat.le_refl _)]
 
 /-- A copied left-child edge of a binary choice restricts to an edge of the

@@ -6,6 +6,9 @@
 | `PactTypeSubstitutionLemmas` | Completion under substitution and substitution at absent variables |
 | `PactTypeRegularityLemmas` | Monotonicity of guarding and tail-position conditions |
 | `TypeDynamicsCoreLemmas` | Reannotation and generated branch-product invariants |
+| `ConjunctiveResiduals` | Enabled-index bounds, subset enumeration, and residual alphabets |
+| `ConjunctiveResidualMenus` | Menus and optimistic completion of atomic offer residuals |
+| `ConjunctiveResidualRegularity` | Tail recursion, clock guarding, and binder freshness of residuals |
 | `PactTypeFutureOffersLemmas` | Constructor equations for future menus |
 | `TypeCompletionFuelLemmas`, `TypeFutureOffersFuelLemmas` | Fuel-based completion/menu agreement |
 | `DeclaredCompletionLemmas` | Completion under substitution and recursion unfolding |

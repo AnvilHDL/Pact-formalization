@@ -4,30 +4,30 @@ namespace Pact
 
 noncomputable section
 
-def indexedFragmentStates
-    (automata : List (BareMessage × AutomatonFragment)) :
+def indexedFragmentStates {Key : Type}
+    (automata : List (Key × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childStates (indexed.2 + 1) indexed.1.2) ∅
 
-def indexedFragmentAccepting
-    (automata : List (BareMessage × AutomatonFragment)) :
+def indexedFragmentAccepting {Key : Type}
+    (automata : List (Key × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childAccepting (indexed.2 + 1) indexed.1.2) ∅
 
 
-def indexedFragmentCompletes
-    (automata : List (BareMessage × AutomatonFragment)) :
+def indexedFragmentCompletes {Key : Type}
+    (automata : List (Key × AutomatonFragment)) :
     Finset TypeAutomatonState :=
   automata.zipIdx.foldl (fun states indexed =>
     states ∪ childCompletes (indexed.2 + 1) indexed.1.2) ∅
 
 /-- An offer may optimistically complete through its default or a branch. -/
-def offerRootCompletes (_alphabet : PactTypeAlphabet)
+def offerRootCompletes {Key : Type} (_alphabet : PactTypeAlphabet)
     (_branches : List (BareMessage × PactType))
     (elseAutomaton : AutomatonFragment)
-    (branchAutomata : List (BareMessage × AutomatonFragment)) :
+    (branchAutomata : List (Key × AutomatonFragment)) :
     Finset TypeAutomatonState := by
   classical
   exact
@@ -36,8 +36,8 @@ def offerRootCompletes (_alphabet : PactTypeAlphabet)
       {TypeAutomatonState.root}
     else ∅
 
-def indexedFragmentEdges
-    (automata : List (BareMessage × AutomatonFragment)) :
+def indexedFragmentEdges {Key : Type}
+    (automata : List (Key × AutomatonFragment)) :
     Finset PendingAutomatonEdge :=
   automata.zipIdx.foldl (fun edges indexed =>
     edges ∪ childPendingEdges (indexed.2 + 1) indexed.1.2) ∅

@@ -87,54 +87,6 @@ relations, matches completed logs, and transfers compatibility.
 transitivity. Inference preserves the alphabets and identifier sets needed to
 use the inferred tuple itself as the forward optimality witness.
 
-The [weak-refinement experiment](Anvilpp/ProofHelpers/WeakRefinement.lean)
-proves an obstruction to replacing this relation by exact-label matching up
-to silent steps. Delaying one component can split two parallel progress
-observations across distinct rounds. Silent padding cannot match the split
-label against the original joint label, even at equal alphabets and
-identifiers with both products well formed. This refutes the corresponding
-parallel-lifting obligation; it is not a counterexample to compatibility
-transfer under a different comparison of executions.
-
-[WeakRefinementLogs](Anvilpp/ProofHelpers/WeakRefinementLogs.lean) proves
-recurrence preservation for matching finite blocks. For finite silent
-insertion under unchanged environments, it additionally proves honesty and
-winning-objective preservation. These results do not construct matching
-executions through arbitrary parallel contexts.
-
-[WeakRefinementEnvironments](Anvilpp/ProofHelpers/WeakRefinementEnvironments.lean)
-constructs admissible environments from the responses already observed and
-proves agreement with the unsplit response's honesty remainder.
-[WeakRefinementParallel](Anvilpp/ProofHelpers/WeakRefinementParallel.lean) applies
-that construction to two independent enabled message prefixes: the delayed
-product finishes in two forced rounds, matching the original joint response.
-This is a constructor case, not the general parallel-lifting theorem.
-
-[WeakRefinementStrategies](Anvilpp/ProofHelpers/WeakRefinementStrategies.lean)
-proves `compatible_skipPrefix_iff`: for every well-formed `source` and required
-progress set `T`, `TypeCompatible (skip; source) T ↔ TypeCompatible source T`.
-The proof constructs both strategies, handles clock-first continuations, and
-transports completed executions including failure logs. It requires no
-completion-agreement premise and does not modify the operational rules.
-It does not prove the corresponding replacement inside a parallel component;
-the public refinement and checking definitions are unchanged.
-
-[WeakRefinementComparison](Anvilpp/ProofHelpers/WeakRefinementComparison.lean)
-defines `HonestBlockRefinement`: every admissible honest abstract strategy
-admits one precise strategy whose completed executions match abstract completed
-executions in finite, clock-aligned blocks. The types have equal alphabets and
-fair/progress identifiers. Its `compatible` theorem transfers compatibility.
-`honestBlockRefinement_skipPrefix` constructs the witness for a leading skip,
-without assuming that the supplied strategy wins. No parallel-closure or
-transitivity theorem for this experimental comparison is claimed.
-
-[WeakRefinementOfferDelay](Anvilpp/ProofHelpers/WeakRefinementOfferDelay.lean)
-checks well-formedness and initial transitions of a closed three-component
-example. Exclusive defaults advertise declared heads, which excludes the
-previous simultaneous-default step; that obsolete incompatibility argument
-is retained only as comments. The new default-current regression checks do
-not establish general contextual skip elimination.
-
 ## Supporting Proofs
 
 | Index | Results |
